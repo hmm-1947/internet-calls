@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "926940644499",
+    "project_id": "callsignals-ba81b",
+    "storage_bucket": "callsignals-ba81b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:926940644499:android:a0ceb5baccde0a4254f966",
+        "android_client_info": {
+          "package_name": "com.joshua.calls"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "926940644499-n66pbkh90fd3ecomk46edf7vok83shvf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBWKq_z3RtnFsUPpEslURJAmrDrIe1LV4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "926940644499-n66pbkh90fd3ecomk46edf7vok83shvf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "926940644499-ij92cvgq7jun965p1v4l8cd4h7aaiqbs.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.calls"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:926940644499:android:aa1ce3b1482b838c54f966",
+        "android_client_info": {
+          "package_name": "com.joshua.calls.listener"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "926940644499-n66pbkh90fd3ecomk46edf7vok83shvf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBWKq_z3RtnFsUPpEslURJAmrDrIe1LV4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "926940644499-n66pbkh90fd3ecomk46edf7vok83shvf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "926940644499-ij92cvgq7jun965p1v4l8cd4h7aaiqbs.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.calls"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

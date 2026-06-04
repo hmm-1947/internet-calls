@@ -1,0 +1,1 @@
+A cross-platform calling application that enables internet-based voice calls using WebRTC with STUN/TURN servers, featuring coin-based payments for call credits and real-time communication.

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Call Server Admin</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #111;
+            color: white;
+            padding: 20px;
+        }
+
+        .card {
+            background: #222;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        td,
+        th {
+            padding: 10px;
+            border-bottom: 1px solid #444;
+        }
+
+        .online {
+            color: #00ff66;
+        }
+
+        .calling {
+            color: #ffcc00;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #1b1b1b;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            margin: 0;
+            font-size: 32px;
+            color: #00ff99;
+        }
+
+        .stat-card span {
+            color: #999;
+        }
+
+        .card {
+            box-shadow: 0 0 15px rgba(0, 0, 0, .3);
+        }
+
+        table tr:hover {
+            background: #2a2a2a;
+        }
+
+        .online-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .online-now {
+            background: #00ff66;
+        }
+
+        .offline-now {
+            background: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="stats">
+        <div class="stat-card">
+            <h3 id="listenerCount">0</h3>
+            <span>Listeners</span>
+        </div>
+
+        <div class="stat-card">
+            <h3 id="userCount">0</h3>
+            <span>Users</span>
+        </div>
+
+        <div class="stat-card">
+            <h3 id="onlineCount">0</h3>
+            <span>Online</span>
+        </div>
+
+        <div class="stat-card">
+            <h3 id="callCount">0</h3>
+            <span>Active Calls</span>
+        </div>
+    </div>
+    <div class="card">
+        <h2>Listeners</h2>
+        <table id="listenersTable"></table>
+    </div>
+
+    <div class="card">
+        <h2>Users</h2>
+        <table id="usersTable"></table>
+    </div>
+
+    <div class="card">
+        <h2>Online Users</h2>
+        <ul id="onlineUsers"></ul>
+    </div>
+
+    <div class="card">
+        <h2>Calls In Progress</h2>
+        <ul id="calls"></ul>
+    </div>
+
+    <script>
+
+        async function loadDashboard() {
+
+            const res = await fetch("/admin/stats");
+            const data = await res.json();
+
+            const listenersTable =
+                document.getElementById("listenersTable");
+
+            listenersTable.innerHTML =
+                "<tr><th>Status</th><th>Listener</th><th>Created</th></tr>";
+
+            data.listeners.forEach(user => {
+                listenersTable.innerHTML += `
+                    <tr>
+                        <td>
+                            <span class="online-dot ${user.online ? "online-now" : "offline-now"
+                    }"></span>
+                        </td>
+                        <td>${user.username}</td>
+                        <td>${user.created_at}</td>
+                    </tr>
+                `;
+            });
+
+            const usersTable =
+                document.getElementById("usersTable");
+
+usersTable.innerHTML =
+                "<tr><th>Status</th><th>User</th><th>Coins</th><th>Created</th></tr>";
+
+            data.users.forEach(user => {
+                usersTable.innerHTML += `
+                    <tr>
+                        <td>
+                            <span class="online-dot ${user.online ? "online-now" : "offline-now"
+                    }"></span>
+                        </td>
+                        <td>${user.username}</td>
+                        <td><input type="number" value="${user.coins}" style="width:70px;background:#333;color:white;border:1px solid #555;border-radius:4px;padding:2px 6px" onchange="updateCoins('${user.username}', this.value)"></td>
+                        <td>${user.created_at}</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById("onlineUsers").innerHTML =
+                data.online_users.map(
+                    u => `<li class="online">${u}</li>`
+                ).join("");
+
+            document.getElementById("calls").innerHTML =
+                data.active_calls.map(
+                    c => `<li class="calling">${c.caller} ➜ ${c.target}</li>`
+                ).join("");
+
+            document.getElementById("listenerCount").innerText =
+                data.listeners.length;
+
+            document.getElementById("userCount").innerText =
+                data.users.length;
+
+            document.getElementById("onlineCount").innerText =
+                data.online_users.length;
+
+            document.getElementById("callCount").innerText =
+                data.active_calls.length;
+        }
+
+        loadDashboard();
+        setInterval(loadDashboard, 2000);
+async function updateCoins(username, coins) {
+    await fetch("/admin/set_coins", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, coins: parseInt(coins)})
+    });
+}
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,199 @@
+import json
+import asyncio
+import math
+import time
+
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+import firebase_admin.messaging as messaging
+import state
+
+router = APIRouter()
+
+async def send_push(token, caller):
+    message = messaging.Message(
+        data={"type": "incoming_call", "caller": caller},
+        android=messaging.AndroidConfig(
+            priority="high",
+            ttl=30,
+            notification=messaging.AndroidNotification(
+                title="Incoming Call", body=caller,
+                channel_id="incoming_calls", priority="max",
+                visibility="public", default_vibrate_timings=True,
+            ),
+        ),
+        token=token,
+    )
+    try:
+        response = messaging.send(message)
+        print("FCM:", response)
+        return True
+    except messaging.UnregisteredError:
+        async with state.db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET fcm_token=NULL WHERE fcm_token=$1", token)
+        return False
+    except Exception as e:
+        print(f"[FCM] Send failed: {e}")
+        return False
+
+async def monitor_call(caller):
+    while caller in state.call_sessions:
+        async with state.db_pool.acquire() as conn:
+            user = await conn.fetchrow("SELECT coins FROM users WHERE username=$1", caller)
+            setting = await conn.fetchrow("SELECT value FROM app_settings WHERE key='coins_per_minute'")
+
+        coins_per_minute = max(1, int(setting["value"]))
+        session = state.call_sessions[caller]
+        elapsed_minutes = math.ceil((time.time() - session["started"]) / 60)
+        max_minutes = max(1, user["coins"] // coins_per_minute)
+
+        if elapsed_minutes >= max_minutes:
+            listener = session["listener"]
+            for uid in [caller, listener]:
+                if uid in state.clients:
+                    await state.clients[uid].send_text(json.dumps({"type": "coins_exhausted"}))
+                    await state.clients[uid].send_text(json.dumps({"type": "hangup"}))
+            state.active_calls.pop(caller, None)
+            state.active_calls.pop(listener, None)
+            state.call_sessions.pop(caller, None)
+            break
+
+        await asyncio.sleep(5)
+
+async def _try_fcm_fallback(ws, client_id, target, offer_data):
+    async with state.db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT fcm_token FROM users WHERE username=$1", target.lower())
+    if row and row["fcm_token"]:
+        state.pending_offers[target] = {"from": client_id, "data": offer_data}
+        sent = await send_push(row["fcm_token"], client_id)
+        if sent:
+            await ws.send_text(json.dumps({"type": "ringing", "target": target}))
+        else:
+            state.pending_offers.pop(target, None)
+            await ws.send_text(json.dumps({"type": "error", "message": f"User '{target}' is not online"}))
+    else:
+        await ws.send_text(json.dumps({"type": "error", "message": f"User '{target}' is not online"}))
+
+@router.get("/test_push/{username}")
+async def test_push(username: str):
+    async with state.db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT fcm_token FROM users WHERE username=$1", username.lower())
+    if not row:
+        raise HTTPException(404)
+    await send_push(row["fcm_token"], "Joshua")
+    return {"status": "sent"}
+
+@router.websocket("/ws/{client_id}")
+async def websocket_endpoint(ws: WebSocket, client_id: str):
+    await ws.accept()
+    state.clients[client_id] = ws
+    async with state.db_pool.acquire() as conn:
+        await conn.execute("UPDATE users SET is_online=TRUE WHERE username=$1", client_id)
+
+    await ws.send_text(json.dumps({"type": "connected", "id": client_id}))
+
+    if client_id in state.pending_offers:
+        offer = state.pending_offers.pop(client_id)
+        await ws.send_text(json.dumps({"type": "incoming_call", "from": offer["from"], "data": offer["data"]}))
+
+    try:
+        while True:
+            raw = await ws.receive_text()
+            message = json.loads(raw)
+            if message.get("type") == "chat_message":
+                chat_target = message.get("target")
+                content = message.get("content")
+                if chat_target and content and chat_target in state.clients:
+                    await state.clients[chat_target].send_text(json.dumps({
+                        "type": "chat_message",
+                        "from": client_id,
+                        "content": content,
+                    }))
+                continue
+            target = message.get("target")
+            msg_type = message.get("data", {}).get("type", "")
+
+            if msg_type == "offer":
+                async with state.db_pool.acquire() as conn:
+                    caller = await conn.fetchrow("SELECT role FROM users WHERE username=$1", client_id.lower())
+                    receiver = await conn.fetchrow("SELECT role FROM users WHERE username=$1", target.lower())
+                    row = await conn.fetchrow("SELECT coins FROM users WHERE username=$1", client_id)
+
+                if not caller or not receiver:
+                    await ws.send_text(json.dumps({"type": "error", "message": "Invalid users"}))
+                    continue
+                if caller["role"] != "user":
+                    await ws.send_text(json.dumps({"type": "error", "message": "Only users can initiate calls"}))
+                    continue
+                if receiver["role"] != "listener":
+                    await ws.send_text(json.dumps({"type": "error", "message": "You can only call listeners"}))
+                    continue
+                if row["coins"] < 1:
+                    await ws.send_text(json.dumps({"type": "error", "message": "Not enough coins"}))
+                    continue
+
+                if target in state.clients:
+                    try:
+                        await state.clients[target].send_text(json.dumps({
+                            "type": "incoming_call", "from": client_id, "data": message["data"]
+                        }))
+                        await ws.send_text(json.dumps({"type": "ringing", "target": target}))
+                    except Exception:
+                        state.clients.pop(target, None)
+                        await _try_fcm_fallback(ws, client_id, target, message["data"])
+                else:
+                    await _try_fcm_fallback(ws, client_id, target, message["data"])
+
+            elif msg_type == "answer":
+                state.active_calls[client_id] = target
+                state.active_calls[target] = client_id
+                state.call_sessions[target] = {"listener": client_id, "started": time.time(), "charged": False}
+                asyncio.create_task(monitor_call(target))
+                if target in state.clients:
+                    await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+
+            elif msg_type in ["hangup", "call_ended"]:
+                other = state.active_calls.pop(client_id, None)
+                session = state.call_sessions.pop(client_id, None)
+
+                if not session:
+                    for user, data in list(state.call_sessions.items()):
+                        if data["listener"] == client_id:
+                            session = data
+                            state.call_sessions.pop(user, None)
+                            client_id = user
+                            break
+
+                if session and not session.get("charged"):
+                    session["charged"] = True
+                    duration_seconds = int(time.time() - session["started"])
+                    async with state.db_pool.acquire() as conn:
+                        setting = await conn.fetchrow("SELECT value FROM app_settings WHERE key='coins_per_minute'")
+                        coins_per_minute = int(setting["value"])
+                        coins_used = math.ceil(duration_seconds / 60) * coins_per_minute
+                        await conn.execute(
+                            "UPDATE users SET coins=GREATEST(coins-$1,0) WHERE username=$2",
+                            coins_used, client_id
+                        )
+                        await conn.execute(
+                            "UPDATE users SET total_call_duration=total_call_duration+$1, daily_call_duration=daily_call_duration+$1 WHERE username=$2",
+                            duration_seconds, session["listener"]
+                        )
+
+                if other:
+                    state.active_calls.pop(other, None)
+                if target in state.clients:
+                    await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+
+            elif target in state.clients:
+                try:
+                    await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+                except Exception:
+                    state.clients.pop(target, None)
+
+    except WebSocketDisconnect:
+        other = state.active_calls.pop(client_id, None)
+        if other:
+            state.active_calls.pop(other, None)
+        async with state.db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET is_online=FALSE WHERE username=$1", client_id)
+        state.clients.pop(client_id, None)
