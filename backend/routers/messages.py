@@ -13,20 +13,20 @@ class SendMessageRequest(BaseModel):
 async def send_message(req: SendMessageRequest):
     async with state.db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "INSERT INTO messages (sender, receiver, content) VALUES ($1, $2, $3) RETURNING id, sender, receiver, content, created_at",
+            "INSERT INTO messages (sender, receiver, content, message_type) VALUES ($1, $2, $3, 'text') RETURNING id, sender, receiver, content, created_at, message_type",
             req.sender.strip().lower(), req.receiver.strip().lower(), req.content.strip()
         )
     return {
         "id": row["id"], "sender": row["sender"], "receiver": row["receiver"],
         "content": row["content"], "created_at": row["created_at"].isoformat(),
+        "message_type": row["message_type"],
     }
-
 @router.get("/messages/{user1}/{user2}")
 async def get_messages(user1: str, user2: str):
     async with state.db_pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, sender, receiver, content, created_at FROM messages
+            SELECT id, sender, receiver, content, created_at, message_type FROM messages
             WHERE (sender=$1 AND receiver=$2) OR (sender=$2 AND receiver=$1)
             ORDER BY created_at ASC
             """,
@@ -34,7 +34,8 @@ async def get_messages(user1: str, user2: str):
         )
     return [
         {"id": r["id"], "sender": r["sender"], "receiver": r["receiver"],
-         "content": r["content"], "created_at": r["created_at"].isoformat()}
+         "content": r["content"], "created_at": r["created_at"].isoformat(),
+         "message_type": r["message_type"]}
         for r in rows
     ]
 

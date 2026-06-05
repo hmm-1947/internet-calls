@@ -31,19 +31,24 @@ class CallService {
   void Function(String callerName)? onIncomingCall;
   void Function(CallState state)? onCallStateChanged;
   void Function(String error)? onError;
-  final List<void Function(String from, String content)> _chatListeners = [];
+  final List<void Function(String from, String content, String messageType)>
+  _chatListeners = [];
 
-  void addChatListener(void Function(String from, String content) fn) {
+  void addChatListener(
+    void Function(String from, String content, String messageType) fn,
+  ) {
     _chatListeners.add(fn);
   }
 
-  void removeChatListener(void Function(String from, String content) fn) {
+  void removeChatListener(
+    void Function(String from, String content, String messageType) fn,
+  ) {
     _chatListeners.remove(fn);
   }
 
-  void _notifyChatListeners(String from, String content) {
+  void _notifyChatListeners(String from, String content, String messageType) {
     for (final fn in List.from(_chatListeners)) {
-      fn(from, content);
+      fn(from, content, messageType);
     }
   }
 
@@ -269,16 +274,21 @@ class CallService {
       track.enabled = !muted;
     });
   }
-void sendChatMessage(String target, String content) {
+
+  void sendChatMessage(
+    String target,
+    String content, {
+    String messageType = 'text',
+  }) {
     _send({
       "target": target,
-      "data": {
-        "type": "chat_message",
-      },
-      "content": content,
       "type": "chat_message",
+      "content": content,
+      "message_type": messageType,
+      "data": {"type": "chat_message"},
     });
   }
+
   Future<void> _onMessage(dynamic raw) async {
     final message = jsonDecode(raw as String);
 
@@ -289,8 +299,9 @@ void sendChatMessage(String target, String content) {
     if (message["type"] == "chat_message") {
       final from = message["from"] as String?;
       final content = message["content"] as String?;
+      final messageType = message["message_type"] as String? ?? "text";
       if (from != null && content != null) {
-        _notifyChatListeners(from, content);
+        _notifyChatListeners(from, content, messageType);
       }
       return;
     }

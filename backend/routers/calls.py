@@ -50,8 +50,11 @@ async def monitor_call(caller):
             listener = session["listener"]
             for uid in [caller, listener]:
                 if uid in state.clients:
-                    await state.clients[uid].send_text(json.dumps({"type": "coins_exhausted"}))
-                    await state.clients[uid].send_text(json.dumps({"type": "hangup"}))
+                    try:
+                        await state.clients[uid].send_text(json.dumps({"type": "coins_exhausted"}))
+                        await state.clients[uid].send_text(json.dumps({"type": "hangup"}))
+                    except RuntimeError:
+                        state.clients.pop(uid, None)
             state.active_calls.pop(caller, None)
             state.active_calls.pop(listener, None)
             state.call_sessions.pop(caller, None)
@@ -89,7 +92,13 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
     async with state.db_pool.acquire() as conn:
         await conn.execute("UPDATE users SET is_online=TRUE WHERE username=$1", client_id)
 
-    await ws.send_text(json.dumps({"type": "connected", "id": client_id}))
+    try:
+        await ws.send_text(json.dumps({"type": "connected", "id": client_id}))
+    except (WebSocketDisconnect, OSError):
+        state.clients.pop(client_id, None)
+        async with state.db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET is_online=FALSE WHERE username=$1", client_id)
+        return
 
     if client_id in state.pending_offers:
         offer = state.pending_offers.pop(client_id)
@@ -102,12 +111,17 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
             if message.get("type") == "chat_message":
                 chat_target = message.get("target")
                 content = message.get("content")
+                message_type = message.get("message_type", "text")
                 if chat_target and content and chat_target in state.clients:
-                    await state.clients[chat_target].send_text(json.dumps({
-                        "type": "chat_message",
-                        "from": client_id,
-                        "content": content,
-                    }))
+                    try:
+                        await state.clients[chat_target].send_text(json.dumps({
+                            "type": "chat_message",
+                            "from": client_id,
+                            "content": content,
+                            "message_type": message_type,
+                        }))
+                    except RuntimeError:
+                        state.clients.pop(chat_target, None)
                 continue
             target = message.get("target")
             msg_type = message.get("data", {}).get("type", "")
@@ -149,7 +163,10 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 state.call_sessions[target] = {"listener": client_id, "started": time.time(), "charged": False}
                 asyncio.create_task(monitor_call(target))
                 if target in state.clients:
-                    await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+                    try:
+                        await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+                    except RuntimeError:
+                        state.clients.pop(target, None)
 
             elif msg_type in ["hangup", "call_ended"]:
                 other = state.active_calls.pop(client_id, None)
@@ -182,7 +199,10 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 if other:
                     state.active_calls.pop(other, None)
                 if target in state.clients:
-                    await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+                    try:
+                        await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+                    except RuntimeError:
+                        state.clients.pop(target, None)
 
             elif target in state.clients:
                 try:
@@ -190,7 +210,7 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 except Exception:
                     state.clients.pop(target, None)
 
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, OSError):
         other = state.active_calls.pop(client_id, None)
         if other:
             state.active_calls.pop(other, None)

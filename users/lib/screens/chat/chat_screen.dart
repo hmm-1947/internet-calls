@@ -1,6 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:calls/screens/chat/voice_message_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import '../../core/api_endpoints.dart';
 import '../../core/config.dart';
 import '../../models/message.dart';
@@ -28,7 +32,11 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _loading = true;
 
-@override
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _recording = false;
+  String? _recordingPath;
+
+  @override
   void initState() {
     super.initState();
     _fetchMessages();
@@ -42,7 +50,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.dispose();
     super.dispose();
   }
-  void _onIncomingMessage(String from, String content) {
+
+  void _onIncomingMessage(String from, String content, String messageType) {
     if (from != widget.otherUsername) return;
     setState(() {
       _messages.add(
@@ -52,10 +61,58 @@ class _ChatScreenState extends State<ChatScreen> {
           receiver: widget.myUsername,
           content: content,
           createdAt: DateTime.now(),
+          messageType: messageType,
         ),
       );
     });
     _scrollToBottom();
+  }
+
+  Future<void> _stopRecording() async {
+    final path = await _recorder.stop();
+    setState(() => _recording = false);
+    if (path == null) return;
+    final file = File(path);
+    if (!await file.exists()) return;
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.httpBase}/voice_messages'),
+    );
+    request.fields['sender'] = widget.myUsername;
+    request.fields['receiver'] = widget.otherUsername;
+    request.files.add(await http.MultipartFile.fromPath('file', path));
+
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      final body = await response.stream.bytesToString();
+      final json = jsonDecode(body);
+      setState(() {
+        _messages.add(
+          Message(
+            id: json['id'],
+            sender: json['sender'],
+            receiver: json['receiver'],
+            content: json['content'],
+            createdAt: DateTime.parse(json['created_at']),
+            messageType: 'voice',
+          ),
+        );
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _startRecording() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) return;
+    final dir = await getTemporaryDirectory();
+    _recordingPath = '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.aac';
+    await _recorder.start(
+      const RecordConfig(encoder: AudioEncoder.aacLc),
+      path: _recordingPath!,
+    );
+    setState(() => _recording = true);
   }
 
   Future<void> _fetchMessages() async {
@@ -261,34 +318,40 @@ class _ChatScreenState extends State<ChatScreen> {
                               bottomRight: Radius.circular(isMe ? 4 : 16),
                             ),
                           ),
-                          child: Stack(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  right: 42,
-                                  bottom: 2,
+                          child: msg.messageType == 'voice'
+                              ? VoiceMessageWidget(
+                                  url:
+                                      '${AppConfig.httpBase}/voice_messages/${msg.content}',
+                                  isMe: isMe,
+                                )
+                              : Stack(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        right: 42,
+                                        bottom: 2,
+                                      ),
+                                      child: Text(
+                                        msg.content,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 0,
+                                      bottom: 0,
+                                      child: Text(
+                                        _formatTime(msg.createdAt.toLocal()),
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.6),
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                child: Text(
-                                  msg.content,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Text(
-                                  _formatTime(msg.createdAt.toLocal()),
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.6),
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                         ),
                       );
                     },
@@ -321,6 +384,27 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                     onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTapDown: (_) => _startRecording(),
+                  onTapUp: (_) => _stopRecording(),
+                  onTapCancel: () => _stopRecording(),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _recording ? Colors.red : const Color(0xFF1E1E2A),
+                    ),
+                    child: Icon(
+                      _recording ? Icons.stop : Icons.mic,
+                      color: _recording
+                          ? Colors.white
+                          : const Color(0xFF8888AA),
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
