@@ -335,8 +335,12 @@ Future<void> _fetchListeners() async {
                       style: TextStyle(color: _textSecondary),
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                : RefreshIndicator(
+    color: _accent,
+    backgroundColor: _surface,
+    onRefresh: _fetchListeners,
+    child: ListView.builder(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _filteredUsers.length,
                     itemBuilder: (context, index) {
                       final user = _filteredUsers[index];
@@ -364,6 +368,7 @@ Future<void> _fetchListeners() async {
                       );
                     },
                   ),
+          )
           ),
         ],
       ),

@@ -210,10 +210,13 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 except Exception:
                     state.clients.pop(target, None)
 
-    except (WebSocketDisconnect, OSError):
+    except (WebSocketDisconnect, OSError, Exception):
         other = state.active_calls.pop(client_id, None)
         if other:
             state.active_calls.pop(other, None)
-        async with state.db_pool.acquire() as conn:
-            await conn.execute("UPDATE users SET is_online=FALSE WHERE username=$1", client_id)
         state.clients.pop(client_id, None)
+        try:
+            async with state.db_pool.acquire() as conn:
+                await conn.execute("UPDATE users SET is_online=FALSE WHERE username=$1", client_id)
+        except Exception:
+            pass
