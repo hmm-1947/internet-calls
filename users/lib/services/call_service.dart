@@ -17,7 +17,8 @@ class CallService {
   MediaStream? _localStream;
 
   bool _isCleaningUp = false;
-
+  String? get pendingVideoOfferFrom => _pendingVideoOfferFrom;
+Map<String, dynamic>? get pendingVideoOffer => _pendingVideoOffer;
   String? _remoteUser;
   Map<String, dynamic>? _pendingOffer;
 
@@ -27,7 +28,9 @@ class CallService {
   CallState get state => _state;
   String? get remoteUser => _remoteUser;
   MediaStream? get localStream => _localStream;
-
+  void Function(String callerName, Map<String, dynamic> offerData)? onIncomingVideoCall;
+String? _pendingVideoOfferFrom;
+Map<String, dynamic>? _pendingVideoOffer;
   void Function(String callerName)? onIncomingCall;
   void Function(CallState state)? onCallStateChanged;
   void Function(String error)? onError;
@@ -40,7 +43,19 @@ class CallService {
   void removeChatListener(void Function(String from, String content) fn) {
     _chatListeners.remove(fn);
   }
+  final List<void Function(String type, Map<String, dynamic> data, String? from)> _videoSignalListeners = [];
 
+void addVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+  _videoSignalListeners.add(fn);
+}
+
+void removeVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+  _videoSignalListeners.remove(fn);
+}
+  void clearPendingVideoOffer() {
+  _pendingVideoOfferFrom = null;
+  _pendingVideoOffer = null;
+}
   void _notifyChatListeners(String from, String content) {
     for (final fn in List.from(_chatListeners)) {
       fn(from, content);
@@ -269,6 +284,9 @@ class CallService {
       track.enabled = !muted;
     });
   }
+void sendSignal(String target, Map<String, dynamic> data) {
+  _send({'target': target, 'data': data});
+}
 void sendChatMessage(String target, String content) {
     _send({
       "target": target,
@@ -373,6 +391,17 @@ void sendChatMessage(String target, String content) {
         onError?.call("Coins exhausted");
 
         break;
+      case 'video_offer':
+  _pendingVideoOfferFrom = from;
+  _pendingVideoOffer = Map<String, dynamic>.from(data);
+  onIncomingVideoCall?.call(from!, Map<String, dynamic>.from(data));
+  break;
+
+case 'video_answer':
+case 'video_candidate':
+case 'video_hangup':
+  _videoSignalListeners.forEach((fn) => fn(signalType, data, from));
+  break;
     }
   }
 

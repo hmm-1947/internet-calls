@@ -150,6 +150,33 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 asyncio.create_task(monitor_call(target))
                 if target in state.clients:
                     await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
+            elif msg_type == "video_offer":
+                async with state.db_pool.acquire() as conn:
+                    caller = await conn.fetchrow("SELECT role FROM users WHERE username=$1", client_id.lower())
+                    receiver = await conn.fetchrow("SELECT role FROM users WHERE username=$1", target.lower())
+                    row = await conn.fetchrow("SELECT coins FROM users WHERE username=$1", client_id)
+                if not caller or not receiver:
+                    await ws.send_text(json.dumps({"type": "error", "message": "Invalid users"}))
+                    continue
+                if caller["role"] != "user":
+                    await ws.send_text(json.dumps({"type": "error", "message": "Only users can initiate calls"}))
+                    continue
+                if receiver["role"] != "listener":
+                    await ws.send_text(json.dumps({"type": "error", "message": "You can only call listeners"}))
+                    continue
+                if row["coins"] < 1:
+                    await ws.send_text(json.dumps({"type": "error", "message": "Not enough coins"}))
+                    continue
+                if target in state.clients:
+                    await state.clients[target].send_text(json.dumps({
+                        "type": "incoming_call", "from": client_id, "data": message["data"]
+                    }))
+                else:
+                    await ws.send_text(json.dumps({"type": "error", "message": f"User '{target}' is not online"}))
+
+            elif msg_type in ["video_answer", "video_candidate", "video_hangup"]:
+                if target in state.clients:
+                    await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
 
             elif msg_type in ["hangup", "call_ended"]:
                 other = state.active_calls.pop(client_id, None)

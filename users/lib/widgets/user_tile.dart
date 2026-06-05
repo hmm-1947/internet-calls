@@ -6,7 +6,7 @@ class UserTile extends StatelessWidget {
   final bool enabled;
 final VoidCallback onCall;
   final VoidCallback? onChat;
-
+final VoidCallback? onVideoCall;
   const UserTile({
     super.key,
     required this.username,
@@ -14,6 +14,7 @@ final VoidCallback onCall;
     required this.enabled,
     required this.onCall,
     this.onChat,
+    this.onVideoCall
   });
 
   @override
@@ -123,6 +124,13 @@ if (onChat != null) ...[
               ),
             ),
           ),
+          IconButton(
+  onPressed: enabled ? onVideoCall : null,
+  icon: Icon(
+    Icons.videocam_rounded,
+    color: enabled ? const Color(0xFF3F51B5) : const Color(0xFF444466),
+  ),
+),
         ],
       ),
     );

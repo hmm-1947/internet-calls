@@ -5,6 +5,7 @@ class UserTile extends StatelessWidget {
   final bool online;
   final bool enabled;
   final VoidCallback? onChat;
+  final VoidCallback? onVideoCall;
 
   const UserTile({
     super.key,
@@ -12,6 +13,7 @@ class UserTile extends StatelessWidget {
     required this.online,
     required this.enabled,
     this.onChat,
+    this.onVideoCall
   });
 
   @override
