@@ -10,7 +10,10 @@ import state
 from admin import router as admin_router
 from routers.auth import router as auth_router
 from routers.messages import router as messages_router
+from routers.voice_messages import router as voice_messages_router
 from routers.calls import router as calls_router
+
+
 
 cred = credentials.Certificate("serviceAccountKey.json")
 firebase_admin.initialize_app(cred)
@@ -23,6 +26,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(messages_router)
+app.include_router(voice_messages_router)
 app.include_router(calls_router)
 
 DB_URL = os.getenv("DATABASE_URL", "postgresql://calluser:calluser@187.127.170.86:5432/callregistry")
@@ -53,6 +57,7 @@ async def startup():
         """)
         await conn.execute("INSERT INTO app_settings(key,value) VALUES('coins_per_minute','1') ON CONFLICT (key) DO NOTHING")
         await conn.execute("UPDATE users SET is_online=FALSE")
+        await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type TEXT NOT NULL DEFAULT 'text'")
 
 @app.on_event("shutdown")
 async def shutdown():
