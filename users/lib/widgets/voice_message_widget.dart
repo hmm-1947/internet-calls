@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
-import 'package:calls/screens/chat/audio_manager.dart';
+import 'package:calls/services/audio_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -9,8 +9,14 @@ import 'package:path_provider/path_provider.dart';
 class VoiceMessageWidget extends StatefulWidget {
   final String url;
   final bool isMe;
+  final DateTime sentAt;
 
-  const VoiceMessageWidget({super.key, required this.url, required this.isMe});
+  const VoiceMessageWidget({
+    super.key,
+    required this.url,
+    required this.isMe,
+    required this.sentAt,
+  });
 
   @override
   State<VoiceMessageWidget> createState() => _VoiceMessageWidgetState();
@@ -57,7 +63,10 @@ class _VoiceMessageWidgetState extends State<VoiceMessageWidget>
       final cacheFile = await _getCacheFile();
       if (!await cacheFile.exists()) {
         final response = await http.get(Uri.parse(widget.url));
-        await cacheFile.writeAsBytes(response.bodyBytes);
+        if (response.statusCode == 200) {
+          await cacheFile.writeAsBytes(response.bodyBytes);
+        } else
+          return;
       }
       await _player.setSource(DeviceFileSource(cacheFile.path));
       if (mounted) setState(() => _loaded = true);
@@ -85,11 +94,15 @@ class _VoiceMessageWidgetState extends State<VoiceMessageWidget>
       AudioManager.instance.play(_player, () {
         if (mounted) setState(() => _playing = false);
       });
-      if (!_loaded) {
-        final cacheFile = await _getCacheFile();
-        await _player.setSource(DeviceFileSource(cacheFile.path));
-        _loaded = true;
+      final cacheFile = await _getCacheFile();
+      if (!await cacheFile.exists()) {
+        final response = await http.get(Uri.parse(widget.url));
+        if (response.statusCode == 200) {
+          await cacheFile.writeAsBytes(response.bodyBytes);
+        }
       }
+      await _player.setSource(DeviceFileSource(cacheFile.path));
+      _loaded = true;
       await _player.resume();
     }
   }
@@ -156,15 +169,25 @@ class _VoiceMessageWidgetState extends State<VoiceMessageWidget>
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Text(
-                _playing ? _fmt(_position) : _fmt(_duration),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 10,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _playing ? _fmt(_position) : _fmt(_duration),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 10,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Text(
+                  '${widget.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${widget.sentAt.toLocal().minute.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

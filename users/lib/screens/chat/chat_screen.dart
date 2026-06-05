@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:calls/screens/chat/voice_message_widget.dart';
+import 'package:calls/widgets/voice_message_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -323,6 +323,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   url:
                                       '${AppConfig.httpBase}/voice_messages/${msg.content}',
                                   isMe: isMe,
+                                  sentAt: msg.createdAt,
                                 )
                               : Stack(
                                   children: [

@@ -8,7 +8,7 @@ import '../../services/call_service.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'voice_message_widget.dart';
+import '../../widgets/voice_message_widget.dart';
 
 class ChatScreen extends StatefulWidget {
   final String myUsername;
@@ -321,6 +321,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   url:
                                       '${AppConfig.httpBase}/voice_messages/${msg.content}',
                                   isMe: isMe,
+                                  sentAt: msg.createdAt,
                                 )
                               : Stack(
                                   children: [

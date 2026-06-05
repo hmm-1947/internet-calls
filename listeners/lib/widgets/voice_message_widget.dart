@@ -3,14 +3,14 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:listener/screens/chat/audio_manager.dart';
+import 'package:listener/services/audio_manager.dart';
 import 'package:path_provider/path_provider.dart';
 
 class VoiceMessageWidget extends StatefulWidget {
-  final String url;
-  final bool isMe;
-
-  const VoiceMessageWidget({super.key, required this.url, required this.isMe});
+final String url;
+final bool isMe;
+final DateTime sentAt;
+  const VoiceMessageWidget({super.key, required this.url, required this.isMe, required this.sentAt});
 
   @override
   State<VoiceMessageWidget> createState() => _VoiceMessageWidgetState();
@@ -52,17 +52,19 @@ class _VoiceMessageWidgetState extends State<VoiceMessageWidget>
     _preloadDuration();
   }
 
-  Future<void> _preloadDuration() async {
-    try {
-      final cacheFile = await _getCacheFile();
-      if (!await cacheFile.exists()) {
-        final response = await http.get(Uri.parse(widget.url));
+Future<void> _preloadDuration() async {
+  try {
+    final cacheFile = await _getCacheFile();
+    if (!await cacheFile.exists()) {
+      final response = await http.get(Uri.parse(widget.url));
+      if (response.statusCode == 200) {
         await cacheFile.writeAsBytes(response.bodyBytes);
-      }
-      await _player.setSource(DeviceFileSource(cacheFile.path));
-      if (mounted) setState(() => _loaded = true);
-    } catch (_) {}
-  }
+      } else return;
+    }
+    await _player.setSource(DeviceFileSource(cacheFile.path));
+    if (mounted) setState(() => _loaded = true);
+  } catch (_) {}
+}
 
   Future<File> _getCacheFile() async {
     final dir = await getTemporaryDirectory();
@@ -77,22 +79,26 @@ class _VoiceMessageWidgetState extends State<VoiceMessageWidget>
     super.dispose();
   }
 
-  void _togglePlay() async {
-    if (_playing) {
-      await _player.pause();
-      AudioManager.instance.clear(_player);
-    } else {
-      AudioManager.instance.play(_player, () {
-        if (mounted) setState(() => _playing = false);
-      });
-      if (!_loaded) {
-        final cacheFile = await _getCacheFile();
-        await _player.setSource(DeviceFileSource(cacheFile.path));
-        _loaded = true;
+void _togglePlay() async {
+  if (_playing) {
+    await _player.pause();
+    AudioManager.instance.clear(_player);
+  } else {
+    AudioManager.instance.play(_player, () {
+      if (mounted) setState(() => _playing = false);
+    });
+    final cacheFile = await _getCacheFile();
+    if (!await cacheFile.exists()) {
+      final response = await http.get(Uri.parse(widget.url));
+      if (response.statusCode == 200) {
+        await cacheFile.writeAsBytes(response.bodyBytes);
       }
-      await _player.resume();
     }
+    await _player.setSource(DeviceFileSource(cacheFile.path));
+    _loaded = true;
+    await _player.resume();
   }
+}
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -156,16 +162,20 @@ class _VoiceMessageWidgetState extends State<VoiceMessageWidget>
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Text(
-                _playing ? _fmt(_position) : _fmt(_duration),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 10,
-                ),
-              ),
-            ),
+            Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    Text(
+      _playing ? _fmt(_position) : _fmt(_duration),
+      style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
+    ),
+    const SizedBox(width: 8),
+    Text(
+      '${widget.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${widget.sentAt.toLocal().minute.toString().padLeft(2, '0')}',
+      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+    ),
+  ],
+),
           ],
         ),
       ],
