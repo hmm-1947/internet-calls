@@ -65,12 +65,18 @@ class AppStorage {
     await prefs.remove("pending_callkit_caller");
   }
 
-  static Future<void> logout() async {
-    final prefs = await _prefs;
+static Future<void> logout() async {
+  final prefs = await _prefs;
+  final username = prefs.getString("username");
 
-    await prefs.remove("username");
-    await prefs.remove("role");
-    await prefs.remove("pending_call_accepted");
-    await prefs.remove("pending_callkit_caller");
+  await prefs.remove("username");
+  await prefs.remove("role");
+  await prefs.remove("pending_call_accepted");
+  await prefs.remove("pending_callkit_caller");
+
+  if (username != null) {
+    await prefs.remove("cached_chats_$username");
+    await prefs.remove("call_logs_$username");
   }
+}
 }

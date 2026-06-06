@@ -143,10 +143,11 @@ class _MainShellState extends State<MainShell>
       ),
       const SizedBox(),
       LogsScreen(
-        onCallUser: (_) {
-          _switchTab(0);
-        },
-      ),
+  myUsername: widget.myUsername,
+  onCallUser: (_) {
+    _switchTab(0);
+  },
+),
       ProfileScreen(username: widget.myUsername, role:widget.role),
     ];
 

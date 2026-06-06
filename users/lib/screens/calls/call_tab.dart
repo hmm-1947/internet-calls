@@ -8,7 +8,7 @@ import '../../models/call_log.dart';
 import '../../services/call_log_store.dart';
 import '../../services/call_service.dart';
 import '../../widgets/incoming_call_dialog.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/user_tile.dart';
 import 'active_call_screen.dart';
 
@@ -99,22 +99,40 @@ class _CallTabState extends State<CallTab> {
   }
 
 Future<void> _fetchListeners() async {
-    try {
-      final response = await http.get(
-        Uri.parse("${AppConfig.httpBase}/listeners"),
-      );
-      if (response.statusCode == 200) {
-        final listeners = jsonDecode(response.body) as List;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('cached_listeners');
+    if (cached != null && _allUsers.isEmpty) {
+      final list = jsonDecode(cached) as List;
+      if (mounted) {
         setState(() {
-          _allUsers = listeners
-              .where((user) => user["username"] != widget.myUsername)
+          _allUsers = list
+              .where((u) => u["username"] != widget.myUsername)
               .cast<Map<String, dynamic>>()
               .toList();
           _filteredUsers = List.from(_allUsers);
         });
       }
-    } catch (_) {}
-  }
+    }
+
+    final response = await http.get(
+      Uri.parse("${AppConfig.httpBase}/listeners"),
+    );
+    if (response.statusCode == 200) {
+      await prefs.setString('cached_listeners', response.body);
+      final listeners = jsonDecode(response.body) as List;
+      if (mounted) {
+        setState(() {
+          _allUsers = listeners
+              .where((u) => u["username"] != widget.myUsername)
+              .cast<Map<String, dynamic>>()
+              .toList();
+          _filteredUsers = List.from(_allUsers);
+        });
+      }
+    }
+  } catch (_) {}
+}
 
   void _setupCallbacks() {
     _callService.onError = (error) {
@@ -210,15 +228,16 @@ Future<void> _fetchListeners() async {
     ).then((_) async {
       final duration = DateTime.now().difference(startTime).inSeconds;
 
-      await CallLogStore.instance.add(
-        CallLog(
-          name: remoteUser,
-          outgoing: _callService.state != CallState.ringing,
-          missed: false,
-          time: startTime,
-          durationSeconds: duration,
-        ),
-      );
+await CallLogStore.instance.add(
+  CallLog(
+    name: remoteUser,
+    outgoing: _callService.state != CallState.ringing,
+    missed: false,
+    time: startTime,
+    durationSeconds: duration,
+  ),
+  widget.myUsername,
+);
 
       _navigatingToCall = false;
     });
@@ -248,6 +267,7 @@ Future<void> _fetchListeners() async {
                 time: DateTime.now(),
                 durationSeconds: 0,
               ),
+              widget.myUsername,
             );
           },
         );

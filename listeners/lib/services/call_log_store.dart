@@ -13,7 +13,7 @@ class CallLogStore {
 
   List<CallLog> get logs => List.unmodifiable(_logs);
 
-  Future<void> load() async {
+  Future<void> load(String s) async {
     final prefs = await SharedPreferences.getInstance();
 
     final rawLogs = prefs.getStringList('call_logs') ?? [];
@@ -44,7 +44,7 @@ class CallLogStore {
     );
   }
 
-  Future<void> clear() async {
+  Future<void> clear(String s) async {
     _logs.clear();
 
     final prefs = await SharedPreferences.getInstance();

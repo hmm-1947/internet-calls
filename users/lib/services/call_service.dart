@@ -54,29 +54,51 @@ class CallService {
 
   CallService({required this.myUsername});
 
-  Future<void> connect() async {
-    if (_channel != null) {
+bool _shouldReconnect = true;
+
+Future<void> connect() async {
+  if (_channel != null) return;
+
+  _shouldReconnect = true;
+  await _connectWithRetry();
+}
+
+Future<void> _connectWithRetry() async {
+  while (_shouldReconnect) {
+    try {
+      _channel = WebSocketChannel.connect(
+        Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
+      );
+
+      _channel!.stream.listen(
+        _onMessage,
+        onError: (e) {
+          onError?.call("WebSocket error: $e");
+          _channel = null;
+          if (_shouldReconnect) {
+            Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+          }
+        },
+        onDone: () {
+          _channel = null;
+          if (_state != CallState.idle) {
+            _setState(CallState.ended);
+          }
+          if (_shouldReconnect) {
+            Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+          }
+        },
+        cancelOnError: true,
+      );
+
+      await _initializeWebRtc();
       return;
+    } catch (_) {
+      _channel = null;
+      await Future.delayed(const Duration(seconds: 3));
     }
-
-    _channel = WebSocketChannel.connect(
-      Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
-    );
-
-    _channel!.stream.listen(
-      _onMessage,
-      onError: (e) {
-        onError?.call("WebSocket error: $e");
-      },
-      onDone: () {
-        if (_state != CallState.idle) {
-          _setState(CallState.ended);
-        }
-      },
-    );
-
-    await _initializeWebRtc();
   }
+}
 
   Future<void> _initializeWebRtc() async {
     if (_peerConnection != null) {
@@ -127,9 +149,14 @@ class CallService {
     await _peerConnection!.createOffer({'offerToReceiveAudio': true});
   }
 
-  Future<void> _resetPeerConnection() async {
-    await _peerConnection?.close();
-    _peerConnection = null;
+Future<void> _resetPeerConnection() async {
+  await _peerConnection?.close();
+  _peerConnection = null;
+
+  _localStream ??= await navigator.mediaDevices.getUserMedia({
+      'audio': true,
+      'video': false,
+    });
 
     _peerConnection = await createPeerConnection(
       Map<String, dynamic>.from(AppConfig.iceServers),
@@ -396,16 +423,19 @@ class CallService {
     onCallStateChanged?.call(state);
   }
 
-  void disconnect() {
-    _channel?.sink.close();
-    _channel = null;
-  }
+void disconnect() {
+  _shouldReconnect = false;
+  _channel?.sink.close();
+  _channel = null;
+}
 
-  void _cleanup() {
-    _remoteUser = null;
-    _pendingOffer = null;
-  }
-
+void _cleanup() {
+  _localStream?.getTracks().forEach((track) => track.stop());
+  _localStream?.dispose();
+  _localStream = null;
+  _remoteUser = null;
+  _pendingOffer = null;
+}
   void dispose() {
     _localStream?.dispose();
     _peerConnection?.close();

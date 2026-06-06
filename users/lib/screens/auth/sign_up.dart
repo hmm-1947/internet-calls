@@ -21,8 +21,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _loading = false;
   bool _obscure = true;
   String? _error;
-  String _role = "user";
-
   Future<void> _submit() async {
     final username = _usernameController.text.trim().toLowerCase();
     final password = _passwordController.text.trim();
@@ -43,7 +41,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final result = await _authService.registerWithRole(
         username: username,
         password: password,
-        role: _role,
+        role: "user",
       );
 
       if (result == null) {
@@ -56,16 +54,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       await AppStorage.saveUsername(username);
 
       if (result["role"] != null) {
-        await AppStorage.saveRole(result["role"]);
+        await AppStorage.saveRole("user");
       }
 
       final token = await FCMService.getToken();
 
       if (token != null) {
-        await _authService.saveFcmToken(
-          username: username,
-          token: token,
-        );
+        await _authService.saveFcmToken(username: username, token: token);
       }
 
       if (!mounted) return;
@@ -73,10 +68,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => MainShell(
-            myUsername: username,
-            role: _role,
-          ),
+          builder: (_) => MainShell(myUsername: username, role: "user"),
         ),
         (_) => false,
       );
@@ -103,25 +95,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return TextField(
       controller: controller,
       obscureText: obscure,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 16,
-      ),
+      style: const TextStyle(color: Colors.white, fontSize: 16),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(
-          color: Color(0xFF555555),
-        ),
-        prefixIcon: Icon(
-          icon,
-          color: const Color(0xFF555555),
-        ),
+        hintStyle: const TextStyle(color: Color(0xFF555555)),
+        prefixIcon: Icon(icon, color: const Color(0xFF555555)),
         suffixIcon: toggleObscure != null
             ? IconButton(
                 icon: Icon(
-                  obscure
-                      ? Icons.visibility_off
-                      : Icons.visibility,
+                  obscure ? Icons.visibility_off : Icons.visibility,
                   color: const Color(0xFF555555),
                 ),
                 onPressed: toggleObscure,
@@ -135,83 +117,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: Color(0xFF2ECC71),
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: Color(0xFF2ECC71), width: 1.5),
         ),
-      ),
-    );
-  }
-
-  Widget _buildRoleSelector() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _role = "user";
-                });
-              },
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _role == "user"
-                      ? const Color(0xFF2ECC71)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                  child: Text(
-                    "User",
-                    style: TextStyle(
-                      color: _role == "user"
-                          ? Colors.black
-                          : Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _role = "listener";
-                });
-              },
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _role == "listener"
-                      ? const Color(0xFF2ECC71)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                  child: Text(
-                    "Listener",
-                    style: TextStyle(
-                      color: _role == "listener"
-                          ? Colors.black
-                          : Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -230,9 +137,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0D0D0D),
         elevation: 0,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(28),
@@ -252,10 +157,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
             const Text(
               "Pick a username and password",
-              style: TextStyle(
-                color: Color(0xFF888888),
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Color(0xFF888888), fontSize: 14),
             ),
 
             const SizedBox(height: 36),
@@ -281,18 +183,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
               },
             ),
 
-            const SizedBox(height: 16),
-
-            _buildRoleSelector(),
-
             if (_error != null) ...[
               const SizedBox(height: 16),
               Text(
                 _error!,
-                style: const TextStyle(
-                  color: Color(0xFFE74C3C),
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: Color(0xFFE74C3C), fontSize: 13),
               ),
             ],
 
@@ -306,10 +201,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2ECC71),
                   foregroundColor: Colors.black,
-                  disabledBackgroundColor:
-                      const Color(0xFF1A1A1A),
-                  disabledForegroundColor:
-                      const Color(0xFF555555),
+                  disabledBackgroundColor: const Color(0xFF1A1A1A),
+                  disabledForegroundColor: const Color(0xFF555555),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

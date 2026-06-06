@@ -1,5 +1,6 @@
 import 'package:calls/screens/auth/auth_landing.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api_endpoints.dart';
 import '../../core/config.dart';
 import '../../core/storage.dart';
@@ -29,24 +30,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _loading = false);
   }
 
-  Future<void> _fetchProfile() async {
-    try {
-      final res = await http.get(
-        Uri.parse(
-          '${AppConfig.httpBase}${ApiEndpoints.userProfile}${widget.username}',
-        ),
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+Future<void> _fetchProfile() async {
+  final prefs = await SharedPreferences.getInstance();
+  final cached = prefs.getString('cached_profile_${widget.username}');
+  if (cached != null && _coins == null) {
+    final data = jsonDecode(cached);
+    if (mounted) {
+      setState(() {
+        _coins = data['coins'];
+        _loading = false;
+      });
+    }
+  }
+
+  try {
+    final res = await http.get(
+      Uri.parse('${AppConfig.httpBase}${ApiEndpoints.userProfile}${widget.username}'),
+    );
+    if (res.statusCode == 200) {
+      await prefs.setString('cached_profile_${widget.username}', res.body);
+      final data = jsonDecode(res.body);
+      if (mounted) {
         setState(() {
           _coins = data['coins'];
           _loading = false;
         });
       }
-    } catch (_) {
-      setState(() => _loading = false);
     }
+  } catch (_) {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   Future<void> _logout() async {
     await AppStorage.logout();

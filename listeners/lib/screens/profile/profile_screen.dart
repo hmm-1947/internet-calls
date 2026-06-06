@@ -10,11 +10,7 @@ class ProfileScreen extends StatefulWidget {
   final String username;
   final String role;
 
-  const ProfileScreen({
-    super.key,
-    required this.username,
-    required this.role,
-  });
+  const ProfileScreen({super.key, required this.username, required this.role});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -22,24 +18,27 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   int? _coins;
+  int? _totalMinutes;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    if (widget.role == 'user') _fetchProfile();
-    else setState(() => _loading = false);
+    _fetchProfile();
   }
 
   Future<void> _fetchProfile() async {
     try {
       final res = await http.get(
-        Uri.parse('${AppConfig.httpBase}${ApiEndpoints.userProfile}${widget.username}'),
+        Uri.parse(
+          '${AppConfig.httpBase}${ApiEndpoints.userProfile}${widget.username}',
+        ),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
           _coins = data['coins'];
+          _totalMinutes = ((data['total_call_duration'] ?? 0) / 60).ceil();
           _loading = false;
         });
       }
@@ -66,7 +65,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: const Color(0xFF0A0A0F),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF3B6B)))
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFFF3B6B)),
+              )
             : Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -79,9 +80,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: const Color(0xFF1E1E2A),
-                        border: Border.all(color: const Color(0xFFFF3B6B), width: 2),
+                        border: Border.all(
+                          color: const Color(0xFFFF3B6B),
+                          width: 2,
+                        ),
                       ),
-                      child: const Icon(Icons.person_rounded, size: 48, color: Color(0xFFFF3B6B)),
+                      child: const Icon(
+                        Icons.person_rounded,
+                        size: 48,
+                        color: Color(0xFFFF3B6B),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -94,14 +102,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E2A),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         widget.role,
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF8888AA)),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8888AA),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -116,14 +130,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFCC00), size: 32),
+                            const Icon(
+                              Icons.monetization_on_rounded,
+                              color: Color(0xFFFFCC00),
+                              size: 32,
+                            ),
                             const SizedBox(width: 16),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Coins', style: TextStyle(color: Color(0xFF8888AA), fontSize: 12)),
+                                const Text(
+                                  'Coins',
+                                  style: TextStyle(
+                                    color: Color(0xFF8888AA),
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 Text(
                                   '${_coins ?? 0}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (widget.role == 'listener') ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF13131A),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF252533)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.headset_mic_rounded,
+                              color: Color(0xFFFF3B6B),
+                              size: 32,
+                            ),
+                            const SizedBox(width: 16),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Total Talk Time',
+                                  style: TextStyle(
+                                    color: Color(0xFF8888AA),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  '${_totalMinutes ?? 0} min',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 28,
@@ -142,12 +208,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _logout,
-                        icon: const Icon(Icons.logout_rounded, color: Color(0xFFFF3B6B)),
-                        label: const Text('Logout', style: TextStyle(color: Color(0xFFFF3B6B))),
+                        icon: const Icon(
+                          Icons.logout_rounded,
+                          color: Color(0xFFFF3B6B),
+                        ),
+                        label: const Text(
+                          'Logout',
+                          style: TextStyle(color: Color(0xFFFF3B6B)),
+                        ),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           side: const BorderSide(color: Color(0xFFFF3B6B)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),

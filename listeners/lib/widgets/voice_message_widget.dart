@@ -67,9 +67,9 @@ Future<void> _preloadDuration() async {
 }
 
   Future<File> _getCacheFile() async {
-    final dir = await getTemporaryDirectory();
+    final dir = await getExternalStorageDirectory();
     final filename = widget.url.split('/').last;
-    return File('${dir.path}/voice_$filename');
+    return File('${dir?.path}/voice_$filename');
   }
 
   @override

@@ -4,24 +4,20 @@ import '../../services/call_log_store.dart';
 
 class LogsScreen extends StatefulWidget {
   final void Function(String username)? onCallUser;
+  final String myUsername;
 
-  const LogsScreen({
-    super.key,
-    this.onCallUser,
-  });
+  const LogsScreen({super.key, this.onCallUser, required this.myUsername});
 
   @override
-  State<LogsScreen> createState() =>
-      _LogsScreenState();
+  State<LogsScreen> createState() => _LogsScreenState();
 }
 
-class _LogsScreenState
-    extends State<LogsScreen> {
+class _LogsScreenState extends State<LogsScreen> {
   @override
   void initState() {
     super.initState();
 
-    CallLogStore.instance.load().then((_) {
+    CallLogStore.instance.load(widget.myUsername).then((_) {
       if (mounted) {
         setState(() {});
       }
@@ -56,14 +52,10 @@ class _LogsScreenState
     final logs = CallLogStore.instance.logs;
 
     return Scaffold(
-      backgroundColor: const Color(
-        0xFF0D0D0D,
-      ),
+      backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
         toolbarHeight: 70,
-        backgroundColor: const Color(
-          0xFF0D0D0D,
-        ),
+        backgroundColor: const Color(0xFF0D0D0D),
         elevation: 0,
         title: const Text(
           'Calls',
@@ -76,19 +68,13 @@ class _LogsScreenState
         actions: [
           IconButton(
             onPressed: () {},
-            icon: const Icon(
-              Icons.search,
-              color: Colors.white70,
-            ),
+            icon: const Icon(Icons.search, color: Colors.white70),
           ),
           PopupMenuButton<String>(
-            color: const Color(
-              0xFF1A1A1A,
-            ),
+            color: const Color(0xFF1A1A1A),
             onSelected: (value) async {
               if (value == "clear") {
-                await CallLogStore.instance
-                    .clear();
+                await CallLogStore.instance.clear(widget.myUsername);
 
                 if (mounted) {
                   setState(() {});
@@ -100,173 +86,104 @@ class _LogsScreenState
                 value: "clear",
                 child: Text(
                   "Clear History",
-                  style: TextStyle(
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(color: Colors.white),
                 ),
               ),
             ],
-            icon: const Icon(
-              Icons.more_vert,
-              color: Colors.white70,
-            ),
+            icon: const Icon(Icons.more_vert, color: Colors.white70),
           ),
         ],
       ),
       body: logs.isEmpty
           ? const Center(
               child: Column(
-                mainAxisSize:
-                    MainAxisSize.min,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.history,
-                    color: Color(
-                      0xFF2A2A2A,
-                    ),
-                    size: 64,
-                  ),
+                  Icon(Icons.history, color: Color(0xFF2A2A2A), size: 64),
                   SizedBox(height: 16),
                   Text(
                     'No call history yet',
-                    style: TextStyle(
-                      color: Color(
-                        0xFF555555,
-                      ),
-                      fontSize: 15,
-                    ),
+                    style: TextStyle(color: Color(0xFF555555), fontSize: 15),
                   ),
                 ],
               ),
             )
           : ListView.builder(
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 16,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: logs.length,
-              itemBuilder:
-                  (context, index) {
+              itemBuilder: (context, index) {
                 final log = logs[index];
 
-                final statusColor =
-                    log.missed
-                        ? const Color(
-                            0xFFFF4D4F,
-                          )
-                        : const Color(
-                            0xFF22C55E,
-                          );
+                final statusColor = log.missed
+                    ? const Color(0xFFFF4D4F)
+                    : const Color(0xFF22C55E);
 
-                final statusIcon =
-                    log.missed
-                        ? Icons.call_missed
-                        : log.outgoing
-                            ? Icons.call_made
-                            : Icons.call_received;
+                final statusIcon = log.missed
+                    ? Icons.call_missed
+                    : log.outgoing
+                    ? Icons.call_made
+                    : Icons.call_received;
 
-                final statusText =
-                    log.missed
-                        ? 'Missed Call'
-                        : '${(log.durationSeconds / 60).toStringAsFixed(2)} min';
+                final statusText = log.missed
+                    ? 'Missed Call'
+                    : '${(log.durationSeconds / 60).toStringAsFixed(2)} min';
 
                 return Padding(
-                  padding:
-                      const EdgeInsets.only(
-                    bottom: 20,
-                  ),
+                  padding: const EdgeInsets.only(bottom: 20),
                   child: InkWell(
-                    borderRadius:
-                        BorderRadius.circular(
-                      12,
-                    ),
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () {
-                      widget.onCallUser
-                          ?.call(log.name);
+                      widget.onCallUser?.call(log.name);
                     },
                     child: Row(
                       children: [
                         Container(
                           width: 54,
                           height: 54,
-                          decoration:
-                              const BoxDecoration(
-                            shape:
-                                BoxShape.circle,
-                            gradient:
-                                LinearGradient(
-                              colors: [
-                                Color(
-                                  0xFFFF9966,
-                                ),
-                                Color(
-                                  0xFFFF5E62,
-                                ),
-                              ],
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFFF9966), Color(0xFFFF5E62)],
                             ),
                           ),
                           child: Center(
                             child: Text(
-                              log.name[0]
-                                  .toUpperCase(),
-                              style:
-                                  const TextStyle(
-                                color:
-                                    Colors.white,
-                                fontWeight:
-                                    FontWeight
-                                        .w700,
-                                fontSize:
-                                    20,
+                              log.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 20,
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(
-                          width: 14,
-                        ),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 log.name,
-                                style:
-                                    const TextStyle(
-                                  color:
-                                      Colors
-                                          .white,
-                                  fontSize:
-                                      18,
-                                  fontWeight:
-                                      FontWeight
-                                          .w700,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(
-                                height: 4,
-                              ),
+                              const SizedBox(height: 4),
                               Row(
                                 children: [
                                   Icon(
                                     statusIcon,
-                                    color:
-                                        statusColor,
+                                    color: statusColor,
                                     size: 13,
                                   ),
-                                  const SizedBox(
-                                    width: 4,
-                                  ),
+                                  const SizedBox(width: 4),
                                   Text(
                                     statusText,
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          statusColor,
-                                      fontSize:
-                                          12,
+                                    style: TextStyle(
+                                      color: statusColor,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
@@ -275,13 +192,9 @@ class _LogsScreenState
                           ),
                         ),
                         Text(
-                          _formatTime(
-                            log.time,
-                          ),
-                          style:
-                              const TextStyle(
-                            color:
-                                Colors.white54,
+                          _formatTime(log.time),
+                          style: const TextStyle(
+                            color: Colors.white54,
                             fontSize: 12,
                           ),
                         ),

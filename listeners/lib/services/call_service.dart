@@ -54,28 +54,50 @@ class CallService {
 
   CallService({required this.myUsername});
 
+  bool _shouldReconnect = true;
+
   Future<void> connect() async {
-    if (_channel != null) {
-      return;
+    if (_channel != null) return;
+
+    _shouldReconnect = true;
+    await _connectWithRetry();
+  }
+
+  Future<void> _connectWithRetry() async {
+    while (_shouldReconnect) {
+      try {
+        _channel = WebSocketChannel.connect(
+          Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
+        );
+
+        _channel!.stream.listen(
+          _onMessage,
+          onError: (e) {
+            onError?.call("WebSocket error: $e");
+            _channel = null;
+            if (_shouldReconnect) {
+              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+            }
+          },
+          onDone: () {
+            _channel = null;
+            if (_state != CallState.idle) {
+              _setState(CallState.ended);
+            }
+            if (_shouldReconnect) {
+              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+            }
+          },
+          cancelOnError: true,
+        );
+
+        await _initializeWebRtc();
+        return;
+      } catch (_) {
+        _channel = null;
+        await Future.delayed(const Duration(seconds: 3));
+      }
     }
-
-    _channel = WebSocketChannel.connect(
-      Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
-    );
-
-    _channel!.stream.listen(
-      _onMessage,
-      onError: (e) {
-        onError?.call("WebSocket error: $e");
-      },
-      onDone: () {
-        if (_state != CallState.idle) {
-          _setState(CallState.ended);
-        }
-      },
-    );
-
-    await _initializeWebRtc();
   }
 
   Future<void> _initializeWebRtc() async {
@@ -396,6 +418,7 @@ class CallService {
   }
 
   void disconnect() {
+    _shouldReconnect = false;
     _channel?.sink.close();
     _channel = null;
   }

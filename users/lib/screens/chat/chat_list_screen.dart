@@ -5,6 +5,7 @@ import '../../core/api_endpoints.dart';
 import '../../core/config.dart';
 import '../../services/call_service.dart';
 import 'chat_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChatListScreen extends StatefulWidget {
   final String myUsername;
@@ -57,28 +58,39 @@ class _ChatListScreenState extends State<ChatListScreen> {
     });
   }
 
-  Future<void> _fetchChats() async {
-    setState(() => _loading = true);
-    try {
-      final res = await http.get(
-        Uri.parse(
-          '${AppConfig.httpBase}${ApiEndpoints.chats}${widget.myUsername}',
-        ),
-      );
-      if (res.statusCode == 200) {
-        final list = jsonDecode(res.body) as List;
-        final chats = list.map((e) => Map<String, dynamic>.from(e)).toList();
-        chats.sort((a, b) => b['last_at'].compareTo(a['last_at']));
-        setState(() {
-          _chats = chats;
-        });
-      }
-    } catch (e) {
-      print('fetchChats error: $e');
-    } finally {
-      setState(() => _loading = false);
+Future<void> _fetchChats() async {
+  final prefs = await SharedPreferences.getInstance();
+  final cached = prefs.getString('cached_chats_${widget.myUsername}');
+  if (cached != null && _chats.isEmpty) {
+    final list = jsonDecode(cached) as List;
+    if (mounted) {
+      setState(() {
+        _chats = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        _loading = false;
+      });
     }
   }
+
+  try {
+    final res = await http.get(
+      Uri.parse('${AppConfig.httpBase}${ApiEndpoints.chats}${widget.myUsername}'),
+    );
+    if (res.statusCode == 200) {
+      await prefs.setString('cached_chats_${widget.myUsername}', res.body);
+      final list = jsonDecode(res.body) as List;
+      final chats = list.map((e) => Map<String, dynamic>.from(e)).toList();
+      chats.sort((a, b) => b['last_at'].compareTo(a['last_at']));
+      if (mounted) {
+        setState(() {
+          _chats = chats;
+          _loading = false;
+        });
+      }
+    }
+  } catch (_) {
+    if (mounted) setState(() => _loading = false);
+  }
+}
 
   String _formatTime(String isoString) {
     final dt = DateTime.parse(isoString).toLocal();

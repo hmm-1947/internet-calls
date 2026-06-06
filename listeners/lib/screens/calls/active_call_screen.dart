@@ -1,6 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:listener/core/config.dart';
+import 'package:listener/core/storage.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import '../../services/call_service.dart';
 import '../../widgets/control_button.dart';
 
@@ -15,36 +21,31 @@ class ActiveCallScreen extends StatefulWidget {
   });
 
   @override
-  State<ActiveCallScreen> createState() =>
-      _ActiveCallScreenState();
+  State<ActiveCallScreen> createState() => _ActiveCallScreenState();
 }
 
-class _ActiveCallScreenState
-    extends State<ActiveCallScreen> {
+class _ActiveCallScreenState extends State<ActiveCallScreen> {
   Timer? _timer;
-
+  final AudioRecorder _recorder = AudioRecorder();
+  String? _recordingPath;
+  String? _myRole;
   int _seconds = 0;
 
   bool _muted = false;
   bool _speakerOn = false;
 
-  void Function(CallState)?
-      _previousStateCallback;
+  void Function(CallState)? _previousStateCallback;
 
   @override
   void initState() {
     super.initState();
 
     _startTimer();
+    _loadRoleAndRecord();
+    _previousStateCallback = widget.callService.onCallStateChanged;
 
-    _previousStateCallback =
-        widget.callService.onCallStateChanged;
-
-    widget.callService.onCallStateChanged =
-        (state) {
-      if ((state == CallState.ended ||
-              state == CallState.idle) &&
-          mounted) {
+    widget.callService.onCallStateChanged = (state) {
+      if ((state == CallState.ended || state == CallState.idle) && mounted) {
         if (Navigator.canPop(context)) {
           Navigator.pop(context);
         }
@@ -56,31 +57,55 @@ class _ActiveCallScreenState
   void dispose() {
     _timer?.cancel();
 
-    widget.callService.onCallStateChanged =
-        _previousStateCallback;
-
+    widget.callService.onCallStateChanged = _previousStateCallback;
+    _stopAndUploadRecording();
+    _recorder.dispose();
     super.dispose();
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) {
-        if (!mounted) return;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
 
-        setState(() {
-          _seconds++;
-        });
-      },
+      setState(() {
+        _seconds++;
+      });
+    });
+  }
+
+  Future<void> _stopAndUploadRecording() async {
+    if (_myRole != 'listener' || _recordingPath == null) return;
+    final path = await _recorder.stop();
+    if (path == null) return;
+    final file = File(path);
+    if (!await file.exists()) return;
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.httpBase}/recordings/upload'),
     );
+    request.fields['caller'] = widget.remoteUser;
+    request.fields['listener'] = widget.callService.myUsername;
+    request.files.add(await http.MultipartFile.fromPath('file', path));
+    await request.send();
+  }
+
+  Future<void> _loadRoleAndRecord() async {
+    _myRole = await AppStorage.getRole();
+    if (_myRole == 'listener') {
+      final dir = await getExternalStorageDirectory();
+      _recordingPath =
+          '${dir?.path}/rec_${widget.remoteUser}_${DateTime.now().millisecondsSinceEpoch}.aac';
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: _recordingPath!,
+      );
+    }
   }
 
   String get _formattedTime {
-    final minutes =
-        (_seconds ~/ 60).toString().padLeft(2, '0');
+    final minutes = (_seconds ~/ 60).toString().padLeft(2, '0');
 
-    final seconds =
-        (_seconds % 60).toString().padLeft(2, '0');
+    final seconds = (_seconds % 60).toString().padLeft(2, '0');
 
     return "$minutes:$seconds";
   }
@@ -100,9 +125,7 @@ class _ActiveCallScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(
-        0xFF0D0D0D,
-      ),
+      backgroundColor: const Color(0xFF0D0D0D),
       body: SafeArea(
         child: Column(
           children: [
@@ -112,25 +135,16 @@ class _ActiveCallScreenState
               height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(
-                  0xFF1A1A1A,
-                ),
-                border: Border.all(
-                  color: const Color(
-                    0xFF2ECC71,
-                  ),
-                  width: 2,
-                ),
+                color: const Color(0xFF1A1A1A),
+                border: Border.all(color: const Color(0xFF2ECC71), width: 2),
               ),
               child: Center(
                 child: Text(
-                  widget.remoteUser[0]
-                      .toUpperCase(),
+                  widget.remoteUser[0].toUpperCase(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 44,
-                    fontWeight:
-                        FontWeight.w700,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -141,41 +155,28 @@ class _ActiveCallScreenState
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 28,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               _formattedTime,
               style: const TextStyle(
-                color: Color(
-                  0xFF2ECC71,
-                ),
+                color: Color(0xFF2ECC71),
                 fontSize: 18,
-                fontWeight:
-                    FontWeight.w500,
+                fontWeight: FontWeight.w500,
                 letterSpacing: 2,
               ),
             ),
             const Spacer(flex: 2),
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 40,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 40),
               child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment
-                        .spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   ControlButton(
-                    icon: _muted
-                        ? Icons.mic_off
-                        : Icons.mic,
-                    label: _muted
-                        ? "Unmute"
-                        : "Mute",
+                    icon: _muted ? Icons.mic_off : Icons.mic,
+                    label: _muted ? "Unmute" : "Mute",
                     active: _muted,
                     onTap: _toggleMute,
                   ),
@@ -184,13 +185,9 @@ class _ActiveCallScreenState
                     child: Container(
                       width: 72,
                       height: 72,
-                      decoration:
-                          const BoxDecoration(
-                        shape:
-                            BoxShape.circle,
-                        color: Color(
-                          0xFFE74C3C,
-                        ),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFFE74C3C),
                       ),
                       child: const Icon(
                         Icons.call_end,
@@ -200,15 +197,12 @@ class _ActiveCallScreenState
                     ),
                   ),
                   ControlButton(
-                    icon: _speakerOn
-                        ? Icons.volume_up
-                        : Icons.volume_down,
+                    icon: _speakerOn ? Icons.volume_up : Icons.volume_down,
                     label: "Speaker",
                     active: _speakerOn,
                     onTap: () {
                       setState(() {
-                        _speakerOn =
-                            !_speakerOn;
+                        _speakerOn = !_speakerOn;
                       });
                     },
                   ),

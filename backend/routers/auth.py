@@ -12,6 +12,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    app_type: str = "user"
 
 class SaveFCMRequest(BaseModel):
     username: str
@@ -47,6 +48,10 @@ async def login_user(req: LoginRequest):
             "SELECT username, role FROM users WHERE username=$1 AND password=$2",
             username, req.password,
         )
+    if row and req.app_type == "user" and row["role"] == "listener":
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    if row and req.app_type == "listener" and row["role"] == "user":
+        raise HTTPException(status_code=401, detail="Invalid username or password")
     if row:
         return {"status": "ok", "username": row["username"], "role": row["role"]}
     raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -62,12 +67,17 @@ async def save_fcm(req: SaveFCMRequest):
 async def get_profile(username: str):
     async with state.db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT username, coins, role FROM users WHERE username=$1",
+            "SELECT username, coins, role, total_call_duration FROM users WHERE username=$1",
             username.strip().lower()
         )
     if not row:
         raise HTTPException(status_code=404)
-    return {"username": row["username"], "coins": row["coins"], "role": row["role"]}
+    return {
+        "username": row["username"],
+        "coins": row["coins"],
+        "role": row["role"],
+        "total_call_duration": row["total_call_duration"]
+    }
 
 @router.get("/user/{username}")
 async def check_user(username: str):

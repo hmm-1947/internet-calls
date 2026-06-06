@@ -80,6 +80,7 @@ class AuthService {
         body: jsonEncode({
           "username": username.trim().toLowerCase(),
           "password": password,
+          "app_type": "listener",
         }),
       );
 

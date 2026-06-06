@@ -36,31 +36,65 @@ async def send_push(token, caller):
         return False
 
 async def monitor_call(caller):
-    while caller in state.call_sessions:
+    while True:
+        await asyncio.sleep(5)
+        
+        if caller not in state.call_sessions:
+            break
+
+        session = state.call_sessions.get(caller)
+        if not session:
+            break
+
         async with state.db_pool.acquire() as conn:
             user = await conn.fetchrow("SELECT coins FROM users WHERE username=$1", caller)
             setting = await conn.fetchrow("SELECT value FROM app_settings WHERE key='coins_per_minute'")
 
-        coins_per_minute = max(1, int(setting["value"]))
-        session = state.call_sessions[caller]
-        elapsed_minutes = math.ceil((time.time() - session["started"]) / 60)
-        max_minutes = max(1, user["coins"] // coins_per_minute)
+        if not user or not setting:
+            break
 
-        if elapsed_minutes >= max_minutes:
+        coins_per_minute = max(1, int(setting["value"]))
+        elapsed_minutes = math.ceil((time.time() - session["started"]) / 60)
+        coins_needed = elapsed_minutes * coins_per_minute
+
+        if user["coins"] < coins_needed:
             listener = session["listener"]
+            
+            # deduct coins before clearing session
+            duration_seconds = int(time.time() - session["started"])
+            async with state.db_pool.acquire() as conn:
+                setting2 = await conn.fetchrow("SELECT value FROM app_settings WHERE key='coins_per_minute'")
+                cpm = int(setting2["value"])
+                coins_used = math.ceil(duration_seconds / 60) * cpm
+                await conn.execute(
+                    "UPDATE users SET coins=GREATEST(coins-$1,0) WHERE username=$2",
+                    coins_used, caller
+                )
+                await conn.execute(
+                    "UPDATE users SET total_call_duration=total_call_duration+$1, daily_call_duration=daily_call_duration+$1 WHERE username=$2",
+                    duration_seconds, listener
+                )
+
+            session["charged"] = True
+
             for uid in [caller, listener]:
                 if uid in state.clients:
                     try:
-                        await state.clients[uid].send_text(json.dumps({"type": "coins_exhausted"}))
-                        await state.clients[uid].send_text(json.dumps({"type": "hangup"}))
+                        await state.clients[uid].send_text(json.dumps({
+                            "type": "error",
+                            "message": "Not enough coins to continue the call"
+                        }))
+                        await state.clients[uid].send_text(json.dumps({
+                            "from": uid,
+                            "data": {"type": "hangup"}
+                        }))
                     except RuntimeError:
                         state.clients.pop(uid, None)
+
             state.active_calls.pop(caller, None)
             state.active_calls.pop(listener, None)
             state.call_sessions.pop(caller, None)
             break
-
-        await asyncio.sleep(5)
 
 async def _try_fcm_fallback(ws, client_id, target, offer_data):
     async with state.db_pool.acquire() as conn:
