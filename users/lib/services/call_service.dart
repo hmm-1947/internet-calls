@@ -65,28 +65,25 @@ void removeVideoSignalListener(void Function(String type, Map<String, dynamic> d
   CallService({required this.myUsername});
 
   Future<void> connect() async {
-    if (_channel != null) {
-      return;
-    }
+  if (_channel != null) return;
 
-    _channel = WebSocketChannel.connect(
-      Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
-    );
+  _channel = WebSocketChannel.connect(
+    Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
+  );
 
-    _channel!.stream.listen(
-      _onMessage,
-      onError: (e) {
-        onError?.call("WebSocket error: $e");
-      },
-      onDone: () {
-        if (_state != CallState.idle) {
-          _setState(CallState.ended);
-        }
-      },
-    );
-
-    await _initializeWebRtc();
-  }
+  _channel!.stream.listen(
+    _onMessage,
+    onError: (e) {
+      onError?.call("WebSocket error: $e");
+    },
+    onDone: () {
+      _channel = null;
+      if (_state != CallState.idle) {
+        _setState(CallState.ended);
+      }
+    },
+  );
+}
 
   Future<void> _initializeWebRtc() async {
     if (_peerConnection != null) {
@@ -182,7 +179,7 @@ void removeVideoSignalListener(void Function(String type, Map<String, dynamic> d
 
   Future<void> call(String targetUsername) async {
     final prefs = await SharedPreferences.getInstance();
-
+    await _initializeWebRtc();
     final role = prefs.getString("role");
 
     if (role != "user") {
@@ -207,6 +204,7 @@ void removeVideoSignalListener(void Function(String type, Map<String, dynamic> d
   }
 
   Future<void> acceptCall() async {
+    await _initializeWebRtc();
     if (_pendingOffer == null || _remoteUser == null) {
       return;
     }

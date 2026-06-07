@@ -5,11 +5,15 @@ import 'package:listener/services/video_call_services.dart';
 class VideoCallScreen extends StatefulWidget {
   final VideoCallService videoCallService;
   final String remoteUser;
+  final MediaStream? initialRemoteStream;
+  final Map<String, dynamic>? offerData;
 
   const VideoCallScreen({
     super.key,
     required this.videoCallService,
     required this.remoteUser,
+    this.initialRemoteStream,
+    this.offerData,
   });
 
   @override
@@ -25,25 +29,39 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   @override
   void initState() {
     super.initState();
-    _initRenderers();
+
     widget.videoCallService.onCallEnded = () {
       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
     };
+
     widget.videoCallService.onRemoteStream = (stream) {
-      if (mounted) setState(() => _remoteRenderer.srcObject = stream);
+      if (mounted) {
+        setState(() => _remoteRenderer.srcObject = stream);
+      }
     };
-    if (widget.videoCallService.remoteStream != null) {
-      _remoteRenderer.srcObject = widget.videoCallService.remoteStream;
-    }
+
+    _initRenderers();
   }
 
   Future<void> _initRenderers() async {
     await _localRenderer.initialize();
     await _remoteRenderer.initialize();
-    _localRenderer.srcObject = widget.videoCallService.localStream;
-    if (widget.videoCallService.remoteStream != null) {
-      _remoteRenderer.srcObject = widget.videoCallService.remoteStream;
+
+    if (widget.offerData != null) {
+      await widget.videoCallService.acceptCall(
+        widget.offerData!,
+        widget.remoteUser,
+      );
     }
+
+    _localRenderer.srcObject = widget.videoCallService.localStream;
+
+    final remote =
+        widget.initialRemoteStream ?? widget.videoCallService.remoteStream;
+    if (remote != null) {
+      _remoteRenderer.srcObject = remote;
+    }
+
     if (mounted) setState(() {});
   }
 
@@ -126,7 +144,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       shape: BoxShape.circle,
                       color: Color(0xFFE74C3C),
                     ),
-                    child: const Icon(Icons.call_end, color: Colors.white, size: 28),
+                    child: const Icon(
+                      Icons.call_end,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
                 ),
                 _ControlBtn(
@@ -148,7 +170,11 @@ class _ControlBtn extends StatelessWidget {
   final VoidCallback onTap;
   final bool active;
 
-  const _ControlBtn({required this.icon, required this.onTap, this.active = false});
+  const _ControlBtn({
+    required this.icon,
+    required this.onTap,
+    this.active = false,
+  });
 
   @override
   Widget build(BuildContext context) {

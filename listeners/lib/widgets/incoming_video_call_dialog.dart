@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:listener/services/video_call_services.dart';
+import 'package:listener/screens/calls/video_call_screen.dart';
 
 class IncomingVideoCallDialog extends StatelessWidget {
   final String callerName;
-  final VoidCallback onAccept;
+  final Map<String, dynamic> offerData;        // ADD: pass offer data in
+  final VideoCallService videoCallService;     // ADD: pass service in
   final VoidCallback onReject;
 
   const IncomingVideoCallDialog({
     super.key,
     required this.callerName,
-    required this.onAccept,
+    required this.offerData,
+    required this.videoCallService,
     required this.onReject,
   });
 
@@ -22,6 +26,7 @@ class IncomingVideoCallDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // ... your existing UI widgets unchanged ...
             Container(
               width: 72,
               height: 72,
@@ -68,7 +73,8 @@ class IncomingVideoCallDialog extends StatelessWidget {
                 const SizedBox(width: 14),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: onAccept,
+                    // ✅ KEY FIX: navigate first, then acceptCall inside the screen
+                    onPressed: () => _navigateAndAccept(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF22C55E),
                       foregroundColor: Colors.white,
@@ -79,6 +85,23 @@ class IncomingVideoCallDialog extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateAndAccept(BuildContext context) {
+    // Close the dialog first
+    Navigator.of(context).pop();
+
+    // Navigate to the call screen immediately — BEFORE acceptCall()
+    // so onRemoteStream is wired up before any track arrives
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VideoCallScreen(
+          videoCallService: videoCallService,
+          remoteUser: callerName,
+          offerData: offerData,          // pass offer, screen will call acceptCall
         ),
       ),
     );

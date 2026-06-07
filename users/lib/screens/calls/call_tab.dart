@@ -102,78 +102,82 @@ class _CallTabState extends State<CallTab> {
   }
 
   void _startVideoCall(String username) async {
-    _videoCallService = VideoCallService(callService: _callService);
-    _callService.addVideoSignalListener(_onVideoSignal);
-    await _videoCallService!.call(username);
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => VideoCallScreen(
-          videoCallService: _videoCallService!,
-          remoteUser: username,
-        ),
+  _videoCallService = VideoCallService(callService: _callService);
+  _callService.addVideoSignalListener(_onVideoSignal);
+
+  _videoCallService!.onCallEnded = () {
+    if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+  };
+
+  await _videoCallService!.call(username);
+  if (!mounted) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => VideoCallScreen(
+        videoCallService: _videoCallService!,
+        remoteUser: username,
       ),
-    ).then((_) {
+    ),
+  ).then((_) {
+    _callService.removeVideoSignalListener(_onVideoSignal);
+    _videoCallService?.dispose();
+    _videoCallService = null;
+  });
+}
+
+  void _onVideoSignal(String type, Map<String, dynamic> data, String? from) {
+  if (_videoCallService == null) return;
+  switch (type) {
+    case 'video_answer':
+      _videoCallService!.handleAnswer(data);
+      break;
+    case 'video_candidate':
+      _videoCallService!.handleCandidate(data);
+      break;
+    case 'video_hangup':
+      _videoCallService!.remoteHangup();
       _callService.removeVideoSignalListener(_onVideoSignal);
       _videoCallService?.dispose();
       _videoCallService = null;
-    });
+      break;
   }
-
-  void _onVideoSignal(String type, Map<String, dynamic> data, String? from) {
-    if (_videoCallService == null) return;
-    switch (type) {
-      case 'video_answer':
-        _videoCallService!.handleAnswer(data);
-        break;
-      case 'video_candidate':
-        _videoCallService!.handleCandidate(data);
-        break;
-      case 'video_hangup':
-        _videoCallService!.onCallEnded?.call();
-        break;
-    }
-  }
+}
 
   void _showIncomingVideoCallDialog(
-    String callerName,
-    Map<String, dynamic> offerData,
-  ) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => IncomingVideoCallDialog(
+  String callerName,
+  Map<String, dynamic> offerData,
+) {
+  _videoCallService = VideoCallService(callService: _callService);
+  _callService.addVideoSignalListener(_onVideoSignal);
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      _videoCallService!.onCallEnded = () {
+        if (mounted) Navigator.of(dialogContext).pop();
+        _callService.removeVideoSignalListener(_onVideoSignal);
+        _videoCallService?.dispose();
+        _videoCallService = null;
+      };
+      return IncomingVideoCallDialog(
         callerName: callerName,
-        onAccept: () async {
-          Navigator.pop(context);
-          _videoCallService = VideoCallService(callService: _callService);
-          _callService.addVideoSignalListener(_onVideoSignal);
-          await _videoCallService!.acceptCall(offerData);
-          _callService.clearPendingVideoOffer();
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VideoCallScreen(
-                videoCallService: _videoCallService!,
-                remoteUser: callerName,
-              ),
-            ),
-          ).then((_) {
-            _callService.removeVideoSignalListener(_onVideoSignal);
-            _videoCallService?.dispose();
-            _videoCallService = null;
-          });
-        },
+        offerData: offerData,
+        videoCallService: _videoCallService!,
         onReject: () {
-          Navigator.pop(context);
+          Navigator.of(dialogContext).pop();
           _callService.sendSignal(callerName, {'type': 'video_hangup'});
           _callService.clearPendingVideoOffer();
+          _callService.removeVideoSignalListener(_onVideoSignal);
+          _videoCallService?.dispose();
+          _videoCallService = null;
         },
-      ),
-    );
-  }
+      );
+    },
+  );
+}
 
   Future<void> _fetchListeners() async {
     try {

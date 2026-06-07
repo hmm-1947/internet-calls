@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:calls/services/video_call_service.dart';
+import 'package:calls/screens/calls/video_call_screen.dart';
 
 class IncomingVideoCallDialog extends StatelessWidget {
   final String callerName;
-  final VoidCallback onAccept;
+  final Map<String, dynamic> offerData;
+  final VideoCallService videoCallService;
   final VoidCallback onReject;
 
   const IncomingVideoCallDialog({
     super.key,
     required this.callerName,
-    required this.onAccept,
+    required this.offerData,
+    required this.videoCallService,
     required this.onReject,
   });
 
@@ -68,7 +72,7 @@ class IncomingVideoCallDialog extends StatelessWidget {
                 const SizedBox(width: 14),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: onAccept,
+                    onPressed: () => _navigateAndAccept(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF22C55E),
                       foregroundColor: Colors.white,
@@ -79,6 +83,19 @@ class IncomingVideoCallDialog extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateAndAccept(BuildContext context) {
+    Navigator.of(context).pop();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VideoCallScreen(
+          videoCallService: videoCallService,
+          remoteUser: callerName,
+          offerData: offerData,
         ),
       ),
     );

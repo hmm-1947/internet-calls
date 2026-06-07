@@ -4,9 +4,7 @@ import 'package:listener/core/config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:listener/core/config.dart';
-import 'package:listener/screens/calls/video_call_screen.dart';
-import 'package:listener/services/video_call_services.dart';
-import 'package:listener/widgets/incoming_video_call_dialog.dart';
+
 import '../chat/chat_screen.dart';
 import '../../models/call_log.dart';
 import '../../services/call_log_store.dart';
@@ -42,8 +40,7 @@ class CallTab extends StatefulWidget {
 
 class _CallTabState extends State<CallTab> {
   final _searchController = TextEditingController();
-  VideoCallService? _videoCallService;
-  late final CallService _callService;
+  CallService get _callService => widget.callService;
 
   bool _connected = false;
   bool _navigatingToCall = false;
@@ -56,8 +53,6 @@ class _CallTabState extends State<CallTab> {
   @override
   void initState() {
     super.initState();
-
-    _callService = widget.callService;
 
     _setupCallbacks();
 
@@ -162,64 +157,6 @@ class _CallTabState extends State<CallTab> {
           break;
       }
     };
-    _callService.onIncomingVideoCall = (callerName, offerData) {
-      if (!mounted) return;
-      _showIncomingVideoCallDialog(callerName, offerData);
-    };
-  }
-
-  void _onVideoSignal(String type, Map<String, dynamic> data, String? from) {
-    if (_videoCallService == null) return;
-    switch (type) {
-      case 'video_answer':
-        _videoCallService!.handleAnswer(data);
-        break;
-      case 'video_candidate':
-        _videoCallService!.handleCandidate(data);
-        break;
-      case 'video_hangup':
-        _videoCallService!.onCallEnded?.call();
-        break;
-    }
-  }
-
-  void _showIncomingVideoCallDialog(
-    String callerName,
-    Map<String, dynamic> offerData,
-  ) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => IncomingVideoCallDialog(
-        callerName: callerName,
-        onAccept: () async {
-          Navigator.pop(context);
-          _videoCallService = VideoCallService(callService: _callService);
-          _callService.addVideoSignalListener(_onVideoSignal);
-          await _videoCallService!.acceptCall(offerData);
-          _callService.clearPendingVideoOffer();
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VideoCallScreen(
-                videoCallService: _videoCallService!,
-                remoteUser: callerName,
-              ),
-            ),
-          ).then((_) {
-            _callService.removeVideoSignalListener(_onVideoSignal);
-            _videoCallService?.dispose();
-            _videoCallService = null;
-          });
-        },
-        onReject: () {
-          Navigator.pop(context);
-          _callService.sendSignal(callerName, {'type': 'video_hangup'});
-          _callService.clearPendingVideoOffer();
-        },
-      ),
-    );
   }
 
   void _onSearchChanged() {
