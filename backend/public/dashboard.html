@@ -142,22 +142,30 @@
             const data = await res.json();
 
             const listenersTable = document.getElementById("listenersTable");
-            listenersTable.innerHTML = "<tr><th>Status</th><th>Listener</th><th>Created</th></tr>";
+            listenersTable.innerHTML = "<tr><th>Status</th><th>Listener</th><th>Total Talk Time</th><th>Created</th></tr>";
             data.listeners.forEach(user => {
-                listenersTable.innerHTML += `<tr><td><span class="online-dot ${user.online ? "online-now" : "offline-now"}"></span></td><td>${user.username}</td><td>${user.created_at}</td></tr>`;
+                const mins = Math.ceil((user.total_duration || 0) / 60);
+                listenersTable.innerHTML += `<tr>
+        <td><span class="online-dot ${user.online ? "online-now" : "offline-now"}"></span></td>
+        <td>${user.username}</td>
+        <td>${mins} min</td>
+        <td>${user.created_at}</td>
+    </tr>`;
             });
 
             const usersTable = document.getElementById("usersTable");
-            usersTable.innerHTML = "<tr><th>Status</th><th>User</th><th>Coins</th><th>Created</th><th>Chats</th></tr>";
+            usersTable.innerHTML = "<tr><th>Status</th><th>User</th><th>Coins</th><th>Total Talk Time</th><th>Created</th><th>Chats</th></tr>";
             data.users.forEach(user => {
+                const mins = Math.ceil((user.total_duration || 0) / 60);
                 usersTable.innerHTML += `
-                <tr>
-                    <td><span class="online-dot ${user.online ? "online-now" : "offline-now"}"></span></td>
-                    <td>${user.username}</td>
-                    <td><input type="number" value="${user.coins}" style="width:70px;background:#333;color:white;border:1px solid #555;border-radius:4px;padding:2px 6px" onchange="updateCoins('${user.username}', this.value)"></td>
-                    <td>${user.created_at}</td>
-                    <td><button onclick="openChats('${user.username}')" style="background:#333;color:#00ff99;border:1px solid #555;border-radius:4px;padding:3px 10px;cursor:pointer">Chats</button></td>
-                </tr>`;
+    <tr>
+        <td><span class="online-dot ${user.online ? "online-now" : "offline-now"}"></span></td>
+        <td>${user.username}</td>
+        <td><input type="number" value="${user.coins}" style="width:70px;background:#333;color:white;border:1px solid #555;border-radius:4px;padding:2px 6px" onchange="updateCoins('${user.username}', this.value)"></td>
+        <td>${mins} min</td>
+        <td>${user.created_at}</td>
+        <td><button onclick="openChats('${user.username}')" style="background:#333;color:#00ff99;border:1px solid #555;border-radius:4px;padding:3px 10px;cursor:pointer">Chats</button></td>
+    </tr>`;
             });
 
             document.getElementById("onlineUsers").innerHTML = data.online_users.map(u => `<li class="online">${u}</li>`).join("");

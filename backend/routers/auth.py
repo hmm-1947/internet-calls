@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import state
+import math
 
 router = APIRouter()
 
@@ -70,15 +71,32 @@ async def get_profile(username: str):
             "SELECT username, coins, role, total_call_duration FROM users WHERE username=$1",
             username.strip().lower()
         )
-    if not row:
-        raise HTTPException(status_code=404)
+        if not row:
+            raise HTTPException(status_code=404)
+        
+        top_users = await conn.fetch(
+            """
+            SELECT CASE WHEN caller=$1 THEN listener ELSE caller END as other_user,
+                   SUM(duration_seconds) as total_seconds
+            FROM call_logs
+            WHERE caller=$1 OR listener=$1
+            GROUP BY other_user
+            ORDER BY total_seconds DESC
+            LIMIT 3
+            """,
+            username.strip().lower()
+        )
+
     return {
         "username": row["username"],
         "coins": row["coins"],
         "role": row["role"],
-        "total_call_duration": row["total_call_duration"]
+        "total_call_duration": row["total_call_duration"],
+        "top_users": [
+            {"username": r["other_user"], "minutes": math.ceil(r["total_seconds"] / 60)}
+            for r in top_users
+        ]
     }
-
 @router.get("/user/{username}")
 async def check_user(username: str):
     username = username.strip().lower()

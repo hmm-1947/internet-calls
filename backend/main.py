@@ -66,6 +66,16 @@ async def startup():
                 filename TEXT NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
+                           
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS call_logs (
+                id SERIAL PRIMARY KEY,
+                caller TEXT NOT NULL,
+                listener TEXT NOT NULL,
+                duration_seconds INTEGER NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
         """)
 
 @app.on_event("shutdown")

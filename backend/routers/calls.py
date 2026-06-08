@@ -72,7 +72,12 @@ async def monitor_call(caller):
                 )
                 await conn.execute(
                     "UPDATE users SET total_call_duration=total_call_duration+$1, daily_call_duration=daily_call_duration+$1 WHERE username=$2",
-                    duration_seconds, listener
+                    duration_seconds, caller
+                )
+                
+                await conn.execute(
+                    "INSERT INTO call_logs (caller, listener, duration_seconds) VALUES ($1, $2, $3)",
+                    caller, listener, duration_seconds
                 )
 
             session["charged"] = True
@@ -227,7 +232,12 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                         )
                         await conn.execute(
                             "UPDATE users SET total_call_duration=total_call_duration+$1, daily_call_duration=daily_call_duration+$1 WHERE username=$2",
-                            duration_seconds, session["listener"]
+                            duration_seconds, client_id
+                        )
+
+                        await conn.execute(
+                            "INSERT INTO call_logs (caller, listener, duration_seconds) VALUES ($1, $2, $3)",
+                            client_id, session["listener"], duration_seconds
                         )
 
                 if other:
