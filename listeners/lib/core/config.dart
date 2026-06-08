@@ -10,7 +10,7 @@ class AppConfig {
 
 //helll
   //thangu
-   //static const String serverHost = "192.168.42.99";
+  //  static const String serverHost = "192.168.137.188";
 
 
 

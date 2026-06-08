@@ -1,14 +1,18 @@
 import 'dart:convert';
-
+import 'package:calls/widgets/video_pip_overlay.dart';
 import 'package:calls/core/config.dart';
+import 'package:calls/screens/calls/video_call_screen.dart';
+import 'package:calls/services/video_call_service.dart';
+import 'package:calls/widgets/incoming_video_call_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../chat/chat_screen.dart';
 import '../../models/call_log.dart';
 import '../../services/call_log_store.dart';
 import '../../services/call_service.dart';
 import '../../widgets/incoming_call_dialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/user_tile.dart';
 import 'active_call_screen.dart';
 
@@ -38,9 +42,9 @@ class CallTab extends StatefulWidget {
 
 class _CallTabState extends State<CallTab> {
   final _searchController = TextEditingController();
-
+  final _pipOverlay = VideoPipOverlay();
   late final CallService _callService;
-
+  VideoCallService? _videoCallService;
   bool _connected = false;
   bool _navigatingToCall = false;
 
@@ -98,41 +102,153 @@ class _CallTabState extends State<CallTab> {
     }
   }
 
-Future<void> _fetchListeners() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final cached = prefs.getString('cached_listeners');
-    if (cached != null && _allUsers.isEmpty) {
-      final list = jsonDecode(cached) as List;
-      if (mounted) {
-        setState(() {
-          _allUsers = list
-              .where((u) => u["username"] != widget.myUsername)
-              .cast<Map<String, dynamic>>()
-              .toList();
-          _filteredUsers = List.from(_allUsers);
-        });
+  Future<void> _fetchListeners() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('cached_listeners');
+      if (cached != null && _allUsers.isEmpty) {
+        final list = jsonDecode(cached) as List;
+        if (mounted) {
+          setState(() {
+            _allUsers = list
+                .where((u) => u["username"] != widget.myUsername)
+                .cast<Map<String, dynamic>>()
+                .toList();
+            _filteredUsers = List.from(_allUsers);
+          });
+        }
       }
+
+      final response = await http.get(
+        Uri.parse("${AppConfig.httpBase}/listeners"),
+      );
+      if (response.statusCode == 200) {
+        await prefs.setString('cached_listeners', response.body);
+        final listeners = jsonDecode(response.body) as List;
+        if (mounted) {
+          setState(() {
+            _allUsers = listeners
+                .where((u) => u["username"] != widget.myUsername)
+                .cast<Map<String, dynamic>>()
+                .toList();
+            _filteredUsers = List.from(_allUsers);
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _startVideoCall(String username) async {
+    if (_videoCallService != null) return;
+
+    _videoCallService = VideoCallService(callService: _callService);
+    _callService.addVideoSignalListener(_onVideoSignal);
+
+    final renderer = await _pipOverlay.createRenderer();
+
+    _videoCallService!.onCallEnded = () {
+      _pipOverlay.hide();
+      _pipOverlay.disposeRenderer();
+      _callService.removeVideoSignalListener(_onVideoSignal);
+      _videoCallService?.dispose();
+      _videoCallService = null;
+      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+    };
+
+    _videoCallService!.onRemoteStream = (stream) {
+      renderer.srcObject = stream;
+    };
+
+    await _videoCallService!.call(username);
+    if (!mounted) return;
+
+    void doMinimize() {
+      Navigator.of(context).pop();
+      _pipOverlay.show(
+        context: context,
+        videoCallService: _videoCallService!,
+        remoteUser: username,
+        onMinimizeFromMaximized: doMinimize,
+      );
     }
 
-    final response = await http.get(
-      Uri.parse("${AppConfig.httpBase}/listeners"),
-    );
-    if (response.statusCode == 200) {
-      await prefs.setString('cached_listeners', response.body);
-      final listeners = jsonDecode(response.body) as List;
-      if (mounted) {
-        setState(() {
-          _allUsers = listeners
-              .where((u) => u["username"] != widget.myUsername)
-              .cast<Map<String, dynamic>>()
-              .toList();
-          _filteredUsers = List.from(_allUsers);
-        });
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VideoCallScreen(
+          videoCallService: _videoCallService!,
+          remoteUser: username,
+          sharedRemoteRenderer: renderer,
+          onMinimize: doMinimize,
+        ),
+      ),
+    ).then((_) {
+      if (!_pipOverlay.isShowing) {
+        _pipOverlay.disposeRenderer();
+        _callService.removeVideoSignalListener(_onVideoSignal);
+        _videoCallService?.dispose();
+        _videoCallService = null;
       }
+    });
+  }
+
+  void _onVideoSignal(String type, Map<String, dynamic> data, String? from) {
+    if (_videoCallService == null) return;
+    switch (type) {
+      case 'video_answer':
+        _videoCallService!.handleAnswer(data);
+        break;
+      case 'video_candidate':
+        _videoCallService!.handleCandidate(data);
+        break;
+      case 'video_hangup':
+        _pipOverlay.hide();
+        _pipOverlay.disposeRenderer();
+        _videoCallService!.remoteHangup();
+        _callService.removeVideoSignalListener(_onVideoSignal);
+        _videoCallService?.dispose();
+        _videoCallService = null;
+        break;
     }
-  } catch (_) {}
-}
+  }
+
+  void _showIncomingVideoCallDialog(
+    String callerName,
+    Map<String, dynamic> offerData,
+  ) {
+    if (_videoCallService != null) return;
+
+    _videoCallService = VideoCallService(callService: _callService);
+    _callService.addVideoSignalListener(_onVideoSignal);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _videoCallService!.onCallEnded = () {
+          _pipOverlay.hide();
+          _pipOverlay.disposeRenderer();
+          if (mounted) Navigator.of(dialogContext).pop();
+          _callService.removeVideoSignalListener(_onVideoSignal);
+          _videoCallService?.dispose();
+          _videoCallService = null;
+        };
+        return IncomingVideoCallDialog(
+          callerName: callerName,
+          offerData: offerData,
+          videoCallService: _videoCallService!,
+          onReject: () {
+            Navigator.of(dialogContext).pop();
+            _callService.sendSignal(callerName, {'type': 'video_hangup'});
+            _callService.clearPendingVideoOffer();
+            _callService.removeVideoSignalListener(_onVideoSignal);
+            _videoCallService?.dispose();
+            _videoCallService = null;
+          },
+        );
+      },
+    );
+  }
 
   void _setupCallbacks() {
     _callService.onError = (error) {
@@ -141,6 +257,11 @@ Future<void> _fetchListeners() async {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error), backgroundColor: _accent));
+    };
+
+    _callService.onIncomingVideoCall = (callerName, offerData) {
+      if (!mounted) return;
+      _showIncomingVideoCallDialog(callerName, offerData);
     };
 
     _callService.onIncomingCall = (callerName) {
@@ -206,13 +327,8 @@ Future<void> _fetchListeners() async {
   }
 
   void _goToCallScreen() {
-    if (_navigatingToCall) {
-      return;
-    }
-
-    if (_callService.remoteUser == null) {
-      return;
-    }
+    if (_navigatingToCall) return;
+    if (_callService.remoteUser == null) return;
 
     _navigatingToCall = true;
 
@@ -228,16 +344,16 @@ Future<void> _fetchListeners() async {
     ).then((_) async {
       final duration = DateTime.now().difference(startTime).inSeconds;
 
-await CallLogStore.instance.add(
-  CallLog(
-    name: remoteUser,
-    outgoing: _callService.state != CallState.ringing,
-    missed: false,
-    time: startTime,
-    durationSeconds: duration,
-  ),
-  widget.myUsername,
-);
+      await CallLogStore.instance.add(
+        CallLog(
+          name: remoteUser,
+          outgoing: _callService.state != CallState.ringing,
+          missed: false,
+          time: startTime,
+          durationSeconds: duration,
+        ),
+        widget.myUsername,
+      );
 
       _navigatingToCall = false;
     });
@@ -356,39 +472,42 @@ await CallLogStore.instance.add(
                     ),
                   )
                 : RefreshIndicator(
-    color: _accent,
-    backgroundColor: _surface,
-    onRefresh: _fetchListeners,
-    child: ListView.builder(
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _filteredUsers.length,
-                    itemBuilder: (context, index) {
-                      final user = _filteredUsers[index];
+                    color: _accent,
+                    backgroundColor: _surface,
+                    onRefresh: _fetchListeners,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _filteredUsers.length,
+                      itemBuilder: (context, index) {
+                        final user = _filteredUsers[index];
 
-                      return UserTile(
-                        username: user["username"],
-                        online: user["online"] ?? false,
-                        enabled:
-                            _connected && _callService.state == CallState.idle,
-                        onCall: () {
-                          _startCall(user["username"]);
-                        },
-                        onChat: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ChatScreen(
-                                myUsername: widget.myUsername,
-                                otherUsername: user["username"],
-                                callService: _callService,
+                        return UserTile(
+                          username: user["username"],
+                          online: user["online"] ?? false,
+                          enabled: _connected &&
+                              _callService.state == CallState.idle,
+                          onCall: () {
+                            _startCall(user["username"]);
+                          },
+                          onVideoCall: () {
+                            _startVideoCall(user["username"]);
+                          },
+                          onChat: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ChatScreen(
+                                  myUsername: widget.myUsername,
+                                  otherUsername: user["username"],
+                                  callService: _callService,
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      );
-                    },
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
-          )
           ),
         ],
       ),

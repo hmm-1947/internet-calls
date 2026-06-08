@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/main_shell.dart';
 import 'screens/auth/auth_landing.dart';
 import 'services/fcm_service.dart';
-// test changejndc
+// test change
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

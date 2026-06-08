@@ -4,6 +4,7 @@ import 'package:listener/core/config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:listener/core/config.dart';
+
 import '../chat/chat_screen.dart';
 import '../../models/call_log.dart';
 import '../../services/call_log_store.dart';
@@ -39,8 +40,7 @@ class CallTab extends StatefulWidget {
 
 class _CallTabState extends State<CallTab> {
   final _searchController = TextEditingController();
-
-  late final CallService _callService;
+  CallService get _callService => widget.callService;
 
   bool _connected = false;
   bool _navigatingToCall = false;
@@ -53,8 +53,6 @@ class _CallTabState extends State<CallTab> {
   @override
   void initState() {
     super.initState();
-
-    _callService = widget.callService;
 
     _setupCallbacks();
 
@@ -99,7 +97,7 @@ class _CallTabState extends State<CallTab> {
     }
   }
 
-Future<void> _fetchListeners() async {
+  Future<void> _fetchListeners() async {
     try {
       setState(() {
         _allUsers = [];

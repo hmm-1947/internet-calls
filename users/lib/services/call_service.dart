@@ -17,9 +17,12 @@ class CallService {
   MediaStream? _localStream;
 
   bool _isCleaningUp = false;
+  bool _shouldReconnect = true;
 
   String? _remoteUser;
   Map<String, dynamic>? _pendingOffer;
+  String? _pendingVideoOfferFrom;
+  Map<String, dynamic>? _pendingVideoOffer;
 
   CallState _state = CallState.idle;
 
@@ -27,22 +30,22 @@ class CallService {
   CallState get state => _state;
   String? get remoteUser => _remoteUser;
   MediaStream? get localStream => _localStream;
+  String? get pendingVideoOfferFrom => _pendingVideoOfferFrom;
+  Map<String, dynamic>? get pendingVideoOffer => _pendingVideoOffer;
 
   void Function(String callerName)? onIncomingCall;
+  void Function(String callerName, Map<String, dynamic> offerData)? onIncomingVideoCall;
   void Function(CallState state)? onCallStateChanged;
   void Function(String error)? onError;
-  final List<void Function(String from, String content, String messageType)>
-  _chatListeners = [];
 
-  void addChatListener(
-    void Function(String from, String content, String messageType) fn,
-  ) {
+  final List<void Function(String from, String content, String messageType)> _chatListeners = [];
+  final List<void Function(String type, Map<String, dynamic> data, String? from)> _videoSignalListeners = [];
+
+  void addChatListener(void Function(String from, String content, String messageType) fn) {
     _chatListeners.add(fn);
   }
 
-  void removeChatListener(
-    void Function(String from, String content, String messageType) fn,
-  ) {
+  void removeChatListener(void Function(String from, String content, String messageType) fn) {
     _chatListeners.remove(fn);
   }
 
@@ -52,58 +55,66 @@ class CallService {
     }
   }
 
+  void addVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+    _videoSignalListeners.add(fn);
+  }
+
+  void removeVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+    _videoSignalListeners.remove(fn);
+  }
+
+  void clearPendingVideoOffer() {
+    _pendingVideoOfferFrom = null;
+    _pendingVideoOffer = null;
+  }
+
   CallService({required this.myUsername});
 
-bool _shouldReconnect = true;
+  Future<void> connect() async {
+    if (_channel != null) return;
+    _shouldReconnect = true;
+    await _connectWithRetry();
+  }
 
-Future<void> connect() async {
-  if (_channel != null) return;
+  Future<void> _connectWithRetry() async {
+    while (_shouldReconnect) {
+      try {
+        _channel = WebSocketChannel.connect(
+          Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
+        );
 
-  _shouldReconnect = true;
-  await _connectWithRetry();
-}
+        _channel!.stream.listen(
+          _onMessage,
+          onError: (e) {
+            onError?.call("WebSocket error: $e");
+            _channel = null;
+            if (_shouldReconnect) {
+              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+            }
+          },
+          onDone: () {
+            _channel = null;
+            if (_state != CallState.idle) {
+              _setState(CallState.ended);
+            }
+            if (_shouldReconnect) {
+              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+            }
+          },
+          cancelOnError: true,
+        );
 
-Future<void> _connectWithRetry() async {
-  while (_shouldReconnect) {
-    try {
-      _channel = WebSocketChannel.connect(
-        Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
-      );
-
-      _channel!.stream.listen(
-        _onMessage,
-        onError: (e) {
-          onError?.call("WebSocket error: $e");
-          _channel = null;
-          if (_shouldReconnect) {
-            Future.delayed(const Duration(seconds: 3), _connectWithRetry);
-          }
-        },
-        onDone: () {
-          _channel = null;
-          if (_state != CallState.idle) {
-            _setState(CallState.ended);
-          }
-          if (_shouldReconnect) {
-            Future.delayed(const Duration(seconds: 3), _connectWithRetry);
-          }
-        },
-        cancelOnError: true,
-      );
-
-      await _initializeWebRtc();
-      return;
-    } catch (_) {
-      _channel = null;
-      await Future.delayed(const Duration(seconds: 3));
+        await _initializeWebRtc();
+        return;
+      } catch (_) {
+        _channel = null;
+        await Future.delayed(const Duration(seconds: 3));
+      }
     }
   }
-}
 
   Future<void> _initializeWebRtc() async {
-    if (_peerConnection != null) {
-      return;
-    }
+    if (_peerConnection != null) return;
 
     _localStream = await navigator.mediaDevices.getUserMedia({
       'audio': true,
@@ -119,10 +130,7 @@ Future<void> _connectWithRetry() async {
     }
 
     _peerConnection!.onIceCandidate = (candidate) {
-      if (candidate.candidate == null || _remoteUser == null) {
-        return;
-      }
-
+      if (candidate.candidate == null || _remoteUser == null) return;
       _send({
         "target": _remoteUser,
         "data": {
@@ -138,8 +146,7 @@ Future<void> _connectWithRetry() async {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected &&
           _state != CallState.connected) {
         _setState(CallState.connected);
-      } else if ((state ==
-                  RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+      } else if ((state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
           !_isCleaningUp) {
         hangup();
@@ -149,11 +156,11 @@ Future<void> _connectWithRetry() async {
     await _peerConnection!.createOffer({'offerToReceiveAudio': true});
   }
 
-Future<void> _resetPeerConnection() async {
-  await _peerConnection?.close();
-  _peerConnection = null;
+  Future<void> _resetPeerConnection() async {
+    await _peerConnection?.close();
+    _peerConnection = null;
 
-  _localStream ??= await navigator.mediaDevices.getUserMedia({
+    _localStream ??= await navigator.mediaDevices.getUserMedia({
       'audio': true,
       'video': false,
     });
@@ -167,10 +174,7 @@ Future<void> _resetPeerConnection() async {
     }
 
     _peerConnection!.onIceCandidate = (candidate) {
-      if (candidate.candidate == null || _remoteUser == null) {
-        return;
-      }
-
+      if (candidate.candidate == null || _remoteUser == null) return;
       _send({
         "target": _remoteUser,
         "data": {
@@ -186,8 +190,7 @@ Future<void> _resetPeerConnection() async {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected &&
           _state != CallState.connected) {
         _setState(CallState.connected);
-      } else if ((state ==
-                  RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+      } else if ((state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
           !_isCleaningUp) {
         hangup();
@@ -199,7 +202,6 @@ Future<void> _resetPeerConnection() async {
 
   Future<void> call(String targetUsername) async {
     final prefs = await SharedPreferences.getInstance();
-
     final role = prefs.getString("role");
 
     if (role != "user") {
@@ -208,7 +210,6 @@ Future<void> _resetPeerConnection() async {
     }
 
     _remoteUser = targetUsername.trim().toLowerCase();
-
     _setState(CallState.calling);
 
     final offer = await _peerConnection!.createOffer({
@@ -224,16 +225,13 @@ Future<void> _resetPeerConnection() async {
   }
 
   Future<void> acceptCall() async {
-    if (_pendingOffer == null || _remoteUser == null) {
-      return;
-    }
+    if (_pendingOffer == null || _remoteUser == null) return;
 
     await _peerConnection!.setRemoteDescription(
       RTCSessionDescription(_pendingOffer!["sdp"], "offer"),
     );
 
     final answer = await _peerConnection!.createAnswer();
-
     await _peerConnection!.setLocalDescription(answer);
 
     _send({
@@ -242,7 +240,6 @@ Future<void> _resetPeerConnection() async {
     });
 
     _pendingOffer = null;
-
     _setState(CallState.connected);
   }
 
@@ -255,7 +252,6 @@ Future<void> _resetPeerConnection() async {
     }
 
     _pendingOffer = null;
-
     _setState(CallState.ended);
 
     Future.delayed(const Duration(milliseconds: 300), () async {
@@ -269,9 +265,7 @@ Future<void> _resetPeerConnection() async {
   }
 
   void hangup() {
-    if (_isCleaningUp) {
-      return;
-    }
+    if (_isCleaningUp) return;
 
     _isCleaningUp = true;
 
@@ -283,7 +277,6 @@ Future<void> _resetPeerConnection() async {
     }
 
     _cleanup();
-
     _setState(CallState.ended);
 
     Future.delayed(const Duration(milliseconds: 300), () async {
@@ -302,11 +295,11 @@ Future<void> _resetPeerConnection() async {
     });
   }
 
-  void sendChatMessage(
-    String target,
-    String content, {
-    String messageType = 'text',
-  }) {
+  void sendSignal(String target, Map<String, dynamic> data) {
+    _send({'target': target, 'data': data});
+  }
+
+  void sendChatMessage(String target, String content, {String messageType = 'text'}) {
     _send({
       "target": target,
       "type": "chat_message",
@@ -319,9 +312,7 @@ Future<void> _resetPeerConnection() async {
   Future<void> _onMessage(dynamic raw) async {
     final message = jsonDecode(raw as String);
 
-    if (message["type"] == "connected") {
-      return;
-    }
+    if (message["type"] == "connected") return;
 
     if (message["type"] == "chat_message") {
       final from = message["from"] as String?;
@@ -335,9 +326,7 @@ Future<void> _resetPeerConnection() async {
 
     if (message["type"] == "error") {
       onError?.call(message["message"] ?? "Unknown error");
-
       _setState(CallState.idle);
-
       return;
     }
 
@@ -345,55 +334,36 @@ Future<void> _resetPeerConnection() async {
     final from = message["from"] as String?;
     final signalType = data?["type"] as String?;
 
-    if (signalType == null) {
-      return;
-    }
+    if (signalType == null) return;
 
     switch (signalType) {
       case "offer":
         _remoteUser = from ?? message["from"];
-
         _pendingOffer = Map<String, dynamic>.from(data);
-
         _setState(CallState.ringing);
-
         onIncomingCall?.call(_remoteUser!);
-
         break;
 
       case "answer":
         await _peerConnection!.setRemoteDescription(
           RTCSessionDescription(data["sdp"], "answer"),
         );
-
         if (_state != CallState.connected) {
           _setState(CallState.connected);
         }
-
         break;
 
       case "candidate":
         await _peerConnection!.addCandidate(
-          RTCIceCandidate(
-            data["candidate"],
-            data["sdpMid"],
-            data["sdpMLineIndex"],
-          ),
+          RTCIceCandidate(data["candidate"], data["sdpMid"], data["sdpMLineIndex"]),
         );
-
         break;
 
       case "hangup":
-        if (_isCleaningUp) {
-          break;
-        }
-
+        if (_isCleaningUp) break;
         _isCleaningUp = true;
-
         _cleanup();
-
         _setState(CallState.ended);
-
         Future.delayed(const Duration(milliseconds: 300), () async {
           try {
             await _resetPeerConnection();
@@ -402,14 +372,23 @@ Future<void> _resetPeerConnection() async {
             _setState(CallState.idle);
           }
         });
-
         break;
 
       case "coins_exhausted":
         hangup();
-
         onError?.call("Coins exhausted");
+        break;
 
+      case 'video_offer':
+        _pendingVideoOfferFrom = from;
+        _pendingVideoOffer = Map<String, dynamic>.from(data);
+        onIncomingVideoCall?.call(from!, Map<String, dynamic>.from(data));
+        break;
+
+      case 'video_answer':
+      case 'video_candidate':
+      case 'video_hangup':
+        _videoSignalListeners.forEach((fn) => fn(signalType, data, from));
         break;
     }
   }
@@ -423,19 +402,20 @@ Future<void> _resetPeerConnection() async {
     onCallStateChanged?.call(state);
   }
 
-void disconnect() {
-  _shouldReconnect = false;
-  _channel?.sink.close();
-  _channel = null;
-}
+  void disconnect() {
+    _shouldReconnect = false;
+    _channel?.sink.close();
+    _channel = null;
+  }
 
-void _cleanup() {
-  _localStream?.getTracks().forEach((track) => track.stop());
-  _localStream?.dispose();
-  _localStream = null;
-  _remoteUser = null;
-  _pendingOffer = null;
-}
+  void _cleanup() {
+    _localStream?.getTracks().forEach((track) => track.stop());
+    _localStream?.dispose();
+    _localStream = null;
+    _remoteUser = null;
+    _pendingOffer = null;
+  }
+
   void dispose() {
     _localStream?.dispose();
     _peerConnection?.close();
