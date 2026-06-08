@@ -1,10 +1,11 @@
 import 'dart:convert';
-
+import 'package:calls/widgets/video_pip_overlay.dart';
 import 'package:calls/core/config.dart';
 import 'package:calls/screens/calls/video_call_screen.dart';
 import 'package:calls/services/video_call_service.dart';
 import 'package:calls/widgets/incoming_video_call_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:http/http.dart' as http;
 import '../chat/chat_screen.dart';
 import '../../models/call_log.dart';
@@ -41,7 +42,7 @@ class CallTab extends StatefulWidget {
 
 class _CallTabState extends State<CallTab> {
   final _searchController = TextEditingController();
-
+  final _pipOverlay = VideoPipOverlay();
   late final CallService _callService;
   VideoCallService? _videoCallService;
   bool _connected = false;
@@ -102,15 +103,38 @@ class _CallTabState extends State<CallTab> {
   }
 
   void _startVideoCall(String username) async {
+  if (_videoCallService != null) return;
+
   _videoCallService = VideoCallService(callService: _callService);
   _callService.addVideoSignalListener(_onVideoSignal);
 
+  final renderer = await _pipOverlay.createRenderer();
+
   _videoCallService!.onCallEnded = () {
+    _pipOverlay.hide();
+    _pipOverlay.disposeRenderer();
+    _callService.removeVideoSignalListener(_onVideoSignal);
+    _videoCallService?.dispose();
+    _videoCallService = null;
     if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+  };
+
+  _videoCallService!.onRemoteStream = (stream) {
+    renderer.srcObject = stream;
   };
 
   await _videoCallService!.call(username);
   if (!mounted) return;
+
+  void doMinimize() {
+    Navigator.of(context).pop();
+    _pipOverlay.show(
+      context: context,
+      videoCallService: _videoCallService!,
+      remoteUser: username,
+      onMinimizeFromMaximized: doMinimize,
+    );
+  }
 
   Navigator.push(
     context,
@@ -118,12 +142,17 @@ class _CallTabState extends State<CallTab> {
       builder: (_) => VideoCallScreen(
         videoCallService: _videoCallService!,
         remoteUser: username,
+        sharedRemoteRenderer: renderer,
+        onMinimize: doMinimize,
       ),
     ),
   ).then((_) {
-    _callService.removeVideoSignalListener(_onVideoSignal);
-    _videoCallService?.dispose();
-    _videoCallService = null;
+    if (!_pipOverlay.isShowing) {
+      _pipOverlay.disposeRenderer();
+      _callService.removeVideoSignalListener(_onVideoSignal);
+      _videoCallService?.dispose();
+      _videoCallService = null;
+    }
   });
 }
 
@@ -137,6 +166,8 @@ class _CallTabState extends State<CallTab> {
       _videoCallService!.handleCandidate(data);
       break;
     case 'video_hangup':
+      _pipOverlay.hide();
+      _pipOverlay.disposeRenderer();
       _videoCallService!.remoteHangup();
       _callService.removeVideoSignalListener(_onVideoSignal);
       _videoCallService?.dispose();
@@ -149,6 +180,8 @@ class _CallTabState extends State<CallTab> {
   String callerName,
   Map<String, dynamic> offerData,
 ) {
+  if (_videoCallService != null) return;
+
   _videoCallService = VideoCallService(callService: _callService);
   _callService.addVideoSignalListener(_onVideoSignal);
 
@@ -157,6 +190,8 @@ class _CallTabState extends State<CallTab> {
     barrierDismissible: false,
     builder: (dialogContext) {
       _videoCallService!.onCallEnded = () {
+        _pipOverlay.hide();
+        _pipOverlay.disposeRenderer();
         if (mounted) Navigator.of(dialogContext).pop();
         _callService.removeVideoSignalListener(_onVideoSignal);
         _videoCallService?.dispose();

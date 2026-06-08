@@ -7,6 +7,8 @@ class VideoCallScreen extends StatefulWidget {
   final String remoteUser;
   final MediaStream? initialRemoteStream;
   final Map<String, dynamic>? offerData;
+  final VoidCallback? onMinimize;
+  final RTCVideoRenderer? sharedRemoteRenderer;
 
   const VideoCallScreen({
     super.key,
@@ -14,6 +16,8 @@ class VideoCallScreen extends StatefulWidget {
     required this.remoteUser,
     this.initialRemoteStream,
     this.offerData,
+    this.onMinimize,
+    this.sharedRemoteRenderer,
   });
 
   @override
@@ -22,13 +26,22 @@ class VideoCallScreen extends StatefulWidget {
 
 class _VideoCallScreenState extends State<VideoCallScreen> {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
-  final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  late final RTCVideoRenderer _remoteRenderer;
+  bool _ownsRemoteRenderer = false;
   bool _muted = false;
   bool _cameraOff = false;
 
   @override
   void initState() {
     super.initState();
+
+    if (widget.sharedRemoteRenderer != null) {
+      _remoteRenderer = widget.sharedRemoteRenderer!;
+      _ownsRemoteRenderer = false;
+    } else {
+      _remoteRenderer = RTCVideoRenderer();
+      _ownsRemoteRenderer = true;
+    }
 
     widget.videoCallService.onCallEnded = () {
       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
@@ -45,7 +58,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Future<void> _initRenderers() async {
     await _localRenderer.initialize();
-    await _remoteRenderer.initialize();
+    if (_ownsRemoteRenderer) await _remoteRenderer.initialize();
 
     if (widget.offerData != null) {
       await widget.videoCallService.acceptCall(
@@ -68,7 +81,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   @override
   void dispose() {
     _localRenderer.dispose();
-    _remoteRenderer.dispose();
+    if (_ownsRemoteRenderer) _remoteRenderer.dispose();
     super.dispose();
   }
 
@@ -84,6 +97,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   void _hangup() {
     widget.videoCallService.hangup();
+  }
+
+  void _minimize() {
+    if (widget.onMinimize != null) {
+      widget.onMinimize!();
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -120,6 +141,26 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+              ),
+            ),
+          ),
+          Positioned(
+            top: 44,
+            right: 130,
+            child: GestureDetector(
+              onTap: _minimize,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.2),
+                ),
+                child: const Icon(
+                  Icons.close_fullscreen_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
             ),
           ),
