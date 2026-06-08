@@ -5,12 +5,12 @@ class AppConfig {
 
 
   //joshusa
-   static const String serverHost = "192.168.42.83";
+  // static const String serverHost = "192.168.42.83";
 
 
 //helll
   //thangu
-   //static const String serverHost = "192.168.42.99";
+   static const String serverHost = "192.168.137.188";
 
 
 

@@ -27,6 +27,8 @@ class CallService {
   CallState get state => _state;
   String? get remoteUser => _remoteUser;
   MediaStream? get localStream => _localStream;
+  String? get pendingVideoOfferFrom => _pendingVideoOfferFrom;
+Map<String, dynamic>? get pendingVideoOffer => _pendingVideoOffer;
 
   void Function(String callerName)? onIncomingCall;
   void Function(CallState state)? onCallStateChanged;
@@ -37,16 +39,34 @@ class CallService {
   void addChatListener(
     void Function(String from, String content, String messageType) fn,
   ) {
+  final List<void Function(String from, String content)> _chatListeners = [];
+  void Function(String callerName, Map<String, dynamic> offerData)? onIncomingVideoCall;
+  String? _pendingVideoOfferFrom;
+  Map<String, dynamic>? _pendingVideoOffer;
+  void addChatListener(void Function(String from, String content) fn) {
     _chatListeners.add(fn);
   }
+  void clearPendingVideoOffer() {
+  _pendingVideoOfferFrom = null;
+  _pendingVideoOffer = null;
+}
 
   void removeChatListener(
     void Function(String from, String content, String messageType) fn,
   ) {
     _chatListeners.remove(fn);
   }
+  final List<void Function(String type, Map<String, dynamic> data, String? from)> _videoSignalListeners = [];
 
-  void _notifyChatListeners(String from, String content, String messageType) {
+void addVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+  _videoSignalListeners.add(fn);
+}
+
+void removeVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+  _videoSignalListeners.remove(fn);
+}
+
+  void _notifyChatListeners(String from, String content) {
     for (final fn in List.from(_chatListeners)) {
       fn(from, content, messageType);
     }
@@ -55,28 +75,25 @@ class CallService {
   CallService({required this.myUsername});
 
   Future<void> connect() async {
-    if (_channel != null) {
-      return;
-    }
+  if (_channel != null) return;
 
-    _channel = WebSocketChannel.connect(
-      Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
-    );
+  _channel = WebSocketChannel.connect(
+    Uri.parse("${AppConfig.wsBase}/ws/$myUsername"),
+  );
 
-    _channel!.stream.listen(
-      _onMessage,
-      onError: (e) {
-        onError?.call("WebSocket error: $e");
-      },
-      onDone: () {
-        if (_state != CallState.idle) {
-          _setState(CallState.ended);
-        }
-      },
-    );
-
-    await _initializeWebRtc();
-  }
+  _channel!.stream.listen(
+    _onMessage,
+    onError: (e) {
+      onError?.call("WebSocket error: $e");
+    },
+    onDone: () {
+      _channel = null;
+      if (_state != CallState.idle) {
+        _setState(CallState.ended);
+      }
+    },
+  );
+}
 
   Future<void> _initializeWebRtc() async {
     if (_peerConnection != null) {
@@ -172,7 +189,7 @@ class CallService {
 
   Future<void> call(String targetUsername) async {
     final prefs = await SharedPreferences.getInstance();
-
+    await _initializeWebRtc();
     final role = prefs.getString("role");
 
     if (role != "user") {
@@ -197,6 +214,7 @@ class CallService {
   }
 
   Future<void> acceptCall() async {
+    await _initializeWebRtc();
     if (_pendingOffer == null || _remoteUser == null) {
       return;
     }
@@ -274,6 +292,9 @@ class CallService {
       track.enabled = !muted;
     });
   }
+  void sendSignal(String target, Map<String, dynamic> data) {
+  _send({'target': target, 'data': data});
+}
 
   void sendChatMessage(
     String target,
@@ -383,6 +404,18 @@ class CallService {
         onError?.call("Coins exhausted");
 
         break;
+      case 'video_offer':
+  _remoteUser = from;
+  _pendingVideoOfferFrom = from;
+  _pendingVideoOffer = Map<String, dynamic>.from(data);
+  onIncomingVideoCall?.call(from!, Map<String, dynamic>.from(data));
+  break;
+
+case 'video_answer':
+case 'video_candidate':
+case 'video_hangup':
+  _videoSignalListeners.forEach((fn) => fn(signalType, data, from));
+  break;
     }
   }
 

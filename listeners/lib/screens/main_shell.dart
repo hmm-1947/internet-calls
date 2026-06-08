@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-
+import 'package:listener/screens/calls/video_call_screen.dart';
+import 'package:listener/services/video_call_services.dart';
+import 'package:listener/widgets/incoming_video_call_dialog.dart';
+import 'package:listener/widgets/video_pip_overlay.dart';
 import '../core/storage.dart';
 import '../services/call_service.dart';
 import 'calls/call_tab.dart';
@@ -7,6 +10,7 @@ import 'calls/logs_screen.dart';
 import 'calls/active_call_screen.dart';
 import 'profile/profile_screen.dart';
 import 'chat/chat_list_screen.dart';
+
 
 class MainShell extends StatefulWidget {
   final String myUsername;
@@ -26,30 +30,29 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell>
     with WidgetsBindingObserver {
   int _index = 0;
-
+  final _pipOverlay = VideoPipOverlay();
   late final CallService _callService;
-
+  VideoCallService? _videoCallService;
   bool _pendingCallAccepted = false;
 
   @override
-  void initState() {
-    super.initState();
-
-    WidgetsBinding.instance.addObserver(this);
-
-    _callService = CallService(
-      myUsername: widget.myUsername,
-    );
-
-    _checkPendingCall();
-  }
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addObserver(this);
+  _callService = CallService(myUsername: widget.myUsername);
+  _callService.onIncomingVideoCall = _handleIncomingVideoCall;
+  _callService.addVideoSignalListener(_onVideoSignal);
+  _checkPendingCall();
+}
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _callService.dispose();
-    super.dispose();
-  }
+void dispose() {
+  WidgetsBinding.instance.removeObserver(this);
+  _callService.removeVideoSignalListener(_onVideoSignal);
+  _callService.dispose();
+  _videoCallService?.dispose();
+  super.dispose();
+}
 
   @override
   void didChangeAppLifecycleState(
@@ -80,6 +83,57 @@ class _MainShellState extends State<MainShell>
     _pendingCallAccepted = true;
   }
 
+  void _handleIncomingVideoCall(String callerName, Map<String, dynamic> offerData) {
+  if (!mounted) return;
+  if (_videoCallService != null) return;
+
+  _videoCallService = VideoCallService(callService: _callService);
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      _videoCallService!.onCallEnded = () {
+        _pipOverlay.hide();
+        _pipOverlay.disposeRenderer();
+        if (mounted) Navigator.of(dialogContext).pop();
+        _videoCallService?.dispose();
+        _videoCallService = null;
+      };
+      return IncomingVideoCallDialog(
+        callerName: callerName,
+        offerData: offerData,
+        videoCallService: _videoCallService!,
+        pipOverlay: _pipOverlay,
+        onReject: () {
+          Navigator.of(dialogContext).pop();
+          _callService.sendSignal(callerName, {'type': 'video_hangup'});
+          _callService.clearPendingVideoOffer();
+          _videoCallService?.dispose();
+          _videoCallService = null;
+        },
+      );
+    },
+  );
+}
+
+void _onVideoSignal(String type, Map<String, dynamic> data, String? from) {
+  switch (type) {
+    case 'video_answer':
+      _videoCallService?.handleAnswer(data);
+      break;
+    case 'video_candidate':
+      _videoCallService?.handleCandidate(data);
+      break;
+    case 'video_hangup':
+      _pipOverlay.hide();
+      _pipOverlay.disposeRenderer();
+      _videoCallService?.remoteHangup();
+      _videoCallService?.dispose();
+      _videoCallService = null;
+      break;
+  }
+}
   void _handlePendingIncomingCall(
     String callerName,
   ) {
