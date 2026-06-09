@@ -468,8 +468,10 @@ class CallService {
   }
 
   void dispose() {
+    _shouldReconnect = false;
     _localStream?.dispose();
     _peerConnection?.close();
     _channel?.sink.close();
+    _channel = null;
   }
 }

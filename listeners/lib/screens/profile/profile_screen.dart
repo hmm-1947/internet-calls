@@ -49,8 +49,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
-    await AppStorage.logout();
+    try {
+      final username = widget.username;
+      await http.post(
+        Uri.parse('${AppConfig.httpBase}/logout'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username}),
+      );
+    } catch (_) {}
 
+    await AppStorage.logout();
     if (!mounted) return;
 
     Navigator.pushAndRemoveUntil(

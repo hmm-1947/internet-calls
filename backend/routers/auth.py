@@ -20,6 +20,28 @@ class SaveFCMRequest(BaseModel):
     username: str
     token: str
 
+
+class LogoutRequest(BaseModel):
+    username: str
+
+@router.post("/logout")
+async def logout_user(req: LogoutRequest):
+    username = req.username.strip().lower()
+    async with state.db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET is_online=FALSE, fcm_token=NULL WHERE username=$1",
+            username
+        )
+    if username in state.clients:
+        try:
+            await state.clients[username].close()
+        except Exception:
+            pass
+        state.clients.pop(username, None)
+    await broadcast_admin_update()
+    return {"status": "ok"}
+
+
 @router.post("/register")
 async def register_user(req: RegisterRequest):
     username = req.username.strip().lower()
