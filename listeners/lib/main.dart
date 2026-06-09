@@ -5,13 +5,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'screens/main_shell.dart';
 import 'screens/auth/auth_landing.dart';
 import 'services/fcm_service.dart';
 // test change
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   if (Platform.isAndroid || Platform.isIOS) {
     await Firebase.initializeApp();

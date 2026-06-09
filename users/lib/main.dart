@@ -12,6 +12,7 @@ import 'services/fcm_service.dart';
 // test change
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   if (Platform.isAndroid || Platform.isIOS) {
     await Firebase.initializeApp();

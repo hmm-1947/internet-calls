@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:http/http.dart' as http;
 import 'package:listener/core/config.dart';
 import 'package:listener/core/storage.dart';
@@ -41,7 +42,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     super.initState();
 
     _startTimer();
-    _loadRoleAndRecord();
+    Helper.setSpeakerphoneOn(true);
+    // Future.delayed(const Duration(seconds: 2), _loadRoleAndRecord);
     _previousStateCallback = widget.callService.onCallStateChanged;
 
     widget.callService.onCallStateChanged = (state) {
@@ -58,7 +60,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _timer?.cancel();
 
     widget.callService.onCallStateChanged = _previousStateCallback;
-    _stopAndUploadRecording();
+    // _stopAndUploadRecording();
     _recorder.dispose();
     super.dispose();
   }
@@ -73,34 +75,40 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     });
   }
 
-  Future<void> _stopAndUploadRecording() async {
-    if (_myRole != 'listener' || _recordingPath == null) return;
-    final path = await _recorder.stop();
-    if (path == null) return;
-    final file = File(path);
-    if (!await file.exists()) return;
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('${AppConfig.httpBase}/recordings/upload'),
-    );
-    request.fields['caller'] = widget.remoteUser;
-    request.fields['listener'] = widget.callService.myUsername;
-    request.files.add(await http.MultipartFile.fromPath('file', path));
-    await request.send();
-  }
+  // Future<void> _stopAndUploadRecording() async {
+  //   if (_myRole != 'listener' || _recordingPath == null) return;
+  //   final path = await _recorder.stop();
+  //   if (path == null) return;
+  //   final file = File(path);
+  //   if (!await file.exists()) return;
+  //   final request = http.MultipartRequest(
+  //     'POST',
+  //     Uri.parse('${AppConfig.httpBase}/recordings/upload'),
+  //   );
+  //   request.fields['caller'] = widget.remoteUser;
+  //   request.fields['listener'] = widget.callService.myUsername;
+  //   request.files.add(await http.MultipartFile.fromPath('file', path));
+  //   await request.send();
+  // }
 
-  Future<void> _loadRoleAndRecord() async {
-    _myRole = await AppStorage.getRole();
-    if (_myRole == 'listener') {
-      final dir = await getExternalStorageDirectory();
-      _recordingPath =
-          '${dir?.path}/rec_${widget.remoteUser}_${DateTime.now().millisecondsSinceEpoch}.aac';
-      await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc),
-        path: _recordingPath!,
-      );
-    }
-  }
+  // Future<void> _loadRoleAndRecord() async {
+  //   _myRole = await AppStorage.getRole();
+  //   if (_myRole == 'listener') {
+  //     final dir = await getExternalStorageDirectory();
+  //     _recordingPath =
+  //         '${dir?.path}/rec_${widget.remoteUser}_${DateTime.now().millisecondsSinceEpoch}.aac';
+  //     await _recorder.start(
+  //       const RecordConfig(
+  //         encoder: AudioEncoder.aacLc,
+  //         sampleRate: 16000,
+  //         numChannels: 1,
+  //         noiseSuppress: false,
+  //         echoCancel: false,
+  //       ),
+  //       path: _recordingPath!,
+  //     );
+  //   }
+  // }
 
   String get _formattedTime {
     final minutes = (_seconds ~/ 60).toString().padLeft(2, '0');
@@ -201,9 +209,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                     label: "Speaker",
                     active: _speakerOn,
                     onTap: () {
-                      setState(() {
-                        _speakerOn = !_speakerOn;
-                      });
+                      setState(() => _speakerOn = !_speakerOn);
+                      Helper.setSpeakerphoneOn(_speakerOn);
                     },
                   ),
                 ],

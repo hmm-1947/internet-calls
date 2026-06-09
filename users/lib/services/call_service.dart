@@ -1,3 +1,5 @@
+//user APP call service
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -34,18 +36,28 @@ class CallService {
   Map<String, dynamic>? get pendingVideoOffer => _pendingVideoOffer;
 
   void Function(String callerName)? onIncomingCall;
-  void Function(String callerName, Map<String, dynamic> offerData)? onIncomingVideoCall;
+  void Function(String callerName, Map<String, dynamic> offerData)?
+  onIncomingVideoCall;
   void Function(CallState state)? onCallStateChanged;
   void Function(String error)? onError;
+  void Function(MediaStream stream)? onRemoteStream;
 
-  final List<void Function(String from, String content, String messageType)> _chatListeners = [];
-  final List<void Function(String type, Map<String, dynamic> data, String? from)> _videoSignalListeners = [];
+  final List<void Function(String from, String content, String messageType)>
+  _chatListeners = [];
+  final List<
+    void Function(String type, Map<String, dynamic> data, String? from)
+  >
+  _videoSignalListeners = [];
 
-  void addChatListener(void Function(String from, String content, String messageType) fn) {
+  void addChatListener(
+    void Function(String from, String content, String messageType) fn,
+  ) {
     _chatListeners.add(fn);
   }
 
-  void removeChatListener(void Function(String from, String content, String messageType) fn) {
+  void removeChatListener(
+    void Function(String from, String content, String messageType) fn,
+  ) {
     _chatListeners.remove(fn);
   }
 
@@ -55,11 +67,15 @@ class CallService {
     }
   }
 
-  void addVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+  void addVideoSignalListener(
+    void Function(String type, Map<String, dynamic> data, String? from) fn,
+  ) {
     _videoSignalListeners.add(fn);
   }
 
-  void removeVideoSignalListener(void Function(String type, Map<String, dynamic> data, String? from) fn) {
+  void removeVideoSignalListener(
+    void Function(String type, Map<String, dynamic> data, String? from) fn,
+  ) {
     _videoSignalListeners.remove(fn);
   }
 
@@ -94,7 +110,7 @@ class CallService {
           },
           onDone: () {
             _channel = null;
-            if (_state != CallState.idle) {
+            if (_state != CallState.idle && _state != CallState.calling) {
               _setState(CallState.ended);
             }
             if (_shouldReconnect) {
@@ -121,9 +137,13 @@ class CallService {
       'video': false,
     });
 
-    _peerConnection = await createPeerConnection(
-      Map<String, dynamic>.from(AppConfig.iceServers),
-    );
+    _peerConnection = await createPeerConnection({
+      "iceServers": [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+      ],
+      "iceTransportPolicy": "all",
+    });
 
     for (final track in _localStream!.getTracks()) {
       _peerConnection!.addTrack(track, _localStream!);
@@ -146,14 +166,21 @@ class CallService {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected &&
           _state != CallState.connected) {
         _setState(CallState.connected);
-      } else if ((state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+      } else if ((state ==
+                  RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
           !_isCleaningUp) {
         hangup();
       }
     };
-
-    await _peerConnection!.createOffer({'offerToReceiveAudio': true});
+    _peerConnection!.onTrack = (event) {
+      if (event.streams.isNotEmpty) {
+        onRemoteStream?.call(event.streams[0]);
+      }
+    };
+    _peerConnection!.onAddStream = (stream) {
+      onRemoteStream?.call(stream);
+    };
   }
 
   Future<void> _resetPeerConnection() async {
@@ -165,9 +192,13 @@ class CallService {
       'video': false,
     });
 
-    _peerConnection = await createPeerConnection(
-      Map<String, dynamic>.from(AppConfig.iceServers),
-    );
+    _peerConnection = await createPeerConnection({
+      "iceServers": [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+      ],
+      "iceTransportPolicy": "all",
+    });
 
     for (final track in _localStream!.getTracks()) {
       _peerConnection!.addTrack(track, _localStream!);
@@ -190,39 +221,46 @@ class CallService {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected &&
           _state != CallState.connected) {
         _setState(CallState.connected);
-      } else if ((state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+      } else if ((state ==
+                  RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
           !_isCleaningUp) {
         hangup();
       }
     };
-
-    await _peerConnection!.createOffer({'offerToReceiveAudio': true});
+    _peerConnection!.onTrack = (event) {
+      if (event.streams.isNotEmpty) {
+        onRemoteStream?.call(event.streams[0]);
+      }
+    };
+    _peerConnection!.onAddStream = (stream) {
+      onRemoteStream?.call(stream);
+    };
   }
 
-  Future<void> call(String targetUsername) async {
-    final prefs = await SharedPreferences.getInstance();
-    final role = prefs.getString("role");
+Future<void> call(String targetUsername) async {
+  final prefs = await SharedPreferences.getInstance();
+  final role = prefs.getString("role");
 
-    if (role != "user") {
-      onError?.call("Only users can initiate calls");
-      return;
-    }
-
-    _remoteUser = targetUsername.trim().toLowerCase();
-    _setState(CallState.calling);
-
-    final offer = await _peerConnection!.createOffer({
-      'offerToReceiveAudio': true,
-    });
-
-    await _peerConnection!.setLocalDescription(offer);
-
-    _send({
-      "target": _remoteUser,
-      "data": {"type": "offer", "sdp": offer.sdp},
-    });
+  if (role != "user") {
+    onError?.call("Only users can initiate calls");
+    return;
   }
+
+  _remoteUser = targetUsername.trim().toLowerCase();
+  _setState(CallState.calling);
+
+  final offer = await _peerConnection!.createOffer({
+    'offerToReceiveAudio': true,
+    'offerToReceiveVideo': false,
+  });
+  await _peerConnection!.setLocalDescription(offer);
+
+  _send({
+    "target": _remoteUser,
+    "data": {"type": "offer", "sdp": offer.sdp},
+  });
+}
 
   Future<void> acceptCall() async {
     if (_pendingOffer == null || _remoteUser == null) return;
@@ -231,7 +269,10 @@ class CallService {
       RTCSessionDescription(_pendingOffer!["sdp"], "offer"),
     );
 
-    final answer = await _peerConnection!.createAnswer();
+    final answer = await _peerConnection!.createAnswer({
+      'offerToReceiveAudio': true,
+      'offerToReceiveVideo': false,
+    });
     await _peerConnection!.setLocalDescription(answer);
 
     _send({
@@ -299,7 +340,11 @@ class CallService {
     _send({'target': target, 'data': data});
   }
 
-  void sendChatMessage(String target, String content, {String messageType = 'text'}) {
+  void sendChatMessage(
+    String target,
+    String content, {
+    String messageType = 'text',
+  }) {
     _send({
       "target": target,
       "type": "chat_message",
@@ -355,7 +400,11 @@ class CallService {
 
       case "candidate":
         await _peerConnection!.addCandidate(
-          RTCIceCandidate(data["candidate"], data["sdpMid"], data["sdpMLineIndex"]),
+          RTCIceCandidate(
+            data["candidate"],
+            data["sdpMid"],
+            data["sdpMLineIndex"],
+          ),
         );
         break;
 
@@ -380,6 +429,7 @@ class CallService {
         break;
 
       case 'video_offer':
+        _remoteUser = from; // add this
         _pendingVideoOfferFrom = from;
         _pendingVideoOffer = Map<String, dynamic>.from(data);
         onIncomingVideoCall?.call(from!, Map<String, dynamic>.from(data));
@@ -409,9 +459,6 @@ class CallService {
   }
 
   void _cleanup() {
-    _localStream?.getTracks().forEach((track) => track.stop());
-    _localStream?.dispose();
-    _localStream = null;
     _remoteUser = null;
     _pendingOffer = null;
   }

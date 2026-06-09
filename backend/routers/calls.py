@@ -15,11 +15,6 @@ async def send_push(token, caller):
         android=messaging.AndroidConfig(
             priority="high",
             ttl=30,
-            notification=messaging.AndroidNotification(
-                title="Incoming Call", body=caller,
-                channel_id="incoming_calls", priority="max",
-                visibility="public", default_vibrate_timings=True,
-            ),
         ),
         token=token,
     )
@@ -124,6 +119,14 @@ async def test_push(username: str):
     await send_push(row["fcm_token"], "Joshua")
     return {"status": "sent"}
 
+@router.get("/users/{username}/coins")
+async def get_coins(username: str):
+    async with state.db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT coins FROM users WHERE username=$1", username.lower())
+    if not row:
+        raise HTTPException(404)
+    return {"coins": row["coins"]}
+
 @router.websocket("/ws/{client_id}")
 async def websocket_endpoint(ws: WebSocket, client_id: str):
     await ws.accept()
@@ -141,7 +144,7 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
 
     if client_id in state.pending_offers:
         offer = state.pending_offers.pop(client_id)
-        await ws.send_text(json.dumps({"type": "incoming_call", "from": offer["from"], "data": offer["data"]}))
+        await ws.send_text(json.dumps({"from": offer["from"], "data": offer["data"]}))
 
     try:
         while True:
@@ -166,6 +169,9 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
             msg_type = message.get("data", {}).get("type", "")
 
             if msg_type == "offer":
+                if not target:
+                    await ws.send_text(json.dumps({"type": "error", "message": "No target specified"}))
+                    continue
                 async with state.db_pool.acquire() as conn:
                     caller = await conn.fetchrow("SELECT role FROM users WHERE username=$1", client_id.lower())
                     receiver = await conn.fetchrow("SELECT role FROM users WHERE username=$1", target.lower())
@@ -214,6 +220,13 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 if caller["role"] != "user":
                     await ws.send_text(json.dumps({"type": "error", "message": "Only users can initiate calls"}))
                     continue
+                print("========== CALL DEBUG ==========")
+                print("client_id:", client_id)
+                print("target:", target)
+                print("caller role:", caller["role"] if caller else None)
+                print("receiver role:", receiver["role"] if receiver else None)
+                print("message:", message)
+                print("================================")
                 if receiver["role"] != "listener":
                     await ws.send_text(json.dumps({"type": "error", "message": "You can only call listeners"}))
                     continue

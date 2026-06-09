@@ -14,23 +14,52 @@ const String _channelName = 'Incoming Calls';
 const int _callNotificationId = 999;
 
 @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(
-  RemoteMessage message,
-) async {
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
   if (message.data["type"] == "incoming_call") {
     final caller = message.data["caller"] ?? "Unknown";
 
-    await _initializeNotifications();
-    await _showIncomingCallNotification(caller);
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      ),
+      onDidReceiveNotificationResponse: null,
+    );
+    await plugin
+    .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+    ?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'incoming_calls',
+        'Incoming Calls',
+        importance: Importance.max,
+      ),
+    );
+    await plugin.show(
+      id: 999,
+      title: "Incoming Call",
+      body: caller,
+      payload: caller,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'incoming_calls',
+          'Incoming Calls',
+          importance: Importance.max,
+          priority: Priority.max,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.call,
+          autoCancel: false,
+          ongoing: true,
+          visibility: NotificationVisibility.public,
+        ),
+      ),
+    );
   }
 }
 
 @pragma('vm:entry-point')
-void notificationTapBackground(
-  NotificationResponse response,
-) async {
+void notificationTapBackground(NotificationResponse response) async {
   final caller = response.payload ?? "Unknown";
 
   if (response.actionId == "accept") {
@@ -41,10 +70,6 @@ void notificationTapBackground(
 
 class FCMService {
   static Future<void> initialize() async {
-    FirebaseMessaging.onBackgroundMessage(
-      firebaseMessagingBackgroundHandler,
-    );
-
     await _initializeNotifications();
 
     FirebaseMessaging.onMessage.listen((message) async {
@@ -76,19 +101,13 @@ class FCMService {
 }
 
 Future<void> _initializeNotifications() async {
-  const androidSettings = AndroidInitializationSettings(
-    '@mipmap/ic_launcher',
-  );
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  const settings = InitializationSettings(
-    android: androidSettings,
-  );
+  const settings = InitializationSettings(android: androidSettings);
 
   await _notificationsPlugin.initialize(
     settings: settings,
-    onDidReceiveNotificationResponse: (
-      NotificationResponse response,
-    ) async {
+    onDidReceiveNotificationResponse: (NotificationResponse response) async {
       final caller = response.payload ?? "Unknown";
 
       if (response.actionId == "accept") {
@@ -96,22 +115,17 @@ Future<void> _initializeNotifications() async {
         await AppStorage.savePendingCaller(caller);
       }
 
-      await _notificationsPlugin.cancel(
-        id: _callNotificationId,
-      );
+      await _notificationsPlugin.cancel(id: _callNotificationId);
     },
-    onDidReceiveBackgroundNotificationResponse:
-        notificationTapBackground,
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
   );
 }
 
-Future<void> _showIncomingCallNotification(
-  String caller,
-) async {
-  final androidPlugin =
-      _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+Future<void> _showIncomingCallNotification(String caller) async {
+  final androidPlugin = _notificationsPlugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
 
   await androidPlugin?.createNotificationChannel(
     const AndroidNotificationChannel(

@@ -41,10 +41,6 @@ void notificationTapBackground(
 
 class FCMService {
   static Future<void> initialize() async {
-    FirebaseMessaging.onBackgroundMessage(
-      firebaseMessagingBackgroundHandler,
-    );
-
     await _initializeNotifications();
 
     FirebaseMessaging.onMessage.listen((message) async {

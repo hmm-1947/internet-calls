@@ -1,0 +1,39 @@
+lib
+├── core/
+│   ├── api_endpoints.dart
+│   ├── config.dart
+│   └── storage.dart
+├── main.dart
+├── models/
+│   ├── call_log.dart
+│   └── message.dart
+├── screens/
+│   ├── auth/
+│   │   ├── auth_landing.dart
+│   │   ├── sign_in.dart
+│   │   └── sign_up.dart
+│   ├── calls/
+│   │   ├── active_call_screen.dart
+│   │   ├── call_tab.dart
+│   │   ├── logs_screen.dart
+│   │   └── video_call_screen.dart
+│   ├── chat/
+│   │   ├── chat_list_screen.dart
+│   │   └── chat_screen.dart
+│   ├── main_shell.dart
+│   └── profile/
+│       └── profile_screen.dart
+├── services/
+│   ├── audio_manager.dart
+│   ├── auth_service.dart
+│   ├── call_log_store.dart
+│   ├── call_service.dart
+│   ├── fcm_service.dart
+│   └── video_call_service.dart
+└── widgets/
+    ├── control_button.dart
+    ├── incoming_call_dialog.dart
+    ├── incoming_video_call_screen.dart
+    ├── user_tile.dart
+    ├── video_pip_overlay.dart
+    └── voice_message_widget.dart

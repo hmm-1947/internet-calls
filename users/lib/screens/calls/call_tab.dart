@@ -141,6 +141,23 @@ class _CallTabState extends State<CallTab> {
   void _startVideoCall(String username) async {
     if (_videoCallService != null) return;
 
+    final coinRes = await http.get(
+      Uri.parse("${AppConfig.httpBase}/user/${widget.myUsername}"),
+    );
+    if (coinRes.statusCode == 200) {
+      final coins = jsonDecode(coinRes.body)['coins'] as int;
+      if (coins < 1) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Not enough coins to start a video call"),
+            backgroundColor: _accent,
+          ),
+        );
+        return;
+      }
+    }
+
     _videoCallService = VideoCallService(callService: _callService);
     _callService.addVideoSignalListener(_onVideoSignal);
 
@@ -464,34 +481,37 @@ class _CallTabState extends State<CallTab> {
             ),
           ),
           Expanded(
-            child: _filteredUsers.isEmpty
-                ? const Center(
-                    child: Text(
-                      "No users found",
-                      style: TextStyle(color: _textSecondary),
-                    ),
-                  )
-                : RefreshIndicator(
-                    color: _accent,
-                    backgroundColor: _surface,
-                    onRefresh: _fetchListeners,
-                    child: ListView.builder(
+            child: RefreshIndicator(
+              color: _accent,
+              backgroundColor: _surface,
+              onRefresh: _fetchListeners,
+              child: _filteredUsers.isEmpty
+                  ? const SingleChildScrollView(
+                      physics: AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: 400,
+                        child: Center(
+                          child: Text(
+                            "No users found",
+                            style: TextStyle(color: _textSecondary),
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: _filteredUsers.length,
                       itemBuilder: (context, index) {
                         final user = _filteredUsers[index];
-
                         return UserTile(
                           username: user["username"],
                           online: user["online"] ?? false,
-                          enabled: _connected &&
+                          enabled:
+                              _connected &&
                               _callService.state == CallState.idle,
-                          onCall: () {
-                            _startCall(user["username"]);
-                          },
-                          onVideoCall: () {
-                            _startVideoCall(user["username"]);
-                          },
+                          onCall: () => _startCall(user["username"]),
+                          onVideoCall: () => _startVideoCall(user["username"]),
                           onChat: () {
                             Navigator.push(
                               context,
@@ -507,7 +527,7 @@ class _CallTabState extends State<CallTab> {
                         );
                       },
                     ),
-                  ),
+            ),
           ),
         ],
       ),

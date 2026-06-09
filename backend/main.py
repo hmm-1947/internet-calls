@@ -29,7 +29,7 @@ app.include_router(messages_router)
 app.include_router(voice_messages_router)
 app.include_router(calls_router)
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://calluser:calluser@187.127.170.86:5432/callregistry")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://calluser:calluser@localhost:5432/callregistry")
 
 @app.on_event("startup")
 async def startup():

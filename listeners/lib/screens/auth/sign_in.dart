@@ -64,6 +64,7 @@ class _SignInScreenState extends State<SignInScreen> {
           username: username,
           token: token,
         );
+        print("SAVED TOKEN: $token");
       }
 
       if (!mounted) return;
