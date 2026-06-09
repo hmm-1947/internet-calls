@@ -203,6 +203,8 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                     await _try_fcm_fallback(ws, client_id, target, message["data"])
 
             elif msg_type == "answer":
+                print(f"[ANSWER] listener={client_id} user={target}")
+                print(f"[ANSWER] target in clients: {target in state.clients}")
                 state.active_calls[client_id] = target
                 state.active_calls[target] = client_id
                 state.call_sessions[target] = {"listener": client_id, "started": time.time(), "charged": False}
@@ -286,10 +288,13 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                         state.clients.pop(target, None)
 
             elif target in state.clients:
+                print(f"[RELAY] type={msg_type} from={client_id} to={target}")
                 try:
                     await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
                 except Exception:
                     state.clients.pop(target, None)
+            else:
+                print(f"[RELAY_FAIL] type={msg_type} from={client_id} to={target} | target_online={target in state.clients}")
 
     except (WebSocketDisconnect, OSError, Exception):
         other = state.active_calls.pop(client_id, None)
