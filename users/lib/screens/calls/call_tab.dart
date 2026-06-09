@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:calls/widgets/video_pip_overlay.dart';
 import 'package:calls/core/config.dart';
@@ -47,7 +48,7 @@ class _CallTabState extends State<CallTab> {
   VideoCallService? _videoCallService;
   bool _connected = false;
   bool _navigatingToCall = false;
-
+  Timer? _pollTimer;
   String? _statusMessage;
 
   List<Map<String, dynamic>> _allUsers = [];
@@ -61,45 +62,34 @@ class _CallTabState extends State<CallTab> {
 
     _setupCallbacks();
 
-    if (!_callService.isConnected) {
-      _connect();
-    } else {
+    if (_callService.isConnected) {
       _connected = true;
-
-      if (_callService.state == CallState.ringing &&
-          _callService.remoteUser != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showIncomingCallDialog(_callService.remoteUser!);
-        });
-      }
+    } else {
+      _callService.connect().then((_) {
+        if (!mounted) return;
+        setState(() => _connected = true);
+      });
     }
 
+    if (_callService.state == CallState.ringing &&
+        _callService.remoteUser != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showIncomingCallDialog(_callService.remoteUser!);
+      });
+    }
     _searchController.addListener(_onSearchChanged);
     _fetchListeners();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _fetchListeners(),
+    );
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _pollTimer?.cancel();
     super.dispose();
-  }
-
-  Future<void> _connect() async {
-    try {
-      await _callService.connect();
-
-      if (!mounted) return;
-
-      setState(() {
-        _connected = true;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _statusMessage = "Connection failed";
-      });
-    }
   }
 
   Future<void> _fetchListeners() async {
@@ -297,26 +287,27 @@ class _CallTabState extends State<CallTab> {
       switch (state) {
         case CallState.calling:
           setState(() {
-            _statusMessage = "Calling ${_callService.remoteUser}...";
+            _statusMessage = null;
           });
+          if (!_navigatingToCall) {
+            _goToCallScreen();
+          }
           break;
 
         case CallState.connected:
           setState(() {
             _statusMessage = null;
           });
-
-          if (!_navigatingToCall) {
-            _goToCallScreen();
-          }
           break;
 
         case CallState.idle:
         case CallState.ended:
           setState(() {
             _statusMessage = null;
+            _connected = true;
           });
           _navigatingToCall = false;
+          _fetchListeners();
           break;
 
         default:
@@ -507,9 +498,7 @@ class _CallTabState extends State<CallTab> {
                         return UserTile(
                           username: user["username"],
                           online: user["online"] ?? false,
-                          enabled:
-                              _connected &&
-                              _callService.state == CallState.idle,
+                          enabled: _connected,
                           onCall: () => _startCall(user["username"]),
                           onVideoCall: () => _startVideoCall(user["username"]),
                           onChat: () {

@@ -1,5 +1,5 @@
+//user side main_shell.dart
 import 'package:flutter/material.dart';
-
 import '../core/storage.dart';
 import '../services/call_service.dart';
 import 'calls/call_tab.dart';
@@ -12,19 +12,13 @@ class MainShell extends StatefulWidget {
   final String myUsername;
   final String role;
 
-  const MainShell({
-    
-    super.key,
-    required this.myUsername,
-    required this.role,
-  });
+  const MainShell({super.key, required this.myUsername, required this.role});
 
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell>
-    with WidgetsBindingObserver {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _index = 0;
 
   late final CallService _callService;
@@ -37,10 +31,8 @@ class _MainShellState extends State<MainShell>
 
     WidgetsBinding.instance.addObserver(this);
 
-    _callService = CallService(
-      myUsername: widget.myUsername,
-    );
-
+    _callService = CallService(myUsername: widget.myUsername);
+    _callService.connect();
     _checkPendingCall();
   }
 
@@ -52,9 +44,7 @@ class _MainShellState extends State<MainShell>
   }
 
   @override
-  void didChangeAppLifecycleState(
-    AppLifecycleState state,
-  ) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _callService.disconnect();
@@ -68,8 +58,7 @@ class _MainShellState extends State<MainShell>
   }
 
   Future<void> _checkPendingCall() async {
-    final accepted =
-        await AppStorage.getPendingCallAccepted();
+    final accepted = await AppStorage.getPendingCallAccepted();
 
     if (!accepted) {
       return;
@@ -80,9 +69,7 @@ class _MainShellState extends State<MainShell>
     _pendingCallAccepted = true;
   }
 
-  void _handlePendingIncomingCall(
-    String callerName,
-  ) {
+  void _handlePendingIncomingCall(String callerName) {
     if (!_pendingCallAccepted) {
       return;
     }
@@ -97,27 +84,23 @@ class _MainShellState extends State<MainShell>
       _index = 0;
     });
 
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) async {
-        await _callService.acceptCall();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _callService.acceptCall();
 
-        if (!mounted ||
-            _callService.remoteUser == null) {
-          return;
-        }
+      if (!mounted || _callService.remoteUser == null) {
+        return;
+      }
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ActiveCallScreen(
-              callService: _callService,
-              remoteUser:
-                  _callService.remoteUser!,
-            ),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ActiveCallScreen(
+            callService: _callService,
+            remoteUser: _callService.remoteUser!,
           ),
-        );
-      },
-    );
+        ),
+      );
+    });
   }
 
   void _switchTab(int index) {
@@ -132,52 +115,37 @@ class _MainShellState extends State<MainShell>
       CallTab(
         myUsername: widget.myUsername,
         callService: _callService,
-        onIncomingCallReady:
-            _pendingCallAccepted
-                ? _handlePendingIncomingCall
-                : null,
+        onIncomingCallReady: _pendingCallAccepted
+            ? _handlePendingIncomingCall
+            : null,
       ),
-      ChatListScreen(
-        myUsername: widget.myUsername,
-        callService: _callService,
-      ),
+      ChatListScreen(myUsername: widget.myUsername, callService: _callService),
       const SizedBox(),
       LogsScreen(
-  myUsername: widget.myUsername,
-  onCallUser: (_) {
-    _switchTab(0);
-  },
-),
-      ProfileScreen(username: widget.myUsername, role:widget.role),
+        myUsername: widget.myUsername,
+        onCallUser: (_) {
+          _switchTab(0);
+        },
+      ),
+      ProfileScreen(username: widget.myUsername, role: widget.role),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(
-        0xFF0A0A0F,
-      ),
-      body: IndexedStack(
-        index: _index,
-        children: screens,
-      ),
+      backgroundColor: const Color(0xFF0A0A0F),
+      body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF13131A),
-          border: Border(
-            top: BorderSide(
-              color: Color(0xFF252533),
-            ),
-          ),
+          border: Border(top: BorderSide(color: Color(0xFF252533))),
         ),
         child: SafeArea(
           child: SizedBox(
             height: 64,
             child: Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _NavItem(
-                  icon:
-                      Icons.grid_view_rounded,
+                  icon: Icons.grid_view_rounded,
                   label: "Home",
                   selected: _index == 0,
                   onTap: () {
@@ -185,8 +153,7 @@ class _MainShellState extends State<MainShell>
                   },
                 ),
                 _NavItem(
-                  icon: Icons
-                      .chat_bubble_outline_rounded,
+                  icon: Icons.chat_bubble_outline_rounded,
                   label: "Chat",
                   selected: _index == 1,
                   onTap: () {
@@ -194,8 +161,7 @@ class _MainShellState extends State<MainShell>
                   },
                 ),
                 _NavItem(
-                  icon:
-                      Icons.call_outlined,
+                  icon: Icons.call_outlined,
                   label: "Calls",
                   selected: _index == 3,
                   onTap: () {
@@ -203,8 +169,7 @@ class _MainShellState extends State<MainShell>
                   },
                 ),
                 _NavItem(
-                  icon: Icons
-                      .person_outline_rounded,
+                  icon: Icons.person_outline_rounded,
                   label: "Profile",
                   selected: _index == 4,
                   onTap: () {
@@ -241,19 +206,14 @@ class _NavItem extends StatelessWidget {
       child: SizedBox(
         width: 60,
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
               size: 22,
               color: selected
-                  ? const Color(
-                      0xFFFF3B6B,
-                    )
-                  : const Color(
-                      0xFF8888AA,
-                    ),
+                  ? const Color(0xFFFF3B6B)
+                  : const Color(0xFF8888AA),
             ),
             const SizedBox(height: 3),
             Text(
@@ -261,15 +221,9 @@ class _NavItem extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 color: selected
-                    ? const Color(
-                        0xFFFF3B6B,
-                      )
-                    : const Color(
-                        0xFF8888AA,
-                      ),
-                fontWeight: selected
-                    ? FontWeight.w600
-                    : FontWeight.w400,
+                    ? const Color(0xFFFF3B6B)
+                    : const Color(0xFF8888AA),
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ],

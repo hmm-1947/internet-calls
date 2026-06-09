@@ -35,7 +35,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     Helper.setSpeakerphoneOn(true);
     super.initState();
 
-    _startTimer();
     widget.callService.onRemoteStream = (stream) {
       if (mounted) {
         setState(() {
@@ -47,6 +46,10 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _previousStateCallback = widget.callService.onCallStateChanged;
 
     widget.callService.onCallStateChanged = (state) {
+      if (state == CallState.connected && mounted) {
+        _startTimer();
+        setState(() {});
+      }
       if ((state == CallState.ended || state == CallState.idle) && mounted) {
         if (Navigator.canPop(context)) {
           Navigator.pop(context);
@@ -135,7 +138,9 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _formattedTime,
+              _seconds == 0 && widget.callService.state == CallState.calling
+                  ? "Calling..."
+                  : _formattedTime,
               style: const TextStyle(
                 color: Color(0xFF2ECC71),
                 fontSize: 18,

@@ -143,28 +143,32 @@
     <script>
         let selectedUser = null;
 
-        async function loadDashboard() {
-            const res = await fetch("/admin/stats");
-            const data = await res.json();
+        function renderDashboard(data) {
 
             const listenersTable = document.getElementById("listenersTable");
             listenersTable.innerHTML =
                 "<tr><th style='width:40px'></th><th style='width:150px'>Listener</th><th style='width:180px'>Total Talk Time</th><th>Created</th></tr>";
+
             data.listeners.forEach(user => {
                 const mins = Math.ceil((user.total_duration || 0) / 60);
+
                 listenersTable.innerHTML += `<tr>
-    <td style="width:40px"><span class="online-dot ${user.online ? "online-now" : "offline-now"}"></span></td>
-    <td style="width:150px">${user.username}</td>
-    <td style="width:180px">${mins} min</td>
-    <td>${user.created_at}</td>
+<td style="width:40px"><span class="online-dot ${user.online ? "online-now" : "offline-now"}"></span></td>
+<td style="width:150px">${user.username}</td>
+<td style="width:180px">${mins} min</td>
+<td>${user.created_at}</td>
 </tr>`;
             });
 
             const usersTable = document.getElementById("usersTable");
+
             usersTable.innerHTML =
                 "<tr><th style='width:40px'></th><th style='width:150px'>User</th><th style='width:150px'>Coins</th><th style='width:180px'>Total Talk Time</th><th>Created</th><th style='width:100px'>Chats</th></tr>";
+
             data.users.forEach(user => {
+
                 const mins = Math.ceil((user.total_duration || 0) / 60);
+
                 usersTable.innerHTML += `
 <tr>
     <td style="width:40px"><span class="online-dot ${user.online ? "online-now" : "offline-now"}"></span></td>
@@ -186,14 +190,17 @@
 </tr>`;
             });
 
-            document.getElementById("onlineUsers").innerHTML = data.online_users.map(u => `<li class="online">${u}</li>`).join("");
-            document.getElementById("calls").innerHTML = data.active_calls.map(c => `<li class="calling">${c.caller} ➜ ${c.target}</li>`).join("");
+            document.getElementById("onlineUsers").innerHTML =
+                data.online_users.map(u => `<li class="online">${u}</li>`).join("");
+
+            document.getElementById("calls").innerHTML =
+                data.active_calls.map(c => `<li class="calling">${c.caller} ➜ ${c.target}</li>`).join("");
+
             document.getElementById("listenerCount").innerText = data.listeners.length;
             document.getElementById("userCount").innerText = data.users.length;
             document.getElementById("onlineCount").innerText = data.online_users.length;
             document.getElementById("callCount").innerText = data.active_calls.length;
         }
-
         async function openChats(username) {
             selectedUser = username;
             document.getElementById("chatPanel").style.display = "flex";
@@ -321,8 +328,19 @@
             });
         }
 
-        loadDashboard();
-        setInterval(loadDashboard, 2000);
+        const protocol = location.protocol === "https:" ? "wss" : "ws";
+
+        const ws = new WebSocket(
+            `${protocol}://${location.host}/admin/ws`
+        );
+
+        ws.onmessage = (event) => {
+            renderDashboard(JSON.parse(event.data));
+        };
+
+        ws.onclose = () => {
+            setTimeout(() => location.reload(), 2000);
+        };
     </script>
 
     <div id="chatPanel"

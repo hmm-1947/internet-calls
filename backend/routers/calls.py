@@ -2,16 +2,19 @@ import json
 import asyncio
 import math
 import time
-
+from admin import broadcast_admin_update
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 import firebase_admin.messaging as messaging
 import state
 
 router = APIRouter()
 
-async def send_push(token, caller):
+async def send_push(token, caller, call_type="incoming_call", sdp=None):
+    data = {"type": call_type, "caller": caller}
+    if sdp:
+        data["sdp"] = sdp
     message = messaging.Message(
-        data={"type": "incoming_call", "caller": caller},
+        data=data,
         android=messaging.AndroidConfig(
             priority="high",
             ttl=30,
@@ -96,12 +99,12 @@ async def monitor_call(caller):
             state.call_sessions.pop(caller, None)
             break
 
-async def _try_fcm_fallback(ws, client_id, target, offer_data):
+async def _try_fcm_fallback(ws, client_id, target, offer_data, call_type="incoming_call", sdp=None):
     async with state.db_pool.acquire() as conn:
         row = await conn.fetchrow("SELECT fcm_token FROM users WHERE username=$1", target.lower())
     if row and row["fcm_token"]:
         state.pending_offers[target] = {"from": client_id, "data": offer_data}
-        sent = await send_push(row["fcm_token"], client_id)
+        sent = await send_push(row["fcm_token"], client_id, call_type, sdp=sdp)
         if sent:
             await ws.send_text(json.dumps({"type": "ringing", "target": target}))
         else:
@@ -119,6 +122,15 @@ async def test_push(username: str):
     await send_push(row["fcm_token"], "Joshua")
     return {"status": "sent"}
 
+@router.get("/call/video/pending/{username}")
+async def check_pending_video_call(username: str):
+    if username in state.pending_offers:
+        offer = state.pending_offers[username]
+        if offer["data"].get("type") == "video_offer":
+            return {"pending": True, "caller": offer["from"]}
+    return {"pending": False}
+
+
 @router.get("/users/{username}/coins")
 async def get_coins(username: str):
     async with state.db_pool.acquire() as conn:
@@ -127,12 +139,22 @@ async def get_coins(username: str):
         raise HTTPException(404)
     return {"coins": row["coins"]}
 
+
+@router.get("/call/pending/{username}")
+async def check_pending_call(username: str):
+    if username in state.pending_offers:
+        offer = state.pending_offers[username]
+        return {"pending": True, "caller": offer["from"]}
+    return {"pending": False}
+
+
 @router.websocket("/ws/{client_id}")
 async def websocket_endpoint(ws: WebSocket, client_id: str):
     await ws.accept()
     state.clients[client_id] = ws
     async with state.db_pool.acquire() as conn:
         await conn.execute("UPDATE users SET is_online=TRUE WHERE username=$1", client_id)
+    await broadcast_admin_update()
 
     try:
         await ws.send_text(json.dumps({"type": "connected", "id": client_id}))
@@ -140,6 +162,8 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
         state.clients.pop(client_id, None)
         async with state.db_pool.acquire() as conn:
             await conn.execute("UPDATE users SET is_online=FALSE WHERE username=$1", client_id)
+        
+        await broadcast_admin_update()
         return
 
     if client_id in state.pending_offers:
@@ -208,6 +232,7 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 state.active_calls[client_id] = target
                 state.active_calls[target] = client_id
                 state.call_sessions[target] = {"listener": client_id, "started": time.time(), "charged": False}
+                await broadcast_admin_update()
                 asyncio.create_task(monitor_call(target))
                 if target in state.clients:
                     await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
@@ -236,26 +261,36 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                     await ws.send_text(json.dumps({"type": "error", "message": "Not enough coins"}))
                     continue
                 if target in state.clients:
-                    await state.clients[target].send_text(json.dumps({
-                        "type": "incoming_call", "from": client_id, "data": message["data"]
-                    }))
+                    try:
+                        await state.clients[target].send_text(json.dumps({
+                            "type": "incoming_call", "from": client_id, "data": message["data"]
+                        }))
+                        await ws.send_text(json.dumps({"type": "ringing", "target": target}))
+                    except Exception:
+                        state.clients.pop(target, None)
+                        await _try_fcm_fallback(ws, client_id, target, message["data"], "incoming_video_call", sdp=message["data"].get("sdp"))
                 else:
-                    await ws.send_text(json.dumps({"type": "error", "message": f"User '{target}' is not online"}))
+                    await _try_fcm_fallback(ws, client_id, target, message["data"], "incoming_video_call", sdp=message["data"].get("sdp"))
 
             elif msg_type in ["video_answer", "video_candidate", "video_hangup"]:
+                if msg_type == "video_hangup":
+                    state.pending_offers.pop(target, None)
+                    state.pending_offers.pop(client_id, None)
                 if target in state.clients:
                     await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
 
             elif msg_type in ["hangup", "call_ended"]:
+                state.pending_offers.pop(target, None)
                 other = state.active_calls.pop(client_id, None)
                 session = state.call_sessions.pop(client_id, None)
+                caller_for_session = client_id
 
                 if not session:
                     for user, data in list(state.call_sessions.items()):
                         if data["listener"] == client_id:
                             session = data
                             state.call_sessions.pop(user, None)
-                            client_id = user
+                            caller_for_session = user
                             break
 
                 if session and not session.get("charged"):
@@ -267,20 +302,21 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                         coins_used = math.ceil(duration_seconds / 60) * coins_per_minute
                         await conn.execute(
                             "UPDATE users SET coins=GREATEST(coins-$1,0) WHERE username=$2",
-                            coins_used, client_id
+                            coins_used, caller_for_session
                         )
                         await conn.execute(
                             "UPDATE users SET total_call_duration=total_call_duration+$1, daily_call_duration=daily_call_duration+$1 WHERE username=$2",
-                            duration_seconds, client_id
+                            duration_seconds, caller_for_session
                         )
 
                         await conn.execute(
                             "INSERT INTO call_logs (caller, listener, duration_seconds) VALUES ($1, $2, $3)",
-                            client_id, session["listener"], duration_seconds
+                            caller_for_session, session["listener"], duration_seconds
                         )
 
                 if other:
                     state.active_calls.pop(other, None)
+                await broadcast_admin_update()
                 if target in state.clients:
                     try:
                         await state.clients[target].send_text(json.dumps({"from": client_id, "data": message["data"]}))
@@ -301,6 +337,7 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
         if other:
             state.active_calls.pop(other, None)
         state.clients.pop(client_id, None)
+        await broadcast_admin_update()
         try:
             async with state.db_pool.acquire() as conn:
                 await conn.execute("UPDATE users SET is_online=FALSE WHERE username=$1", client_id)

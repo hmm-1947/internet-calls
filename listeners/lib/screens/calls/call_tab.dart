@@ -1,10 +1,17 @@
+//listeners calltab.dart
 import 'dart:convert';
-
 import 'package:listener/core/config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:listener/core/config.dart';
-
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:listener/core/config.dart';
+import 'package:listener/services/fcm_service.dart';
+import 'package:listener/core/storage.dart';
+import 'package:listener/services/video_call_services.dart';
+import 'package:listener/widgets/incoming_video_call_dialog.dart';
+import 'package:listener/widgets/video_pip_overlay.dart';
 import '../chat/chat_screen.dart';
 import '../../models/call_log.dart';
 import '../../services/call_log_store.dart';
@@ -26,14 +33,21 @@ class CallTab extends StatefulWidget {
   final String myUsername;
   final CallService callService;
   final void Function(String callerName)? onIncomingCallReady;
-
+  final VideoPipOverlay pipOverlay;
+  final VideoCallService? Function()? getVideoCallService;
+  final void Function(VideoCallService?) setVideoCallService;
+  final void Function(String callerName, Map<String, dynamic> offerData)
+  onShowVideoCallDialog;
   const CallTab({
     super.key,
     required this.myUsername,
     required this.callService,
+    required this.pipOverlay,
+    required this.setVideoCallService,
     this.onIncomingCallReady,
+    this.getVideoCallService,
+    required this.onShowVideoCallDialog,
   });
-
   @override
   State<CallTab> createState() => _CallTabState();
 }
@@ -44,6 +58,7 @@ class _CallTabState extends State<CallTab> {
 
   bool _connected = false;
   bool _navigatingToCall = false;
+  VideoCallService? get _videoCallService => widget.getVideoCallService?.call();
 
   String? _statusMessage;
 
@@ -53,22 +68,25 @@ class _CallTabState extends State<CallTab> {
   @override
   void initState() {
     super.initState();
-
     _setupCallbacks();
-
-    if (!_callService.isConnected) {
-      _connect();
-    } else {
+    if (_callService.isConnected) {
       _connected = true;
-
-      if (_callService.state == CallState.ringing &&
-          _callService.remoteUser != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showIncomingCallDialog(_callService.remoteUser!);
-        });
-      }
+    } else {
+      _callService.connect().then((_) {
+        if (!mounted) return;
+        setState(() => _connected = true);
+      });
     }
 
+    if (_callService.state == CallState.ringing &&
+        _callService.remoteUser != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showIncomingCallDialog(_callService.remoteUser!);
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPendingVideoCall();
+    });
     _searchController.addListener(_onSearchChanged);
     _fetchListeners();
   }
@@ -79,22 +97,51 @@ class _CallTabState extends State<CallTab> {
     super.dispose();
   }
 
-  Future<void> _connect() async {
-    try {
-      await _callService.connect();
+  Future<void> _checkPendingVideoCall() async {
+    final caller = await AppStorage.getPendingVideoCaller();
+    final sdp = await AppStorage.getPendingVideoSdp();
 
-      if (!mounted) return;
+    if (caller == null || sdp == null) return;
 
-      setState(() {
-        _connected = true;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _statusMessage = "Connection failed";
-      });
+    final expired = await AppStorage.isPendingVideoCallExpired();
+    if (expired) {
+      await AppStorage.clearPendingVideoCallData();
+      return;
     }
+
+    try {
+      final res = await http.get(
+        Uri.parse(
+          "${AppConfig.httpBase}/call/video/pending/${widget.myUsername}",
+        ),
+      );
+      if (res.statusCode != 200) {
+        await AppStorage.clearPendingVideoCallData();
+        return;
+      }
+      final data = jsonDecode(res.body);
+      if (data["pending"] != true) {
+        await AppStorage.clearPendingVideoCallData();
+        return;
+      }
+    } catch (_) {
+      await AppStorage.clearPendingVideoCallData();
+      return;
+    }
+
+    await AppStorage.clearPendingVideoCallData();
+    await FCMService.cancelVideoCallNotification();
+    if (!mounted) return;
+
+    final offerData = {'type': 'video_offer', 'sdp': sdp};
+    _showIncomingVideoCallDialog(caller, offerData);
+  }
+
+  void _showIncomingVideoCallDialog(
+    String callerName,
+    Map<String, dynamic> offerData,
+  ) {
+    widget.onShowVideoCallDialog(callerName, offerData);
   }
 
   Future<void> _fetchListeners() async {
@@ -126,6 +173,7 @@ class _CallTabState extends State<CallTab> {
     };
 
     _callService.onCallStateChanged = (state) {
+      debugPrint('CallTab: state=$state mounted=$mounted');
       if (!mounted) return;
 
       switch (state) {
@@ -147,8 +195,10 @@ class _CallTabState extends State<CallTab> {
 
         case CallState.idle:
         case CallState.ended:
+          debugPrint('CallTab idle/ended: _connected=$_connected');
           setState(() {
             _statusMessage = null;
+            _connected = true;
           });
           _navigatingToCall = false;
           break;
@@ -218,18 +268,17 @@ class _CallTabState extends State<CallTab> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) {
+      builder: (dialogContext) {
         return IncomingCallDialog(
           callerName: callerName,
+          callService: _callService,
           onAccept: () {
-            Navigator.pop(context);
+            Navigator.of(dialogContext).pop();
             _callService.acceptCall();
           },
           onReject: () async {
-            Navigator.pop(context);
-
+            Navigator.of(dialogContext).pop();
             _callService.rejectCall();
-
             await CallLogStore.instance.add(
               CallLog(
                 name: callerName,
@@ -242,7 +291,27 @@ class _CallTabState extends State<CallTab> {
           },
         );
       },
-    );
+    ).then((_) {});
+
+    _callService.onCallStateChanged = (state) {
+      if (!mounted) return;
+      if (state == CallState.connected) {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        _goToCallScreen();
+      }
+      if (state == CallState.ended) {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        _setupCallbacks();
+      }
+      if (state == CallState.idle) {
+        setState(() => _connected = true);
+        _navigatingToCall = false;
+      }
+    };
   }
 
   @override

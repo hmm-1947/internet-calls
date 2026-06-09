@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:listener/services/fcm_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -183,6 +184,13 @@ class CallService {
     await _peerConnection?.close();
     _peerConnection = null;
 
+    await _localStream?.dispose();
+    _localStream = null;
+    _localStream = await navigator.mediaDevices.getUserMedia({
+      'audio': true,
+      'video': false,
+    });
+
     _peerConnection = await createPeerConnection({
       "iceServers": [
         {"urls": "stun:stun.l.google.com:19302"},
@@ -267,15 +275,16 @@ class CallService {
       "target": _remoteUser,
       "data": {"type": "answer", "sdp": answer.sdp},
     });
-for (final candidate in _pendingCandidates) {
-  await _peerConnection!.addCandidate(candidate);
-}
-_pendingCandidates.clear();
+    for (final candidate in _pendingCandidates) {
+      await _peerConnection!.addCandidate(candidate);
+    }
+    _pendingCandidates.clear();
     _pendingOffer = null;
     _setState(CallState.connected);
   }
 
   void rejectCall() {
+    FCMService.cancelCallNotification();
     if (_remoteUser != null) {
       _send({
         "target": _remoteUser,
@@ -404,6 +413,7 @@ _pendingCandidates.clear();
       case "hangup":
         if (_isCleaningUp) break;
         _isCleaningUp = true;
+        FCMService.cancelCallNotification();
         _cleanup();
         _setState(CallState.ended);
         Future.delayed(const Duration(milliseconds: 300), () async {

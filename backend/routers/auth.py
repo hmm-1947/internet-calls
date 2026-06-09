@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import state
 import math
+from admin import broadcast_admin_update
 
 router = APIRouter()
 
@@ -35,6 +36,7 @@ async def register_user(req: RegisterRequest):
                 "INSERT INTO users (username, password, role) VALUES ($1, $2, $3)",
                 username, req.password, req.role
             )
+            await broadcast_admin_update()
         return {"status": "ok", "username": username, "role": req.role}
     except HTTPException:
         raise

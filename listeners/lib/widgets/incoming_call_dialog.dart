@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
+import '../services/call_service.dart';
 
 class IncomingCallDialog extends StatelessWidget {
   final String callerName;
   final VoidCallback onAccept;
   final VoidCallback onReject;
+  final CallService callService;
 
   const IncomingCallDialog({
     super.key,
     required this.callerName,
     required this.onAccept,
     required this.onReject,
+    required this.callService,
   });
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: const Color(0xFF13131A),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -30,10 +31,7 @@ class IncomingCallDialog extends StatelessWidget {
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF6C3FA0),
-                    Color(0xFFFF3B6B),
-                  ],
+                  colors: [Color(0xFF6C3FA0), Color(0xFFFF3B6B)],
                 ),
               ),
               child: const Icon(
@@ -71,9 +69,7 @@ class IncomingCallDialog extends StatelessWidget {
                       backgroundColor: const Color(0xFF2A1010),
                       foregroundColor: const Color(0xFFFF3B6B),
                     ),
-                    child: const Icon(
-                      Icons.call_end_rounded,
-                    ),
+                    child: const Icon(Icons.call_end_rounded),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -84,9 +80,7 @@ class IncomingCallDialog extends StatelessWidget {
                       backgroundColor: const Color(0xFF22C55E),
                       foregroundColor: Colors.white,
                     ),
-                    child: const Icon(
-                      Icons.call_rounded,
-                    ),
+                    child: const Icon(Icons.call_rounded),
                   ),
                 ),
               ],

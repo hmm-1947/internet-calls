@@ -43,10 +43,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _ownsRemoteRenderer = true;
     }
 
-    widget.videoCallService.onCallEnded = () {
-      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
-    };
-
     widget.videoCallService.onRemoteStream = (stream) {
       if (mounted) {
         setState(() => _remoteRenderer.srcObject = stream);

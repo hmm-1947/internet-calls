@@ -82,7 +82,10 @@ class VideoCallService {
     callService.sendSignal(target, {'type': 'video_offer', 'sdp': offer.sdp});
   }
 
-  Future<void> acceptCall(Map<String, dynamic> offerData, String callerName) async {
+  Future<void> acceptCall(
+    Map<String, dynamic> offerData,
+    String callerName,
+  ) async {
     _remoteUser = callerName;
     await initialize();
 
@@ -175,6 +178,7 @@ class VideoCallService {
   }
 
   void dispose() {
+    if (_isCleaningUp) return;
     _isCleaningUp = true;
     _dispose();
   }

@@ -41,12 +41,12 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   void initState() {
     super.initState();
 
-    _startTimer();
     Helper.setSpeakerphoneOn(true);
-    // Future.delayed(const Duration(seconds: 2), _loadRoleAndRecord);
+    _startTimer();
     _previousStateCallback = widget.callService.onCallStateChanged;
 
     widget.callService.onCallStateChanged = (state) {
+      _previousStateCallback?.call(state);
       if ((state == CallState.ended || state == CallState.idle) && mounted) {
         if (Navigator.canPop(context)) {
           Navigator.pop(context);

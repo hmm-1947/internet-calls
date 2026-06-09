@@ -187,7 +187,9 @@ class CallService {
     await _peerConnection?.close();
     _peerConnection = null;
 
-    _localStream ??= await navigator.mediaDevices.getUserMedia({
+    await _localStream?.dispose();
+    _localStream = null;
+    _localStream = await navigator.mediaDevices.getUserMedia({
       'audio': true,
       'video': false,
     });
@@ -238,29 +240,29 @@ class CallService {
     };
   }
 
-Future<void> call(String targetUsername) async {
-  final prefs = await SharedPreferences.getInstance();
-  final role = prefs.getString("role");
+  Future<void> call(String targetUsername) async {
+    final prefs = await SharedPreferences.getInstance();
+    final role = prefs.getString("role");
 
-  if (role != "user") {
-    onError?.call("Only users can initiate calls");
-    return;
+    if (role != "user") {
+      onError?.call("Only users can initiate calls");
+      return;
+    }
+
+    _remoteUser = targetUsername.trim().toLowerCase();
+    _setState(CallState.calling);
+
+    final offer = await _peerConnection!.createOffer({
+      'offerToReceiveAudio': true,
+      'offerToReceiveVideo': false,
+    });
+    await _peerConnection!.setLocalDescription(offer);
+
+    _send({
+      "target": _remoteUser,
+      "data": {"type": "offer", "sdp": offer.sdp},
+    });
   }
-
-  _remoteUser = targetUsername.trim().toLowerCase();
-  _setState(CallState.calling);
-
-  final offer = await _peerConnection!.createOffer({
-    'offerToReceiveAudio': true,
-    'offerToReceiveVideo': false,
-  });
-  await _peerConnection!.setLocalDescription(offer);
-
-  _send({
-    "target": _remoteUser,
-    "data": {"type": "offer", "sdp": offer.sdp},
-  });
-}
 
   Future<void> acceptCall() async {
     if (_pendingOffer == null || _remoteUser == null) return;

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Query
 import state
 from pydantic import BaseModel
+from fastapi import WebSocket, WebSocketDisconnect
+
 
 router = APIRouter(prefix="/admin")
 
@@ -67,6 +69,7 @@ class SetCoinsRequest(BaseModel):
 async def set_coins(req: SetCoinsRequest):
     async with state.db_pool.acquire() as conn:
         await conn.execute("UPDATE users SET coins=$1 WHERE username=$2", req.coins, req.username.lower())
+    await broadcast_admin_update()
     return {"status": "ok"}
 
 @router.get("/messages/{user1}/{user2}")
@@ -134,7 +137,10 @@ async def update_coins(
             coins,
             username.lower()
         )
+
+    await broadcast_admin_update()
     return {"status": "ok"}
+
     
     
 @router.post("/rate")
@@ -148,3 +154,93 @@ async def update_rate(
             "coins_per_minute"
         )
     return {"status": "ok"}
+
+async def get_admin_stats():
+    async with state.db_pool.acquire() as conn:
+        users = await conn.fetch("""
+            SELECT
+            username,
+            created_at,
+            role,
+            is_online,
+            coins,
+            total_call_duration,
+            daily_call_duration
+            FROM users
+        """)
+
+    return {
+        "users": [
+            {
+                "username": u["username"],
+                "created_at": str(u["created_at"]),
+                "online": u["is_online"],
+                "coins": u["coins"],
+                "total_duration": u["total_call_duration"],
+                "daily_duration": u["daily_call_duration"]
+            }
+            for u in users if u["role"] == "user"
+        ],
+
+        "listeners": [
+            {
+                "username": u["username"],
+                "created_at": str(u["created_at"]),
+                "online": u["is_online"],
+                "coins": u["coins"],
+                "total_duration": u["total_call_duration"],
+                "daily_duration": u["daily_call_duration"]
+            }
+            for u in users if u["role"] == "listener"
+        ],
+
+        "online_users": list(state.clients.keys()),
+
+        "active_calls": [
+            {
+                "caller": a,
+                "target": b
+            }
+            for a, b in state.active_calls.items()
+            if a < b
+        ]
+    }
+
+@router.get("/stats")
+async def admin_stats():
+    return await get_admin_stats()
+
+@router.websocket("/ws")
+async def admin_ws(ws: WebSocket):
+    await ws.accept()
+
+    state.admin_dashboards.add(ws)
+
+    try:
+        await ws.send_json(await get_admin_stats())
+
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        state.admin_dashboards.discard(ws)
+
+
+
+async def broadcast_admin_update():
+    if not state.admin_dashboards:
+        return
+
+    data = await get_admin_stats()
+
+    dead = []
+
+    for ws in state.admin_dashboards:
+        try:
+            await ws.send_json(data)
+        except:
+            dead.append(ws)
+
+    for ws in dead:
+        state.admin_dashboards.discard(ws)
