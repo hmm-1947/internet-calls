@@ -47,7 +47,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      _callService.disconnect();
+      if (_callService.state == CallState.idle) {
+        _callService.disconnect();
+      }
     }
 
     if (state == AppLifecycleState.resumed) {

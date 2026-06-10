@@ -41,15 +41,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _callService = CallService(myUsername: widget.myUsername);
     _callService.onIncomingVideoCall = _handleIncomingVideoCall;
     _callService.addVideoSignalListener(_onVideoSignal);
-    _callService.onIncomingCall = (callerName) async {
-      if (!mounted) return;
-      final accepted = await AppStorage.getPendingCallAccepted();
-      if (accepted) {
-        await AppStorage.clearPendingCallData();
-        await _checkPendingCall(callerName);
-      }
-    };
     _callService.connect();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPendingFcmCall();
+    });
   }
 
   @override
@@ -65,14 +60,44 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      _callService.disconnect();
+      if (_callService.state == CallState.idle) {
+        _callService.disconnect();
+      }
     }
 
     if (state == AppLifecycleState.resumed) {
       if (!_callService.isConnected) {
         _callService.connect();
       }
+      _checkPendingVideoCall();
     }
+  }
+
+  void _showIncomingCallDialogFromShell(String callerName) {
+    if (!mounted) return;
+    // delegate to CallTab's existing dialog via setState + callback
+    // CallTab already handles this via its own onIncomingCall wiring
+  }
+
+  Future<void> _checkPendingFcmCall() async {
+    final accepted = await AppStorage.getPendingCallAccepted();
+    if (accepted) {
+      final caller = await AppStorage.getPendingCaller();
+      if (caller != null) {
+        await AppStorage.clearPendingCallData();
+        await _waitForWsConnection();
+        // Wait for the offer to arrive via WS (server replays pending_offers)
+        int waited = 0;
+        while (_callService.state != CallState.ringing && waited < 30) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          waited++;
+        }
+        if (_callService.state == CallState.ringing) {
+          _handlePendingIncomingCall(caller);
+        }
+      }
+    }
+    await _checkPendingVideoCall();
   }
 
   Future<void> _checkPendingCall(String callerName) async {
@@ -218,19 +243,35 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      int waited = 0;
+      while (_callService.state != CallState.ringing && waited < 40) {
+        await Future.delayed(const Duration(milliseconds: 150));
+        waited++;
+      }
+
+      if (!mounted || _callService.state != CallState.ringing) return;
+
+      _callService.onIncomingCall = null;
+
       await _callService.acceptCall();
 
       if (!mounted || _callService.remoteUser == null) return;
+
+      final remoteUser = _callService.remoteUser!;
 
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ActiveCallScreen(
             callService: _callService,
-            remoteUser: _callService.remoteUser!,
+            remoteUser: remoteUser,
           ),
         ),
-      );
+      ).then((_) {
+        if (mounted) {
+          _callService.onIncomingCall = (callerName) {};
+        }
+      });
     });
   }
 

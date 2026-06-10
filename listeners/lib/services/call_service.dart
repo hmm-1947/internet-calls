@@ -18,7 +18,7 @@ class CallService {
   WebSocketChannel? _channel;
   RTCPeerConnection? _peerConnection;
   MediaStream? _localStream;
-
+  bool _isConnecting = false;
   bool _isCleaningUp = false;
   bool _shouldReconnect = true;
 
@@ -93,6 +93,8 @@ class CallService {
   }
 
   Future<void> _connectWithRetry() async {
+    if (_isConnecting) return;
+    _isConnecting = true;
     while (_shouldReconnect) {
       try {
         _channel = WebSocketChannel.connect(
@@ -105,7 +107,10 @@ class CallService {
             onError?.call("WebSocket error: $e");
             _channel = null;
             if (_shouldReconnect) {
-              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+              Future.delayed(const Duration(seconds: 3), () {
+                _isConnecting = false;
+                _connectWithRetry();
+              });
             }
           },
           onDone: () {
@@ -114,19 +119,24 @@ class CallService {
               _setState(CallState.ended);
             }
             if (_shouldReconnect) {
-              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+              Future.delayed(const Duration(seconds: 3), () {
+                _isConnecting = false;
+                _connectWithRetry();
+              });
             }
           },
           cancelOnError: true,
         );
 
         await _initializeWebRtc();
+        _isConnecting = false;
         return;
       } catch (_) {
         _channel = null;
         await Future.delayed(const Duration(seconds: 3));
       }
     }
+    _isConnecting = false;
   }
 
   Future<void> _initializeWebRtc() async {
@@ -169,7 +179,8 @@ class CallService {
       } else if ((state ==
                   RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
-          !_isCleaningUp) {
+          !_isCleaningUp &&
+          _state == CallState.connected) {
         hangup();
       }
     };
@@ -181,6 +192,7 @@ class CallService {
   }
 
   Future<void> _resetPeerConnection() async {
+    print('[RTC] _resetPeerConnection called from: ${StackTrace.current}');
     await _peerConnection?.close();
     _peerConnection = null;
 
@@ -223,7 +235,8 @@ class CallService {
       } else if ((state ==
                   RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
-          !_isCleaningUp) {
+          !_isCleaningUp &&
+          _state == CallState.connected) {
         hangup();
       }
     };
@@ -259,7 +272,13 @@ class CallService {
   }
 
   Future<void> acceptCall() async {
-    if (_pendingOffer == null || _remoteUser == null) return;
+    print(
+      '[RTC] acceptCall: _pendingOffer=${_pendingOffer != null}, _remoteUser=$_remoteUser, pc=${_peerConnection != null}',
+    );
+    if (_pendingOffer == null || _remoteUser == null) {
+      print('[RTC] acceptCall BAILED - pendingOffer or remoteUser is null');
+      return;
+    }
 
     await _peerConnection!.setRemoteDescription(
       RTCSessionDescription(_pendingOffer!["sdp"], "offer"),
@@ -305,7 +324,11 @@ class CallService {
     });
   }
 
+  // WITH:
   void hangup() {
+    print(
+      '[RTC] hangup called, state=$_state, isCleaningUp=$_isCleaningUp, stack=${StackTrace.current}',
+    );
     if (_isCleaningUp) return;
 
     _isCleaningUp = true;
@@ -441,7 +464,9 @@ class CallService {
       case 'video_answer':
       case 'video_candidate':
       case 'video_hangup':
-        _videoSignalListeners.forEach((fn) => fn(signalType, data, from));
+        for (final fn in List.from(_videoSignalListeners)) {
+          fn(signalType, data, from);
+        }
         break;
     }
   }
@@ -450,13 +475,15 @@ class CallService {
     _channel?.sink.add(jsonEncode(data));
   }
 
-  void _setState(CallState state) {
-    _state = state;
-    onCallStateChanged?.call(state);
+  void _setState(CallState newState) {
+    print('[RTC] setState: $_state -> $newState');
+    _state = newState;
+    onCallStateChanged?.call(newState);
   }
 
   void disconnect() {
     _shouldReconnect = false;
+    _isConnecting = false;
     _channel?.sink.close();
     _channel = null;
   }

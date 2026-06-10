@@ -17,7 +17,7 @@ async def send_push(token, caller, call_type="incoming_call", sdp=None):
         data=data,
         android=messaging.AndroidConfig(
             priority="high",
-            ttl=30,
+            ttl=60,
         ),
         token=token,
     )

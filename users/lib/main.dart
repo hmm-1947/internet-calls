@@ -1,5 +1,5 @@
+//user main.dart
 import 'dart:io';
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/main_shell.dart';
 import 'screens/auth/auth_landing.dart';
 import 'services/fcm_service.dart';
-// test change
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -30,23 +30,14 @@ Future<void> main() async {
   final username = prefs.getString("username");
   final role = prefs.getString("role");
 
-  runApp(
-    VoiceLinkApp(
-      savedUsername: username,
-      savedRole: role,
-    ),
-  );
+  runApp(VoiceLinkApp(savedUsername: username, savedRole: role));
 }
 
 class VoiceLinkApp extends StatelessWidget {
   final String? savedUsername;
   final String? savedRole;
 
-  const VoiceLinkApp({
-    super.key,
-    this.savedUsername,
-    this.savedRole,
-  });
+  const VoiceLinkApp({super.key, this.savedUsername, this.savedRole});
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +53,7 @@ class VoiceLinkApp extends StatelessWidget {
         ),
       ),
       home: savedUsername != null
-          ? MainShell(
-              myUsername: savedUsername!,
-              role: savedRole ?? 'user',
-            )
+          ? MainShell(myUsername: savedUsername!, role: savedRole ?? 'user')
           : const AuthLandingScreen(),
     );
   }

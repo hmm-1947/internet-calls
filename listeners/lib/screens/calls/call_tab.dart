@@ -153,10 +153,10 @@ class _CallTabState extends State<CallTab> {
     } catch (_) {}
   }
 
+  // WITH:
   void _setupCallbacks() {
     _callService.onError = (error) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error), backgroundColor: _accent));
@@ -164,7 +164,6 @@ class _CallTabState extends State<CallTab> {
 
     _callService.onIncomingCall = (callerName) {
       if (!mounted) return;
-
       if (widget.onIncomingCallReady != null) {
         widget.onIncomingCallReady!(callerName);
       } else {
@@ -175,24 +174,22 @@ class _CallTabState extends State<CallTab> {
     _callService.onCallStateChanged = (state) {
       debugPrint('CallTab: state=$state mounted=$mounted');
       if (!mounted) return;
-
       switch (state) {
         case CallState.calling:
           setState(() {
             _statusMessage = "Calling ${_callService.remoteUser}...";
           });
           break;
-
         case CallState.connected:
           setState(() {
             _statusMessage = null;
           });
-
-          if (!_navigatingToCall) {
+          // Only navigate if WE triggered this call (not FCM path)
+          // FCM path: onIncomingCallReady is set, main_shell handles navigation
+          if (!_navigatingToCall && widget.onIncomingCallReady == null) {
             _goToCallScreen();
           }
           break;
-
         case CallState.idle:
         case CallState.ended:
           debugPrint('CallTab idle/ended: _connected=$_connected');
@@ -202,7 +199,6 @@ class _CallTabState extends State<CallTab> {
           });
           _navigatingToCall = false;
           break;
-
         default:
           break;
       }
@@ -264,6 +260,7 @@ class _CallTabState extends State<CallTab> {
     });
   }
 
+  // WITH:
   void _showIncomingCallDialog(String callerName) {
     showDialog(
       context: context,
@@ -274,7 +271,12 @@ class _CallTabState extends State<CallTab> {
           callService: _callService,
           onAccept: () {
             Navigator.of(dialogContext).pop();
-            _callService.acceptCall();
+            _callService.acceptCall().then((_) {
+              if (!mounted || _callService.remoteUser == null) return;
+              if (!_navigatingToCall) {
+                _goToCallScreen();
+              }
+            });
           },
           onReject: () async {
             Navigator.of(dialogContext).pop();
@@ -291,27 +293,7 @@ class _CallTabState extends State<CallTab> {
           },
         );
       },
-    ).then((_) {});
-
-    _callService.onCallStateChanged = (state) {
-      if (!mounted) return;
-      if (state == CallState.connected) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-        _goToCallScreen();
-      }
-      if (state == CallState.ended) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-        _setupCallbacks();
-      }
-      if (state == CallState.idle) {
-        setState(() => _connected = true);
-        _navigatingToCall = false;
-      }
-    };
+    );
   }
 
   @override

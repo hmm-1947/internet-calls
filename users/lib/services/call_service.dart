@@ -17,7 +17,7 @@ class CallService {
   WebSocketChannel? _channel;
   RTCPeerConnection? _peerConnection;
   MediaStream? _localStream;
-
+  bool _isConnecting = false;
   bool _isCleaningUp = false;
   bool _shouldReconnect = true;
 
@@ -27,7 +27,8 @@ class CallService {
   Map<String, dynamic>? _pendingVideoOffer;
 
   CallState _state = CallState.idle;
-
+  final List<Map<String, dynamic>> _pendingOutgoingCandidates = [];
+  bool _answerReceived = false;
   bool get isConnected => _channel != null;
   CallState get state => _state;
   String? get remoteUser => _remoteUser;
@@ -93,6 +94,8 @@ class CallService {
   }
 
   Future<void> _connectWithRetry() async {
+    if (_isConnecting) return;
+    _isConnecting = true;
     while (_shouldReconnect) {
       try {
         _channel = WebSocketChannel.connect(
@@ -105,7 +108,10 @@ class CallService {
             onError?.call("WebSocket error: $e");
             _channel = null;
             if (_shouldReconnect) {
-              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+              Future.delayed(const Duration(seconds: 3), () {
+                _isConnecting = false;
+                _connectWithRetry();
+              });
             }
           },
           onDone: () {
@@ -114,19 +120,24 @@ class CallService {
               _setState(CallState.ended);
             }
             if (_shouldReconnect) {
-              Future.delayed(const Duration(seconds: 3), _connectWithRetry);
+              Future.delayed(const Duration(seconds: 3), () {
+                _isConnecting = false;
+                _connectWithRetry();
+              });
             }
           },
           cancelOnError: true,
         );
 
         await _initializeWebRtc();
+        _isConnecting = false;
         return;
       } catch (_) {
         _channel = null;
         await Future.delayed(const Duration(seconds: 3));
       }
     }
+    _isConnecting = false;
   }
 
   Future<void> _initializeWebRtc() async {
@@ -149,9 +160,10 @@ class CallService {
       _peerConnection!.addTrack(track, _localStream!);
     }
 
+    // WITH (in both _initializeWebRtc AND _resetPeerConnection):
     _peerConnection!.onIceCandidate = (candidate) {
       if (candidate.candidate == null || _remoteUser == null) return;
-      _send({
+      final candidateMsg = {
         "target": _remoteUser,
         "data": {
           "type": "candidate",
@@ -159,7 +171,12 @@ class CallService {
           "sdpMid": candidate.sdpMid,
           "sdpMLineIndex": candidate.sdpMLineIndex,
         },
-      });
+      };
+      if (_answerReceived) {
+        _send(candidateMsg);
+      } else {
+        _pendingOutgoingCandidates.add(candidateMsg);
+      }
     };
 
     _peerConnection!.onConnectionState = (state) {
@@ -169,7 +186,8 @@ class CallService {
       } else if ((state ==
                   RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
-          !_isCleaningUp) {
+          !_isCleaningUp &&
+          _state == CallState.connected) {
         hangup();
       }
     };
@@ -206,9 +224,10 @@ class CallService {
       _peerConnection!.addTrack(track, _localStream!);
     }
 
+    // WITH (in both _initializeWebRtc AND _resetPeerConnection):
     _peerConnection!.onIceCandidate = (candidate) {
       if (candidate.candidate == null || _remoteUser == null) return;
-      _send({
+      final candidateMsg = {
         "target": _remoteUser,
         "data": {
           "type": "candidate",
@@ -216,7 +235,12 @@ class CallService {
           "sdpMid": candidate.sdpMid,
           "sdpMLineIndex": candidate.sdpMLineIndex,
         },
-      });
+      };
+      if (_answerReceived) {
+        _send(candidateMsg);
+      } else {
+        _pendingOutgoingCandidates.add(candidateMsg);
+      }
     };
 
     _peerConnection!.onConnectionState = (state) {
@@ -226,7 +250,8 @@ class CallService {
       } else if ((state ==
                   RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
               state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) &&
-          !_isCleaningUp) {
+          !_isCleaningUp &&
+          _state == CallState.connected) {
         hangup();
       }
     };
@@ -249,6 +274,8 @@ class CallService {
       return;
     }
 
+    _answerReceived = false;
+    _pendingOutgoingCandidates.clear();
     _remoteUser = targetUsername.trim().toLowerCase();
     _setState(CallState.calling);
 
@@ -395,11 +422,15 @@ class CallService {
         await _peerConnection!.setRemoteDescription(
           RTCSessionDescription(data["sdp"], "answer"),
         );
+        _answerReceived = true;
+        for (final c in _pendingOutgoingCandidates) {
+          _send(c);
+        }
+        _pendingOutgoingCandidates.clear();
         if (_state != CallState.connected) {
           _setState(CallState.connected);
         }
         break;
-
       case "candidate":
         await _peerConnection!.addCandidate(
           RTCIceCandidate(
@@ -440,7 +471,9 @@ class CallService {
       case 'video_answer':
       case 'video_candidate':
       case 'video_hangup':
-        _videoSignalListeners.forEach((fn) => fn(signalType, data, from));
+        for (final fn in List.from(_videoSignalListeners)) {
+          fn(signalType, data, from);
+        }
         break;
     }
   }
@@ -456,6 +489,7 @@ class CallService {
 
   void disconnect() {
     _shouldReconnect = false;
+    _isConnecting = false;
     _channel?.sink.close();
     _channel = null;
   }
@@ -463,6 +497,8 @@ class CallService {
   void _cleanup() {
     _remoteUser = null;
     _pendingOffer = null;
+    _answerReceived = false;
+    _pendingOutgoingCandidates.clear();
   }
 
   void dispose() {
