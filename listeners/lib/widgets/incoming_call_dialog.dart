@@ -1,7 +1,8 @@
+// listener incoming_call_dialogue.dart
 import 'package:flutter/material.dart';
 import '../services/call_service.dart';
 
-class IncomingCallDialog extends StatelessWidget {
+class IncomingCallDialog extends StatefulWidget {
   final String callerName;
   final VoidCallback onAccept;
   final VoidCallback onReject;
@@ -14,6 +15,21 @@ class IncomingCallDialog extends StatelessWidget {
     required this.onReject,
     required this.callService,
   });
+
+  @override
+  State<IncomingCallDialog> createState() => _IncomingCallDialogState();
+}
+
+class _IncomingCallDialogState extends State<IncomingCallDialog> {
+  @override
+  void initState() {
+    super.initState();
+    widget.callService.onCallStateChanged = (state) {
+      if ((state == CallState.idle || state == CallState.ended) && mounted) {
+        Navigator.of(context).pop();
+      }
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +68,7 @@ class IncomingCallDialog extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              callerName,
+              widget.callerName,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 26,
@@ -64,7 +80,7 @@ class IncomingCallDialog extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: onReject,
+                    onPressed: widget.onReject,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2A1010),
                       foregroundColor: const Color(0xFFFF3B6B),
@@ -75,7 +91,7 @@ class IncomingCallDialog extends StatelessWidget {
                 const SizedBox(width: 14),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: onAccept,
+                    onPressed: widget.onAccept,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF22C55E),
                       foregroundColor: Colors.white,

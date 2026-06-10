@@ -158,8 +158,9 @@ class _CallTabState extends State<CallTab> {
       _pipOverlay.hide();
       _pipOverlay.disposeRenderer();
       _callService.removeVideoSignalListener(_onVideoSignal);
-      _videoCallService?.dispose();
+      final svc = _videoCallService;
       _videoCallService = null;
+      svc?.dispose();
       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
     };
 
@@ -212,10 +213,10 @@ class _CallTabState extends State<CallTab> {
       case 'video_hangup':
         _pipOverlay.hide();
         _pipOverlay.disposeRenderer();
-        _videoCallService!.remoteHangup();
         _callService.removeVideoSignalListener(_onVideoSignal);
-        _videoCallService?.dispose();
+        final svc = _videoCallService;
         _videoCallService = null;
+        svc?.remoteHangup();
         break;
     }
   }

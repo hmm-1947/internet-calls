@@ -181,6 +181,7 @@ class VideoCallService {
   }
 
   void _dispose() {
+    _isCleaningUp = false;
     _remoteDescriptionSet = false;
     _answerReceived = false;
     _pendingCandidates.clear();

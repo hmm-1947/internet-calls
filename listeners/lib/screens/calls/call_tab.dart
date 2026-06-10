@@ -3,14 +3,9 @@ import 'dart:convert';
 import 'package:listener/core/config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:listener/core/config.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:listener/core/config.dart';
 import 'package:listener/services/fcm_service.dart';
 import 'package:listener/core/storage.dart';
 import 'package:listener/services/video_call_services.dart';
-import 'package:listener/widgets/incoming_video_call_dialog.dart';
 import 'package:listener/widgets/video_pip_overlay.dart';
 import '../chat/chat_screen.dart';
 import '../../models/call_log.dart';
@@ -293,7 +288,9 @@ class _CallTabState extends State<CallTab> {
           },
         );
       },
-    );
+    ).then((_) {
+      _setupCallbacks();
+    });
   }
 
   @override

@@ -1,3 +1,4 @@
+//listener video_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:listener/services/video_call_services.dart';
@@ -43,6 +44,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _ownsRemoteRenderer = true;
     }
 
+    // Do NOT set onCallEnded here — incoming_video_call_dialog owns it
     widget.videoCallService.onRemoteStream = (stream) {
       if (mounted) {
         setState(() => _remoteRenderer.srcObject = stream);

@@ -1,16 +1,15 @@
-//listener incoming_video_call_dialog.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:listener/services/video_call_services.dart';
 import 'package:listener/screens/calls/video_call_screen.dart';
 import 'package:listener/widgets/video_pip_overlay.dart';
 
-class IncomingVideoCallDialog extends StatelessWidget {
+class IncomingVideoCallDialog extends StatefulWidget {
   final String callerName;
   final Map<String, dynamic> offerData;
   final VideoCallService videoCallService;
   final VoidCallback onReject;
   final VideoPipOverlay pipOverlay;
+  final BuildContext shellContext;
 
   const IncomingVideoCallDialog({
     super.key,
@@ -19,7 +18,86 @@ class IncomingVideoCallDialog extends StatelessWidget {
     required this.videoCallService,
     required this.onReject,
     required this.pipOverlay,
+    required this.shellContext,
   });
+
+  @override
+  State<IncomingVideoCallDialog> createState() =>
+      _IncomingVideoCallDialogState();
+}
+
+class _IncomingVideoCallDialogState extends State<IncomingVideoCallDialog> {
+  bool _dismissed = false;
+
+  void _dismiss() {
+    if (_dismissed) return;
+    _dismissed = true;
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final previousOnCallEnded = widget.videoCallService.onCallEnded;
+    widget.videoCallService.onCallEnded = () {
+      widget.pipOverlay.hide();
+      widget.pipOverlay.disposeRenderer();
+      _dismiss();
+      previousOnCallEnded?.call();
+      final shell = widget.shellContext;
+      if (Navigator.of(shell).canPop()) {
+        Navigator.of(shell).popUntil((route) => route.isFirst);
+      }
+    };
+  }
+
+  void _navigateAndAccept() async {
+    final renderer = await widget.pipOverlay.createRenderer();
+
+    if (!mounted) {
+      widget.pipOverlay.disposeRenderer();
+      return;
+    }
+
+    widget.videoCallService.onRemoteStream = (stream) {
+      renderer.srcObject = stream;
+    };
+    if (widget.videoCallService.remoteStream != null) {
+      renderer.srcObject = widget.videoCallService.remoteStream;
+    }
+
+    _dismiss();
+
+    void doMinimize() {
+      Navigator.of(widget.shellContext).pop();
+      widget.pipOverlay.show(
+        context: widget.shellContext,
+        videoCallService: widget.videoCallService,
+        remoteUser: widget.callerName,
+        onMinimizeFromMaximized: doMinimize,
+      );
+    }
+
+    Navigator.of(widget.shellContext)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => VideoCallScreen(
+              videoCallService: widget.videoCallService,
+              remoteUser: widget.callerName,
+              offerData: widget.offerData,
+              sharedRemoteRenderer: renderer,
+              onMinimize: doMinimize,
+            ),
+          ),
+        )
+        .then((_) {
+          if (!widget.pipOverlay.isShowing) {
+            widget.pipOverlay.disposeRenderer();
+          }
+        });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +136,7 @@ class IncomingVideoCallDialog extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              callerName,
+              widget.callerName,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 26,
@@ -70,7 +148,7 @@ class IncomingVideoCallDialog extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: onReject,
+                    onPressed: widget.onReject,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2A1010),
                       foregroundColor: const Color(0xFFFF3B6B),
@@ -81,7 +159,7 @@ class IncomingVideoCallDialog extends StatelessWidget {
                 const SizedBox(width: 14),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => _navigateAndAccept(context),
+                    onPressed: _navigateAndAccept,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF22C55E),
                       foregroundColor: Colors.white,
@@ -95,48 +173,5 @@ class IncomingVideoCallDialog extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  void _navigateAndAccept(BuildContext context) async {
-    final navigator = Navigator.of(context);
-
-    final renderer = await pipOverlay.createRenderer();
-
-    videoCallService.onRemoteStream = (stream) {
-      renderer.srcObject = stream;
-    };
-    if (videoCallService.remoteStream != null) {
-      renderer.srcObject = videoCallService.remoteStream;
-    }
-
-    navigator.pop();
-
-    void doMinimize() {
-      navigator.pop();
-      pipOverlay.show(
-        context: navigator.context,
-        videoCallService: videoCallService,
-        remoteUser: callerName,
-        onMinimizeFromMaximized: doMinimize,
-      );
-    }
-
-    navigator
-        .push(
-          MaterialPageRoute(
-            builder: (_) => VideoCallScreen(
-              videoCallService: videoCallService,
-              remoteUser: callerName,
-              offerData: offerData,
-              sharedRemoteRenderer: renderer,
-              onMinimize: doMinimize,
-            ),
-          ),
-        )
-        .then((_) {
-          if (!pipOverlay.isShowing) {
-            pipOverlay.disposeRenderer();
-          }
-        });
   }
 }

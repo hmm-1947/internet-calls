@@ -1,8 +1,8 @@
+//listener video_pip_overlay
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:listener/screens/calls/video_call_screen.dart';
 import 'package:listener/services/video_call_services.dart';
-
 
 class VideoPipOverlay {
   OverlayEntry? _entry;
@@ -39,14 +39,13 @@ class VideoPipOverlay {
               builder: (_) => VideoCallScreen(
                 videoCallService: videoCallService,
                 remoteUser: remoteUser,
+                sharedRemoteRenderer: _sharedRemoteRenderer,
                 onMinimize: onMinimizeFromMaximized,
               ),
             ),
           );
         },
         onHangup: () {
-          hide();
-          disposeRenderer();
           videoCallService.hangup();
         },
       ),
@@ -56,7 +55,8 @@ class VideoPipOverlay {
   }
 
   void hide() {
-    _entry?.remove();
+    if (_entry == null) return;
+    _entry!.remove();
     _entry = null;
     _isShowing = false;
   }
@@ -118,10 +118,7 @@ class _PipBubbleState extends State<_PipBubble> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFFF3B6B), width: 2),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 12,
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 12),
               ],
             ),
             child: ClipRRect(

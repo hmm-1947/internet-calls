@@ -1,3 +1,4 @@
+//user side video_call_screen
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../services/video_call_service.dart';
@@ -42,10 +43,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _remoteRenderer = RTCVideoRenderer();
       _ownsRemoteRenderer = true;
     }
-
-    widget.videoCallService.onCallEnded = () {
-      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
-    };
 
     widget.videoCallService.onRemoteStream = (stream) {
       if (mounted) {

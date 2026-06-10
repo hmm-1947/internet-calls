@@ -172,12 +172,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     Map<String, dynamic> offerData,
   ) {
     if (!mounted) return;
-    if (_videoCallActive) {
-      print('[DIALOG] blocked by _videoCallActive=true');
-      return;
-    }
+    if (_videoCallActive) return;
 
-    print('[DIALOG] showing for $callerName');
     _videoCallActive = true;
     _videoCallService?.dispose();
     _videoCallService = VideoCallService(callService: _callService);
@@ -185,15 +181,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final svc = _videoCallService!;
 
     svc.onCallEnded = () {
-      print('[DIALOG] onCallEnded fired');
-      _pipOverlay.hide();
-      _pipOverlay.disposeRenderer();
       _videoCallService = null;
       _videoCallActive = false;
-      print('[DIALOG] _videoCallActive reset to false');
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
     };
 
     showDialog(
@@ -205,15 +194,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           offerData: offerData,
           videoCallService: svc,
           pipOverlay: _pipOverlay,
+          shellContext: context,
           onReject: () {
-            print('[DIALOG] rejected');
             Navigator.of(dialogContext).pop();
             _callService.sendSignal(callerName, {'type': 'video_hangup'});
             _callService.clearPendingVideoOffer();
             svc.dispose();
             _videoCallService = null;
             _videoCallActive = false;
-            print('[DIALOG] _videoCallActive reset after reject');
           },
         );
       },
