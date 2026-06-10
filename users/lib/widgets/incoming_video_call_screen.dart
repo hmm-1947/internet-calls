@@ -1,3 +1,4 @@
+//user side incoming_video_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:calls/services/video_call_service.dart';
 import 'package:calls/screens/calls/video_call_screen.dart';
@@ -35,7 +36,11 @@ class IncomingVideoCallDialog extends StatelessWidget {
                   colors: [Color(0xFF3F51B5), Color(0xFF2ECC71)],
                 ),
               ),
-              child: const Icon(Icons.videocam_rounded, color: Colors.white, size: 32),
+              child: const Icon(
+                Icons.videocam_rounded,
+                color: Colors.white,
+                size: 32,
+              ),
             ),
             const SizedBox(height: 16),
             const Text(

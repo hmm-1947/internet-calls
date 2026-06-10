@@ -1,3 +1,4 @@
+//listener video_call_services.dart
 import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -12,7 +13,8 @@ class VideoCallService {
   MediaStream? _localStream;
   MediaStream? _remoteStream;
   String? _remoteUser;
-
+  final List<Map<String, dynamic>> _pendingOutgoingCandidates = [];
+  bool _answerSent = false;
   bool _isCleaningUp = false;
   bool _cameraOff = false;
   bool _muted = false;
@@ -47,12 +49,17 @@ class VideoCallService {
 
     _peerConnection!.onIceCandidate = (candidate) {
       if (candidate.candidate == null || _remoteUser == null) return;
-      callService.sendSignal(_remoteUser!, {
+      final msg = {
         'type': 'video_candidate',
         'candidate': candidate.candidate,
         'sdpMid': candidate.sdpMid,
         'sdpMLineIndex': candidate.sdpMLineIndex,
-      });
+      };
+      if (_answerSent) {
+        callService.sendSignal(_remoteUser!, msg);
+      } else {
+        _pendingOutgoingCandidates.add(msg);
+      }
     };
 
     _peerConnection!.onTrack = (event) {
@@ -82,10 +89,13 @@ class VideoCallService {
     callService.sendSignal(target, {'type': 'video_offer', 'sdp': offer.sdp});
   }
 
+  // WITH:
   Future<void> acceptCall(
     Map<String, dynamic> offerData,
     String callerName,
   ) async {
+    _answerSent = false;
+    _pendingOutgoingCandidates.clear();
     _remoteUser = callerName;
     await initialize();
 
@@ -111,6 +121,12 @@ class VideoCallService {
       'type': 'video_answer',
       'sdp': answer.sdp,
     });
+
+    _answerSent = true;
+    for (final msg in _pendingOutgoingCandidates) {
+      callService.sendSignal(_remoteUser!, msg);
+    }
+    _pendingOutgoingCandidates.clear();
   }
 
   Future<void> handleAnswer(Map<String, dynamic> data) async {
@@ -168,7 +184,9 @@ class VideoCallService {
 
   void _dispose() {
     _remoteDescriptionSet = false;
+    _answerSent = false;
     _pendingCandidates.clear();
+    _pendingOutgoingCandidates.clear();
     _localStream?.dispose();
     _peerConnection?.close();
     _localStream = null;

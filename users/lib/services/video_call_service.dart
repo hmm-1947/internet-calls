@@ -1,3 +1,4 @@
+//user side video_call_service.dart
 import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -12,7 +13,8 @@ class VideoCallService {
   MediaStream? _localStream;
   MediaStream? _remoteStream;
   String? _remoteUser;
-
+  final List<Map<String, dynamic>> _pendingOutgoingCandidates = [];
+  bool _answerReceived = false;
   bool _isCleaningUp = false;
   bool _cameraOff = false;
   bool _muted = false;
@@ -47,12 +49,17 @@ class VideoCallService {
 
     _peerConnection!.onIceCandidate = (candidate) {
       if (candidate.candidate == null || _remoteUser == null) return;
-      callService.sendSignal(_remoteUser!, {
+      final msg = {
         'type': 'video_candidate',
         'candidate': candidate.candidate,
         'sdpMid': candidate.sdpMid,
         'sdpMLineIndex': candidate.sdpMLineIndex,
-      });
+      };
+      if (_answerReceived) {
+        callService.sendSignal(_remoteUser!, msg);
+      } else {
+        _pendingOutgoingCandidates.add(msg);
+      }
     };
 
     _peerConnection!.onTrack = (event) {
@@ -72,6 +79,8 @@ class VideoCallService {
   }
 
   Future<void> call(String target) async {
+    _answerReceived = false;
+    _pendingOutgoingCandidates.clear();
     _remoteUser = target;
     await initialize();
     final offer = await _peerConnection!.createOffer({
@@ -82,7 +91,10 @@ class VideoCallService {
     callService.sendSignal(target, {'type': 'video_offer', 'sdp': offer.sdp});
   }
 
-  Future<void> acceptCall(Map<String, dynamic> offerData, String callerName) async {
+  Future<void> acceptCall(
+    Map<String, dynamic> offerData,
+    String callerName,
+  ) async {
     _remoteUser = callerName;
     await initialize();
 
@@ -115,12 +127,17 @@ class VideoCallService {
       RTCSessionDescription(data['sdp'], 'answer'),
     );
     _remoteDescriptionSet = true;
+    _answerReceived = true;
     for (final c in _pendingCandidates) {
       await _peerConnection!.addCandidate(
         RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']),
       );
     }
     _pendingCandidates.clear();
+    for (final msg in _pendingOutgoingCandidates) {
+      callService.sendSignal(_remoteUser!, msg);
+    }
+    _pendingOutgoingCandidates.clear();
   }
 
   Future<void> handleCandidate(Map<String, dynamic> data) async {
@@ -165,7 +182,9 @@ class VideoCallService {
 
   void _dispose() {
     _remoteDescriptionSet = false;
+    _answerReceived = false;
     _pendingCandidates.clear();
+    _pendingOutgoingCandidates.clear();
     _localStream?.dispose();
     _peerConnection?.close();
     _localStream = null;

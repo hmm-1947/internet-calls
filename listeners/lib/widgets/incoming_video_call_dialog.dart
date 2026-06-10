@@ -1,3 +1,4 @@
+//listener incoming_video_call_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:listener/services/video_call_services.dart';
@@ -97,43 +98,45 @@ class IncomingVideoCallDialog extends StatelessWidget {
   }
 
   void _navigateAndAccept(BuildContext context) async {
-  final navigator = Navigator.of(context);
+    final navigator = Navigator.of(context);
 
-  final renderer = await pipOverlay.createRenderer();
+    final renderer = await pipOverlay.createRenderer();
 
-  videoCallService.onRemoteStream = (stream) {
-    renderer.srcObject = stream;
-  };
-  if (videoCallService.remoteStream != null) {
-    renderer.srcObject = videoCallService.remoteStream;
-  }
+    videoCallService.onRemoteStream = (stream) {
+      renderer.srcObject = stream;
+    };
+    if (videoCallService.remoteStream != null) {
+      renderer.srcObject = videoCallService.remoteStream;
+    }
 
-  navigator.pop();
+    navigator.pop();
 
-  void doMinimize() {
-  navigator.pop();
-  pipOverlay.show(
-    context: navigator.context,
-    videoCallService: videoCallService,
-    remoteUser: callerName,
-    onMinimizeFromMaximized: doMinimize,
-  );
-}
-
-  navigator.push(
-    MaterialPageRoute(
-      builder: (_) => VideoCallScreen(
+    void doMinimize() {
+      navigator.pop();
+      pipOverlay.show(
+        context: navigator.context,
         videoCallService: videoCallService,
         remoteUser: callerName,
-        offerData: offerData,
-        sharedRemoteRenderer: renderer,
-        onMinimize: doMinimize,
-      ),
-    ),
-  ).then((_) {
-    if (!pipOverlay.isShowing) {
-      pipOverlay.disposeRenderer();
+        onMinimizeFromMaximized: doMinimize,
+      );
     }
-  });
-}
+
+    navigator
+        .push(
+          MaterialPageRoute(
+            builder: (_) => VideoCallScreen(
+              videoCallService: videoCallService,
+              remoteUser: callerName,
+              offerData: offerData,
+              sharedRemoteRenderer: renderer,
+              onMinimize: doMinimize,
+            ),
+          ),
+        )
+        .then((_) {
+          if (!pipOverlay.isShowing) {
+            pipOverlay.disposeRenderer();
+          }
+        });
+  }
 }
