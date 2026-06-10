@@ -18,11 +18,14 @@
     <application
         android:label="listener"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        >
 
-                <activity
+
+                <receiver
     android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
-    android:exported="true"/>
+    android:exported="false"/>
 
         <activity
             android:name=".MainActivity"

@@ -20,10 +20,10 @@
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">
-        
-        <activity
+
+        <receiver
     android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
-    android:exported="true"/>
+    android:exported="false"/>
 
 
 

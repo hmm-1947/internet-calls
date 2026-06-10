@@ -5,6 +5,9 @@ plugins {
 }
 
 android {
+    lint {
+        baseline = file("lint-baseline.xml")
+    }
     namespace = "com.joshua.calls"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion

@@ -147,13 +147,9 @@ class CallService {
       'video': false,
     });
 
-    _peerConnection = await createPeerConnection({
-      "iceServers": [
-        {"urls": "stun:stun.l.google.com:19302"},
-        {"urls": "stun:stun1.l.google.com:19302"},
-      ],
-      "iceTransportPolicy": "all",
-    });
+    _peerConnection = await createPeerConnection(
+      Map<String, dynamic>.from(AppConfig.iceServers),
+    );
 
     for (final track in _localStream!.getTracks()) {
       _peerConnection!.addTrack(track, _localStream!);
@@ -203,13 +199,9 @@ class CallService {
       'video': false,
     });
 
-    _peerConnection = await createPeerConnection({
-      "iceServers": [
-        {"urls": "stun:stun.l.google.com:19302"},
-        {"urls": "stun:stun1.l.google.com:19302"},
-      ],
-      "iceTransportPolicy": "all",
-    });
+    _peerConnection = await createPeerConnection(
+      Map<String, dynamic>.from(AppConfig.iceServers),
+    );
 
     for (final track in _localStream!.getTracks()) {
       _peerConnection!.addTrack(track, _localStream!);

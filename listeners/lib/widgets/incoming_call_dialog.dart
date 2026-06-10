@@ -24,11 +24,6 @@ class _IncomingCallDialogState extends State<IncomingCallDialog> {
   @override
   void initState() {
     super.initState();
-    widget.callService.onCallStateChanged = (state) {
-      if ((state == CallState.idle || state == CallState.ended) && mounted) {
-        Navigator.of(context).pop();
-      }
-    };
   }
 
   @override

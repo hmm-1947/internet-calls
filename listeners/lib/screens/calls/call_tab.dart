@@ -53,6 +53,7 @@ class _CallTabState extends State<CallTab> {
 
   bool _connected = false;
   bool _navigatingToCall = false;
+  BuildContext? _incomingDialogContext;
   VideoCallService? get _videoCallService => widget.getVideoCallService?.call();
 
   String? _statusMessage;
@@ -193,6 +194,10 @@ class _CallTabState extends State<CallTab> {
             _connected = true;
           });
           _navigatingToCall = false;
+          if (_incomingDialogContext != null) {
+            Navigator.of(_incomingDialogContext!).pop();
+            _incomingDialogContext = null;
+          }
           break;
         default:
           break;
@@ -261,10 +266,12 @@ class _CallTabState extends State<CallTab> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
+        _incomingDialogContext = dialogContext;
         return IncomingCallDialog(
           callerName: callerName,
           callService: _callService,
           onAccept: () {
+            _incomingDialogContext = null;
             Navigator.of(dialogContext).pop();
             _callService.acceptCall().then((_) {
               if (!mounted || _callService.remoteUser == null) return;
@@ -274,8 +281,9 @@ class _CallTabState extends State<CallTab> {
             });
           },
           onReject: () async {
-            Navigator.of(dialogContext).pop();
+            _incomingDialogContext = null;
             _callService.rejectCall();
+            Navigator.of(dialogContext).pop();
             await CallLogStore.instance.add(
               CallLog(
                 name: callerName,
@@ -289,6 +297,7 @@ class _CallTabState extends State<CallTab> {
         );
       },
     ).then((_) {
+      _incomingDialogContext = null;
       _setupCallbacks();
     });
   }
