@@ -1,147 +1,87 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-import state
-import math
-from admin import broadcast_admin_update
+import bcrypt
+from jose import jwt
+import os
+from datetime import datetime, timedelta
+from database import get_pool
+from routers.livekit import decode_token
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["auth"])
 
-class RegisterRequest(BaseModel):
+SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
+ALGORITHM = "HS256"
+TOKEN_EXPIRE_MINUTES = 60 * 24
+
+
+def make_token(data: dict):
+    payload = data.copy()
+    payload["exp"] = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+class UserRegister(BaseModel):
     username: str
     password: str
-    role: str
 
-class LoginRequest(BaseModel):
+
+class UserLogin(BaseModel):
     username: str
     password: str
-    app_type: str = "user"
-
-class SaveFCMRequest(BaseModel):
-    username: str
-    token: str
 
 
-class LogoutRequest(BaseModel):
-    username: str
-
-@router.post("/logout")
-async def logout_user(req: LogoutRequest):
-    username = req.username.strip().lower()
-    async with state.db_pool.acquire() as conn:
+@router.post("/user/register")
+async def register(body: UserRegister):
+    pool = await get_pool()
+    hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    async with pool.acquire() as conn:
+        existing = await conn.fetchrow("SELECT id FROM users WHERE username = $1", body.username)
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already taken")
         await conn.execute(
-            "UPDATE users SET is_online=FALSE, fcm_token=NULL WHERE username=$1",
-            username
+            "INSERT INTO users (username, password_hash) VALUES ($1, $2)",
+            body.username, hashed
         )
-    if username in state.clients:
-        try:
-            await state.clients[username].close()
-        except Exception:
-            pass
-        state.clients.pop(username, None)
-    await broadcast_admin_update()
-    return {"status": "ok"}
+    return {"message": "User registered successfully"}
 
 
-@router.post("/register")
-async def register_user(req: RegisterRequest):
-    username = req.username.strip().lower()
-    if not username or len(username) < 2:
-        raise HTTPException(status_code=400, detail="Username too short")
-    if len(username) > 24:
-        raise HTTPException(status_code=400, detail="Username too long")
-    try:
-        async with state.db_pool.acquire() as conn:
-            existing = await conn.fetchrow("SELECT username FROM users WHERE username=$1", username)
-            if existing:
-                raise HTTPException(status_code=409, detail="Username already taken")
-            await conn.execute(
-                "INSERT INTO users (username, password, role) VALUES ($1, $2, $3)",
-                username, req.password, req.role
-            )
-            await broadcast_admin_update()
-        return {"status": "ok", "username": username, "role": req.role}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/user/login")
+async def user_login(body: UserLogin):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM users WHERE username = $1", body.username)
+    if not row or not bcrypt.checkpw(body.password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = make_token({"sub": row["username"], "role": "user"})
+    return {"access_token": token, "token_type": "bearer"}
 
-@router.post("/login")
-async def login_user(req: LoginRequest):
-    username = req.username.strip().lower()
-    async with state.db_pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT username, role FROM users WHERE username=$1 AND password=$2",
-            username, req.password,
-        )
-    if row and req.app_type == "user" and row["role"] == "listener":
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    if row and req.app_type == "listener" and row["role"] == "user":
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    if row:
-        return {"status": "ok", "username": row["username"], "role": row["role"]}
-    raise HTTPException(status_code=401, detail="Invalid username or password")
 
-@router.post("/save_fcm")
-async def save_fcm(req: SaveFCMRequest):
-    username = req.username.strip().lower()
-    async with state.db_pool.acquire() as conn:
-        await conn.execute("UPDATE users SET fcm_token=$1 WHERE username=$2", req.token, username)
-    return {"status": "ok"}
+@router.post("/listener/login")
+async def listener_login(body: UserLogin):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM listeners WHERE username = $1", body.username)
+    if not row or not bcrypt.checkpw(body.password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = make_token({"sub": row["username"], "role": "listener"})
+    return {"access_token": token, "token_type": "bearer"}
 
-@router.get("/profile/{username}")
-async def get_profile(username: str):
-    async with state.db_pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT username, coins, role, total_call_duration FROM users WHERE username=$1",
-            username.strip().lower()
-        )
-        if not row:
-            raise HTTPException(status_code=404)
-        
-        top_users = await conn.fetch(
-            """
-            SELECT CASE WHEN caller=$1 THEN listener ELSE caller END as other_user,
-                   SUM(duration_seconds) as total_seconds
-            FROM call_logs
-            WHERE caller=$1 OR listener=$1
-            GROUP BY other_user
-            ORDER BY total_seconds DESC
-            LIMIT 3
-            """,
-            username.strip().lower()
-        )
 
-    return {
-        "username": row["username"],
-        "coins": row["coins"],
-        "role": row["role"],
-        "total_call_duration": row["total_call_duration"],
-        "top_users": [
-            {"username": r["other_user"], "minutes": math.ceil(r["total_seconds"] / 60)}
-            for r in top_users
-        ]
-    }
-@router.get("/user/{username}")
-async def check_user(username: str):
-    username = username.strip().lower()
-    async with state.db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT username, coins FROM users WHERE username=$1", username)
-    if row:
-        return {"exists": True, "username": row["username"], "coins": row["coins"]}
-    raise HTTPException(status_code=404, detail="User not found")
+@router.post("/listener/online")
+async def set_online(payload: dict = Depends(decode_token)):
+    if payload.get("role") != "listener":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE listeners SET is_online = TRUE WHERE username = $1", payload["sub"])
+    return {"status": "online"}
 
-@router.get("/listeners")
-async def listeners():
-    async with state.db_pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT username, is_online FROM users WHERE role='listener' ORDER BY username"
-        )
-    return [{"username": r["username"], "online": r["is_online"]} for r in rows]
 
-@router.get("/users")
-async def list_users():
-    async with state.db_pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT username, is_online FROM users WHERE role='user' ORDER BY username"
-        )
-    return [{"username": r["username"], "online": r["is_online"]} for r in rows]
+@router.post("/listener/offline")
+async def set_offline(payload: dict = Depends(decode_token)):
+    if payload.get("role") != "listener":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE listeners SET is_online = FALSE WHERE username = $1", payload["sub"])
+    return {"status": "offline"}

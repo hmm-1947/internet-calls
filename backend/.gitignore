@@ -1,6 +1,0 @@
-.venv
-venv/
-__pycache__
-serviceAccountKey.json
-voice_messages/
-recordings/

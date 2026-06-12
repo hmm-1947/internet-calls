@@ -1,0 +1,4 @@
+admin_panel
+├── admin.js
+├── dashboard.html
+└── index.html
