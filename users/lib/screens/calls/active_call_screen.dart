@@ -32,7 +32,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   @override
   void initState() {
     _remoteRenderer.initialize();
-    Helper.setSpeakerphoneOn(true);
+    widget.callService.setSpeaker(false);
     super.initState();
 
     widget.callService.onRemoteStream = (stream) {
@@ -86,11 +86,9 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   }
 
   void _toggleMute() {
-    setState(() {
-      _muted = !_muted;
-    });
-
+    setState(() => _muted = !_muted);
     widget.callService.setMute(_muted);
+    widget.callService.setSpeaker(_speakerOn);
   }
 
   void _hangup() {
@@ -182,7 +180,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                     active: _speakerOn,
                     onTap: () async {
                       setState(() => _speakerOn = !_speakerOn);
-                      Helper.setSpeakerphoneOn(_speakerOn);
+                      widget.callService.setSpeaker(_speakerOn);
                     },
                   ),
                 ],

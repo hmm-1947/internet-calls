@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -25,6 +26,7 @@ class CallService {
   Map<String, dynamic>? _pendingOffer;
   String? _pendingVideoOfferFrom;
   Map<String, dynamic>? _pendingVideoOffer;
+  final AudioPlayer _ringbackPlayer = AudioPlayer();
 
   CallState _state = CallState.idle;
   final List<Map<String, dynamic>> _pendingOutgoingCandidates = [];
@@ -32,10 +34,11 @@ class CallService {
   bool get isConnected => _channel != null;
   CallState get state => _state;
   String? get remoteUser => _remoteUser;
+  bool _speakerOn = false;
   MediaStream? get localStream => _localStream;
   String? get pendingVideoOfferFrom => _pendingVideoOfferFrom;
   Map<String, dynamic>? get pendingVideoOffer => _pendingVideoOffer;
-
+  void Function()? onListenerBusy;
   void Function(String callerName)? onIncomingCall;
   void Function(String callerName, Map<String, dynamic> offerData)?
   onIncomingVideoCall;
@@ -60,6 +63,12 @@ class CallService {
     void Function(String from, String content, String messageType) fn,
   ) {
     _chatListeners.remove(fn);
+  }
+
+  Future<void> setSpeaker(bool on) async {
+    _speakerOn = on;
+    Helper.setSpeakerphoneOn(on);
+    await _ringbackPlayer.setVolume(on ? 1.0 : 0.2);
   }
 
   void _notifyChatListeners(String from, String content, String messageType) {
@@ -138,6 +147,18 @@ class CallService {
       }
     }
     _isConnecting = false;
+  }
+
+  Future<void> playRingback() async {
+    await _ringbackPlayer.stop();
+    await _ringbackPlayer.setReleaseMode(ReleaseMode.loop);
+    await _ringbackPlayer.setVolume(1.0);
+    await _ringbackPlayer.play(AssetSource('audio/ringback.mp3'));
+  }
+
+  Future<void> stopRingback() async {
+    await _ringbackPlayer.stop();
+    await _ringbackPlayer.release();
   }
 
   Future<void> _initializeWebRtc() async {
@@ -313,6 +334,7 @@ class CallService {
       });
     }
 
+    stopRingback();
     _pendingOffer = null;
     _setState(CallState.ended);
 
@@ -338,6 +360,7 @@ class CallService {
       });
     }
 
+    stopRingback();
     _cleanup();
     _setState(CallState.ended);
 
@@ -390,9 +413,19 @@ class CallService {
       return;
     }
 
-    if (message["type"] == "error") {
-      onError?.call(message["message"] ?? "Unknown error");
-      _setState(CallState.idle);
+    if (message["message"] == "listener_busy") {
+      stopRingback();
+      _cleanup();
+      _setState(CallState.ended);
+      Future.delayed(const Duration(milliseconds: 300), () async {
+        try {
+          await _resetPeerConnection();
+        } finally {
+          _isCleaningUp = false;
+          _setState(CallState.idle);
+        }
+      });
+      onListenerBusy?.call();
       return;
     }
 
@@ -436,6 +469,7 @@ class CallService {
       case "hangup":
         if (_isCleaningUp) break;
         _isCleaningUp = true;
+        stopRingback();
         _cleanup();
         _setState(CallState.ended);
         Future.delayed(const Duration(milliseconds: 300), () async {
@@ -494,6 +528,7 @@ class CallService {
   }
 
   void dispose() {
+    _ringbackPlayer.dispose();
     _localStream?.dispose();
     _peerConnection?.close();
     _channel?.sink.close();

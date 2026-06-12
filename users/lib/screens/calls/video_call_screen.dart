@@ -55,7 +55,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Future<void> _initRenderers() async {
     await _localRenderer.initialize();
+    if (!mounted) return;
     if (_ownsRemoteRenderer) await _remoteRenderer.initialize();
+    if (!mounted) return;
 
     if (widget.offerData != null) {
       await widget.videoCallService.acceptCall(
@@ -63,6 +65,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         widget.remoteUser,
       );
     }
+    if (!mounted) return;
 
     _localRenderer.srcObject = widget.videoCallService.localStream;
 
@@ -77,8 +80,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   @override
   void dispose() {
-    _localRenderer.dispose();
-    if (_ownsRemoteRenderer) _remoteRenderer.dispose();
+    try {
+      _localRenderer.dispose();
+    } catch (_) {}
+    try {
+      if (_ownsRemoteRenderer) _remoteRenderer.dispose();
+    } catch (_) {}
     super.dispose();
   }
 

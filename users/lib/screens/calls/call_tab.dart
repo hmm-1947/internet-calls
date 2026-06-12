@@ -1,6 +1,7 @@
 //user side call_tab.dart
 import 'dart:async';
 import 'dart:convert';
+import 'package:calls/widgets/listener_busy_dialog.dart';
 import 'package:calls/widgets/video_pip_overlay.dart';
 import 'package:calls/core/config.dart';
 import 'package:calls/screens/calls/video_call_screen.dart';
@@ -267,6 +268,11 @@ class _CallTabState extends State<CallTab> {
         context,
       ).showSnackBar(SnackBar(content: Text(error), backgroundColor: _accent));
     };
+    _callService.onListenerBusy = () {
+      if (!mounted) return;
+      if (Navigator.canPop(context)) Navigator.pop(context);
+      showDialog(context: context, builder: (_) => const ListenerBusyDialog());
+    };
 
     _callService.onIncomingVideoCall = (callerName, offerData) {
       if (!mounted) return;
@@ -288,22 +294,21 @@ class _CallTabState extends State<CallTab> {
 
       switch (state) {
         case CallState.calling:
-          setState(() {
-            _statusMessage = null;
-          });
+          _callService.playRingback(); // start ringback
+          setState(() => _statusMessage = null);
           if (!_navigatingToCall) {
             _goToCallScreen();
           }
           break;
 
         case CallState.connected:
-          setState(() {
-            _statusMessage = null;
-          });
+          _callService.stopRingback(); // stop ringback
+          setState(() => _statusMessage = null);
           break;
 
         case CallState.idle:
         case CallState.ended:
+          _callService.stopRingback(); // stop ringback
           setState(() {
             _statusMessage = null;
             _connected = true;

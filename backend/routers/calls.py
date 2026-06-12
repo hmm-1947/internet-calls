@@ -213,15 +213,20 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 if row["coins"] < 1:
                     await ws.send_text(json.dumps({"type": "error", "message": "Not enough coins"}))
                     continue
+                if target in state.active_calls or target in state.pending_offers:
+                    await ws.send_text(json.dumps({"type": "error", "message": "listener_busy"}))
+                    continue
 
                 if target in state.clients:
                     try:
+                        state.pending_offers[target] = {"from": client_id, "data": message["data"]}
                         await state.clients[target].send_text(json.dumps({
                             "type": "incoming_call", "from": client_id, "data": message["data"]
                         }))
                         await ws.send_text(json.dumps({"type": "ringing", "target": target}))
                     except Exception:
                         state.clients.pop(target, None)
+                        state.pending_offers.pop(target, None)
                         await _try_fcm_fallback(ws, client_id, target, message["data"])
                 else:
                     await _try_fcm_fallback(ws, client_id, target, message["data"])
@@ -260,14 +265,19 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
                 if row["coins"] < 1:
                     await ws.send_text(json.dumps({"type": "error", "message": "Not enough coins"}))
                     continue
+                if target in state.active_calls or target in state.pending_offers:
+                    await ws.send_text(json.dumps({"type": "error", "message": "listener_busy"}))
+                    continue
                 if target in state.clients:
                     try:
+                        state.pending_offers[target] = {"from": client_id, "data": message["data"]}
                         await state.clients[target].send_text(json.dumps({
                             "type": "incoming_call", "from": client_id, "data": message["data"]
                         }))
                         await ws.send_text(json.dumps({"type": "ringing", "target": target}))
                     except Exception:
                         state.clients.pop(target, None)
+                        state.pending_offers.pop(target, None)
                         await _try_fcm_fallback(ws, client_id, target, message["data"], "incoming_video_call", sdp=message["data"].get("sdp"))
                 else:
                     await _try_fcm_fallback(ws, client_id, target, message["data"], "incoming_video_call", sdp=message["data"].get("sdp"))
@@ -281,6 +291,7 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
 
             elif msg_type in ["hangup", "call_ended"]:
                 state.pending_offers.pop(target, None)
+                state.pending_offers.pop(client_id, None)
                 other = state.active_calls.pop(client_id, None)
                 session = state.call_sessions.pop(client_id, None)
                 caller_for_session = client_id
