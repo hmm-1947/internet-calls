@@ -5,28 +5,28 @@ import '../config/config.dart';
 
 class AuthService {
   static Future<void> login(String username, String password) async {
-    final res = await http.post(
-      Uri.parse('${AppConfig.baseUrl}/auth/listener/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
-    );
-    if (res.statusCode != 200) {
-      final error = jsonDecode(res.body)['detail'];
-      throw Exception(error);
-    }
-    final token = jsonDecode(res.body)['access_token'];
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', token);
-    await prefs.setString('username', username);
-    await _setOnline(token);
+  final res = await http.post(
+    Uri.parse('${AppConfig.baseUrl}/auth/listener/login'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'username': username, 'password': password}),
+  );
+  if (res.statusCode != 200) {
+    final error = jsonDecode(res.body)['detail'];
+    throw Exception(error);
   }
+  final token = jsonDecode(res.body)['access_token'];
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('token', token);
+  await prefs.setString('username', username);
+  await _setOnline(token);
+}
 
   static Future<void> _setOnline(String token) async {
-    await http.post(
-      Uri.parse('${AppConfig.baseUrl}/auth/listener/online'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-  }
+  await http.post(
+    Uri.parse('${AppConfig.baseUrl}/auth/listener/online'),
+    headers: {'Authorization': 'Bearer $token'},
+  );
+}
 
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();

@@ -138,11 +138,92 @@ async function deleteListener(username) {
   }
 }
 
+async function loadCoinRate() {
+  try {
+    const res = await fetch(`${BASE_URL}/coins/rate`, {
+      headers: { Authorization: 'Bearer ' + getToken() }
+    });
+    const data = await res.json();
+    document.getElementById('coinRate').value = data.coins_per_minute;
+  } catch (e) {}
+}
+
+async function saveCoinRate() {
+  const value = parseFloat(document.getElementById('coinRate').value);
+  const feedback = document.getElementById('coinRateFeedback');
+  const btn = document.getElementById('coinRateBtn');
+
+  if (!value || value <= 0) {
+    feedback.textContent = 'Enter a valid rate';
+    feedback.className = 'feedback error';
+    feedback.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${BASE_URL}/coins/admin/rate`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + getToken(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ coins_per_minute: value })
+    });
+    feedback.textContent = res.ok ? 'Rate saved successfully' : 'Failed to save rate';
+    feedback.className = 'feedback ' + (res.ok ? 'success' : 'error');
+  } catch (e) {
+    feedback.textContent = 'Network error';
+    feedback.className = 'feedback error';
+  } finally {
+    feedback.style.display = 'block';
+    btn.disabled = false;
+  }
+}
+
+async function addCoins() {
+  const username = document.getElementById('coinUsername').value.trim();
+  const amount = parseFloat(document.getElementById('coinAmount').value);
+  const feedback = document.getElementById('coinFeedback');
+  const btn = document.getElementById('addCoinsBtn');
+
+  if (!username || !amount || amount <= 0) {
+    feedback.textContent = 'Enter a valid username and amount';
+    feedback.className = 'feedback error';
+    feedback.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${BASE_URL}/coins/admin/add`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + getToken(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, amount })
+    });
+    const data = await res.json();
+    feedback.textContent = res.ok
+      ? `Added ${amount} coins to ${username}. New balance: ${data.new_balance}`
+      : data.detail || 'Failed to add coins';
+    feedback.className = 'feedback ' + (res.ok ? 'success' : 'error');
+  } catch (e) {
+    feedback.textContent = 'Network error';
+    feedback.className = 'feedback error';
+  } finally {
+    feedback.style.display = 'block';
+    btn.disabled = false;
+  }
+}
+
 if (window.location.pathname.includes('dashboard')) {
   if (!getToken()) {
     window.location.href = 'index.html';
   } else {
     fetchListeners();
+    loadCoinRate();
   }
 }
 

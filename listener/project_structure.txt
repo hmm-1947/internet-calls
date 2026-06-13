@@ -1,0 +1,26 @@
+lib
+├── config/
+│   └── config.dart
+├── main.dart
+├── models/
+│   ├── chat_message.dart
+│   └── conversation.dart
+├── screens/
+│   ├── calls/
+│   │   ├── active_call_screen.dart
+│   │   └── active_video_call_screen.dart
+│   ├── chat/
+│   │   ├── chat_list_screen.dart
+│   │   └── chat_screen.dart
+│   ├── home_screen.dart
+│   ├── login_screen.dart
+│   └── navs/
+│       ├── call_logs_tab.dart
+│       ├── chat_tab.dart
+│       ├── profile_tab.dart
+│       └── standby_tab.dart
+└── services/
+    ├── auth_service.dart
+    ├── chat_service.dart
+    ├── livekit_service.dart
+    └── websocket_service.dart

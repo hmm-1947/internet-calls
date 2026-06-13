@@ -1,6 +1,9 @@
+//active video calls
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:livekitcalls/services/auth_service.dart';
+import 'package:livekitcalls/services/coin_service.dart';
 import '../../config/config.dart';
 import '../../services/websocket_service.dart';
 
@@ -28,6 +31,7 @@ class _ActiveVideoCallScreenState extends State<ActiveVideoCallScreen> {
   bool _videoOff = false;
   bool _connecting = true;
   bool _waiting = true;
+  final Stopwatch _callTimer = Stopwatch();
   Duration _duration = Duration.zero;
   Timer? _timer;
   late final StreamSubscription _wsSub;
@@ -41,14 +45,15 @@ class _ActiveVideoCallScreenState extends State<ActiveVideoCallScreen> {
     _joinCall();
   }
 
-  void _handleEvent(Map<String, dynamic> message) {
+  Future<void> _handleEvent(Map<String, dynamic> message) async {
     final event = message['event'];
     if (event == 'call_accepted') {
-      setState(() => _waiting = false);
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        setState(() => _duration += const Duration(seconds: 1));
-      });
-    } else if (event == 'call_rejected') {
+  setState(() => _waiting = false);
+  _callTimer.start();
+  _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    setState(() => _duration += const Duration(seconds: 1));
+  });
+} else if (event == 'call_rejected') {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(
@@ -56,8 +61,14 @@ class _ActiveVideoCallScreenState extends State<ActiveVideoCallScreen> {
         ).showSnackBar(const SnackBar(content: Text('Call was rejected')));
       }
     } else if (event == 'call_ended') {
-      if (mounted) Navigator.pop(context);
-    }
+  _timer?.cancel();
+  _callTimer.stop();
+  try {
+    final token = await AuthService.getToken();
+    await CoinService.deductCoins(token!, _callTimer.elapsed.inSeconds);
+  } catch (_) {}
+  if (mounted) Navigator.pop(context);
+}
   }
 
   Future<void> _joinCall() async {
@@ -98,11 +109,16 @@ class _ActiveVideoCallScreenState extends State<ActiveVideoCallScreen> {
   }
 
   Future<void> _endCall() async {
-    _timer?.cancel();
-    widget.wsService.send({'event': 'call_ended', 'to': widget.listenerName});
-    await _room?.disconnect();
-    if (mounted) Navigator.pop(context);
-  }
+  _timer?.cancel();
+  _callTimer.stop();
+  widget.wsService.send({'event': 'call_ended', 'to': widget.listenerName});
+  await _room?.disconnect();
+  try {
+    final token = await AuthService.getToken();
+    await CoinService.deductCoins(token!, _callTimer.elapsed.inSeconds);
+  } catch (_) {}
+  if (mounted) Navigator.pop(context);
+}
 
   void _toggleMute() async {
     final newMuted = !_muted;

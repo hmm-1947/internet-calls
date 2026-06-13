@@ -27,6 +27,9 @@ app.include_router(ws_router)
 from routers.admin import router as admin_router
 app.include_router(admin_router)
 
+from routers.coins import router as coin_router
+app.include_router(coin_router)
+
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(

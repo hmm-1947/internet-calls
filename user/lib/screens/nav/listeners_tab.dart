@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:livekitcalls/screens/calls/active_call_screen.dart';
 import 'package:livekitcalls/screens/calls/active_video_call_screen.dart';
 import 'package:livekitcalls/screens/chat/chat_screen.dart';
+import 'package:livekitcalls/services/auth_service.dart';
 import 'package:livekitcalls/services/chat_service.dart';
+import 'package:livekitcalls/services/coin_service.dart';
 import '../../services/livekit_service.dart';
 import '../../services/websocket_service.dart';
 
@@ -74,50 +76,68 @@ class _ListenersTabState extends State<ListenersTab> {
   }
 
   Future<void> _startCall(String listenerUsername) async {
-    try {
-      final data = await LiveKitService.getToken(listenerUsername);
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ActiveCallScreen(
-            room: data['room']!,
-            token: data['token']!,
-            listenerName: listenerUsername,
-            wsService: widget.wsService,
-          ),
+  try {
+    final token = await AuthService.getToken();
+    final eligible = await CoinService.canCall(token!);
+    if (!eligible) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Insufficient coins to make a call')),
+        );
+      }
+      return;
+    }
+    final data = await LiveKitService.getToken(listenerUsername);
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ActiveCallScreen(
+          room: data['room']!,
+          token: data['token']!,
+          listenerName: listenerUsername,
+          wsService: widget.wsService,
         ),
-      );
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ),
+    );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
+}
 
   Future<void> _startVideoCall(String listenerUsername) async {
-    try {
-      final data = await LiveKitService.getVideoToken(listenerUsername);
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ActiveVideoCallScreen(
-            room: data['room']!,
-            token: data['token']!,
-            listenerName: listenerUsername,
-            wsService: widget.wsService,
-          ),
+  try {
+    final token = await AuthService.getToken();
+    final eligible = await CoinService.canCall(token!);
+    if (!eligible) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Insufficient coins to make a video call')),
+        );
+      }
+      return;
+    }
+    final data = await LiveKitService.getVideoToken(listenerUsername);
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ActiveVideoCallScreen(
+          room: data['room']!,
+          token: data['token']!,
+          listenerName: listenerUsername,
+          wsService: widget.wsService,
         ),
-      );
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ),
+    );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {

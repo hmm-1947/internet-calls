@@ -1,6 +1,9 @@
+//active_call_screen
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:livekitcalls/services/auth_service.dart';
+import 'package:livekitcalls/services/coin_service.dart';
 import 'package:livekitcalls/services/websocket_service.dart';
 import '../../config/config.dart';
 
@@ -28,6 +31,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   bool _speakerOn = true;
   bool _connecting = true;
   bool _waiting = true;
+  final Stopwatch _callTimer = Stopwatch();
   Duration _duration = Duration.zero;
   Timer? _timer;
   late final StreamSubscription _wsSub;
@@ -39,7 +43,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _joinCall();
   }
 
-  void _handleEvent(Map<String, dynamic> message) {
+  Future<void> _handleEvent(Map<String, dynamic> message) async {
     final event = message['event'];
     if (event == 'call_accepted') {
       setState(() => _waiting = false);
@@ -52,8 +56,14 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
         ).showSnackBar(const SnackBar(content: Text('Call was rejected')));
       }
     } else if (event == 'call_ended') {
-      if (mounted) Navigator.pop(context);
-    }
+  _timer?.cancel();
+  _callTimer.stop();
+  try {
+    final token = await AuthService.getToken();
+    await CoinService.deductCoins(token!, _callTimer.elapsed.inSeconds);
+  } catch (_) {}
+  if (mounted) Navigator.pop(context);
+}
   }
 
   Future<void> _joinCall() async {
@@ -76,17 +86,23 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() => _duration += const Duration(seconds: 1));
-    });
-  }
+  _callTimer.start();
+  _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    setState(() => _duration += const Duration(seconds: 1));
+  });
+}
 
   Future<void> _endCall() async {
-    _timer?.cancel();
-    widget.wsService.send({'event': 'call_ended', 'to': widget.listenerName});
-    await _room?.disconnect();
-    if (mounted) Navigator.pop(context);
-  }
+  _timer?.cancel();
+  _callTimer.stop();
+  widget.wsService.send({'event': 'call_ended', 'to': widget.listenerName});
+  await _room?.disconnect();
+  try {
+    final token = await AuthService.getToken();
+    await CoinService.deductCoins(token!, _callTimer.elapsed.inSeconds);
+  } catch (_) {}
+  if (mounted) Navigator.pop(context);
+}
 
   void _toggleMute() async {
     final newMuted = !_muted;

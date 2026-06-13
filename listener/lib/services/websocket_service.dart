@@ -23,25 +23,27 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get events => _eventController.stream;
 
   Future<void> connect() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    final username = prefs.getString('username');
-    if (token == null || username == null) return;
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token');
+  final username = prefs.getString('username');
+  if (token == null || username == null) return;
 
-    _channel = WebSocketChannel.connect(
-      Uri.parse('${AppConfig.wsBaseUrl}/ws/$username?token=$token'),
-    );
+  _channel = WebSocketChannel.connect(
+    Uri.parse('${AppConfig.wsBaseUrl}/ws/$username?token=$token'),
+  );
 
-    _channel!.stream.listen((data) {
+  _channel!.stream.listen(
+    (data) {
       final message = jsonDecode(data as String) as Map<String, dynamic>;
-
       _eventController.add(message);
-
       if (message['event'] == 'chat_message') {
         _chatController.add(message);
       }
-    });
-  }
+    },
+    onDone: _onDone,
+    onError: _onError,
+  );
+}
 
   void send(Map<String, dynamic> message) {
     _channel?.sink.add(jsonEncode(message));
