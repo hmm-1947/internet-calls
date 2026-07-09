@@ -1,7 +1,7 @@
 firebase.json
 recordings/
 voice_notes/
-_pycache_/
+__pycache__/
 .stfolder/
 .env
 app/venv/
