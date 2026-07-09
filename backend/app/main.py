@@ -7,6 +7,7 @@ from app.core.database import SessionLocal
 from app.models.models import User, Listener
 
 # Base.metadata.create_all(bind=engine)
+# test
 import os
 os.makedirs("recordings", exist_ok=True)
 os.makedirs("voice_notes", exist_ok=True)
