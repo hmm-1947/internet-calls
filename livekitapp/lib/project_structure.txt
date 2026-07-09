@@ -1,0 +1,32 @@
+lib
+├── common/
+│   └── models/
+│       └── auth_response.dart
+├── core/
+│   ├── constants/
+│   │   └── api_constants.dart
+│   └── network/
+│       ├── api_client.dart
+│       └── local_storage.dart
+├── flavors/
+│   └── flavor_config.dart
+├── listener/
+│   ├── repository/
+│   │   └── listener_repository.dart
+│   ├── screens/
+│   │   ├── incoming_call_screen.dart
+│   │   ├── listener_call_screen.dart
+│   │   ├── listener_home_screen.dart
+│   │   └── listener_login_screen.dart
+│   └── services/
+│       └── callkit_service.dart
+├── main_listener.dart
+├── main_user.dart
+└── user/
+    ├── repository/
+    │   └── user_repository.dart
+    └── screens/
+        ├── call_screen.dart
+        ├── user_home_screen.dart
+        ├── user_login_screen.dart
+        └── user_register_screen.dart

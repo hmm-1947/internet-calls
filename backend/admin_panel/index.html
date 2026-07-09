@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <style>
+    :root {
+      --mint: #eafaf1;
+      --leaf: #34c78e;
+      --leaf-dark: #1f9d6f;
+      --sky: #2f6fed;
+      --sky-dark: #1e4fc4;
+      --ink: #16324a;
+      --slate: #5c7080;
+      --line: #dce8e2;
+      --white: #ffffff;
+      --danger: #e0475a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      max-width: 1500px;
+      margin: 32px auto;
+      padding: 0 20px;
+      background: var(--mint);
+      color: var(--ink);
+    }
+
+    h1 {
+      font-size: 22px;
+      letter-spacing: .3px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h1 .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--leaf), var(--sky));
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    input {
+      padding: 9px 10px;
+      margin: 5px 0;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--white);
+      font-size: 13px;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--sky);
+    }
+
+    .btn {
+      padding: 8px 16px;
+      margin: 4px 2px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background .15s;
+    }
+
+    .btn-primary {
+      background: var(--sky);
+      color: var(--white);
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      background: var(--sky-dark);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: var(--white);
+    }
+
+    .btn-danger:hover {
+      background: #c53347;
+    }
+
+    .btn-leaf {
+      background: var(--leaf);
+      color: var(--white);
+    }
+
+    .btn-leaf:hover {
+      background: var(--leaf-dark);
+    }
+
+    .btn-ghost {
+      background: var(--white);
+      color: var(--sky);
+      border: 1px solid var(--line);
+    }
+
+    .btn-ghost:hover {
+      background: #f2f7ff;
+    }
+
+    .btn-ghost:disabled {
+      opacity: .4;
+      cursor: default;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 2px 10px rgba(31, 157, 111, .08);
+      margin-bottom: 22px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--leaf);
+      color: var(--white);
+      padding: 9px 8px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f4fbf7;
+    }
+
+    #msg {
+      margin-top: 10px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .ok {
+      color: var(--leaf-dark);
+    }
+
+    .err {
+      color: var(--danger);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .badge-yes {
+      background: #dcf6e8;
+      color: var(--leaf-dark);
+    }
+
+    .badge-no {
+      background: #fde3e7;
+      color: var(--danger);
+    }
+
+    .badge-role {
+      background: #e6efff;
+      color: var(--sky-dark);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+    }
+
+    .sidebar {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 2px 10px rgba(31, 157, 111, .08);
+      max-height: 760px;
+      overflow: auto;
+    }
+
+    .sidebar-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 8px 0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--mint);
+      color: var(--slate);
+    }
+
+    .tab.active {
+      background: var(--sky);
+      color: var(--white);
+    }
+
+    .search-box {
+      margin-bottom: 8px;
+    }
+
+    .person-item {
+      padding: 10px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 5px;
+      border: 1px solid transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .person-item:hover {
+      background: #f4fbf7;
+    }
+
+    .person-item.selected {
+      background: #e6f7ee;
+      border-color: var(--leaf);
+    }
+
+    .person-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .person-sub {
+      font-size: 12px;
+      color: var(--slate);
+    }
+
+    .content {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(31, 157, 111, .08);
+      min-height: 400px;
+    }
+
+    .empty-state {
+      color: var(--slate);
+      text-align: center;
+      padding: 60px 20px;
+      font-size: 14px;
+    }
+
+    .detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--mint);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+
+    .detail-header h3 {
+      margin: 0;
+      font-size: 18px;
+      color: var(--ink);
+    }
+
+    .detail-header .person-sub {
+      font-size: 13px;
+    }
+
+    .section-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .section-tab {
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--mint);
+      color: var(--slate);
+    }
+
+    .section-tab.active {
+      background: var(--leaf);
+      color: var(--white);
+    }
+
+    .page-size-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: var(--slate);
+    }
+
+    .page-size-row select {
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--white);
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 14px;
+      margin: 14px 0 2px;
+      font-size: 13px;
+      color: var(--slate);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    audio {
+      height: 30px;
+    }
+
+    .chat-thread {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 6px;
+    }
+
+    .chat-row {
+      display: flex;
+    }
+
+    .chat-row.left {
+      justify-content: flex-start;
+    }
+
+    .chat-row.right {
+      justify-content: flex-end;
+    }
+
+    .chat-bubble {
+      max-width: 60%;
+      min-width: 60px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+
+    .bubble-left {
+      background: var(--mint);
+      color: var(--ink);
+      border-bottom-left-radius: 2px;
+    }
+
+    .bubble-right {
+      background: var(--leaf);
+      color: var(--white);
+      border-bottom-right-radius: 2px;
+    }
+
+    .chat-bubble {
+      min-width: 60px;
+    }
+
+    .chat-meta {
+      font-weight: 700;
+      font-size: 11px;
+      opacity: .8;
+      margin-bottom: 2px;
+    }
+
+    .chat-time {
+      font-size: 10px;
+      opacity: .7;
+      float: right;
+      margin-left: 8px;
+      margin-top: 4px;
+      shape-outside: inset(0 0 0 0);
+    }
+
+    .chat-scroll {
+      max-height: 500px;
+      overflow-y: auto;
+      padding: 6px;
+    }
+
+    .chat-date-divider {
+      display: flex;
+      justify-content: center;
+      margin: 14px 0;
+    }
+
+    .other-person-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .other-person-picker label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--slate);
+    }
+
+    .other-person-picker select {
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .other-person-picker select:focus {
+      outline: none;
+      border-color: var(--leaf);
+    }
+
+    .pair-arrow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .pair-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .pair-arrow {
+      font-size: 22px;
+      color: var(--leaf);
+    }
+
+    .chat-date-label {
+      background: var(--mint);
+      color: var(--slate);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1><span class="dot"></span>Admin Panel</h1>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Register Listener</h2>
+      <input id="adminSecret" placeholder="Admin Secret" type="password">
+      <input id="name" placeholder="Name">
+      <input id="phone" placeholder="Phone">
+      <input id="password" placeholder="Password" type="password">
+      <button class="btn btn-primary" onclick="registerListener()">Register Listener</button>
+      <div id="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Coin Settings</h2>
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Audio call coin deduction / minute</label>
+      <input id="audioCoins" placeholder="e.g. 10" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Video call coin deduction / minute</label>
+      <input id="videoCoins" placeholder="e.g. 20" type="number">
+      <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>People
+      <button class="btn btn-ghost" onclick="loadPeople()">↻ Refresh</button>
+    </h2>
+    <div class="layout">
+      <div class="sidebar">
+        <div class="sidebar-tabs">
+          <div class="tab active" id="tabUsers" onclick="switchPeopleTab('user')">Users</div>
+          <div class="tab" id="tabListeners" onclick="switchPeopleTab('listener')">Listeners</div>
+        </div>
+        <input class="search-box" id="personSearch" placeholder="Search by name or phone" oninput="renderPeopleList()">
+        <div id="peopleList"></div>
+      </div>
+
+      <div class="content" id="personContent">
+        <div class="empty-state">Select a user or listener from the list to view their call logs and recordings.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://187.127.182.10:8005';
+
+    const secretInput = document.getElementById('adminSecret');
+    secretInput.value = localStorage.getItem('adminSecret') || '';
+    secretInput.addEventListener('input', () => localStorage.setItem('adminSecret', secretInput.value));
+    function getSecret() { return secretInput.value; }
+    function authHeaders(json) {
+      const h = { 'x-admin-secret': getSecret() };
+      if (json) h['Content-Type'] = 'application/json';
+      return h;
+    }
+
+    function setMsg(text, ok) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    let peopleTab = 'user';
+    let usersCache = [];
+    let listenersCache = [];
+    let selectedPerson = null;
+
+    let logSection = 'calls';
+    let logPageSize = 10;
+    let logPage = 1;
+    let logsCache = [];
+
+    async function registerListener() {
+      const name = document.getElementById('name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const password = document.getElementById('password').value;
+      if (!name || !phone || !password) { setMsg('Please fill in all fields.', false); return; }
+      setMsg('Submitting…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/listeners', {
+          method: 'POST', headers: authHeaders(true),
+          body: JSON.stringify({ name, phone, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg('✓ Listener created: ' + data.name, true);
+        document.getElementById('name').value = '';
+        document.getElementById('phone').value = '';
+        document.getElementById('password').value = '';
+        loadPeople();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    async function loadCoinSettings() {
+      try {
+        const res = await fetch(API_URL + '/admin/coins/settings', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        document.getElementById('audioCoins').value = data.audio_coins_per_minute;
+        document.getElementById('videoCoins').value = data.video_coins_per_minute;
+      } catch (e) { }
+    }
+
+    async function saveCoinSettings() {
+      const audio_coins_per_minute = parseInt(document.getElementById('audioCoins').value);
+      const video_coins_per_minute = parseInt(document.getElementById('videoCoins').value);
+      try {
+        const res = await fetch(API_URL + '/admin/coins/settings', {
+          method: 'POST', headers: authHeaders(true),
+          body: JSON.stringify({ audio_coins_per_minute, video_coins_per_minute })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg('✓ Coin settings saved', true);
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    async function loadPeople() {
+      try {
+        const [uRes, lRes] = await Promise.all([
+          fetch(API_URL + '/admin/coins/users', { headers: authHeaders() }),
+          fetch(API_URL + '/admin/listeners', { headers: authHeaders() })
+        ]);
+        usersCache = await uRes.json();
+        listenersCache = await lRes.json();
+        if (!uRes.ok) throw new Error(usersCache.detail || 'Failed to load users');
+        if (!lRes.ok) throw new Error(listenersCache.detail || 'Failed to load listeners');
+        renderPeopleList();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    function switchPeopleTab(tab) {
+      peopleTab = tab;
+      document.getElementById('tabUsers').classList.toggle('active', tab === 'user');
+      document.getElementById('tabListeners').classList.toggle('active', tab === 'listener');
+      renderPeopleList();
+    }
+
+    function renderPeopleList() {
+      const list = document.getElementById('peopleList');
+      const q = document.getElementById('personSearch').value.trim().toLowerCase();
+      const source = peopleTab === 'user' ? usersCache : listenersCache;
+      const filtered = (source || []).filter(p =>
+        (p.name || '').toLowerCase().includes(q) || (p.phone || '').includes(q)
+      );
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="empty-state">No results.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      filtered.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'person-item' + (selectedPerson && selectedPerson.type === peopleTab && selectedPerson.id === p.id ? ' selected' : '');
+        const extra = peopleTab === 'user'
+          ? `${p.coins} coins`
+          : `<span class="badge ${p.is_online ? 'badge-yes' : 'badge-no'}">${p.is_online ? 'Online' : 'Offline'}</span>`;
+        div.innerHTML = `<span class="person-name">${p.name}</span><span class="person-sub">${p.phone} · ${extra}</span>`;
+        div.onclick = () => selectPerson(peopleTab, p);
+        list.appendChild(div);
+      });
+    }
+
+    function selectPerson(type, person) {
+      selectedPerson = { type, id: person.id, name: person.name, phone: person.phone, raw: person };
+      logSection = 'calls';
+      logPage = 1;
+      otherPersonFilter = null;
+      renderPeopleList();
+      renderPersonContent();
+      loadPersonLogs();
+    }
+
+    function renderPersonContent() {
+      const content = document.getElementById('personContent');
+      const p = selectedPerson;
+      const roleLabel = p.type === 'user' ? 'User' : 'Listener';
+      content.innerHTML = `
+<div class="detail-header">
+          <div>
+            <h3>${p.name} <span class="badge badge-role">${roleLabel}</span></h3>
+            <div class="person-sub">${p.phone}</div>
+          </div>
+          <div class="other-person-picker">
+            <label>${p.type === 'user' ? 'Listener' : 'User'}</label>
+            <select id="otherPersonSelect" onchange="changeOtherPersonFilter()">
+              <option value="">All</option>
+            </select>
+          </div>
+          ${p.type === 'user' ? `
+          <div style="display:flex;gap:6px">
+            <input type="number" id="amount-${p.id}" placeholder="±amount" style="width:90px">
+            <button class="btn btn-leaf" onclick="adjustCoins(${p.id})">Apply</button>
+          </div>` : ''}
+        </div>
+        <div class="pair-arrow-row" id="pairArrowRow" style="display:none">
+          <span class="pair-name pair-left"></span>
+          <span class="pair-arrow">&#10230;</span>
+          <span class="pair-name pair-right"></span>
+        </div>
+<div class="section-tabs">
+          <div class="section-tab ${logSection === 'calls' ? 'active' : ''}" onclick="switchLogSection('calls')">Call Logs</div>
+          <div class="section-tab ${logSection === 'recordings' ? 'active' : ''}" onclick="switchLogSection('recordings')">Recordings</div>
+          <div class="section-tab ${logSection === 'chats' ? 'active' : ''}" onclick="switchLogSection('chats')">Chats</div>
+        </div>
+${logSection === 'chats' ? '' : `
+        <div class="page-size-row">
+          Show
+          <select id="pageSizeSelect" onchange="changePageSize()">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+          </select>
+          per page
+        </div>`}
+        <div id="logTableWrap"></div>
+        <div class="pagination" id="paginationWrap"></div>
+      `;
+      if (logSection !== 'chats') document.getElementById('pageSizeSelect').value = logPageSize;
+    }
+
+    function switchLogSection(section) {
+      logSection = section;
+      logPage = 1;
+      renderPersonContent();
+      loadPersonLogs();
+    }
+
+    function changePageSize() {
+      logPageSize = parseInt(document.getElementById('pageSizeSelect').value);
+      logPage = 1;
+      renderLogTable();
+    }
+
+    let otherPersonFilter = null;
+    let logsCacheAll = [];
+
+    async function loadPersonLogs() {
+      const wrap = document.getElementById('logTableWrap');
+      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      try {
+        const endpoint = logSection === 'calls' ? '/admin/calls' : logSection === 'recordings' ? '/admin/recordings' : '/admin/chats';
+        const res = await fetch(API_URL + endpoint, { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        const idField = selectedPerson.type === 'user' ? 'caller_name' : 'listener_name';
+        logsCacheAll = data.filter(row => row[idField] === selectedPerson.name);
+        applyOtherPersonFilter();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Error: ' + e.message + '</div>';
+      }
+    }
+
+    function applyOtherPersonFilter() {
+      const otherField = selectedPerson.type === 'user' ? 'listener_name' : 'caller_name';
+      logsCache = otherPersonFilter ? logsCacheAll.filter(row => row[otherField] === otherPersonFilter) : logsCacheAll;
+      renderOtherPersonSelect();
+      renderLogTable();
+    }
+
+    function renderOtherPersonSelect() {
+      const el = document.getElementById('otherPersonSelect');
+      if (!el) return;
+      const otherField = selectedPerson.type === 'user' ? 'listener_name' : 'caller_name';
+      const names = [...new Set(logsCacheAll.map(row => row[otherField]).filter(Boolean))];
+      el.innerHTML = '<option value="">All</option>' + names.map(n => `<option value="${n}" ${otherPersonFilter === n ? 'selected' : ''}>${n}</option>`).join('');
+      const arrowRow = document.getElementById('pairArrowRow');
+      if (otherPersonFilter) {
+        arrowRow.style.display = 'flex';
+        const leftEl = arrowRow.querySelector('.pair-left');
+        const rightEl = arrowRow.querySelector('.pair-right');
+        if (selectedPerson.type === 'user') {
+          leftEl.textContent = selectedPerson.name;
+          rightEl.textContent = otherPersonFilter;
+        } else {
+          leftEl.textContent = otherPersonFilter;
+          rightEl.textContent = selectedPerson.name;
+        }
+      } else {
+        arrowRow.style.display = 'none';
+      }
+    }
+    function changeOtherPersonFilter() {
+      otherPersonFilter = document.getElementById('otherPersonSelect').value || null;
+      applyOtherPersonFilter();
+    }
+
+    function renderLogTable() {
+      const wrap = document.getElementById('logTableWrap');
+      const pagWrap = document.getElementById('paginationWrap');
+      if (logsCache.length === 0) {
+        const label = logSection === 'calls' ? 'call logs' : logSection === 'recordings' ? 'recordings' : 'chat messages';
+        wrap.innerHTML = `<div class="empty-state">No ${label} with other people yet.</div>`;
+        pagWrap.innerHTML = '';
+        return;
+      }
+
+      if (logSection === 'chats') {
+        pagWrap.innerHTML = '';
+        const ordered = logsCache.slice().reverse();
+        const groups = [];
+        let currentKey = null;
+        ordered.forEach(m => {
+          const d = new Date(m.created_at);
+          const key = d.toDateString();
+          if (key !== currentKey) {
+            groups.push({ key, date: d, items: [] });
+            currentKey = key;
+          }
+          groups[groups.length - 1].items.push(m);
+        });
+        const now = new Date();
+        const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const dayDiff = d => Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const labelFor = d => {
+          const diff = dayDiff(d);
+          if (diff === 0) return 'Today';
+          if (diff === 1) return 'Yesterday';
+          if (diff > 1 && diff < 7) return dayNames[d.getDay()];
+          return d.toLocaleDateString();
+        };
+        wrap.innerHTML = `
+          <div class="chat-scroll">
+            ${groups.map(g => `
+              <div class="chat-date-divider"><span class="chat-date-label">${labelFor(g.date)}</span></div>
+              <div class="chat-thread">
+                ${g.items.map(m => {
+          const isUserSender = m.sender_type === 'user';
+          const content = m.is_deleted
+            ? '<i>deleted</i>'
+            : (m.message_type === 'audio'
+              ? ('<audio controls src="' + API_URL + m.audio_url + '"></audio>')
+              : (m.message || ''));
+          const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return `
+                <div class="chat-row ${isUserSender ? 'left' : 'right'}">
+                      <div class="chat-bubble ${isUserSender ? 'bubble-left' : 'bubble-right'}">
+                        <div class="chat-meta">${isUserSender ? (m.caller_name || 'User') : (m.listener_name || 'Listener')}</div>
+          <div class="chat-text">${content}<span class="chat-time">${time}</span></div>
+                      </div>
+                    </div>`;
+        }).join('')}
+              </div>
+            `).join('')}
+          </div>
+        `;
+        const scrollEl = wrap.querySelector('.chat-scroll');
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(logsCache.length / logPageSize));
+      logPage = Math.min(logPage, totalPages);
+      const start = (logPage - 1) * logPageSize;
+      const pageItems = logsCache.slice(start, start + logPageSize);
+
+      if (logSection === 'calls') {
+        wrap.innerHTML = `
+          <table>
+            <thead><tr><th>ID</th><th>Caller</th><th>Listener</th><th>Status</th><th>Created</th></tr></thead>
+            <tbody>
+              ${pageItems.map(c => `
+                <tr>
+                  <td>${c.id}</td>
+                  <td>${c.caller_name || ''}</td>
+                  <td>${c.listener_name || ''}</td>
+                  <td>${c.status}</td>
+                  <td>${c.created_at || ''}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        wrap.innerHTML = `
+          <table>
+            <thead><tr><th>ID</th><th>Caller</th><th>Listener</th><th>Status</th><th>Started</th><th>Ended</th><th>Play</th></tr></thead>
+            <tbody>
+              ${pageItems.map(r => {
+          const audio = r.file_path ? `<audio controls src="${API_URL}/recordings/${r.file_path}"></audio>` : '';
+          return `
+                <tr>
+                  <td>${r.id}</td>
+                  <td>${r.caller_name || ''}</td>
+                  <td>${r.listener_name || ''}</td>
+                  <td>${r.status}</td>
+                  <td>${r.started_at || ''}</td>
+                  <td>${r.ended_at || ''}</td>
+                  <td>${audio}</td>
+                </tr>`;
+        }).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      pagWrap.innerHTML = `
+        <button class="btn btn-ghost" ${logPage <= 1 ? 'disabled' : ''} onclick="changeLogPage(-1)">&larr; Prev</button>
+        <span>Page ${logPage} of ${totalPages}</span>
+        <button class="btn btn-ghost" ${logPage >= totalPages ? 'disabled' : ''} onclick="changeLogPage(1)">Next &rarr;</button>
+      `;
+    }
+
+    function changeLogPage(delta) {
+      logPage += delta;
+      renderLogTable();
+    }
+    async function adjustCoins(userId) {
+      const amount = parseInt(document.getElementById('amount-' + userId).value);
+      if (!amount) { setMsg('Enter a valid amount.', false); return; }
+      try {
+        const res = await fetch(API_URL + '/admin/coins/adjust', {
+          method: 'POST', headers: authHeaders(true),
+          body: JSON.stringify({ user_id: userId, amount })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg('✓ Coins updated', true);
+        loadPeople();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+    window.addEventListener('DOMContentLoaded', () => { loadPeople(); loadCoinSettings(); });
+  </script>
+</body>
+
+</html>

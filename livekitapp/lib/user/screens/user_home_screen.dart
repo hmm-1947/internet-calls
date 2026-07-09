@@ -1,0 +1,764 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:livekitapp/core/network/chat_socket_service.dart';
+import 'package:livekitapp/core/network/local_storage.dart' as ls;
+import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/user/screens/chat_history_screen.dart';
+import 'package:livekitapp/user/screens/user_call_screen.dart';
+import 'package:livekitapp/user/screens/user_login_screen.dart';
+import 'package:livekitapp/user/screens/user_profile_screen.dart';
+
+// ---------------------------------------------------------------------------
+// Design tokens (pulled from Figma "Home screen" frame)
+// ---------------------------------------------------------------------------
+class _AppColors {
+  static const bg = Color(0xFF0B0B0B);
+  static const headerBg = Color(0xCC0B0B0B);
+  static const cardBg = Color(0xCC1A1A1A);
+  static const cardBorder = Color(0x0DFFFFFF);
+  static const inputBg = Color(0xFF1C2B3C);
+  static const brandRed = Color(0xFFE11D48);
+  static const online = Color(0xFF74D8BD);
+  static const textSecondary = Color(0xFFD4E4FA);
+  static const textMuted = Color(0xFFE5BDBE);
+}
+
+class UserHomeScreen extends StatefulWidget {
+  const UserHomeScreen({super.key});
+
+  @override
+  State<UserHomeScreen> createState() => _UserHomeScreenState();
+}
+
+class _UserHomeScreenState extends State<UserHomeScreen> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  String _profileName = '';
+  int _profileCoins = 0;
+  final _repository = UserRepository();
+  final _localStorage = LocalStorage();
+  bool _loading = true;
+  String? _error;
+  StreamSubscription? _socketSub;
+  List<Map<String, dynamic>> _listeners = [];
+  int? _callingListenerId; // tracks in-flight call to prevent double-tap
+
+  Timer? _pollTimer;
+  final PageController _offersController = PageController(
+    viewportFraction: 0.92,
+  );
+  Timer? _offersAutoScrollTimer;
+  int _offersCurrentPage = 0;
+  static const int _offersCardCount = 2;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _initSocket();
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _load());
+    _offersAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!_offersController.hasClients) return;
+      _offersCurrentPage = (_offersCurrentPage + 1) % _offersCardCount;
+      _offersController.animateToPage(
+        _offersCurrentPage,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  Future<void> _initSocket() async {
+    final token = await _localStorage.getToken();
+    if (token == null) return;
+    ChatSocketService().connect(token, 'user');
+    _socketSub = ChatSocketService().stream.listen(_onSocketEvent);
+  }
+
+  void _onSocketEvent(Map<String, dynamic> data) {
+    final type = data['type'];
+    if (type == 'listener_online' || type == 'listener_offline') {
+      final listenerId = data['listener_id'];
+      if (listenerId == null) return;
+      setState(() {
+        final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+        if (idx != -1) {
+          _listeners[idx]['is_online'] = type == 'listener_online';
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _socketSub?.cancel();
+    _pollTimer?.cancel();
+    _offersAutoScrollTimer?.cancel();
+    _offersController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final token = await _localStorage.getToken();
+      final listeners = await _repository.getListeners(token!);
+      final me = await _repository.getMe(token);
+      if (mounted) {
+        setState(() {
+          _listeners = listeners;
+          _profileName = me['name'] ?? '';
+          _profileCoins = me['coins'] ?? 0;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _callListener(int listenerId, {bool video = false}) async {
+    if (_callingListenerId != null) return;
+    setState(() => _callingListenerId = listenerId);
+    try {
+      final token = await _localStorage.getToken();
+      final result = await _repository.initiateCall(
+        token!,
+        listenerId,
+        callType: video ? 'video' : 'audio',
+      );
+      if (!mounted) return;
+      final listenerName = _listeners.firstWhere(
+        (l) => l['id'] == listenerId,
+        orElse: () => {'name': 'Listener'},
+      )['name'];
+      Navigator.of(
+        context,
+      ).push(_callRoute(result['call_id'], listenerName, video));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _callingListenerId = null);
+    }
+  }
+
+  Route _callRoute(int callId, String listenerName, bool video) {
+    return PageRouteBuilder(
+      pageBuilder: (_, __, ___) => CallScreen(
+        callId: callId,
+        otherPartyName: listenerName,
+        startWithVideo: video,
+      ),
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      opaque: true,
+      barrierColor: Colors.black,
+    );
+  }
+
+  void _openChat(Map<String, dynamic> listener) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatHistoryScreen(
+          listenerId: listener['id'],
+          listenerName: listener['name'],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: _AppColors.bg,
+      endDrawer: _buildProfileDrawer(),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                  children: [
+                    _buildSearchBar(),
+                    const SizedBox(height: 32),
+                    _buildDummyOffersSection(),
+                    const SizedBox(height: 32),
+                    _buildFeaturedProfilesSection(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Header — "LAILA NOW" brand (dummy menu icon, no action yet)
+  // -------------------------------------------------------------------------
+  Widget _buildProfileDrawer() {
+    return Drawer(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2A0A14), Color(0xFF0B0B0B)],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: 96,
+                height: 96,
+                alignment: Alignment.center,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _AppColors.brandRed, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _AppColors.brandRed.withOpacity(0.5),
+                      blurRadius: 16,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: const CircleAvatar(
+                  radius: 44,
+                  backgroundColor: Color(0xFF2A2A2A),
+                  child: Icon(Icons.person, color: Colors.white54, size: 44),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _profileName.isEmpty ? 'User' : _profileName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0x1AFFFFFF),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.monetization_on,
+                        color: Colors.amber,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$_profileCoins Coins',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              ListTile(
+                leading: const Icon(
+                  Icons.person_outline,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Profile',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const UserProfileScreen(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.settings_outlined,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Settings',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () => Navigator.of(context).pop(),
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.white70),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await ls.LocalStorage().clear();
+                  if (!mounted) return;
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const UserLoginScreen()),
+                  );
+                },
+              ),
+              const Spacer(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: const BoxDecoration(
+        color: _AppColors.headerBg,
+        border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Image.asset(
+            'assets/images/banner.png',
+            height: 32,
+            fit: BoxFit.contain,
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Search bar — dummy, non-functional (no search endpoint yet)
+  // -------------------------------------------------------------------------
+  Widget _buildSearchBar() {
+    return Container(
+      height: 55,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: _AppColors.inputBg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.search, color: _AppColors.textMuted, size: 18),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Search for experts or services...',
+              style: TextStyle(color: _AppColors.textMuted, fontSize: 16),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Special Offers carousel — dummy placeholder cards (no backend data yet)
+  // -------------------------------------------------------------------------
+  Widget _buildDummyOffersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const [
+            Text(
+              'Special Offers',
+              style: TextStyle(
+                fontSize: 16,
+                color: _AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Text(
+              'See all',
+              style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 160,
+          child: PageView(
+            controller: _offersController,
+            onPageChanged: (index) => _offersCurrentPage = index,
+            children: [
+              _dummyOfferCard(
+                badge: 'LIMITED TIME',
+                title: '50% Off First Call',
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)],
+                ),
+              ),
+              _dummyOfferCard(
+                badge: 'NEW',
+                title: 'Free 5-min Trial',
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_AppColors.brandRed, Color(0xFF681A19)],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dummyOfferCard({
+    required String badge,
+    required String title,
+    required Gradient gradient,
+  }) {
+    return Container(
+      height: 160,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.fromLTRB(20, 17, 20, 20),
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2.5,
+                ),
+                decoration: BoxDecoration(
+                  color: _AppColors.brandRed,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  badge,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: _AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'Claim Offer',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF05141E),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Featured Profiles — REAL listener data: online status + call + chat
+  // -------------------------------------------------------------------------
+  Widget _buildFeaturedProfilesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Call me',
+              style: TextStyle(
+                fontSize: 16,
+                color: _AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.refresh,
+                color: _AppColors.textMuted,
+                size: 20,
+              ),
+              onPressed: _load,
+              tooltip: 'Refresh',
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_error != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 48),
+            child: Center(
+              child: Text(
+                _error!,
+                style: const TextStyle(color: _AppColors.textMuted),
+              ),
+            ),
+          )
+        else if (_listeners.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(
+              child: Text(
+                'No listeners available',
+                style: TextStyle(color: _AppColors.textMuted),
+              ),
+            ),
+          )
+        else
+          Column(
+            children: _listeners
+                .map(
+                  (listener) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildProfileCard(listener),
+                  ),
+                )
+                .toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildProfileCard(Map<String, dynamic> listener) {
+    final bool isOnline = listener['is_online'] == true;
+    final bool isCalling = _callingListenerId == listener['id'];
+    final bool canAct = isOnline && _callingListenerId == null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Avatar with real online status dot
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const CircleAvatar(
+                radius: 28,
+                backgroundColor: Color(0xFF2A2A2A),
+                child: Icon(Icons.person, color: Colors.white54, size: 28),
+              ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: isOnline ? _AppColors.online : Colors.grey.shade600,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF050E17),
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  listener['name'] ?? 'Listener',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      isOnline ? 'Online now' : 'Offline',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isOnline
+                            ? _AppColors.online
+                            : _AppColors.textMuted,
+                      ),
+                    ),
+                    if (listener['avg_rating'] != null) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.star, color: Colors.amber, size: 14),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${listener['avg_rating']}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Chat — real, opens ChatHistoryScreen
+          IconButton(
+            icon: const Icon(
+              Icons.chat_bubble_outline,
+              color: _AppColors.textMuted,
+              size: 22,
+            ),
+            onPressed: () => _openChat(listener),
+            tooltip: 'Chat',
+          ),
+          // Video call — real, matches Figma's circular red CTA
+          isCalling
+              ? const SizedBox(width: 44, height: 44)
+              : InkWell(
+                  onTap: canAct
+                      ? () => _callListener(listener['id'], video: true)
+                      : null,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: canAct
+                          ? _AppColors.brandRed.withOpacity(0.85)
+                          : _AppColors.brandRed.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.videocam,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+          const SizedBox(width: 8),
+          // Call — real, matches Figma's circular red CTA
+          isCalling
+              ? const SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _AppColors.brandRed,
+                    ),
+                  ),
+                )
+              : InkWell(
+                  onTap: canAct ? () => _callListener(listener['id']) : null,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: canAct
+                          ? _AppColors.brandRed
+                          : _AppColors.brandRed.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.call,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+}

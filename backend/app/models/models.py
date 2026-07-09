@@ -1,0 +1,135 @@
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.sql import func
+from app.core.database import Base
+from sqlalchemy import Index
+
+#models.py
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    fcm_token = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    is_online = Column(Boolean, default=False)
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+    coins = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Listener(Base):
+    __tablename__ = "listeners"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    fcm_token = Column(String, nullable=True)
+    is_online = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Call(Base):
+    __tablename__ = "calls"
+
+    id = Column(Integer, primary_key=True, index=True)
+    room_name = Column(String, nullable=False)
+    caller_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    callee_listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False)
+    status = Column(String, default="ringing", index=True)
+    call_type = Column(String, default="audio")
+    connected_at = Column(DateTime(timezone=True), nullable=True)
+    coins_deducted = Column(Integer, default=0)
+    duration_seconds = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index(
+            'ix_one_active_call_per_listener',
+            'callee_listener_id',
+            unique=True,
+            postgresql_where=Column('status').in_(['ringing', 'accepted']),
+        ),
+    )
+
+class CallRecording(Base):
+    __tablename__ = "call_recordings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False)
+    egress_id = Column(String, nullable=True)
+    room_name = Column(String, nullable=False)
+    file_path = Column(String, nullable=True)
+    status = Column(String, default="recording")
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(String, nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False, index=True)
+    sender_type = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    message_type = Column(String, default="text")
+    audio_url = Column(String, nullable=True)
+    audio_duration = Column(Integer, nullable=True)
+    status = Column(String, default="sent")
+    is_read = Column(Boolean, default=False)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    edited_at = Column(DateTime(timezone=True), nullable=True)
+    is_deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ChatSettings(Base):
+    __tablename__ = "chat_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_type = Column(String, nullable=False)
+    owner_id = Column(Integer, nullable=False)
+    other_id = Column(Integer, nullable=False)
+    is_pinned = Column(Boolean, default=False)
+    is_archived = Column(Boolean, default=False)
+    is_muted = Column(Boolean, default=False)
+
+class CoinSettings(Base):
+    __tablename__ = "coin_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audio_coins_per_minute = Column(Integer, default=10)
+    video_coins_per_minute = Column(Integer, default=10)
+
+class CoinTransaction(Base):
+    __tablename__ = "coin_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    amount = Column(Integer, nullable=False)
+    reason = Column(String, nullable=False)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class CallRating(Base):
+    __tablename__ = "call_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False)
+    review = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -1,0 +1,47 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "User App",
+            "type": "dart",
+            "request": "launch",
+            "program": "livekitapp/lib/main_user.dart",
+            "deviceId": "1A081FDEE005FT",
+            "args": [
+                "--flavor",
+                "user"
+            ]
+        },
+        // {
+        //     "name": "User App",
+        //     "type": "dart",
+        //     "request": "launch",
+        //     "program": "livekitapp/lib/main_user.dart",
+        //     "deviceId": "192.168.137.211:45455",
+        //     "args": [
+        //         "--flavor",
+        //         "user"
+        //     ]
+        // },
+        {
+            "name": "Listener App",
+            "type": "dart",
+            "request": "launch",
+            "program": "livekitapp/lib/main_listener.dart",
+            "deviceId": "ZY322M9MNH",
+            "args": [
+                "--flavor",
+                "listener"
+            ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Run Both Phones",
+            "configurations": [
+                "User App",
+                "Listener App"
+            ]
+        }
+    ]
+}

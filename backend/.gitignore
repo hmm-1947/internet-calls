@@ -1,6 +1,7 @@
-.venv
-venv/
-__pycache__
-serviceAccountKey.json
-voice_messages/
+firebase.json
 recordings/
+voice_notes/
+_pycache_/
+.stfolder/
+.env
+app/venv/
