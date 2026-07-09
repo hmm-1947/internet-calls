@@ -1,7 +1,10 @@
-class ApiConstants {
-  static const String baseUrl = 'http://187.127.182.10:8005';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-  static const String userRegister = '/user/register';
+class ApiConstants {
+  static final String baseUrl = dotenv.env['API_BASE_URL']!;
+
+  static const String userRegisterInitiate = '/user/register/initiate';
+  static const String userRegisterVerifyOtp = '/user/register/verify-otp';
   static const String userLogin = '/user/login';
   static const String userListeners = '/user/listeners';
   static const String listenerLogin = '/listener/login';

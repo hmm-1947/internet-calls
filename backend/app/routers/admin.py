@@ -1,19 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
-from app.models.models import CallRecording
 from app.core.database import get_db
 from app.core.config import settings
-from app.models.models import Listener
-from app.models.models import CallRecording, ChatMessage
+from app.models.models import (
+    Listener, User, Call, CallRecording, ChatMessage,
+    CoinTransaction, CallRating, Session as SessionModel,
+)
 from app.schemas.schemas import ListenerCreate
-from app.models.models import Call, User
 from app.utils.security import hash_password
+from app.core.ws_manager import manager
 #admin
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 def verify_admin(x_admin_secret: str = Header(...)):
     if x_admin_secret != settings.admin_secret:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+@router.websocket("/ws")
+async def admin_ws(websocket: WebSocket, secret: str = Query(...)):
+    if secret != settings.admin_secret:
+        await websocket.close(code=4003)
+        return
+    await manager.connect_admin(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect_admin(websocket)
+    except Exception:
+        manager.disconnect_admin(websocket)
 
 @router.post("/listeners")
 def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=Depends(verify_admin)):
@@ -33,16 +48,56 @@ def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=De
 @router.get("/listeners")
 def list_listeners(db: Session = Depends(get_db), _=Depends(verify_admin)):
     listeners = db.query(Listener).all()
-    return [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": l.is_online} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id)} for l in listeners]
+    result.sort(key=lambda x: not x["is_online"])
+    return result
 
 @router.delete("/listeners/{listener_id}")
 def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(verify_admin)):
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
+
+    call_ids = [c.id for c in db.query(Call.id).filter(Call.callee_listener_id == listener_id).all()]
+
+    db.query(CallRating).filter(CallRating.listener_id == listener_id).delete(synchronize_session=False)
+    db.query(ChatMessage).filter(ChatMessage.listener_id == listener_id).delete(synchronize_session=False)
+    db.query(SessionModel).filter(SessionModel.listener_id == listener_id).delete(synchronize_session=False)
+    if call_ids:
+        db.query(CallRecording).filter(CallRecording.call_id.in_(call_ids)).delete(synchronize_session=False)
+        db.query(CoinTransaction).filter(CoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+    db.query(Call).filter(Call.callee_listener_id == listener_id).delete(synchronize_session=False)
+
     db.delete(listener)
     db.commit()
     return {"detail": "Listener deleted"}
+
+@router.get("/users")
+def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    users = db.query(User).all()
+    result = [{"id": u.id, "name": u.name, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id)} for u in users]
+    result.sort(key=lambda x: not x["is_online"])
+    return result
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    call_ids = [c.id for c in db.query(Call.id).filter(Call.caller_user_id == user_id).all()]
+
+    db.query(CallRating).filter(CallRating.user_id == user_id).delete(synchronize_session=False)
+    db.query(ChatMessage).filter(ChatMessage.user_id == user_id).delete(synchronize_session=False)
+    db.query(SessionModel).filter(SessionModel.user_id == user_id).delete(synchronize_session=False)
+    db.query(CoinTransaction).filter(CoinTransaction.user_id == user_id).delete(synchronize_session=False)
+    if call_ids:
+        db.query(CallRecording).filter(CallRecording.call_id.in_(call_ids)).delete(synchronize_session=False)
+    db.query(Call).filter(Call.caller_user_id == user_id).delete(synchronize_session=False)
+
+    db.delete(user)
+    db.commit()
+    return {"detail": "User deleted"}
 
 @router.get("/recordings")
 def list_recordings(db: Session = Depends(get_db), _=Depends(verify_admin)):

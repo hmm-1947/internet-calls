@@ -189,7 +189,7 @@ async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_cu
         call.duration_seconds = int(duration)
         user = db.query(User).filter(User.id == call.caller_user_id).first()
         if user:
-            deducted = deduct_coins(db, user, call.id, int(duration), call.call_type)
+            deducted = await deduct_coins(db, user, call.id, int(duration), call.call_type)
             call.coins_deducted = deducted
     db.commit()
     recording = db.query(CallRecording).filter(CallRecording.call_id == call_id, CallRecording.status == "recording").first()
@@ -246,7 +246,7 @@ async def coin_exceeded(call_id: int, db: Session = Depends(get_db), current_use
             connected_at = connected_at.replace(tzinfo=timezone.utc)
         duration = (datetime.now(timezone.utc) - connected_at).total_seconds()
         call.duration_seconds = int(duration)
-        deducted = deduct_coins(db, current_user, call.id, int(duration), call.call_type)
+        deducted = await deduct_coins(db, current_user, call.id, int(duration), call.call_type)
         call.coins_deducted = deducted
     db.commit()
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
@@ -282,7 +282,7 @@ async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
     call.duration_seconds = duration
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     if user:
-        call.coins_deducted = deduct_coins(db, user, call.id, duration, call.call_type)
+        call.coins_deducted = await deduct_coins(db, user, call.id, duration, call.call_type)
     db.commit()
     return {"ok": True}
 
@@ -330,7 +330,7 @@ def call_summary(call_id: int, db: Session = Depends(get_db), current_user: User
     )
 
 @router.post("/{call_id}/rate")
-def rate_call(call_id: int, payload: CallRatingSubmit, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def rate_call(call_id: int, payload: CallRatingSubmit, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if payload.rating < 1 or payload.rating > 5:
         raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
@@ -347,6 +347,16 @@ def rate_call(call_id: int, payload: CallRatingSubmit, db: Session = Depends(get
         )
         db.add(existing)
     db.commit()
+
+    from sqlalchemy import func as sqlfunc
+    avg_rating = db.query(sqlfunc.avg(CallRating.rating)).filter(CallRating.listener_id == call.callee_listener_id).scalar()
+    rating_count = db.query(sqlfunc.count(CallRating.id)).filter(CallRating.listener_id == call.callee_listener_id).scalar()
+    await manager.broadcast_to_all_users({
+        "type": "listener_rating_updated",
+        "listener_id": call.callee_listener_id,
+        "avg_rating": round(avg_rating, 1) if avg_rating else None,
+        "rating_count": rating_count or 0,
+    })
     return {"status": "ok"}
 
 @router.get("/listener/reviews", response_model=list[ListenerReviewOut])

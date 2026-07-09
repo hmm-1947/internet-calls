@@ -21,7 +21,7 @@ def max_call_seconds(db: Session, user: User, call_type: str) -> int:
     minutes_available = user.coins // per_minute
     return minutes_available * 60
 
-def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: int, call_type: str) -> int:
+async def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: int, call_type: str) -> int:
     per_minute = coins_per_minute(db, call_type)
     minutes_used = max(1, duration_seconds // 60)
     amount = minutes_used * per_minute
@@ -29,4 +29,6 @@ def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: int, c
     user.coins -= amount
     db.add(CoinTransaction(user_id=user.id, amount=-amount, reason=f"{call_type}_call", call_id=call_id))
     db.commit()
+    from app.core.ws_manager import manager
+    await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
     return amount

@@ -536,9 +536,9 @@
       </div>
     </div>
   </div>
-
+<script src="config.js"></script>
   <script>
-    const API_URL = 'http://187.127.182.10:8005';
+      const API_URL = CONFIG.API_URL;
 
     const secretInput = document.getElementById('adminSecret');
     secretInput.value = localStorage.getItem('adminSecret') || '';
@@ -638,7 +638,7 @@
       const source = peopleTab === 'user' ? usersCache : listenersCache;
       const filtered = (source || []).filter(p =>
         (p.name || '').toLowerCase().includes(q) || (p.phone || '').includes(q)
-      );
+      ).sort((a, b) => (b.is_online === true) - (a.is_online === true));
       if (filtered.length === 0) {
         list.innerHTML = '<div class="empty-state">No results.</div>';
         return;
@@ -648,7 +648,7 @@
         const div = document.createElement('div');
         div.className = 'person-item' + (selectedPerson && selectedPerson.type === peopleTab && selectedPerson.id === p.id ? ' selected' : '');
         const extra = peopleTab === 'user'
-          ? `${p.coins} coins`
+          ? `${p.coins} coins · <span class="badge ${p.is_online ? 'badge-yes' : 'badge-no'}">${p.is_online ? 'Online' : 'Offline'}</span>`
           : `<span class="badge ${p.is_online ? 'badge-yes' : 'badge-no'}">${p.is_online ? 'Online' : 'Offline'}</span>`;
         div.innerHTML = `<span class="person-name">${p.name}</span><span class="person-sub">${p.phone} · ${extra}</span>`;
         div.onclick = () => selectPerson(peopleTab, p);
@@ -683,10 +683,14 @@
             </select>
           </div>
           ${p.type === 'user' ? `
-          <div style="display:flex;gap:6px">
+          <div style="display:flex;gap:6px;align-items:center">
             <input type="number" id="amount-${p.id}" placeholder="±amount" style="width:90px">
             <button class="btn btn-leaf" onclick="adjustCoins(${p.id})">Apply</button>
-          </div>` : ''}
+            <button class="btn btn-danger" onclick="deletePerson('user', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete User</button>
+          </div>` : `
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
+          </div>`}
         </div>
         <div class="pair-arrow-row" id="pairArrowRow" style="display:none">
           <span class="pair-name pair-left"></span>
@@ -901,6 +905,20 @@ ${logSection === 'chats' ? '' : `
       logPage += delta;
       renderLogTable();
     }
+    async function deletePerson(type, id, name) {
+      if (!confirm(`Delete ${type} "${name}"? This will permanently remove all their calls, chats, recordings, ratings, and sessions. This cannot be undone.`)) return;
+      try {
+        const endpoint = type === 'user' ? `/admin/users/${id}` : `/admin/listeners/${id}`;
+        const res = await fetch(API_URL + endpoint, { method: 'DELETE', headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg(`✓ ${type === 'user' ? 'User' : 'Listener'} deleted`, true);
+        selectedPerson = null;
+        document.getElementById('personContent').innerHTML = '<div class="empty-state">Select a user or listener from the list to view their call logs and recordings.</div>';
+        loadPeople();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
     async function adjustCoins(userId) {
       const amount = parseInt(document.getElementById('amount-' + userId).value);
       if (!amount) { setMsg('Enter a valid amount.', false); return; }
@@ -915,7 +933,32 @@ ${logSection === 'chats' ? '' : `
         loadPeople();
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
-    window.addEventListener('DOMContentLoaded', () => { loadPeople(); loadCoinSettings(); });
+    window.addEventListener('DOMContentLoaded', () => { loadPeople(); loadCoinSettings(); connectAdminWs(); });
+
+    let adminWs = null;
+    let adminWsReconnectTimer = null;
+
+    function connectAdminWs() {
+      const wsUrl = API_URL.replace('http', 'ws') + '/admin/ws?secret=' + encodeURIComponent(getSecret());
+      adminWs = new WebSocket(wsUrl);
+      adminWs.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          if (data.type === 'user_status') {
+            const u = usersCache.find(x => x.id === data.id);
+            if (u) { u.is_online = data.is_online; renderPeopleList(); }
+          } else if (data.type === 'listener_status') {
+            const l = listenersCache.find(x => x.id === data.id);
+            if (l) { l.is_online = data.is_online; renderPeopleList(); }
+          }
+        } catch (e) {}
+      };
+      adminWs.onclose = () => {
+        clearTimeout(adminWsReconnectTimer);
+        adminWsReconnectTimer = setTimeout(connectAdminWs, 3000);
+      };
+      adminWs.onerror = () => { adminWs.close(); };
+    }
   </script>
 </body>
 

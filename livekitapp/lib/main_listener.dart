@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
@@ -17,6 +18,8 @@ import 'package:livekitapp/shared/widgets/splash_screen.dart';
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();
   }
@@ -27,6 +30,7 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await dotenv.load(fileName: ".env");
   final isolateName = Isolate.current.debugName;
   print('[Callkit] main() started in isolate: $isolateName');
   if (isolateName != 'main') {
@@ -140,6 +144,7 @@ class _ListenerAppState extends State<ListenerApp> {
         theme: ThemeData(
           colorSchemeSeed: Colors.deepPurple,
           useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFF0B0F1A),
         ),
         home: FutureBuilder<String?>(
           future: LocalStorage().getToken(),

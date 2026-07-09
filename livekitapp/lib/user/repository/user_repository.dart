@@ -7,19 +7,32 @@ import 'package:livekitapp/common/models/auth_response.dart';
 class UserRepository {
   final ApiClient _apiClient = ApiClient();
 
-  Future<AuthResponse> register(
+  Future<void> registerInitiate(
     String name,
+    String email,
     String phone,
     String password,
   ) async {
-    final response = await _apiClient.post(ApiConstants.userRegister, {
+    final response = await _apiClient.post(ApiConstants.userRegisterInitiate, {
       'name': name,
+      'email': email,
       'phone': phone,
       'password': password,
     });
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Registration failed');
+    }
+  }
+
+  Future<AuthResponse> registerVerifyOtp(String email, String otpCode) async {
+    final response = await _apiClient.post(ApiConstants.userRegisterVerifyOtp, {
+      'email': email,
+      'otp_code': otpCode,
+    });
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'OTP verification failed');
     }
     return AuthResponse.fromJson(data);
   }

@@ -43,13 +43,11 @@ async def update_status(payload: ListenerStatusUpdate, db: Session = Depends(get
     if not payload.is_online:
         current_listener.last_seen = datetime.now(timezone.utc)
     db.commit()
-    user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == current_listener.id).distinct().all()]
     event_type = "listener_online" if payload.is_online else "listener_offline"
     payload_out = {"type": event_type, "listener_id": current_listener.id}
     if not payload.is_online:
         payload_out["last_seen"] = current_listener.last_seen.isoformat()
-    for uid in user_ids:
-        await manager.send_to_user(uid, payload_out)
+    await manager.broadcast_to_all_users(payload_out)
     return {"status": "updated", "is_online": current_listener.is_online}
 
 
@@ -61,13 +59,11 @@ async def logout(authorization: str = Header(...), db: Session = Depends(get_db)
     current_listener.last_seen = datetime.now(timezone.utc)
     db.commit()
     manager.disconnect_listener(current_listener.id)
-    user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == current_listener.id).distinct().all()]
-    for uid in user_ids:
-        await manager.send_to_user(uid, {
-            "type": "listener_offline",
-            "listener_id": current_listener.id,
-            "last_seen": current_listener.last_seen.isoformat(),
-        })
+    await manager.broadcast_to_all_users({
+        "type": "listener_offline",
+        "listener_id": current_listener.id,
+        "last_seen": current_listener.last_seen.isoformat(),
+    })
     return {"status": "logged_out"}
 
 @router.post("/fcm-token")

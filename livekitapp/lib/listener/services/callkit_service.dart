@@ -9,6 +9,7 @@ import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_call_screen.dart';
 import 'package:livekitapp/listener/screens/listener_home_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class PendingCallNav {
   final String url;
@@ -51,6 +52,12 @@ class CallkitService {
       print('[Callkit] event received: $event');
       if (event is CallEventActionCallEnded) {
         _lastShownCallId = null;
+        if (_acceptingCallId != null || _pendingCallNav != null) {
+          print(
+            '[Callkit] CallEventActionCallEnded ignored — call already accepted/in progress',
+          );
+          return;
+        }
         final state = navigatorKey.currentState;
         if (state != null && state.mounted) {
           state.pushAndRemoveUntil(
@@ -310,6 +317,10 @@ class CallkitService {
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
+    final micStatus = await Permission.microphone.status;
+    if (!micStatus.isGranted) {
+      await Permission.microphone.request();
+    }
     final params = CallKitParams(
       id: _callIdToUuid(callId.toString()),
       nameCaller: callerName,
@@ -333,6 +344,12 @@ class CallkitService {
     );
     try {
       await FlutterCallkitIncoming.showCallkitIncoming(params);
+    } catch (e) {}
+  }
+
+  Future<void> setCallConnected(String callId) async {
+    try {
+      await FlutterCallkitIncoming.setCallConnected(_callIdToUuid(callId));
     } catch (e) {}
   }
 
@@ -360,10 +377,14 @@ class CallkitService {
   }
 
   Future<void> endCall(String callId) async {
+    _acceptingCallId = null;
+    _pendingCallNav = null;
     await FlutterCallkitIncoming.endCall(_callIdToUuid(callId));
   }
 
   Future<void> endAllCalls() async {
+    _acceptingCallId = null;
+    _pendingCallNav = null;
     await FlutterCallkitIncoming.endAllCalls();
   }
 }

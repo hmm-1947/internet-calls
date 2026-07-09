@@ -5,3 +5,4 @@ _pycache_/
 .stfolder/
 .env
 app/venv/
+admin_panel/config.js

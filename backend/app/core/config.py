@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     livekit_url: str
     firebase_credentials_path: str
     admin_secret: str
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: str
+    smtp_from_email: str
 
     class Config:
         env_file = ".env"

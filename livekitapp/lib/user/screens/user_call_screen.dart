@@ -3,10 +3,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
+import 'package:livekitapp/user/services/callkit_service.dart';
 import 'package:livekitapp/user/screens/call_summary_screen.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:volume_controller/volume_controller.dart';
@@ -65,6 +66,15 @@ class _CallScreenState extends State<CallScreen> {
     }
     _listenForSignals();
     _startRingingTimeout();
+    _requestMicAndStartCall();
+  }
+
+  Future<void> _requestMicAndStartCall() async {
+    await Permission.microphone.request();
+    UserCallkitService.instance.startOutgoingCall(
+      widget.callId.toString(),
+      widget.otherPartyName,
+    );
   }
 
   Future<void> _runBusyFlow() async {
@@ -254,6 +264,9 @@ class _CallScreenState extends State<CallScreen> {
         await room.setSpeakerOn(_speakerOn);
         VolumeController.instance.showSystemUI = false;
         VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
+        await UserCallkitService.instance.setCallConnected(
+          widget.callId.toString(),
+        );
         setState(() {
           _room = room;
           _roomListener = roomListener;
@@ -333,6 +346,7 @@ class _CallScreenState extends State<CallScreen> {
     _roomListener = null;
     _room?.disconnect();
     _durationTimer?.cancel();
+    await UserCallkitService.instance.endCall(widget.callId.toString());
     if (mounted) {
       Navigator.of(context).pushReplacement(_summaryRoute());
       ScaffoldMessenger.of(context).showSnackBar(
@@ -350,6 +364,7 @@ class _CallScreenState extends State<CallScreen> {
     _roomListener = null;
     _room?.disconnect();
     _durationTimer?.cancel();
+    UserCallkitService.instance.endCall(widget.callId.toString());
     if (rejected) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -382,6 +397,7 @@ class _CallScreenState extends State<CallScreen> {
     _roomListener = null;
     _room?.disconnect();
     _durationTimer?.cancel();
+    await UserCallkitService.instance.endCall(widget.callId.toString());
     if (!mounted) return;
     if (wasConnected) {
       Navigator.of(context).pushReplacement(_summaryRoute());
@@ -409,6 +425,7 @@ class _CallScreenState extends State<CallScreen> {
     _room?.disconnect();
     _durationTimer?.cancel();
     _busyPlayer?.dispose();
+    UserCallkitService.instance.endCall(widget.callId.toString());
     super.dispose();
   }
 

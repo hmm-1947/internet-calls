@@ -435,12 +435,17 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                     ),
                                     onTap: () async {
                                       await Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => ChatHistoryScreen(
+                                        PageRouteBuilder(
+                                          pageBuilder: (_, __, ___) => ChatHistoryScreen(
                                             listenerId: thread['listener_id'],
                                             listenerName:
                                                 thread['listener_name'],
                                           ),
+                                          transitionsBuilder: (_, animation, __, child) {
+                                            return FadeTransition(opacity: animation, child: child);
+                                          },
+                                          opaque: true,
+                                          barrierColor: bg,
                                         ),
                                       );
                                       _load();

@@ -5,29 +5,72 @@ from app.core.ws_manager import manager
 from app.schemas.schemas import ListenerStatusUpdate
 from app.models.models import CallRating
 from sqlalchemy import func as sqlfunc
-from app.schemas.schemas import UserRegister, UserLogin, AuthResponse, FcmTokenUpdate
+from datetime import datetime, timedelta, timezone
+from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate
 from app.core.database import get_db
-from app.models.models import User, Session as SessionModel
-from app.schemas.schemas import UserRegister, UserLogin, AuthResponse
+from app.models.models import User, Session as SessionModel, EmailOtp
+from app.utils.email_otp import generate_otp_code, send_otp_email
 from app.utils.security import hash_password, verify_password, generate_session_token
 from app.models.models import Listener
 from app.core.deps import get_current_user
 
 router = APIRouter(prefix="/user", tags=["user-auth"])
 
-@router.post("/register", response_model=AuthResponse)
-def register(payload: UserRegister, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.phone == payload.phone).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Phone already registered")
-    user = User(
+@router.post("/register/initiate")
+def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(
+        (User.phone == payload.phone) | (User.email == payload.email)
+    ).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Phone or email already registered")
+
+    otp_code = generate_otp_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+    db.query(EmailOtp).filter(EmailOtp.email == payload.email).delete()
+    db.add(EmailOtp(
+        email=payload.email,
+        otp_code=otp_code,
         name=payload.name,
         phone=payload.phone,
         password_hash=hash_password(payload.password),
+        expires_at=expires_at,
+    ))
+    db.commit()
+
+    send_otp_email(payload.email, otp_code)
+    return {"status": "otp_sent"}
+
+
+@router.post("/register/verify-otp", response_model=AuthResponse)
+def register_verify_otp(payload: UserRegisterVerifyOtp, db: Session = Depends(get_db)):
+    record = db.query(EmailOtp).filter(EmailOtp.email == payload.email).order_by(EmailOtp.id.desc()).first()
+    if not record:
+        raise HTTPException(status_code=400, detail="No OTP request found")
+    if record.otp_code != payload.otp_code:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if record.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    existing_user = db.query(User).filter(
+        (User.phone == record.phone) | (User.email == record.email)
+    ).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Phone or email already registered")
+
+    user = User(
+        name=record.name,
+        email=record.email,
+        phone=record.phone,
+        password_hash=record.password_hash,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    db.query(EmailOtp).filter(EmailOtp.email == payload.email).delete()
+    db.commit()
+
     token = generate_session_token()
     db.add(SessionModel(token=token, user_id=user.id))
     db.commit()
@@ -75,8 +118,6 @@ def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), cur
 
 @router.post("/status")
 async def update_status(payload: ListenerStatusUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    listener_ids = [r[0] for r in db.query(ChatMessage.listener_id).filter(ChatMessage.user_id == current_user.id).distinct().all()]
     event_type = "user_online" if payload.is_online else "user_offline"
-    for lid in listener_ids:
-        await manager.send_to_listener(lid, {"type": event_type, "user_id": current_user.id})
+    await manager.broadcast_to_all_listeners({"type": event_type, "user_id": current_user.id})
     return {"status": "updated"}

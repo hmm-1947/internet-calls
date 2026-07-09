@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/listener/screens/listener_call_history_screen.dart';
 import 'package:livekitapp/listener/screens/listener_home_screen.dart';
 import 'package:livekitapp/listener/screens/listener_chats_list_screen.dart';
-import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
+import 'package:livekitapp/listener/screens/listener_settings_screen.dart';
 import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/shared/widgets/crown_nav_bar.dart';
 
@@ -15,13 +15,13 @@ class ListenerMainScreen extends StatefulWidget {
 
 class _ListenerMainScreenState extends State<ListenerMainScreen> {
   int _index = 0;
-  final _profileKey = GlobalKey<ListenerProfileScreenState>();
+  final _settingsKey = GlobalKey<ListenerSettingsScreenState>();
 
   late final List<Widget> _screens = [
     const ListenerHomeScreen(),
     const ListenerChatsListScreen(),
     const ListenerCallHistoryScreen(),
-    ListenerProfileScreen(key: _profileKey),
+    ListenerSettingsScreen(key: _settingsKey),
   ];
   void _onDestinationSelected(int i) {
     setState(() => _index = i);
@@ -29,7 +29,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
       chatMessageNotifier.value = 0;
     }
     if (i == 3) {
-      _profileKey.currentState?.refresh();
+      _settingsKey.currentState?.refresh();
     }
   }
 
@@ -41,7 +41,8 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
         selectedIndex: _index,
         onDestinationSelected: _onDestinationSelected,
         onCrownTap: () {},
-        labels: const ['Home', 'Chat', 'Calls', 'Profile'],
+        showCrown: false,
+        labels: const ['Home', 'Chat', 'Calls', 'Settings'],
         icons: [
           const Icon(Icons.grid_view_rounded),
           ValueListenableBuilder<int>(
@@ -67,7 +68,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
             ),
           ),
           const Icon(Icons.call_outlined),
-          const Icon(Icons.person_outline),
+          const Icon(Icons.settings_outlined),
         ],
       ),
     );

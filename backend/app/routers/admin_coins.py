@@ -4,6 +4,7 @@ from app.core.database import get_db
 from app.models.models import User, CoinSettings
 from app.routers.admin import verify_admin
 from app.utils.coins import get_coin_settings
+from app.core.ws_manager import manager
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/admin/coins", tags=["admin_coins"])
@@ -19,7 +20,9 @@ class CoinSettingsUpdate(BaseModel):
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
     users = db.query(User).all()
-    return [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins} for u in users]
+    result = [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins, "is_online": manager.is_user_online(u.id)} for u in users]
+    result.sort(key=lambda x: not x["is_online"])
+    return result
 
 @router.post("/adjust")
 def adjust_coins(payload: CoinAdjust, db: Session = Depends(get_db), _=Depends(verify_admin)):

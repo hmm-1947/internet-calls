@@ -6,6 +6,7 @@ class CrownNavBar extends StatelessWidget {
   final List<Widget> icons;
   final List<String> labels;
   final VoidCallback onCrownTap;
+  final bool showCrown;
 
   const CrownNavBar({
     super.key,
@@ -14,6 +15,7 @@ class CrownNavBar extends StatelessWidget {
     required this.icons,
     required this.labels,
     required this.onCrownTap,
+    this.showCrown = true,
   });
 
   @override
@@ -64,36 +66,37 @@ class CrownNavBar extends StatelessWidget {
               ],
             ),
           ),
-          Positioned(
-            top: -22,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap: onCrownTap,
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFFFC1B4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: activeColor.withOpacity(0.5),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.emoji_events,
-                    color: Color(0xFF2A0A0A),
-                    size: 28,
+          if (showCrown)
+            Positioned(
+              top: -22,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: onCrownTap,
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFFFC1B4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: activeColor.withOpacity(0.5),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.emoji_events,
+                      color: Color(0xFF2A0A0A),
+                      size: 28,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
@@ -17,6 +18,9 @@ final userChatDotNotifier = ValueNotifier<bool>(false);
 /// Background handler — must be top-level with this annotation.
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();
   }
@@ -28,6 +32,8 @@ void _handleChatMessage(RemoteMessage message) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
   FlavorConfig.set(AppFlavor.user);
   await Firebase.initializeApp();
 
@@ -93,7 +99,11 @@ class _UserAppState extends State<UserApp> {
       child: MaterialApp(
         title: 'Calling App',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(colorSchemeSeed: Colors.blue, useMaterial3: true),
+        theme: ThemeData(
+          colorSchemeSeed: Colors.blue,
+          useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFF0B0B0B),
+        ),
         home: FutureBuilder<String?>(
           future: LocalStorage().getToken(),
           builder: (context, snapshot) {

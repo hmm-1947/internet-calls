@@ -2,10 +2,15 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-class UserRegister(BaseModel):
+class UserRegisterInitiate(BaseModel):
     name: str
+    email: str
     phone: str
     password: str
+
+class UserRegisterVerifyOtp(BaseModel):
+    email: str
+    otp_code: str
 
 class UserLogin(BaseModel):
     phone: str

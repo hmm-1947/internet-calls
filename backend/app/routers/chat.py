@@ -342,26 +342,26 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
         return
     user_id = session.user_id
     await manager.connect_user(user_id, websocket)
+    await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": True})
     user = db.query(User).filter(User.id == user_id).first()
     if user and not user.is_online:
         user.is_online = True
         db.commit()
-    listener_ids = [r[0] for r in db.query(ChatMessage.listener_id).filter(ChatMessage.user_id == user_id).distinct().all()]
-    for lid in listener_ids:
-        await manager.send_to_listener(lid, {"type": "user_online", "user_id": user_id})
+    await manager.broadcast_to_all_listeners({"type": "user_online", "user_id": user_id})
     try:
         while True:
             raw = await websocket.receive_json()
             await _handle_user_ws_event(raw, user_id, db)
     except Exception:
-        manager.disconnect_user(user_id)
+        manager.disconnect_user(user_id, websocket)
+        if manager.is_user_online(user_id):
+            return
+        await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": False})
         user = db.query(User).filter(User.id == user_id).first()
         if user:
             user.is_online = False
             db.commit()
-        listener_ids = [r[0] for r in db.query(ChatMessage.listener_id).filter(ChatMessage.user_id == user_id).distinct().all()]
-        for lid in listener_ids:
-            await manager.send_to_listener(lid, {"type": "user_offline", "user_id": user_id})
+        await manager.broadcast_to_all_listeners({"type": "user_offline", "user_id": user_id})
 
 async def _handle_user_ws_event(raw: dict, user_id: int, db: Session):
     etype = raw.get("type")
@@ -379,6 +379,7 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
         return
     listener_id = session.listener_id
     await manager.connect_listener(listener_id, websocket)
+    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": True})
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     if listener and not listener.is_online:
         listener.is_online = True
@@ -391,7 +392,10 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
             raw = await websocket.receive_json()
             await _handle_listener_ws_event(raw, listener_id, db)
     except Exception:
-        manager.disconnect_listener(listener_id)
+        manager.disconnect_listener(listener_id, websocket)
+        if manager.is_listener_online(listener_id):
+            return
+        await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": False})
         listener = db.query(Listener).filter(Listener.id == listener_id).first()
         if listener:
             listener.is_online = False

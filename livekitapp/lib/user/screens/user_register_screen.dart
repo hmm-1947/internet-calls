@@ -1,9 +1,6 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
-import 'package:livekitapp/core/network/local_storage.dart';
-import 'package:livekitapp/user/screens/user_home_screen.dart';
-import 'package:livekitapp/user/screens/user_main_screen.dart';
+import 'package:livekitapp/user/screens/user_otp_verify_screen.dart';
 
 class UserRegisterScreen extends StatefulWidget {
   const UserRegisterScreen({super.key});
@@ -14,14 +11,16 @@ class UserRegisterScreen extends StatefulWidget {
 
 class _UserRegisterScreenState extends State<UserRegisterScreen> {
   final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _repository = UserRepository();
-  final _localStorage = LocalStorage();
   bool _loading = false;
+
   @override
   void dispose() {
     _nameController.dispose();
+    _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -30,19 +29,18 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
   Future<void> _register() async {
     setState(() => _loading = true);
     try {
-      final result = await _repository.register(
+      await _repository.registerInitiate(
         _nameController.text.trim(),
+        _emailController.text.trim(),
         _phoneController.text.trim(),
         _passwordController.text,
       );
-      await _localStorage.saveSession(result.token, result.id, result.name);
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      if (fcmToken != null) {
-        await _repository.updateFcmToken(result.token, fcmToken);
-      }
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const UserMainScreen()),
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              UserOtpVerifyScreen(email: _emailController.text.trim()),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -91,8 +89,19 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
               ),
               const SizedBox(height: 16),
               TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: 'Phone',
                   border: OutlineInputBorder(),
@@ -102,6 +111,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: true,
+                style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: 'Password',
                   border: OutlineInputBorder(),
@@ -122,7 +132,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                   onPressed: _loading ? null : _register,
                   child: _loading
                       ? const CircularProgressIndicator(color: Colors.black)
-                      : const Text('Register'),
+                      : const Text('Send OTP'),
                 ),
               ),
             ],

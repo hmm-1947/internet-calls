@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
@@ -16,6 +18,8 @@ class ListenerHomeScreen extends StatefulWidget {
 class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
+  final _socketService = ChatSocketService();
+  StreamSubscription<Map<String, dynamic>>? _socketSub;
   bool _isOnline = false;
   String? _token;
   List<Map<String, dynamic>> _users = [];
@@ -36,6 +40,24 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
       _updateStatus(true);
       _loadUsers();
       _loadProfile();
+      _socketService.connect(_token!, 'listener');
+      _socketSub = _socketService.stream.listen(_handleSocketEvent);
+    }
+  }
+
+  void _handleSocketEvent(Map<String, dynamic> data) {
+    final type = data['type'];
+    if (type == 'user_online' || type == 'user_offline') {
+      final userId = data['user_id'];
+      if (userId == null) return;
+      final index = _users.indexWhere((u) => u['id'] == userId);
+      if (index != -1) {
+        setState(() {
+          _users[index]['is_online'] = type == 'user_online';
+        });
+      } else if (type == 'user_online') {
+        _loadUsers();
+      }
     }
   }
 
@@ -91,6 +113,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
 
   @override
   void dispose() {
+    _socketSub?.cancel();
     super.dispose();
   }
 

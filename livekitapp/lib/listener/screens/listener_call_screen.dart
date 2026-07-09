@@ -191,6 +191,11 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
         await room.setSpeakerOn(_speakerOn);
         VolumeController.instance.showSystemUI = false;
         VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
+        if (widget.callId != null) {
+          await CallkitService.instance.setCallConnected(
+            widget.callId.toString(),
+          );
+        }
         setState(() {
           _room = room;
           _roomListener = roomListener;

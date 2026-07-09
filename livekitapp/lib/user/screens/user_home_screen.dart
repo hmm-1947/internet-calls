@@ -57,7 +57,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     super.initState();
     _load();
     _initSocket();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _load());
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _load(silent: true),
+    );
     _offersAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!_offersController.hasClients) return;
       _offersCurrentPage = (_offersCurrentPage + 1) % _offersCardCount;
@@ -87,6 +90,22 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           _listeners[idx]['is_online'] = type == 'listener_online';
         }
       });
+    } else if (type == 'listener_rating_updated') {
+      final listenerId = data['listener_id'];
+      if (listenerId == null) return;
+      setState(() {
+        final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+        if (idx != -1) {
+          _listeners[idx]['avg_rating'] = data['avg_rating'];
+          _listeners[idx]['rating_count'] = data['rating_count'];
+        }
+      });
+    } else if (type == 'coins_updated') {
+      final coins = data['coins'];
+      if (coins == null) return;
+      setState(() {
+        _profileCoins = coins;
+      });
     }
   }
 
@@ -99,11 +118,13 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final token = await _localStorage.getToken();
       final listeners = await _repository.getListeners(token!);
@@ -117,10 +138,12 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          if (!silent) _error = e.toString().replaceFirst('Exception: ', '');
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -169,11 +192,16 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   void _openChat(Map<String, dynamic> listener) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatHistoryScreen(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => ChatHistoryScreen(
           listenerId: listener['id'],
           listenerName: listener['name'],
         ),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        opaque: true,
+        barrierColor: _AppColors.bg,
       ),
     );
   }

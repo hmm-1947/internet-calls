@@ -9,6 +9,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
     phone = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     fcm_token = Column(String, nullable=True)
@@ -132,4 +133,17 @@ class CallRating(Base):
     listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False, index=True)
     rating = Column(Integer, nullable=False)
     review = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class EmailOtp(Base):
+    __tablename__ = "email_otps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, index=True)
+    otp_code = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    password_hash = Column(String, nullable=False)
+    is_verified = Column(Boolean, default=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
