@@ -43,14 +43,6 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     return '$m:$s';
   }
 
-  String _fmtTime(DateTime dt) {
-    final local = dt.toLocal();
-    final h = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final m = local.minute.toString().padLeft(2, '0');
-    final ampm = local.hour >= 12 ? 'PM' : 'AM';
-    return '$h:$m $ampm';
-  }
-
   Future<void> _toggle() async {
     if (!_loaded) {
       final url = widget.audioUrl.startsWith('http')

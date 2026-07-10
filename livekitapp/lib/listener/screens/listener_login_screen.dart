@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
-import 'package:livekitapp/listener/screens/listener_home_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 
 class ListenerLoginScreen extends StatefulWidget {

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:livekitapp/core/network/api_client.dart';
-import 'package:livekitapp/core/constants/api_constants.dart';
 
 class CoinRepository {
   final ApiClient _apiClient = ApiClient();

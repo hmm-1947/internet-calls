@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -146,26 +144,6 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton> {
     _stop(send: false);
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
-    if (!_recording || _locked) return;
-    setState(() {
-      _dragDx += details.delta.dx;
-      _dragDy += details.delta.dy;
-      if (_dragDx > 0) _dragDx = 0;
-      if (_dragDy > 0) _dragDy = 0;
-    });
-    _overlay?.markNeedsBuild();
-    if (_dragDx < _cancelThreshold) {
-      _cancelRecording();
-      return;
-    }
-    if (_dragDy < _lockThreshold) {
-      setState(() => _locked = true);
-      widget.onLockChanged?.call(true);
-      _overlay?.markNeedsBuild();
-    }
-  }
-
   void _showOverlay() {
     _overlay = OverlayEntry(
       builder: (context) {
@@ -188,12 +166,6 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton> {
   void _removeOverlay() {
     _overlay?.remove();
     _overlay = null;
-  }
-
-  String _fmtElapsed(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   Widget _buildOverlayContent() {

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/common/models/auth_response.dart';
@@ -94,14 +93,9 @@ class UserRepository {
   }
 
   Future<void> updateStatus(String token, bool isOnline) async {
-    await http.post(
-      Uri.parse('${ApiConstants.baseUrl}${ApiConstants.userStatus}'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'is_online': isOnline}),
-    );
+    await _apiClient.post(ApiConstants.userStatus, {
+      'is_online': isOnline,
+    }, token: token);
   }
 
   Future<void> updateFcmToken(String token, String fcmToken) async {

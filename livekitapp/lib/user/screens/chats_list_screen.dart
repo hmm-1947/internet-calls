@@ -126,15 +126,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     _load();
   }
 
-  String _lastSeenText(Map<String, dynamic> thread) {
-    if (thread['is_online'] == true) return 'Online';
-    final lastSeen = thread['last_seen'];
-    if (lastSeen == null) return '';
-    final dt = DateTime.tryParse(lastSeen);
-    if (dt == null) return '';
-    return 'Last seen ${TimeOfDay.fromDateTime(dt.toLocal()).format(context)}';
-  }
-
   void _showThreadOptions(Map<String, dynamic> thread) {
     showModalBottomSheet(
       context: context,
@@ -436,14 +427,20 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                     onTap: () async {
                                       await Navigator.of(context).push(
                                         PageRouteBuilder(
-                                          pageBuilder: (_, __, ___) => ChatHistoryScreen(
-                                            listenerId: thread['listener_id'],
-                                            listenerName:
-                                                thread['listener_name'],
-                                          ),
-                                          transitionsBuilder: (_, animation, __, child) {
-                                            return FadeTransition(opacity: animation, child: child);
-                                          },
+                                          pageBuilder: (_, __, ___) =>
+                                              ChatHistoryScreen(
+                                                listenerId:
+                                                    thread['listener_id'],
+                                                listenerName:
+                                                    thread['listener_name'],
+                                              ),
+                                          transitionsBuilder:
+                                              (_, animation, __, child) {
+                                                return FadeTransition(
+                                                  opacity: animation,
+                                                  child: child,
+                                                );
+                                              },
                                           opaque: true,
                                           barrierColor: bg,
                                         ),

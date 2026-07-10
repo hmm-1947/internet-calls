@@ -9,7 +9,6 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/shared/widgets/splash_screen.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
-import 'package:livekitapp/user/screens/user_home_screen.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
 
