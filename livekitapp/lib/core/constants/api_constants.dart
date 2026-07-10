@@ -29,4 +29,16 @@ class ApiConstants {
   static const String listenerMe = '/listener/me';
   static const String listenerUsers = '/listener/users';
   static const String listenerReviews = '/call/listener/reviews';
+
+  static String callAccept(int callId) => '/call/$callId/accept';
+  static String callReady(int callId) => '/call/$callId/ready';
+  static String callReject(int callId) => '/call/$callId/reject';
+  static String callEnd(int callId) => '/call/$callId/end';
+
+  static const String listenerFcmToken = '/listener/fcm-token';
+
+  static String listenerMessages(int userId) =>
+      '/chat/listener/$userId/messages';
+
+  static String deleteMessage(int messageId) => '/chat/message/$messageId';
 }

@@ -31,9 +31,14 @@ class ListenerRepository {
   }
 
   Future<void> updateStatus(String token, bool isOnline) async {
-    await _apiClient.post(ApiConstants.listenerStatus, {
+    final response = await _apiClient.post(ApiConstants.listenerStatus, {
       'is_online': isOnline,
     }, token: token);
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to update status');
+    }
   }
 
   Future<void> logout(String token) async {
@@ -49,7 +54,11 @@ class ListenerRepository {
   }
 
   Future<Map<String, dynamic>> acceptCall(String token, int callId) async {
-    final res = await _apiClient.post('/call/$callId/accept', {}, token: token);
+    final res = await _apiClient.post(
+      ApiConstants.callAccept(callId),
+      {},
+      token: token,
+    );
     final data = jsonDecode(res.body);
     if (res.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to accept call');
@@ -58,7 +67,11 @@ class ListenerRepository {
   }
 
   Future<void> readyCall(String token, int callId) async {
-    final res = await _apiClient.post('/call/$callId/ready', {}, token: token);
+    final res = await _apiClient.post(
+      ApiConstants.callReady(callId),
+      {},
+      token: token,
+    );
     if (res.statusCode != 200) {
       final data = jsonDecode(res.body);
       throw Exception(data['detail'] ?? 'Failed to mark call ready');
@@ -66,17 +79,40 @@ class ListenerRepository {
   }
 
   Future<void> rejectCall(String token, int callId) async {
-    await _apiClient.post('/call/$callId/reject', {}, token: token);
+    final response = await _apiClient.post(
+      ApiConstants.callReject(callId),
+      {},
+      token: token,
+    );
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to reject call');
+    }
   }
 
   Future<void> endCall(String token, int callId) async {
-    await _apiClient.post('/call/$callId/end', {}, token: token);
+    final response = await _apiClient.post(
+      ApiConstants.callEnd(callId),
+      {},
+      token: token,
+    );
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to end call');
+    }
   }
 
   Future<void> updateFcmToken(String token, String fcmToken) async {
-    await _apiClient.post('/listener/fcm-token', {
-      "fcm_token": fcmToken,
+    final response = await _apiClient.post(ApiConstants.listenerFcmToken, {
+      'fcm_token': fcmToken,
     }, token: token);
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to update FCM token');
+    }
   }
 
   Future<Map<String, dynamic>> sendChatMessage(
@@ -127,7 +163,7 @@ class ListenerRepository {
     int userId,
   ) async {
     final response = await _apiClient.get(
-      '/chat/listener/$userId/messages',
+      ApiConstants.listenerMessages(userId),
       token: token,
     );
     final data = jsonDecode(response.body);
@@ -186,14 +222,27 @@ class ListenerRepository {
   }
 
   Future<void> editMessage(String token, int messageId, String message) async {
-    await _apiClient.post(ApiConstants.messageEdit, {
+    final response = await _apiClient.post(ApiConstants.messageEdit, {
       'message_id': messageId,
       'message': message,
     }, token: token);
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to edit message');
+    }
   }
 
   Future<void> deleteMessage(String token, int messageId) async {
-    await _apiClient.delete('/chat/message/$messageId', token: token);
+    final response = await _apiClient.delete(
+      ApiConstants.deleteMessage(messageId),
+      token: token,
+    );
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to delete message');
+    }
   }
 
   Future<void> updateChatSettings(
@@ -203,11 +252,15 @@ class ListenerRepository {
     bool? isArchived,
     bool? isMuted,
   }) async {
-    await _apiClient.post(ApiConstants.listenerChatSettings, {
+    final response = await _apiClient.post(ApiConstants.listenerChatSettings, {
       'other_id': otherId,
       'is_pinned': isPinned,
       'is_archived': isArchived,
       'is_muted': isMuted,
     }, token: token);
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to update chat settings');
+    }
   }
 }
