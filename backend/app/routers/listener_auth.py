@@ -2,27 +2,56 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
 from app.core.database import get_db
-from app.models.models import Listener, Session as SessionModel, Call
+from app.models.models import Listener, Session as SessionModel, Call, CallRating
 from datetime import datetime, timezone
+import json
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
-from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate
+from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate
 from app.utils.security import verify_password, generate_session_token
 from app.core.deps import get_current_listener
 
 router = APIRouter(prefix="/listener", tags=["listener-auth"])
+
+def _parse_list(value):
+    if not value:
+        return []
+    try:
+        return json.loads(value)
+    except Exception:
+        return []
 
 @router.get("/me")
 def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     total_seconds = db.query(sa_func.coalesce(sa_func.sum(Call.duration_seconds), 0)).filter(
         Call.callee_listener_id == current_listener.id
     ).scalar()
+    avg_rating = db.query(sa_func.avg(CallRating.rating)).filter(CallRating.listener_id == current_listener.id).scalar()
+    rating_count = db.query(sa_func.count(CallRating.id)).filter(CallRating.listener_id == current_listener.id).scalar()
     return {
         "id": current_listener.id,
         "name": current_listener.name,
         "phone": current_listener.phone,
         "total_talk_time_seconds": int(total_seconds),
+        "about": current_listener.about,
+        "tags": _parse_list(current_listener.tags),
+        "languages": _parse_list(current_listener.languages),
+        "avg_rating": round(avg_rating, 1) if avg_rating else None,
+        "rating_count": rating_count or 0,
+        "created_at": current_listener.created_at.isoformat() if current_listener.created_at else None,
     }
+
+@router.put("/profile")
+def update_profile(payload: ListenerProfileUpdate, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    if payload.about is not None:
+        current_listener.about = payload.about
+    if payload.tags is not None:
+        current_listener.tags = json.dumps(payload.tags)
+    if payload.languages is not None:
+        current_listener.languages = json.dumps(payload.languages)
+    db.commit()
+    return {"status": "updated"}
+
 
 @router.post("/login", response_model=AuthResponse)
 def login(payload: ListenerLogin, db: Session = Depends(get_db)):

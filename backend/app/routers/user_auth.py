@@ -102,6 +102,35 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             "rating_count": rating_count or 0,
         })
     return result
+
+@router.get("/listener/{listener_id}")
+def get_listener_profile(listener_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    import json
+    l = db.query(Listener).filter(Listener.id == listener_id, Listener.is_active == True).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    avg_rating = db.query(sqlfunc.avg(CallRating.rating)).filter(CallRating.listener_id == l.id).scalar()
+    rating_count = db.query(sqlfunc.count(CallRating.id)).filter(CallRating.listener_id == l.id).scalar()
+    try:
+        tags = json.loads(l.tags) if l.tags else []
+    except Exception:
+        tags = []
+    try:
+        languages = json.loads(l.languages) if l.languages else []
+    except Exception:
+        languages = []
+    return {
+        "id": l.id,
+        "name": l.name,
+        "is_online": manager.is_listener_online(l.id),
+        "about": l.about,
+        "tags": tags,
+        "languages": languages,
+        "avg_rating": round(avg_rating, 1) if avg_rating else None,
+        "rating_count": rating_count or 0,
+        "created_at": l.created_at.isoformat() if l.created_at else None,
+    }
+
     
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):

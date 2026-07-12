@@ -30,7 +30,11 @@ class Listener(Base):
     is_online = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     last_seen = Column(DateTime(timezone=True), nullable=True)
+    about = Column(String, nullable=True)
+    tags = Column(String, nullable=True)
+    languages = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class Session(Base):
     __tablename__ = "sessions"

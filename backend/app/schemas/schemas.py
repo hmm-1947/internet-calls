@@ -39,6 +39,12 @@ class CallInitiate(BaseModel):
 
 class ListenerStatusUpdate(BaseModel):
     is_online: bool
+
+class ListenerProfileUpdate(BaseModel):
+    about: Optional[str] = None
+    tags: Optional[list[str]] = None
+    languages: Optional[list[str]] = None
+
     
 class LiveKitTokenResponse(BaseModel):
     call_id: int
