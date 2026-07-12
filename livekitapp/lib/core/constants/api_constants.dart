@@ -27,8 +27,11 @@ class ApiConstants {
   static String callRate(int callId) => '/call/$callId/rate';
   static const String listenerCallHistory = '/call/listener/history';
   static const String listenerMe = '/listener/me';
+  static const String listenerProfile = '/listener/profile';
   static const String listenerUsers = '/listener/users';
   static const String listenerReviews = '/call/listener/reviews';
+  static String userListenerProfile(int listenerId) => '/user/listener/$listenerId';
+
 
   static String callAccept(int callId) => '/call/$callId/accept';
   static String callReady(int callId) => '/call/$callId/ready';
@@ -41,4 +44,18 @@ class ApiConstants {
       '/chat/listener/$userId/messages';
 
   static String deleteMessage(int messageId) => '/chat/message/$messageId';
+
+  static String callRecordingStart(int callId) =>
+      '/call/$callId/recording/start';
+
+  static String callCancel(int callId) => '/call/$callId/cancel';
+
+  static String callCoinExceeded(int callId) => '/call/$callId/coin-exceeded';
+
+  static const String userFcmToken = '/user/fcm-token';
+
+  static String userMessages(int listenerId) =>
+      '/chat/user/$listenerId/messages';
+
+  static const String userMe = '/user/me';
 }

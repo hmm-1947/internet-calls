@@ -78,7 +78,7 @@ class UserRepository {
 
   Future<void> startRecording(String token, int callId) async {
     final response = await _apiClient.post(
-      '/call/$callId/recording/start',
+      ApiConstants.callRecordingStart(callId),
       {},
       token: token,
     );
@@ -91,7 +91,7 @@ class UserRepository {
 
   Future<void> cancelCall(String token, int callId) async {
     final response = await _apiClient.post(
-      '/call/$callId/cancel',
+      ApiConstants.callCancel(callId),
       {},
       token: token,
     );
@@ -103,7 +103,7 @@ class UserRepository {
 
   Future<void> endCall(String token, int callId) async {
     final response = await _apiClient.post(
-      '/call/$callId/end',
+      ApiConstants.callEnd(callId),
       {},
       token: token,
     );
@@ -115,7 +115,7 @@ class UserRepository {
 
   Future<void> reportCoinExceeded(String token, int callId) async {
     final response = await _apiClient.post(
-      '/call/$callId/coin-exceeded',
+      ApiConstants.callCoinExceeded(callId),
       {},
       token: token,
     );
@@ -136,7 +136,7 @@ class UserRepository {
   }
 
   Future<void> updateFcmToken(String token, String fcmToken) async {
-    final response = await _apiClient.post('/user/fcm-token', {
+    final response = await _apiClient.post(ApiConstants.userFcmToken, {
       'fcm_token': fcmToken,
     }, token: token);
 
@@ -194,7 +194,7 @@ class UserRepository {
     int listenerId,
   ) async {
     final response = await _apiClient.get(
-      '/chat/user/$listenerId/messages',
+      ApiConstants.userMessages(listenerId),
       token: token,
     );
     final data = jsonDecode(response.body);
@@ -269,7 +269,7 @@ class UserRepository {
 
   Future<void> deleteMessage(String token, int messageId) async {
     final response = await _apiClient.delete(
-      '/chat/message/$messageId',
+      ApiConstants.deleteMessage(messageId),
       token: token,
     );
     if (response.statusCode != 200) {
@@ -298,11 +298,27 @@ class UserRepository {
   }
 
   Future<Map<String, dynamic>> getMe(String token) async {
-    final response = await _apiClient.get('/user/me', token: token);
+    final response = await _apiClient.get(ApiConstants.userMe, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load profile');
     }
     return data;
   }
+
+  Future<Map<String, dynamic>> getListenerProfile(
+    String token,
+    int listenerId,
+  ) async {
+    final response = await _apiClient.get(
+      ApiConstants.userListenerProfile(listenerId),
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to load listener profile');
+    }
+    return data;
+  }
 }
+

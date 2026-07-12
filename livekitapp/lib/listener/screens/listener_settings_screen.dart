@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
+import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
+
 
 class ListenerSettingsScreen extends StatefulWidget {
   const ListenerSettingsScreen({super.key});
@@ -137,7 +139,16 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
           ),
           _sectionLabel('ACCOUNT'),
           _card([
-            _tile(icon: Icons.person_outline, title: 'Edit Profile', onTap: () {}),
+            _tile(
+              icon: Icons.person_outline,
+              title: 'Edit Profile',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
+                );
+              },
+            ),
+
             const Divider(height: 1, color: Colors.white12),
             _tile(icon: Icons.lock_reset, title: 'Change Password', onTap: () {}),
           ]),

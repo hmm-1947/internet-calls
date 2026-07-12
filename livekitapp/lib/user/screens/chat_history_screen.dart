@@ -39,6 +39,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   StreamSubscription? _socketSub;
   bool _listenerTyping = false;
   bool _isFavorite = false;
+  int _profileCoins = 0;
   Timer? _typingStopTimer;
   Timer? _typingSendTimer;
 
@@ -52,10 +53,17 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     _token = await _localStorage.getToken();
     await _load();
     _loadFavoriteStatus();
+    _loadCoins();
     ChatSocketService().connect(_token!, 'user');
     _socketSub = ChatSocketService().stream.listen(_onSocketMessage);
     _controller.addListener(_onTyping);
     await _flushPending();
+  }
+
+  Future<void> _loadCoins() async {
+    if (_token == null) return;
+    final me = await _repository.getMe(_token!);
+    if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
   }
 
   Future<void> _loadFavoriteStatus() async {
@@ -180,6 +188,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
           _messages[idx]['message'] = '';
         }
       });
+    } else if (type == 'coins_updated') {
+      final coins = data['coins'];
+      if (coins == null) return;
+      setState(() => _profileCoins = coins);
     }
   }
 
@@ -376,9 +388,32 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
             ),
             onPressed: _toggleFavorite,
           ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () {},
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: const Color(0x1AFFFFFF),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.monetization_on,
+                  color: Colors.amber,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '$_profileCoins',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

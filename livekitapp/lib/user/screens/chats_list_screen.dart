@@ -17,6 +17,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   List<Map<String, dynamic>> _threads = [];
+  int _profileCoins = 0;
   bool _loading = true;
   String _chatFilter = 'all';
   String _search = '';
@@ -32,10 +33,17 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   Future<void> _init() async {
     _token = await _localStorage.getToken();
     await _load();
+    await _loadCoins();
     if (_token != null) {
       ChatSocketService().connect(_token!, 'user');
       _socketSub = ChatSocketService().stream.listen(_onSocketEvent);
     }
+  }
+
+  Future<void> _loadCoins() async {
+    if (_token == null) return;
+    final me = await _repository.getMe(_token!);
+    if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
   }
 
   void _onSocketEvent(Map<String, dynamic> data) {
@@ -52,6 +60,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           _threads[idx]['is_online'] = type == 'listener_online';
         });
       }
+    } else if (type == 'coins_updated') {
+      final coins = data['coins'];
+      if (coins == null) return;
+      setState(() => _profileCoins = coins);
     }
   }
 
@@ -202,9 +214,31 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                     height: 32,
                     fit: BoxFit.contain,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
-                    onPressed: () {},
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1AFFFFFF),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.monetization_on,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$_profileCoins',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

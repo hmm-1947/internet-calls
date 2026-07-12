@@ -6,6 +6,7 @@ import 'package:livekitapp/core/network/local_storage.dart' as ls;
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/chat_history_screen.dart';
+import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
 import 'package:livekitapp/user/screens/user_call_screen.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
@@ -402,6 +403,53 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             height: 32,
             fit: BoxFit.contain,
           ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0x1AFFFFFF),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.monetization_on,
+                  color: Colors.amber,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '$_profileCoins',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderWithDrawer() {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: const BoxDecoration(
+        color: _AppColors.headerBg,
+        border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Image.asset(
+            'assets/images/banner.png',
+            height: 32,
+            fit: BoxFit.contain,
+          ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -637,155 +685,168 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     final bool isCalling = _callingListenerId == listener['id'];
     final bool canAct = isOnline && _callingListenerId == null;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _AppColors.cardBorder),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Avatar with real online status dot
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const CircleAvatar(
-                radius: 28,
-                backgroundColor: Color(0xFF2A2A2A),
-                child: Icon(Icons.person, color: Colors.white54, size: 28),
-              ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: isOnline ? _AppColors.online : Colors.grey.shade600,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF050E17),
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: () => _openListenerProfile(listener),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _AppColors.cardBorder),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Avatar with real online status dot
+            Stack(
+              clipBehavior: Clip.none,
               children: [
-                Text(
-                  listener['name'] ?? 'Listener',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                const CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Color(0xFF2A2A2A),
+                  child: Icon(Icons.person, color: Colors.white54, size: 28),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      isOnline ? 'Online now' : 'Offline',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isOnline
-                            ? _AppColors.online
-                            : _AppColors.textMuted,
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: isOnline
+                          ? _AppColors.online
+                          : Colors.grey.shade600,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF050E17),
+                        width: 2,
                       ),
                     ),
-                    if (listener['avg_rating'] != null) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.star, color: Colors.amber, size: 14),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${listener['avg_rating']}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.amber,
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          // Chat — real, opens ChatHistoryScreen
-          IconButton(
-            icon: const Icon(
-              Icons.chat_bubble_outline,
-              color: _AppColors.textMuted,
-              size: 22,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    listener['name'] ?? 'Listener',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        isOnline ? 'Online now' : 'Offline',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isOnline
+                              ? _AppColors.online
+                              : _AppColors.textMuted,
+                        ),
+                      ),
+                      if (listener['avg_rating'] != null) ...[
+                        const SizedBox(width: 8),
+                        const Icon(Icons.star, color: Colors.amber, size: 14),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${listener['avg_rating']}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.amber,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-            onPressed: () => _openChat(listener),
-            tooltip: 'Chat',
-          ),
-          // Video call — real, matches Figma's circular red CTA
-          isCalling
-              ? const SizedBox(width: 44, height: 44)
-              : InkWell(
-                  onTap: canAct
-                      ? () => _callListener(listener['id'], video: true)
-                      : null,
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: canAct
-                          ? _AppColors.brandRed.withOpacity(0.85)
-                          : _AppColors.brandRed.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.videocam,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-          const SizedBox(width: 8),
-          // Call — real, matches Figma's circular red CTA
-          isCalling
-              ? const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _AppColors.brandRed,
+            const SizedBox(width: 8),
+            // Chat — real, opens ChatHistoryScreen
+            IconButton(
+              icon: const Icon(
+                Icons.chat_bubble_outline,
+                color: _AppColors.textMuted,
+                size: 22,
+              ),
+              onPressed: () => _openChat(listener),
+              tooltip: 'Chat',
+            ),
+            // Video call — real, matches Figma's circular red CTA
+            isCalling
+                ? const SizedBox(width: 44, height: 44)
+                : InkWell(
+                    onTap: canAct
+                        ? () => _callListener(listener['id'], video: true)
+                        : null,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: canAct
+                            ? _AppColors.brandRed.withOpacity(0.85)
+                            : _AppColors.brandRed.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.videocam,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
-                )
-              : InkWell(
-                  onTap: canAct ? () => _callListener(listener['id']) : null,
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: canAct
-                          ? _AppColors.brandRed
-                          : _AppColors.brandRed.withOpacity(0.3),
-                      shape: BoxShape.circle,
+            const SizedBox(width: 8),
+            // Call — real, matches Figma's circular red CTA
+            isCalling
+                ? const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _AppColors.brandRed,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.call,
-                      color: Colors.white,
-                      size: 20,
+                  )
+                : InkWell(
+                    onTap: canAct ? () => _callListener(listener['id']) : null,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: canAct
+                            ? _AppColors.brandRed
+                            : _AppColors.brandRed.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.call,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
-                ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openListenerProfile(Map<String, dynamic> listener) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ListenerProfileViewScreen(listenerId: listener['id']),
       ),
     );
   }

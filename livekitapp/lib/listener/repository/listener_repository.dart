@@ -41,6 +41,24 @@ class ListenerRepository {
     }
   }
 
+  Future<void> updateProfile(
+    String token, {
+    String? about,
+    List<String>? tags,
+    List<String>? languages,
+  }) async {
+    final response = await _apiClient.put(ApiConstants.listenerProfile, {
+      if (about != null) 'about': about,
+      if (tags != null) 'tags': tags,
+      if (languages != null) 'languages': languages,
+    }, token: token);
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to update profile');
+    }
+  }
+
+
   Future<void> logout(String token) async {
     final response = await _apiClient.post(
       ApiConstants.listenerLogout,

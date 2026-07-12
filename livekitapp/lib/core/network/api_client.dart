@@ -42,6 +42,21 @@ class ApiClient {
     );
   }
 
+  Future<http.Response> put(
+    String path,
+    Map<String, dynamic> body, {
+    String? token,
+  }) {
+    final headers = {'Content-Type': 'application/json'};
+    if (token != null) headers['Authorization'] = 'Bearer $token';
+    return http.put(
+      Uri.parse('${ApiConstants.baseUrl}$path'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
+  }
+
+
   Future<http.Response> delete(String path, {String? token}) {
     final headers = {'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';

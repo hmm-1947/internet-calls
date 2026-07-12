@@ -13,12 +13,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   List<Map<String, dynamic>> _calls = [];
+  int _profileCoins = 0;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadCoins();
   }
 
   Future<void> _load() async {
@@ -33,6 +35,13 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _loadCoins() async {
+    final token = await _localStorage.getToken();
+    if (token == null) return;
+    final me = await _repository.getMe(token);
+    if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
   }
 
   String _fmtDateTime(String iso) {
@@ -80,6 +89,35 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           'Calls',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
+        actions: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: const Color(0x1AFFFFFF),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.monetization_on,
+                  color: Colors.amber,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '$_profileCoins',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _load,
