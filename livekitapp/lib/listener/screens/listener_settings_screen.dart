@@ -3,8 +3,9 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
-import 'package:livekitapp/shared/utils/fade_page_route.dart';
+import 'package:livekitapp/listener/screens/listener_wallet_screen.dart';
 
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class ListenerSettingsScreen extends StatefulWidget {
   const ListenerSettingsScreen({super.key});
@@ -81,16 +82,20 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
       leading: Icon(icon, color: Colors.white70),
       title: Text(title, style: const TextStyle(color: Colors.white)),
       subtitle: subtitle != null
-          ? Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 12))
+          ? Text(
+              subtitle,
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
+            )
           : null,
-      trailing: trailing ??
+      trailing:
+          trailing ??
           (onTap != null
               ? const Icon(Icons.chevron_right, color: Colors.white38)
               : null),
     );
   }
 
-    Widget _card(List<Widget> children) {
+  Widget _card(List<Widget> children) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -130,7 +135,10 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
             ),
             child: Row(
               children: [
-                const CircleAvatar(radius: 28, child: Icon(Icons.person, size: 28)),
+                const CircleAvatar(
+                  radius: 28,
+                  child: Icon(Icons.person, size: 28),
+                ),
                 const SizedBox(width: 16),
                 Text(
                   _name,
@@ -146,18 +154,33 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
           _sectionLabel('ACCOUNT'),
           _card([
             _tile(
+              icon: Icons.account_balance_wallet_outlined,
+              title: 'Wallet',
+              onTap: () {
+                Navigator.of(
+                  context,
+                ).push(fadeRoute(const ListenerWalletScreen()));
+              },
+            ),
+            const Divider(height: 1, color: Colors.white12),
+            _tile(
               icon: Icons.person_outline,
               title: 'Edit Profile',
               onTap: () {
-                Navigator.of(context).push(
-                  fadeRoute(const ListenerProfileScreen()),
-                );
+                Navigator.of(
+                  context,
+                ).push(fadeRoute(const ListenerProfileScreen()));
               },
             ),
 
             const Divider(height: 1, color: Colors.white12),
-            _tile(icon: Icons.lock_reset, title: 'Change Password', onTap: () {}),
+            _tile(
+              icon: Icons.lock_reset,
+              title: 'Change Password',
+              onTap: () {},
+            ),
           ]),
+
           _sectionLabel('PREFERENCES'),
           _card([
             _tile(
@@ -181,15 +204,31 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
               ),
             ),
             const Divider(height: 1, color: Colors.white12),
-            _tile(icon: Icons.shield_outlined, title: 'Privacy & Security', onTap: () {}),
+            _tile(
+              icon: Icons.shield_outlined,
+              title: 'Privacy & Security',
+              onTap: () {},
+            ),
           ]),
           _sectionLabel('SUPPORT'),
           _card([
-            _tile(icon: Icons.help_outline, title: 'Help & Support', onTap: () {}),
+            _tile(
+              icon: Icons.help_outline,
+              title: 'Help & Support',
+              onTap: () {},
+            ),
             const Divider(height: 1, color: Colors.white12),
-            _tile(icon: Icons.description_outlined, title: 'Terms of Service', onTap: () {}),
+            _tile(
+              icon: Icons.description_outlined,
+              title: 'Terms of Service',
+              onTap: () {},
+            ),
             const Divider(height: 1, color: Colors.white12),
-            _tile(icon: Icons.privacy_tip_outlined, title: 'Privacy Policy', onTap: () {}),
+            _tile(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Policy',
+              onTap: () {},
+            ),
           ]),
           const SizedBox(height: 16),
           _card([
@@ -198,7 +237,10 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text(
                 'Logout',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ]),

@@ -30,7 +30,20 @@ class ListenerRepository {
     return data;
   }
 
+  Future<Map<String, dynamic>> getWallet(String token) async {
+    final response = await _apiClient.get(
+      ApiConstants.listenerWallet,
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to load wallet');
+    }
+    return data;
+  }
+
   Future<void> updateStatus(String token, bool isOnline) async {
+
     final response = await _apiClient.post(ApiConstants.listenerStatus, {
       'is_online': isOnline,
     }, token: token);
@@ -279,6 +292,49 @@ class ListenerRepository {
     if (response.statusCode != 200) {
       final data = jsonDecode(response.body);
       throw Exception(data['detail'] ?? 'Failed to update chat settings');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getNoteByCall(String token, int callId) async {
+    final response = await _apiClient.get(
+      ApiConstants.listenerNoteByCall(callId),
+      token: token,
+    );
+    if (response.statusCode == 404) return null;
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to load note');
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>?> getNoteByUser(String token, int userId) async {
+    final response = await _apiClient.get(
+      ApiConstants.listenerNoteByUser(userId),
+      token: token,
+    );
+    if (response.statusCode == 404) return null;
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to load note');
+    }
+    return data;
+  }
+
+  Future<void> saveNote(
+    String token, {
+    int? callId,
+    int? userId,
+    required String note,
+  }) async {
+    final response = await _apiClient.post(ApiConstants.listenerNoteSave, {
+      if (callId != null) 'call_id': callId,
+      if (userId != null) 'user_id': userId,
+      'note': note,
+    }, token: token);
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to save note');
     }
   }
 }

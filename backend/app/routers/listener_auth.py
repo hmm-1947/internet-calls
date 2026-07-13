@@ -41,7 +41,40 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "created_at": current_listener.created_at.isoformat() if current_listener.created_at else None,
     }
 
+@router.get("/wallet")
+def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    from app.models.models import ListenerCoinTransaction
+    audio_coins = db.query(sa_func.coalesce(sa_func.sum(ListenerCoinTransaction.amount), 0)).filter(
+        ListenerCoinTransaction.listener_id == current_listener.id,
+        ListenerCoinTransaction.reason == "audio_call",
+    ).scalar()
+    video_coins = db.query(sa_func.coalesce(sa_func.sum(ListenerCoinTransaction.amount), 0)).filter(
+        ListenerCoinTransaction.listener_id == current_listener.id,
+        ListenerCoinTransaction.reason == "video_call",
+    ).scalar()
+    audio_seconds = db.query(sa_func.coalesce(sa_func.sum(Call.duration_seconds), 0)).filter(
+        Call.callee_listener_id == current_listener.id, Call.call_type == "audio",
+    ).scalar()
+    video_seconds = db.query(sa_func.coalesce(sa_func.sum(Call.duration_seconds), 0)).filter(
+        Call.callee_listener_id == current_listener.id, Call.call_type == "video",
+    ).scalar()
+    chat_coins = db.query(sa_func.coalesce(sa_func.sum(ListenerCoinTransaction.amount), 0)).filter(
+        ListenerCoinTransaction.listener_id == current_listener.id,
+        ListenerCoinTransaction.reason == "chat_message",
+    ).scalar()
+    return {
+        "coins": current_listener.coins,
+        "audio_call_coins": int(audio_coins),
+        "audio_call_minutes": int(audio_seconds) // 60,
+        "video_call_coins": int(video_coins),
+        "video_call_minutes": int(video_seconds) // 60,
+        "chat_coins": int(chat_coins),
+        "gift_coins": 0,
+    }
+
+
 @router.put("/profile")
+
 def update_profile(payload: ListenerProfileUpdate, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     if payload.about is not None:
         current_listener.about = payload.about

@@ -27,6 +27,8 @@ class ApiConstants {
   static String callRate(int callId) => '/call/$callId/rate';
   static const String listenerCallHistory = '/call/listener/history';
   static const String listenerMe = '/listener/me';
+  static const String listenerWallet = '/listener/wallet';
+
   static const String listenerProfile = '/listener/profile';
   static const String listenerUsers = '/listener/users';
   static const String listenerReviews = '/call/listener/reviews';
@@ -59,4 +61,8 @@ class ApiConstants {
 
   static const String userMe = '/user/me';
   static const String userBio = '/user/bio';
+
+  static const String listenerNoteSave = '/listener/notes';
+  static String listenerNoteByCall(int callId) => '/listener/notes/by-call/$callId';
+  static String listenerNoteByUser(int userId) => '/listener/notes/by-user/$userId';
 }

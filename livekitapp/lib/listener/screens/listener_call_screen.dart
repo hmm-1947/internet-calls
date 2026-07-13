@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/listener/screens/listener_call_notes_screen.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 class ListenerCallScreen extends StatefulWidget {
@@ -406,9 +407,18 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
                   onTap: _hangUp,
                 ),
                 CallActionButton(
-                  icon: Icons.card_giftcard,
-                  label: 'Gift',
-                  onTap: () {},
+                  icon: Icons.note_alt_outlined,
+                  label: 'Notes',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ListenerCallNotesScreen(
+                          callId: widget.callId,
+                          otherPartyName: widget.otherPartyName,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 CallActionButton(
                   icon: Icons.more_horiz,

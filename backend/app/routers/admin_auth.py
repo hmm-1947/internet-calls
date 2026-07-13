@@ -13,8 +13,12 @@ from app.schemas.schemas import (
     AdminInviteVerifyOtp,
     AdminInviteComplete,
     AdminLogin,
+    AdminForgotPasswordRequestOtp,
+    AdminForgotPasswordVerifyOtp,
+    AdminForgotPasswordReset,
     AdminAuthResponse,
 )
+
 from app.utils.email_otp import generate_otp_code, send_otp_email
 from app.utils.security import hash_password, verify_password, generate_session_token
 
@@ -117,6 +121,53 @@ def complete_invite(payload: AdminInviteComplete, db: Session = Depends(get_db))
     return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)
 
 
+
+@router.post("/forgot-password/request-otp")
+def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, db: Session = Depends(get_db)):
+    admin = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Email not registered")
+
+    otp_code = generate_otp_code()
+    admin.reset_otp_code = otp_code
+    admin.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    db.commit()
+
+    send_otp_email(payload.email, otp_code)
+    return {"status": "otp_sent"}
+
+
+@router.post("/forgot-password/verify-otp")
+def forgot_password_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
+    admin = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Email not registered")
+    if not admin.reset_otp_code or admin.reset_otp_code != payload.otp_code:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    return {"status": "otp_verified"}
+
+
+@router.post("/forgot-password/reset")
+def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depends(get_db)):
+    admin = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Email not registered")
+    if not admin.reset_otp_code or admin.reset_otp_code != payload.otp_code:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    admin.password_hash = hash_password(payload.new_password)
+    admin.reset_otp_code = None
+    admin.reset_otp_expires_at = None
+    db.commit()
+
+    return {"status": "password_reset"}
+
+
 @router.post("/login", response_model=AdminAuthResponse)
 def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
     admin = db.query(AdminUser).filter(
@@ -132,3 +183,5 @@ def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
     db.commit()
 
     return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)
+
+

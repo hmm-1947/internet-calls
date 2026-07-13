@@ -9,7 +9,9 @@ from app.core.deps import get_current_user, get_current_listener
 from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message
+from app.utils.coins import deduct_chat_coins
 from app.core.ws_manager import manager
+
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -43,6 +45,8 @@ def _msg_dict(msg):
 
 @router.post("/user/send", response_model=ChatMessageOut)
 async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if len(payload.message) > 100:
+        raise HTTPException(status_code=400, detail="Message too long, only 100 characters allowed")
     listener = db.query(Listener).filter(Listener.id == payload.listener_id, Listener.is_active == True).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
@@ -59,7 +63,9 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     db.add(msg)
     db.commit()
     db.refresh(msg)
+    await deduct_chat_coins(db, current_user, listener.id, msg.id)
     await manager.send_to_listener(listener.id, _msg_dict(msg))
+
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if listener.fcm_token:
         try:

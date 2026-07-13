@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.sql import func
 from app.core.database import Base
 from sqlalchemy import Index
@@ -34,7 +34,9 @@ class Listener(Base):
     about = Column(String, nullable=True)
     tags = Column(String, nullable=True)
     languages = Column(String, nullable=True)
+    coins = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 
 class Session(Base):
@@ -56,7 +58,10 @@ class AdminUser(Base):
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_support = Column(Boolean, default=False)
+    reset_otp_code = Column(String, nullable=True)
+    reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class AdminInvite(Base):
     __tablename__ = "admin_invites"
@@ -144,12 +149,24 @@ class CoinSettings(Base):
     id = Column(Integer, primary_key=True, index=True)
     audio_coins_per_minute = Column(Integer, default=10)
     video_coins_per_minute = Column(Integer, default=10)
+    chat_message_coins = Column(Integer, default=1, nullable=False)
+
 
 class CoinTransaction(Base):
     __tablename__ = "coin_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    amount = Column(Integer, nullable=False)
+    reason = Column(String, nullable=False)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ListenerCoinTransaction(Base):
+    __tablename__ = "listener_coin_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False)
     amount = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
     call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
@@ -165,6 +182,21 @@ class CallRating(Base):
     rating = Column(Integer, nullable=False)
     review = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ListenerNote(Base):
+    __tablename__ = "listener_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True, index=True)
+    note = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('ix_listener_notes_pair', 'listener_id', 'user_id'),
+    )
 
 class EmailOtp(Base):
     __tablename__ = "email_otps"

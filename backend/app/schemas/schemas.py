@@ -157,6 +157,24 @@ class CallSummaryOut(BaseModel):
     existing_rating: Optional[int] = None
     existing_review: Optional[str] = None
 
+class ListenerNoteSave(BaseModel):
+    call_id: Optional[int] = None
+    user_id: Optional[int] = None
+    note: str
+
+class ListenerNoteOut(BaseModel):
+    id: int
+    listener_id: int
+    user_id: int
+    call_id: Optional[int] = None
+    note: str
+    updated_at: datetime
+    user_name: Optional[str] = None
+    last_call_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 class ListenerReviewOut(BaseModel):
     user_name: str
     rating: int
@@ -184,8 +202,21 @@ class AdminLogin(BaseModel):
     identifier: str
     password: str
 
+class AdminForgotPasswordRequestOtp(BaseModel):
+    email: str
+
+class AdminForgotPasswordVerifyOtp(BaseModel):
+    email: str
+    otp_code: str
+
+class AdminForgotPasswordReset(BaseModel):
+    email: str
+    otp_code: str
+    new_password: str
+
 class AdminAuthResponse(BaseModel):
     token: str
     id: int
     username: str
     email: Optional[str] = None
+

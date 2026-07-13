@@ -554,7 +554,33 @@
       <input id="loginIdentifier" placeholder="Username or Email">
       <input id="loginPassword" placeholder="Password" type="password">
       <button class="btn btn-primary" onclick="doAdminLogin()">Login</button>
+      <div style="margin-top:8px;text-align:right;">
+        <a href="#" style="font-size:13px;font-weight:600;" onclick="showForgotScreen();return false;">Forgot password?</a>
+      </div>
       <div id="loginMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
+    </div>
+  </div>
+
+  <div id="forgotScreen" style="max-width:380px;margin:80px auto;display:none;">
+    <div class="card">
+      <h2>Reset Password</h2>
+      <div id="forgotStepEmail">
+        <input id="forgotEmail" placeholder="Email address">
+        <button class="btn btn-primary" onclick="requestForgotOtp()">Send verification code</button>
+      </div>
+      <div id="forgotStepOtp" style="display:none;">
+        <input id="forgotOtp" placeholder="Enter OTP">
+        <button class="btn btn-primary" onclick="verifyForgotOtp()">Verify code</button>
+      </div>
+      <div id="forgotStepReset" style="display:none;">
+        <input id="forgotNewPassword" placeholder="New password" type="password">
+        <input id="forgotConfirmPassword" placeholder="Confirm password" type="password">
+        <button class="btn btn-primary" onclick="resetForgotPassword()">Reset password</button>
+      </div>
+      <div id="forgotMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
+      <div style="margin-top:8px;">
+        <a href="#" style="font-size:13px;font-weight:600;" onclick="showLoginScreen();return false;">Back to login</a>
+      </div>
     </div>
   </div>
 
@@ -601,7 +627,10 @@
       <input id="audioCoins" placeholder="e.g. 10" type="number">
       <label style="font-size:13px;color:var(--slate);font-weight:600">Video call coin deduction / minute</label>
       <input id="videoCoins" placeholder="e.g. 20" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Chat message coin deduction / message</label>
+      <input id="chatCoins" placeholder="e.g. 1" type="number">
       <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
+
     </div>
   </div>
 
@@ -660,8 +689,85 @@
 
     function showLoginScreen() {
       document.getElementById('loginScreen').style.display = '';
+      document.getElementById('forgotScreen').style.display = 'none';
       document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = 'none';
+    }
+
+    function showForgotScreen() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('forgotScreen').style.display = '';
+      document.getElementById('setupScreen').style.display = 'none';
+      document.getElementById('panelRoot').style.display = 'none';
+      document.getElementById('forgotStepEmail').style.display = '';
+      document.getElementById('forgotStepOtp').style.display = 'none';
+      document.getElementById('forgotStepReset').style.display = 'none';
+      document.getElementById('forgotEmail').value = '';
+      document.getElementById('forgotOtp').value = '';
+      document.getElementById('forgotNewPassword').value = '';
+      document.getElementById('forgotConfirmPassword').value = '';
+      setForgotMsg('', null);
+    }
+
+    function setForgotMsg(text, ok) {
+      const el = document.getElementById('forgotMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function requestForgotOtp() {
+      const email = document.getElementById('forgotEmail').value.trim();
+      if (!email) { setForgotMsg('Enter your email.', false); return; }
+      setForgotMsg('Sending code…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/auth/forgot-password/request-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to send code');
+        setForgotMsg('✓ Code sent to ' + email, true);
+        document.getElementById('forgotStepEmail').style.display = 'none';
+        document.getElementById('forgotStepOtp').style.display = '';
+      } catch (e) { setForgotMsg('✗ ' + e.message, false); }
+    }
+
+    async function verifyForgotOtp() {
+      const email = document.getElementById('forgotEmail').value.trim();
+      const otp_code = document.getElementById('forgotOtp').value.trim();
+      if (!otp_code) { setForgotMsg('Enter the OTP.', false); return; }
+      setForgotMsg('Verifying…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/auth/forgot-password/verify-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp_code })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Invalid code');
+        setForgotMsg('✓ Code verified', true);
+        document.getElementById('forgotStepOtp').style.display = 'none';
+        document.getElementById('forgotStepReset').style.display = '';
+      } catch (e) { setForgotMsg('✗ ' + e.message, false); }
+    }
+
+    async function resetForgotPassword() {
+      const email = document.getElementById('forgotEmail').value.trim();
+      const otp_code = document.getElementById('forgotOtp').value.trim();
+      const newPassword = document.getElementById('forgotNewPassword').value;
+      const confirmPassword = document.getElementById('forgotConfirmPassword').value;
+      if (!newPassword || !confirmPassword) { setForgotMsg('Please fill in all fields.', false); return; }
+      if (newPassword !== confirmPassword) { setForgotMsg('Passwords do not match.', false); return; }
+      setForgotMsg('Resetting…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/auth/forgot-password/reset', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp_code, new_password: newPassword })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to reset password');
+        setForgotMsg('✓ Password reset. Please login.', true);
+        setTimeout(showLoginScreen, 1200);
+      } catch (e) { setForgotMsg('✗ ' + e.message, false); }
     }
 
     function showSetupScreen() {
@@ -829,22 +935,25 @@
         if (!res.ok) throw new Error(data.detail || 'Failed');
         document.getElementById('audioCoins').value = data.audio_coins_per_minute;
         document.getElementById('videoCoins').value = data.video_coins_per_minute;
+        document.getElementById('chatCoins').value = data.chat_message_coins;
       } catch (e) { }
     }
 
     async function saveCoinSettings() {
       const audio_coins_per_minute = parseInt(document.getElementById('audioCoins').value);
       const video_coins_per_minute = parseInt(document.getElementById('videoCoins').value);
+      const chat_message_coins = parseInt(document.getElementById('chatCoins').value);
       try {
         const res = await fetch(API_URL + '/admin/coins/settings', {
           method: 'POST', headers: authHeaders(true),
-          body: JSON.stringify({ audio_coins_per_minute, video_coins_per_minute })
+          body: JSON.stringify({ audio_coins_per_minute, video_coins_per_minute, chat_message_coins })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg('✓ Coin settings saved', true);
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
+
 
     async function loadPeople() {
       try {

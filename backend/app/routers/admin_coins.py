@@ -16,6 +16,8 @@ class CoinAdjust(BaseModel):
 class CoinSettingsUpdate(BaseModel):
     audio_coins_per_minute: int
     video_coins_per_minute: int
+    chat_message_coins: int
+
 
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
@@ -38,12 +40,13 @@ def adjust_coins(payload: CoinAdjust, db: Session = Depends(get_db), _=Depends(v
 @router.get("/settings")
 def get_settings(db: Session = Depends(get_db), _=Depends(verify_admin)):
     s = get_coin_settings(db)
-    return {"audio_coins_per_minute": s.audio_coins_per_minute, "video_coins_per_minute": s.video_coins_per_minute}
+    return {"audio_coins_per_minute": s.audio_coins_per_minute, "video_coins_per_minute": s.video_coins_per_minute, "chat_message_coins": s.chat_message_coins}
 
 @router.post("/settings")
 def update_settings(payload: CoinSettingsUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
     s = get_coin_settings(db)
     s.audio_coins_per_minute = payload.audio_coins_per_minute
     s.video_coins_per_minute = payload.video_coins_per_minute
+    s.chat_message_coins = payload.chat_message_coins
     db.commit()
-    return {"audio_coins_per_minute": s.audio_coins_per_minute, "video_coins_per_minute": s.video_coins_per_minute}
+    return {"audio_coins_per_minute": s.audio_coins_per_minute, "video_coins_per_minute": s.video_coins_per_minute, "chat_message_coins": s.chat_message_coins}

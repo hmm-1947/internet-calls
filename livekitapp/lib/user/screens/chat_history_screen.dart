@@ -226,7 +226,14 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _token == null) return;
+    if (text.length > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Message too long, only 100 characters allowed')),
+      );
+      return;
+    }
     _controller.clear();
+
     final clientId = const Uuid().v4();
     setState(() {
       _messages.add({
@@ -567,6 +574,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                               )
                             : TextField(
                                 controller: _controller,
+                                maxLength: 100,
+                                buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
                                 style: const TextStyle(color: Colors.white),
                                 decoration: const InputDecoration(
                                   hintText: 'Type a message',
@@ -576,6 +585,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                                 ),
                                 onSubmitted: (_) => _send(),
                               ),
+
                       ),
                     ),
                     const SizedBox(width: 6),

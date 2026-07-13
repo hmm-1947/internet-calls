@@ -7,6 +7,7 @@ import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/listener/screens/listener_call_notes_screen.dart';
 import 'package:uuid/uuid.dart';
 
 class ListenerChatHistoryScreen extends StatefulWidget {
@@ -361,6 +362,20 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.note_alt_outlined, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ListenerCallNotesScreen(
+                    userId: widget.userId,
+                    otherPartyName: widget.userName,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
