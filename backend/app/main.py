@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
-from app.routers import user_auth, listener_auth, admin, admin_coins, call, chat
+from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat
 from fastapi.staticfiles import StaticFiles
 from app.core.database import SessionLocal
 from app.models.models import User, Listener
@@ -30,6 +30,7 @@ app.include_router(user_auth.router)
 app.include_router(listener_auth.router)
 app.include_router(admin.router)
 app.include_router(admin_coins.router)
+app.include_router(admin_auth.router)
 app.include_router(call.router)
 app.include_router(chat.router)
 

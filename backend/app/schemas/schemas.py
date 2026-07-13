@@ -162,3 +162,30 @@ class ListenerReviewOut(BaseModel):
     rating: int
     review: Optional[str] = None
     created_at: datetime
+
+class AdminInviteCreate(BaseModel):
+    expires_in_hours: Optional[int] = 72
+
+class AdminInviteRequestOtp(BaseModel):
+    invite_token: str
+    email: str
+
+class AdminInviteVerifyOtp(BaseModel):
+    invite_token: str
+    email: str
+    otp_code: str
+
+class AdminInviteComplete(BaseModel):
+    invite_token: str
+    username: str
+    password: str
+
+class AdminLogin(BaseModel):
+    identifier: str
+    password: str
+
+class AdminAuthResponse(BaseModel):
+    token: str
+    id: int
+    username: str
+    email: Optional[str] = None

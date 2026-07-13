@@ -44,7 +44,33 @@ class Session(Base):
     token = Column(String, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=True)
+    password_hash = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_support = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class AdminInvite(Base):
+    __tablename__ = "admin_invites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, nullable=True)
+    otp_code = Column(String, nullable=True)
+    otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    email_verified = Column(Boolean, default=False)
+    is_used = Column(Boolean, default=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class Call(Base):
     __tablename__ = "calls"

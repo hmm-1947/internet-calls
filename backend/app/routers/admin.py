@@ -4,7 +4,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
-    CoinTransaction, CallRating, Session as SessionModel,
+    CoinTransaction, CallRating, Session as SessionModel, AdminUser,
 )
 from app.schemas.schemas import ListenerCreate
 from app.utils.security import hash_password
@@ -12,15 +12,29 @@ from app.core.ws_manager import manager
 #admin
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-def verify_admin(x_admin_secret: str = Header(...)):
-    if x_admin_secret != settings.admin_secret:
-        raise HTTPException(status_code=403, detail="Forbidden")
+def verify_admin(authorization: str = Header(...), db: Session = Depends(get_db)) -> AdminUser:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    token = authorization.removeprefix("Bearer ")
+    session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id.isnot(None)).first()
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    admin = db.query(AdminUser).filter(AdminUser.id == session.admin_id).first()
+    if not admin or not admin.is_active:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    return admin
 
 @router.websocket("/ws")
-async def admin_ws(websocket: WebSocket, secret: str = Query(...)):
-    if secret != settings.admin_secret:
-        await websocket.close(code=4003)
-        return
+async def admin_ws(websocket: WebSocket, token: str = Query(...)):
+    db = next(get_db())
+    try:
+        session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id.isnot(None)).first()
+        admin = db.query(AdminUser).filter(AdminUser.id == session.admin_id).first() if session else None
+        if not admin or not admin.is_active:
+            await websocket.close(code=4003)
+            return
+    finally:
+        db.close()
     await manager.connect_admin(websocket)
     try:
         while True:
@@ -29,6 +43,7 @@ async def admin_ws(websocket: WebSocket, secret: str = Query(...)):
         manager.disconnect_admin(websocket)
     except Exception:
         manager.disconnect_admin(websocket)
+
 
 @router.post("/listeners")
 def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=Depends(verify_admin)):
