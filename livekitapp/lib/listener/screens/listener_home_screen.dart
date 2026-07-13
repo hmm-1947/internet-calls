@@ -6,6 +6,7 @@ import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
 import 'package:livekitapp/listener/screens/listener_reviews_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class ListenerHomeScreen extends StatefulWidget {
@@ -257,11 +258,9 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ListenerProfileScreen(),
-                    ),
-                  );
+                  Navigator.of(
+                    context,
+                  ).push(fadeRoute(const ListenerProfileScreen()));
                 },
               ),
               ListTile(
@@ -283,11 +282,9 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ListenerReviewsScreen(),
-                    ),
-                  );
+                  Navigator.of(
+                    context,
+                  ).push(fadeRoute(const ListenerReviewsScreen()));
                 },
               ),
               ListTile(
@@ -408,6 +405,15 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
                         : const Color(0xFFE5BDBE),
                   ),
                 ),
+                if ((user['bio'] ?? '').toString().trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    user['bio'],
+                    style: const TextStyle(fontSize: 13, color: Colors.white54),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ],
             ),
           ),

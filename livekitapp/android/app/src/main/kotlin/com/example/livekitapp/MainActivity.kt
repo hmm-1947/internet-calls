@@ -8,6 +8,9 @@ import android.telecom.TelecomManager
 import android.content.IntentFilter
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import android.app.PictureInPictureParams
+import android.util.Rational
+import android.content.res.Configuration
 import io.flutter.plugin.common.MethodChannel
 import android.os.Build
 
@@ -15,6 +18,10 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "livekitapp/lockscreen"
     private var pendingUnlockResult: MethodChannel.Result? = null
     private var unlockReceiver: BroadcastReceiver? = null
+private val PIP_CHANNEL = "livekitapp/pip"
+    private var isInPipMode = false
+    private var isInCallState = false
+
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -79,6 +86,32 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PIP_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "enterPip" -> {
+                    result.success(enterPipMode())
+                }
+                "isPipSupported" -> {
+                    result.success(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                }
+                "setCallActive" -> {
+                    isInCallState = call.arguments as? Boolean ?: false
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isInCallState) {
+            enterPipMode()
+        }
+        flutterEngine?.let {
+            MethodChannel(it.dartExecutor.binaryMessenger, PIP_CHANNEL)
+                .invokeMethod("onUserLeaveHint", null)
+        }
     }
     private fun forceClearTelecomCalls() {
     val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
@@ -89,7 +122,27 @@ class MainActivity : FlutterActivity() {
         android.util.Log.d("Callkit", "forceClearTelecomCalls: endCall() threw $e")
     }
 }
+private fun enterPipMode(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(9, 14))
+            .build()
+        return try {
+            enterPictureInPictureMode(params)
+        } catch (e: Exception) {
+            android.util.Log.d("PiP", "enterPipMode threw: $e")
+            false
+        }
+    }
 
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPipMode = isInPictureInPictureMode
+        flutterEngine?.let {
+            MethodChannel(it.dartExecutor.binaryMessenger, PIP_CHANNEL)
+                .invokeMethod("onPipModeChanged", isInPictureInPictureMode)
+        }
+    }
 private fun closeIncomingCallScreen() {
     val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
     try {

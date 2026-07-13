@@ -5,6 +5,7 @@ import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/chat_history_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
@@ -310,11 +311,34 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                   },
                                   pink,
                                 ),
+                                const SizedBox(width: 8),
+                                _filterChip(
+                                  'Group(Beta)',
+                                  _chatFilter == 'group',
+                                  () {
+                                    setState(() => _chatFilter = 'group');
+                                  },
+                                  pink,
+                                ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 8),
-                          if (_filteredThreads.isEmpty)
+                          if (_chatFilter == 'group')
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.5,
+                              child: Center(
+                                child: Text(
+                                  'Coming soon .........',
+                                  style: TextStyle(
+                                    color: pink.withOpacity(0.6),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (_filteredThreads.isEmpty)
                             SizedBox(
                               height: MediaQuery.of(context).size.height * 0.5,
                               child: const Center(
@@ -460,22 +484,12 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                     ),
                                     onTap: () async {
                                       await Navigator.of(context).push(
-                                        PageRouteBuilder(
-                                          pageBuilder: (_, __, ___) =>
-                                              ChatHistoryScreen(
-                                                listenerId:
-                                                    thread['listener_id'],
-                                                listenerName:
-                                                    thread['listener_name'],
-                                              ),
-                                          transitionsBuilder:
-                                              (_, animation, __, child) {
-                                                return FadeTransition(
-                                                  opacity: animation,
-                                                  child: child,
-                                                );
-                                              },
-                                          opaque: true,
+                                        fadeRoute(
+                                          ChatHistoryScreen(
+                                            listenerId: thread['listener_id'],
+                                            listenerName:
+                                                thread['listener_name'],
+                                          ),
                                           barrierColor: bg,
                                         ),
                                       );

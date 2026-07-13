@@ -8,6 +8,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
 import 'package:livekitapp/user/screens/user_call_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 
@@ -193,15 +194,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   void _openChat(Map<String, dynamic> listener) {
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => ChatHistoryScreen(
+      fadeRoute(
+        ChatHistoryScreen(
           listenerId: listener['id'],
           listenerName: listener['name'],
         ),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        opaque: true,
         barrierColor: _AppColors.bg,
       ),
     );
@@ -347,9 +344,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 onTap: () {
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const UserProfileScreen(),
-                    ),
+                    fadeRoute(const UserProfileScreen()),
                   );
                 },
               ),
@@ -845,9 +840,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   void _openListenerProfile(Map<String, dynamic> listener) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ListenerProfileViewScreen(listenerId: listener['id']),
-      ),
+      fadeRoute(ListenerProfileViewScreen(listenerId: listener['id'])),
     );
   }
 }

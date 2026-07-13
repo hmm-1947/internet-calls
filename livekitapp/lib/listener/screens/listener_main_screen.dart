@@ -5,6 +5,7 @@ import 'package:livekitapp/listener/screens/listener_chats_list_screen.dart';
 import 'package:livekitapp/listener/screens/listener_settings_screen.dart';
 import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/shared/widgets/crown_nav_bar.dart';
+import 'package:livekitapp/shared/widgets/faded_indexed_stack.dart';
 
 class ListenerMainScreen extends StatefulWidget {
   const ListenerMainScreen({super.key});
@@ -36,7 +37,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: FadedIndexedStack(index: _index, children: _screens),
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,
         onDestinationSelected: _onDestinationSelected,

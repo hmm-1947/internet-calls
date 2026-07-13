@@ -4,6 +4,7 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
 import 'package:livekitapp/user/screens/user_register_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class UserLoginScreen extends StatefulWidget {
   const UserLoginScreen({super.key});
@@ -126,9 +127,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const UserRegisterScreen(),
-                    ),
+                    fadeRoute(const UserRegisterScreen()),
                   );
                 },
                 child: const Text(

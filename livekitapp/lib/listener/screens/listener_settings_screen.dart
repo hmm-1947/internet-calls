@@ -3,6 +3,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 
 class ListenerSettingsScreen extends StatefulWidget {
@@ -89,14 +90,19 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     );
   }
 
-  Widget _card(List<Widget> children) {
+    Widget _card(List<Widget> children) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(children: children),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: children),
+      ),
     );
   }
 
@@ -144,7 +150,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
               title: 'Edit Profile',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
+                  fadeRoute(const ListenerProfileScreen()),
                 );
               },
             ),

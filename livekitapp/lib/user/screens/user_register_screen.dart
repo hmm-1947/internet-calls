@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_otp_verify_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class UserRegisterScreen extends StatefulWidget {
   const UserRegisterScreen({super.key});
@@ -37,10 +38,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
       );
       if (!mounted) return;
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              UserOtpVerifyScreen(email: _emailController.text.trim()),
-        ),
+        fadeRoute(UserOtpVerifyScreen(email: _emailController.text.trim())),
       );
     } catch (e) {
       if (!mounted) return;

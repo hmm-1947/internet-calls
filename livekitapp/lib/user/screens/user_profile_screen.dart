@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
-import 'package:livekitapp/user/screens/user_login_screen.dart';
+import 'package:livekitapp/user/screens/user_settings_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
+
+class _AppColors {
+  static const bg = Color(0xFF0B0B0B);
+  static const cardBg = Color(0xFF141B26);
+  static const cardBorder = Color(0x0DFFFFFF);
+  static const brandRed = Color(0xFFE11D48);
+  static const textMuted = Color(0xFF9CA3AF);
+}
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -17,7 +26,6 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   String _name = '';
   String _phone = '';
   bool _loading = true;
-  bool _loggingOut = false;
 
   @override
   void initState() {
@@ -41,20 +49,96 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    setState(() => _loggingOut = true);
-    await _localStorage.clear();
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const UserLoginScreen()),
-      );
-    }
+  void _openWallet() {
+    Navigator.of(context).push(
+      fadeRoute(WalletCoinsScreen(coins: _coins)),
+    );
+  }
+
+  void _openEnrollAsListener() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: _AppColors.cardBg,
+        title: const Text('Coming Soon', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Listener enrollment will be available soon.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK', style: TextStyle(color: _AppColors.brandRed)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _menuTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: _AppColors.cardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _AppColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _AppColors.brandRed.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: _AppColors.brandRed, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white38),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      backgroundColor: _AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: _AppColors.bg,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Profile',
+          style: TextStyle(color: _AppColors.brandRed, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+            onPressed: () {
+              Navigator.of(context).push(
+                fadeRoute(const UserSettingsScreen()),
+              );
+            },
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: refresh,
         child: _loading
@@ -69,63 +153,96 @@ class UserProfileScreenState extends State<UserProfileScreen> {
               )
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                 children: [
-                  CircleAvatar(radius: 40, child: Icon(Icons.person, size: 40)),
-                  const SizedBox(height: 16),
+                  Center(
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _AppColors.brandRed, width: 2),
+                      ),
+                      child: const CircleAvatar(
+                        radius: 44,
+                        backgroundColor: Color(0xFF2A2A2A),
+                        child: Icon(Icons.person, color: Colors.white54, size: 44),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Center(
                     child: Text(
                       _name,
                       style: const TextStyle(
-                        fontSize: 20,
+                        color: Colors.white,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
+                  const SizedBox(height: 4),
                   Center(
                     child: Text(
                       _phone,
-                      style: const TextStyle(color: Colors.grey),
+                      style: const TextStyle(color: _AppColors.textMuted, fontSize: 13),
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.monetization_on, color: Colors.amber),
-                              SizedBox(width: 8),
-                              Text('Coins', style: TextStyle(fontSize: 18)),
-                            ],
-                          ),
-                          Text(
-                            '$_coins',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  const SizedBox(height: 28),
+                  _menuTile(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Wallet & Coins',
+                    onTap: _openWallet,
                   ),
-                  const SizedBox(height: 32),
-                  ElevatedButton.icon(
-                    onPressed: _loggingOut ? null : _logout,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Logout'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(48),
-                    ),
+                  const SizedBox(height: 12),
+                  _menuTile(
+                    icon: Icons.person_outline,
+                    title: 'Enroll as a listener',
+                    onTap: _openEnrollAsListener,
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class WalletCoinsScreen extends StatelessWidget {
+  final int coins;
+
+  const WalletCoinsScreen({super.key, required this.coins});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: _AppColors.bg,
+        elevation: 0,
+        title: const Text('Wallet & Coins'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.monetization_on, color: Colors.amber, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              '$coins',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 40,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Coins',
+              style: TextStyle(color: _AppColors.textMuted, fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }

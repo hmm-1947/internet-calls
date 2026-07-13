@@ -6,7 +6,7 @@ from app.schemas.schemas import ListenerStatusUpdate
 from app.models.models import CallRating
 from sqlalchemy import func as sqlfunc
 from datetime import datetime, timedelta, timezone
-from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate
+from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate
 from app.core.database import get_db
 from app.models.models import User, Session as SessionModel, EmailOtp
 from app.utils.email_otp import generate_otp_code, send_otp_email
@@ -134,7 +134,13 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
     
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
-    return {"id": current_user.id, "name": current_user.name, "phone": current_user.phone, "coins": current_user.coins}
+    return {"id": current_user.id, "name": current_user.name, "email": current_user.email, "phone": current_user.phone, "coins": current_user.coins, "bio": current_user.bio}
+
+@router.post("/bio")
+def update_bio(payload: UserBioUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    current_user.bio = payload.bio
+    db.commit()
+    return {"status": "updated", "bio": current_user.bio}
 
 @router.post("/fcm-token")
 def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

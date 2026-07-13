@@ -29,7 +29,7 @@
             android:exported="true"
             android:foregroundServiceType="microphone|camera|phoneCall"
             tools:replace="android:exported,android:foregroundServiceType" />
-        <activity
+<activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleInstance"
@@ -37,8 +37,10 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode|screenLayout"
             android:hardwareAccelerated="true"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user

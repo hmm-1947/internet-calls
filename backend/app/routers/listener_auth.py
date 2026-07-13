@@ -102,10 +102,11 @@ def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), cur
     return {"status": "updated"}
 
 @router.get("/users")
+@router.get("/users")
 def get_users(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     from app.models.models import User
     users = db.query(User).filter(User.is_active == True).all()
     return [
-        {"id": u.id, "name": u.name, "is_online": manager.is_user_online(u.id)}
+        {"id": u.id, "name": u.name, "is_online": manager.is_user_online(u.id), "bio": u.bio}
         for u in users
     ]

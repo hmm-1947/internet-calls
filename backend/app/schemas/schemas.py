@@ -16,6 +16,9 @@ class UserLogin(BaseModel):
     phone: str
     password: str
 
+class UserBioUpdate(BaseModel):
+    bio: str
+
 class ListenerLogin(BaseModel):
     phone: str
     password: str

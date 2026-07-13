@@ -5,6 +5,7 @@ import 'package:livekitapp/user/screens/user_home_screen.dart';
 import 'package:livekitapp/user/screens/chats_list_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 import 'package:livekitapp/user/screens/call_history_screen.dart';
+import 'package:livekitapp/shared/widgets/faded_indexed_stack.dart';
 
 class UserMainScreen extends StatefulWidget {
   const UserMainScreen({super.key});
@@ -38,7 +39,7 @@ class _UserMainScreenState extends State<UserMainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F1A2E),
-      body: IndexedStack(index: _index, children: _screens),
+      body: FadedIndexedStack(index: _index, children: _screens),
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,
         onDestinationSelected: _onDestinationSelected,

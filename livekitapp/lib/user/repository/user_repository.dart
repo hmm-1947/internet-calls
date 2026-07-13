@@ -320,5 +320,15 @@ class UserRepository {
     }
     return data;
   }
+
+  Future<void> updateBio(String token, String bio) async {
+    final response = await _apiClient.post(ApiConstants.userBio, {
+      'bio': bio,
+    }, token: token);
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to update bio');
+    }
+  }
 }
 

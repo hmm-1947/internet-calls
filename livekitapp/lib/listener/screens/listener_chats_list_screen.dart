@@ -5,6 +5,7 @@ import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_chat_history_screen.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class ListenerChatsListScreen extends StatefulWidget {
   const ListenerChatsListScreen({super.key});
@@ -395,15 +396,11 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                             ),
                             onTap: () async {
                               await Navigator.of(context).push(
-                                PageRouteBuilder(
-                                  pageBuilder: (_, __, ___) => ListenerChatHistoryScreen(
+                                fadeRoute(
+                                  ListenerChatHistoryScreen(
                                     userId: thread['user_id'],
                                     userName: thread['user_name'],
                                   ),
-                                  transitionsBuilder: (_, animation, __, child) {
-                                    return FadeTransition(opacity: animation, child: child);
-                                  },
-                                  opaque: true,
                                   barrierColor: bg,
                                 ),
                               );

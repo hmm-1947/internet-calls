@@ -58,4 +58,5 @@ class ApiConstants {
       '/chat/user/$listenerId/messages';
 
   static const String userMe = '/user/me';
+  static const String userBio = '/user/bio';
 }

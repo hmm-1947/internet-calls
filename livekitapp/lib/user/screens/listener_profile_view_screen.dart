@@ -22,8 +22,7 @@ class ListenerProfileViewScreen extends StatefulWidget {
       _ListenerProfileViewScreenState();
 }
 
-class _ListenerProfileViewScreenState
-    extends State<ListenerProfileViewScreen> {
+class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   bool _loading = true;
@@ -105,7 +104,10 @@ class _ListenerProfileViewScreenState
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _AppColors.cardBorder),
       ),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 12)),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
     );
   }
 
@@ -121,210 +123,210 @@ class _ListenerProfileViewScreenState
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: _AppColors.textMuted),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                    children: [
-                      Center(
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 96,
-                              height: 96,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: _AppColors.brandRed,
-                                  width: 2,
-                                ),
-                              ),
-                              child: const CircleAvatar(
-                                radius: 44,
-                                backgroundColor: Color(0xFF2A2A2A),
-                                child: Icon(
-                                  Icons.person,
-                                  color: Colors.white54,
-                                  size: 44,
-                                ),
-                              ),
+          ? Center(
+              child: Text(
+                _error!,
+                style: const TextStyle(color: _AppColors.textMuted),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                children: [
+                  Center(
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _AppColors.brandRed,
+                              width: 2,
                             ),
-                            Positioned(
-                              right: 2,
-                              bottom: 4,
-                              child: Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: _isOnline
-                                      ? _AppColors.online
-                                      : _AppColors.offline,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: _AppColors.bg,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
+                          ),
+                          child: const CircleAvatar(
+                            radius: 44,
+                            backgroundColor: Color(0xFF2A2A2A),
+                            child: Icon(
+                              Icons.person,
+                              color: Colors.white54,
+                              size: 44,
                             ),
-                          ],
+                          ),
                         ),
+                        Positioned(
+                          right: 2,
+                          bottom: 4,
+                          child: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: _isOnline
+                                  ? _AppColors.online
+                                  : _AppColors.offline,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _AppColors.bg,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Text(
+                      _name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 12),
-                      Center(
-                        child: Text(
-                          _name,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Center(
+                    child: Text(
+                      _isOnline ? 'ONLINE NOW' : 'OFFLINE',
+                      style: TextStyle(
+                        color: _isOnline
+                            ? _AppColors.online
+                            : _AppColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: _AppColors.cardBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _AppColors.cardBorder),
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.star, color: Colors.amber, size: 20),
+                        const SizedBox(height: 4),
+                        Text(
+                          _avgRating != null
+                              ? _avgRating!.toStringAsFixed(1)
+                              : '—',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Center(
-                        child: Text(
-                          _isOnline ? 'ONLINE NOW' : 'OFFLINE',
+                        const SizedBox(height: 2),
+                        const Text(
+                          'RATING',
                           style: TextStyle(
-                            color: _isOnline
-                                ? _AppColors.online
-                                : _AppColors.textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            color: _AppColors.textMuted,
+                            fontSize: 11,
                             letterSpacing: 1,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: _AppColors.cardBg,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _AppColors.cardBorder),
-                        ),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.star, color: Colors.amber, size: 20),
-                            const SizedBox(height: 4),
-                            Text(
-                              _avgRating != null
-                                  ? _avgRating!.toStringAsFixed(1)
-                                  : '—',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'RATING',
-                              style: TextStyle(
-                                color: _AppColors.textMuted,
-                                fontSize: 11,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      _sectionLabel('ABOUT'),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: _AppColors.cardBg,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _AppColors.cardBorder),
-                        ),
-                        child: Text(
-                          _about.isEmpty ? 'No description yet.' : _about,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                      _sectionLabel('GOOD TO TALK ABOUT'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _tags.isEmpty
-                            ? [
-                                const Text(
-                                  'Not set',
-                                  style: TextStyle(color: Colors.white38),
-                                ),
-                              ]
-                            : _tags.map((t) => _chip(t)).toList(),
-                      ),
-                      _sectionLabel('LANGUAGES'),
-                      Text(
-                        _languages.isEmpty ? 'Not set' : _languages.join(' • '),
-                        style: TextStyle(
-                          color: _languages.isEmpty
-                              ? Colors.white38
-                              : _AppColors.brandRed,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      _sectionLabel('YOUR PRIVACY'),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: _AppColors.brandRed.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: _AppColors.brandRed.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(
-                              Icons.shield_outlined,
-                              color: _AppColors.brandRed,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '100% anonymous. $_name never sees your real identity. Conversations stay between the two of you.',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 13,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Center(
-                        child: Text(
-                          _memberSinceYear().isEmpty
-                              ? ''
-                              : 'Member since ${_memberSinceYear()}',
-                          style: const TextStyle(
-                            color: Colors.white24,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                  _sectionLabel('ABOUT'),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _AppColors.cardBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _AppColors.cardBorder),
+                    ),
+                    child: Text(
+                      _about.isEmpty ? 'No description yet.' : _about,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  _sectionLabel('GOOD TO TALK ABOUT'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _tags.isEmpty
+                        ? [
+                            const Text(
+                              'Not set',
+                              style: TextStyle(color: Colors.white38),
+                            ),
+                          ]
+                        : _tags.map((t) => _chip(t)).toList(),
+                  ),
+                  _sectionLabel('LANGUAGES'),
+                  Text(
+                    _languages.isEmpty ? 'Not set' : _languages.join(' • '),
+                    style: TextStyle(
+                      color: _languages.isEmpty
+                          ? Colors.white38
+                          : _AppColors.brandRed,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  _sectionLabel('YOUR PRIVACY'),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _AppColors.brandRed.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _AppColors.brandRed.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.shield_outlined,
+                          color: _AppColors.brandRed,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '100% anonymous. $_name never sees your real identity. Conversations stay between the two of you.',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Text(
+                      _memberSinceYear().isEmpty
+                          ? ''
+                          : 'Member since ${_memberSinceYear()}',
+                      style: const TextStyle(
+                        color: Colors.white24,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

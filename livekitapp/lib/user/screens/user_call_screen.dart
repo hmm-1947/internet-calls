@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:livekitapp/user/services/pip_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
@@ -34,6 +35,7 @@ class _CallScreenState extends State<CallScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   AudioPlayer? _busyPlayer;
+  bool _isInPip = false;
   Room? _room;
   EventsListener<RoomEvent>? _roomListener;
   // Tracks the current phase shown to the user
@@ -60,6 +62,11 @@ class _CallScreenState extends State<CallScreen> {
   void initState() {
     super.initState();
     _cameraEnabled = widget.startWithVideo;
+    PipService.instance.init();
+    PipService.instance.onPipModeChanged = (isInPip) {
+      if (mounted) setState(() => _isInPip = isInPip);
+    };
+    PipService.instance.onUserLeaveHint = _maybeEnterPip;
     if (widget.busy) {
       _runBusyFlow();
       return;
@@ -276,6 +283,9 @@ class _CallScreenState extends State<CallScreen> {
             _remoteVideoTrack = existingRemoteVideoTrack;
           }
         });
+        if (widget.startWithVideo) {
+          PipService.instance.setCallActive(true);
+        }
       } else {
         roomListener.dispose();
         room.disconnect();
@@ -347,6 +357,7 @@ class _CallScreenState extends State<CallScreen> {
     _room?.disconnect();
     _durationTimer?.cancel();
     await UserCallkitService.instance.endCall(widget.callId.toString());
+    PipService.instance.setCallActive(false);
     if (mounted) {
       Navigator.of(context).pushReplacement(_summaryRoute());
       ScaffoldMessenger.of(context).showSnackBar(
@@ -365,6 +376,7 @@ class _CallScreenState extends State<CallScreen> {
     _room?.disconnect();
     _durationTimer?.cancel();
     UserCallkitService.instance.endCall(widget.callId.toString());
+    PipService.instance.setCallActive(false);
     if (rejected) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -375,6 +387,11 @@ class _CallScreenState extends State<CallScreen> {
     } else {
       Navigator.of(context).pop();
     }
+  }
+
+  Future<void> _maybeEnterPip() async {
+    if (!widget.startWithVideo || _phase != _CallPhase.connected) return;
+    await PipService.instance.enterPip();
   }
 
   /// User taps hang-up — cancel if still ringing, end if connected.
@@ -398,6 +415,7 @@ class _CallScreenState extends State<CallScreen> {
     _room?.disconnect();
     _durationTimer?.cancel();
     await UserCallkitService.instance.endCall(widget.callId.toString());
+    PipService.instance.setCallActive(false);
     if (!mounted) return;
     if (wasConnected) {
       Navigator.of(context).pushReplacement(_summaryRoute());
@@ -426,6 +444,9 @@ class _CallScreenState extends State<CallScreen> {
     _durationTimer?.cancel();
     _busyPlayer?.dispose();
     UserCallkitService.instance.endCall(widget.callId.toString());
+    PipService.instance.onPipModeChanged = null;
+    PipService.instance.onUserLeaveHint = null;
+    PipService.instance.setCallActive(false);
     super.dispose();
   }
 
@@ -433,15 +454,27 @@ class _CallScreenState extends State<CallScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _maybeEnterPip();
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Center(
           child: widget.startWithVideo && _phase == _CallPhase.connected
               ? _buildConnectedVideo()
-              : _buildAudioCallUi(),
+              : (_isInPip ? _buildPipVideoUi() : _buildAudioCallUi()),
         ),
       ),
     );
+  }
+
+  Widget _buildPipVideoUi() {
+    final bool showRemoteVideo =
+        !_remoteVideoMuted && _remoteVideoTrack != null;
+    return showRemoteVideo
+        ? VideoTrackRenderer(_remoteVideoTrack!)
+        : Container(color: const Color(0xFF0B0B0B));
   }
 
   Widget _buildAudioCallUi() {
@@ -552,6 +585,11 @@ class _CallScreenState extends State<CallScreen> {
   Widget _buildConnectedVideo() {
     final bool showRemoteVideo =
         !_remoteVideoMuted && _remoteVideoTrack != null;
+    if (_isInPip) {
+      return showRemoteVideo
+          ? VideoTrackRenderer(_remoteVideoTrack!)
+          : Container(color: const Color(0xFF0B0B0B));
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
