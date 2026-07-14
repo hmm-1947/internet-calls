@@ -40,28 +40,13 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
     }
   }
 
-    void _onSocketEvent(Map<String, dynamic> data) {
+  void _onSocketEvent(Map<String, dynamic> data) {
     final type = data['type'];
     if (type == 'chat_message' ||
         type == 'read_receipt' ||
         type == 'message_status') {
       _refreshDebounce?.cancel();
       _refreshDebounce = Timer(const Duration(milliseconds: 400), _refreshSilently);
-    } else if (type == 'user_online' || type == 'user_offline') {
-      final uid = data['user_id'];
-      final idx = _threads.indexWhere((t) => t['user_id'] == uid);
-      if (idx != -1) {
-        setState(() {
-          _threads[idx]['is_online'] = type == 'user_online';
-        });
-      }
-    }
-  } {
-    final type = data['type'];
-    if (type == 'chat_message' ||
-        type == 'read_receipt' ||
-        type == 'message_status') {
-      _refreshSilently();
     } else if (type == 'user_online' || type == 'user_offline') {
       final uid = data['user_id'];
       final idx = _threads.indexWhere((t) => t['user_id'] == uid);
