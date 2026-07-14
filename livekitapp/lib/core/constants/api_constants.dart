@@ -6,8 +6,10 @@ class ApiConstants {
   static const String userRegisterInitiate = '/user/register/initiate';
   static const String userRegisterVerifyOtp = '/user/register/verify-otp';
   static const String userLogin = '/user/login';
+  static const String userSessionCheck = '/user/session/check';
   static const String userListeners = '/user/listeners';
   static const String listenerLogin = '/listener/login';
+  static const String listenerSessionCheck = '/listener/session/check';
   static const String listenerStatus = '/listener/status';
   static const String listenerLogout = '/listener/logout';
   static const String callInitiate = '/call/initiate';

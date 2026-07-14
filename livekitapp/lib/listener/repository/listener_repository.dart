@@ -19,6 +19,14 @@ class ListenerRepository {
     return AuthResponse.fromJson(data);
   }
 
+  Future<bool> checkSessionActive(String token) async {
+    final response = await _apiClient.get(
+      ApiConstants.listenerSessionCheck,
+      token: token,
+    );
+    return response.statusCode == 200;
+  }
+
   Future<Map<String, dynamic>> getMe(
     String token, {
     bool forceRefresh = false,

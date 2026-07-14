@@ -6,16 +6,18 @@
   <title>Admin ka Panel</title>
   <style>
     :root {
-      --mint: #201a1a;
-      --leaf: #c9636b;
-      --leaf-dark: #a84850;
-      --sky: #bf5158;
-      --sky-dark: #a04148;
-      --ink: #d8c9c9;
-      --slate: #9c8484;
-      --line: #3a2e2e;
-      --white: rgba(35, 28, 28, .5);
-      --danger: #d9727a;
+      --mint: #f4f5f7;
+      --leaf: #e63946;
+      --leaf-dark: #c1121f;
+      --sky: #e63946;
+      --sky-dark: #c1121f;
+      --ink: #1f2430;
+      --slate: #7c8493;
+      --line: #ecedf1;
+      --white: #ffffff;
+      --danger: #e63946;
+      --bg: #f5f6f9;
+      --sidebar-w: 240px;
     }
 
     * {
@@ -24,21 +26,185 @@
 
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
-      max-width: 1500px;
-      margin: 32px auto;
-      padding: 0 20px;
-      background:
-        radial-gradient(circle at 15% 10%, rgba(191, 81, 88, .08), transparent 40%),
-        radial-gradient(circle at 85% 30%, rgba(168, 72, 80, .06), transparent 45%),
-        #221c1c;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
       color: var(--ink);
       min-height: 100vh;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      min-height: 100vh;
+    }
+
+    .side-nav {
+      background: var(--white);
+      border-right: 1px solid var(--line);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .side-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px 22px;
+      font-weight: 800;
+      font-size: 17px;
+      color: var(--ink);
+    }
+
+    .side-brand .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--leaf);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--slate);
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .nav-item .nav-ic {
+      width: 18px;
+      text-align: center;
+    }
+
+    .nav-item:hover {
+      background: #fbeaec;
+      color: var(--leaf);
+    }
+
+    .nav-item.active {
+      background: #fdecee;
+      color: var(--leaf);
+    }
+
+    .main-col {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .top-bar {
+      background: var(--white);
+      border-bottom: 1px solid var(--line);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .top-bar-title {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .admin-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      position: relative;
+      padding: 4px 8px;
+      border-radius: 10px;
+    }
+
+    .admin-chip:hover {
+      background: var(--mint);
+    }
+
+    .admin-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--leaf);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .admin-name-block {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+
+    .admin-name-block .an {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .admin-name-block .ar {
+      font-size: 11px;
+      color: var(--slate);
+    }
+
+    .admin-menu {
+      position: absolute;
+      top: 46px;
+      right: 0;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+      min-width: 160px;
+      display: none;
+      overflow: hidden;
+      z-index: 20;
+    }
+
+    .admin-menu.open {
+      display: block;
+    }
+
+    .admin-menu-item {
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .admin-menu-item:hover {
+      background: var(--mint);
+    }
+
+    .page-body {
+      padding: 24px 28px;
+      flex: 1;
     }
 
     h1 {
       font-size: 24px;
       letter-spacing: .5px;
-      text-transform: uppercase;
       color: var(--ink);
       display: flex;
       align-items: center;
@@ -53,7 +219,7 @@
       height: 12px;
       border-radius: 50%;
       background: var(--sky);
-      box-shadow: 0 0 8px 1px rgba(191, 81, 88, .3);
+      box-shadow: 0 0 8px 1px rgba(230, 57, 70, .3);
     }
 
     h2 {
@@ -73,11 +239,9 @@
       padding: 10px 12px;
       margin: 5px 0;
       width: 100%;
-      border: 1px solid rgba(255, 255, 255, .14);
+      border: 1px solid var(--line);
       border-radius: 8px;
-      background: rgba(255, 255, 255, .06);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      background: var(--white);
       color: var(--ink);
       font-size: 13px;
       transition: border-color .15s, box-shadow .15s;
@@ -86,7 +250,7 @@
     input:focus {
       outline: none;
       border-color: var(--sky);
-      box-shadow: 0 0 0 3px rgba(240, 74, 83, .18);
+      box-shadow: 0 0 0 3px rgba(230, 57, 70, .12);
     }
 
     .btn {
@@ -98,7 +262,6 @@
       font-size: 13px;
       font-weight: 700;
       letter-spacing: .2px;
-      text-transform: uppercase;
       transition: background .15s, transform .1s, box-shadow .15s;
     }
 
@@ -107,57 +270,47 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, rgba(191, 81, 88, .8), rgba(120, 42, 48, .8));
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      color: #f0e6e6;
+      background: var(--leaf);
+      color: #fff;
       width: 100%;
-      box-shadow: 0 3px 10px rgba(191, 81, 88, .2), inset 0 1px 0 rgba(255, 255, 255, .12);
-      border: 1px solid rgba(255, 255, 255, .12);
+      box-shadow: 0 3px 10px rgba(230, 57, 70, .25);
+      border: 1px solid transparent;
     }
 
     .btn-primary:hover {
-      background: linear-gradient(135deg, rgba(191, 81, 88, .9), rgba(160, 65, 72, .9));
-      box-shadow: 0 4px 14px rgba(191, 81, 88, .3), inset 0 1px 0 rgba(255, 255, 255, .15);
+      background: var(--leaf-dark);
     }
 
     .btn-danger {
-      background: rgba(217, 114, 122, .1);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      background: #fdeceb;
       color: var(--danger);
-      border: 1px solid rgba(217, 114, 122, .35);
+      border: 1px solid #f6c9c9;
     }
 
     .btn-danger:hover {
       background: var(--danger);
-      color: #221c1c;
+      color: #fff;
     }
 
     .btn-leaf {
-      background: linear-gradient(135deg, rgba(201, 99, 107, .8), rgba(168, 72, 80, .8));
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      color: #f0e6e6;
-      box-shadow: 0 3px 10px rgba(201, 99, 107, .2), inset 0 1px 0 rgba(255, 255, 255, .12);
-      border: 1px solid rgba(255, 255, 255, .12);
+      background: var(--leaf);
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(230, 57, 70, .2);
+      border: 1px solid transparent;
     }
 
     .btn-leaf:hover {
-      background: linear-gradient(135deg, rgba(201, 99, 107, .9), rgba(168, 72, 80, .9));
-      box-shadow: 0 4px 14px rgba(201, 99, 107, .3), inset 0 1px 0 rgba(255, 255, 255, .15);
+      background: var(--leaf-dark);
     }
 
     .btn-ghost {
-      background: rgba(255, 255, 255, .06);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      background: var(--mint);
       color: var(--ink);
-      border: 1px solid rgba(255, 255, 255, .14);
+      border: 1px solid var(--line);
     }
 
     .btn-ghost:hover {
-      background: rgba(255, 255, 255, .12);
+      background: #e9eaed;
     }
 
     .btn-ghost:disabled {
@@ -167,14 +320,115 @@
 
     .card {
       background: var(--white);
-      backdrop-filter: blur(18px) saturate(160%);
-      -webkit-backdrop-filter: blur(18px) saturate(160%);
       border-radius: 16px;
       padding: 20px 22px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .08);
+      box-shadow: 0 2px 10px rgba(20, 20, 30, .05);
       margin-bottom: 22px;
-      border: 1px solid rgba(255, 255, 255, .12);
-      border-top: 3px solid var(--sky);
+      border: 1px solid var(--line);
+    }
+
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .stat-card {
+      background: var(--white);
+      border-radius: 16px;
+      padding: 20px 22px;
+      box-shadow: 0 2px 10px rgba(20, 20, 30, .05);
+      border: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--slate);
+      margin-bottom: 4px;
+    }
+
+    .stat-label b {
+      display: block;
+      font-size: 15px;
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .stat-value {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--ink);
+      margin: 10px 0 6px;
+    }
+
+    .stat-value small {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--slate);
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: var(--slate);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .stat-sub .up {
+      color: #1c9a5b;
+      font-weight: 700;
+    }
+
+    .stat-sub .down {
+      color: var(--danger);
+      font-weight: 700;
+    }
+
+    .stat-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #fdeceb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: var(--leaf);
+      flex-shrink: 0;
+    }
+
+    .chart-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .chart-head h2 {
+      border-bottom: none;
+      padding-bottom: 0;
+      margin: 0;
+      font-size: 17px;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .range-select {
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
     }
 
     table {
@@ -185,15 +439,15 @@
     }
 
     th {
-      background: #1c1414;
-      color: var(--sky);
+      background: var(--mint);
+      color: var(--slate);
       padding: 10px 8px;
       text-align: left;
       font-weight: 700;
       text-transform: uppercase;
       font-size: 11px;
       letter-spacing: .4px;
-      border-bottom: 2px solid var(--sky);
+      border-bottom: 2px solid var(--line);
     }
 
     td {
@@ -206,7 +460,7 @@
     }
 
     tr:hover td {
-      background: #241414;
+      background: var(--mint);
     }
 
     #msg {
@@ -216,7 +470,7 @@
     }
 
     .ok {
-      color: var(--leaf-dark);
+      color: #1c9a5b;
     }
 
     .err {
@@ -232,18 +486,18 @@
     }
 
     .badge-yes {
-      background: #2a1414;
-      color: #ff5c5c;
+      background: #e6f7ee;
+      color: #1c9a5b;
     }
 
     .badge-no {
-      background: #241010;
+      background: #fdeceb;
       color: var(--danger);
     }
 
     .badge-role {
-      background: #241414;
-      color: #ff8080;
+      background: #fdeceb;
+      color: var(--leaf);
     }
 
     .layout {
@@ -254,14 +508,12 @@
 
     .sidebar {
       background: var(--white);
-      backdrop-filter: blur(18px) saturate(160%);
-      -webkit-backdrop-filter: blur(18px) saturate(160%);
       border-radius: 16px;
       padding: 14px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .08);
+      box-shadow: 0 2px 10px rgba(20, 20, 30, .05);
       max-height: 760px;
       overflow: auto;
-      border: 1px solid rgba(255, 255, 255, .12);
+      border: 1px solid var(--line);
     }
 
     .sidebar-tabs {
@@ -283,8 +535,8 @@
     }
 
     .tab.active {
-      background: var(--sky);
-      color: var(--white);
+      background: var(--leaf);
+      color: #fff;
     }
 
     .search-box {
@@ -303,11 +555,11 @@
     }
 
     .person-item:hover {
-      background: #241414;
+      background: var(--mint);
     }
 
     .person-item.selected {
-      background: #2a1010;
+      background: #fdeceb;
       border-color: var(--leaf);
     }
 
@@ -324,13 +576,11 @@
 
     .content {
       background: var(--white);
-      backdrop-filter: blur(18px) saturate(160%);
-      -webkit-backdrop-filter: blur(18px) saturate(160%);
       border-radius: 16px;
       padding: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .08);
+      box-shadow: 0 2px 10px rgba(20, 20, 30, .05);
       min-height: 400px;
-      border: 1px solid rgba(255, 255, 255, .12);
+      border: 1px solid var(--line);
     }
 
     .empty-state {
@@ -344,7 +594,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 2px solid var(--mint);
+      border-bottom: 2px solid var(--line);
       padding-bottom: 12px;
       margin-bottom: 16px;
     }
@@ -377,7 +627,7 @@
 
     .section-tab.active {
       background: var(--leaf);
-      color: var(--white);
+      color: #fff;
     }
 
     .page-size-row {
@@ -445,14 +695,14 @@
 
 
     .bubble-left {
-      background: #241414;
+      background: var(--mint);
       color: var(--ink);
       border-bottom-left-radius: 2px;
     }
 
     .bubble-right {
       background: var(--leaf);
-      color: var(--white);
+      color: #fff;
       border-bottom-right-radius: 2px;
     }
 
@@ -605,10 +855,78 @@
   </div>
 
   <div id="panelRoot" style="display:none;">
+  <div class="app-shell">
+    <div class="side-nav">
+      <div class="side-brand"><span class="brand-icon">&#128222;</span>LailaNowAdmin</div>
+      <div class="nav-item active" id="navDashboard" onclick="switchPage('dashboard')"><span class="nav-ic">&#9635;</span>Dashboard</div>
+      <div class="nav-item" id="navUsers" onclick="switchPage('users')"><span class="nav-ic">&#128100;</span>Users</div>
+      <div class="nav-item" id="navListeners" onclick="switchPage('listeners')"><span class="nav-ic">&#127911;</span>Listeners</div>
+    </div>
+    <div class="main-col">
+      <div class="top-bar">
+        <div class="top-bar-title" id="topBarTitle">Dashboard</div>
+        <div class="top-bar-right">
+          <div class="admin-chip" onclick="toggleAdminMenu()">
+            <div class="admin-avatar" id="adminAvatarInitial">A</div>
+            <div class="admin-name-block">
+              <span class="an" id="adminNameLabel">Admin</span>
+              <span class="ar">Admin</span>
+            </div>
+            <div class="admin-menu" id="adminMenu">
+              <div class="admin-menu-item" onclick="doAdminLogout()">Logout</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="page-body">
 
-  <h1><span class="dot"></span>Admin ka Panel
-    <button class="btn btn-ghost" style="margin-left:auto" onclick="doAdminLogout()">Logout</button>
-  </h1>
+  <div id="page-dashboard">
+
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div>
+        <div class="stat-label">Total number of<br><b>Users</b></div>
+        <div class="stat-value" id="statTotalUsers">–</div>
+        <div class="stat-sub">
+          <span class="up" id="statActiveUsers">0 active</span>
+          <span class="down" id="statInactiveUsers">0 inactive</span>
+        </div>
+      </div>
+      <div class="stat-icon">&#128101;</div>
+    </div>
+    <div class="stat-card">
+      <div>
+        <div class="stat-label">Total number of<br><b>Listeners</b></div>
+        <div class="stat-value" id="statTotalListeners">–</div>
+        <div class="stat-sub">
+          <span class="up" id="statActiveListeners">0 active</span>
+          <span class="down" id="statInactiveListeners">0 inactive</span>
+        </div>
+      </div>
+      <div class="stat-icon">&#127911;</div>
+    </div>
+    <div class="stat-card">
+      <div>
+        <div class="stat-label">Average Call<br><b>Duration</b></div>
+        <div class="stat-value" id="statAvgDuration">–</div>
+      </div>
+      <div class="stat-icon">&#128337;</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-head">
+      <h2 style="border:none;padding:0;margin:0;text-transform:none;letter-spacing:0;font-size:17px;color:var(--ink);font-weight:800">Calls Over Time</h2>
+      <select class="range-select" id="callsRangeSelect" onchange="loadOverview()">
+        <option value="day">Today</option>
+        <option value="week">Last 1 Week</option>
+        <option value="month" selected>Last 1 Month</option>
+        <option value="6months">Last 6 Months</option>
+        <option value="all">All Time</option>
+      </select>
+    </div>
+    <canvas id="callsChart" height="90"></canvas>
+  </div>
 
 
   <div class="grid-2">
@@ -641,29 +959,68 @@
   </div>
 
   <div class="card">
-    <h2>People
-      <button class="btn btn-ghost" onclick="loadPeople()">↻ Refresh</button>
+    <h2>Live Calls
+      <button class="btn btn-ghost" onclick="loadActiveCalls()">↻ Refresh</button>
     </h2>
-    <div class="layout">
-      <div class="sidebar">
-        <div class="sidebar-tabs">
-          <div class="tab active" id="tabUsers" onclick="switchPeopleTab('user')">Users</div>
-          <div class="tab" id="tabListeners" onclick="switchPeopleTab('listener')">Listeners</div>
-        </div>
-        <input class="search-box" id="personSearch" placeholder="Search by name or phone" oninput="renderPeopleList()">
-        <div id="peopleList"></div>
-      </div>
+    <div id="activeCallsWrap"></div>
+  </div>
 
-      <div class="content" id="personContent">
-        <div class="empty-state">Select a user or listener from the list to view their call logs and recordings.</div>
+  <div class="card">
+    <h2>Leaderboard
+      <button class="btn btn-ghost" onclick="loadStats()">↻ Refresh</button>
+    </h2>
+    <div class="sidebar-tabs">
+      <div class="tab active" id="tabStatsUsers" onclick="switchStatsTab('user')">Users</div>
+      <div class="tab" id="tabStatsListeners" onclick="switchStatsTab('listener')">Listeners</div>
+    </div>
+    <div id="statsTableWrap"></div>
+  </div>
+
+  </div>
+
+  <div id="page-users" style="display:none;">
+    <div class="card">
+      <h2>Users
+        <button class="btn btn-ghost" onclick="loadPeople()">↻ Refresh</button>
+      </h2>
+      <div class="layout">
+        <div class="sidebar">
+          <input class="search-box" id="userSearch" placeholder="Search by name or phone" oninput="renderPersonList('user')">
+          <div id="userList"></div>
+        </div>
+        <div class="content" id="userContent">
+          <div class="empty-state">Select a user from the list to view their call logs, recordings, chats and coins.</div>
+        </div>
       </div>
     </div>
   </div>
 
+  <div id="page-listeners" style="display:none;">
+    <div class="card">
+      <h2>Listeners
+        <button class="btn btn-ghost" onclick="loadPeople()">↻ Refresh</button>
+      </h2>
+      <div class="layout">
+        <div class="sidebar">
+          <input class="search-box" id="listenerSearch" placeholder="Search by name or phone" oninput="renderPersonList('listener')">
+          <div id="listenerList"></div>
+        </div>
+        <div class="content" id="listenerContent">
+          <div class="empty-state">Select a listener from the list to view their call logs, recordings, chats and coins.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+      </div>
+    </div>
+  </div>
   </div>
 
 <script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script>
+
       const API_URL = CONFIG.API_URL;
 
     function getAdminToken() { return localStorage.getItem('adminToken') || ''; }
@@ -782,7 +1139,91 @@
       document.getElementById('panelRoot').style.display = '';
       loadPeople();
       loadCoinSettings();
+      loadActiveCalls();
+      loadStats();
+      loadOverview();
+      setAdminNameLabel();
       connectAdminWs();
+    }
+
+    function switchPage(page) {
+      document.getElementById('page-dashboard').style.display = page === 'dashboard' ? '' : 'none';
+      document.getElementById('page-users').style.display = page === 'users' ? '' : 'none';
+      document.getElementById('page-listeners').style.display = page === 'listeners' ? '' : 'none';
+      document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
+      document.getElementById('navUsers').classList.toggle('active', page === 'users');
+      document.getElementById('navListeners').classList.toggle('active', page === 'listeners');
+      document.getElementById('topBarTitle').textContent = page === 'dashboard' ? 'Dashboard' : page === 'users' ? 'Users' : 'Listeners';
+    }
+
+    function setAdminNameLabel() {
+      const name = localStorage.getItem('adminUsername') || 'Admin';
+      document.getElementById('adminNameLabel').textContent = name;
+      document.getElementById('adminAvatarInitial').textContent = name.charAt(0).toUpperCase();
+    }
+
+    function toggleAdminMenu() {
+      document.getElementById('adminMenu').classList.toggle('open');
+    }
+
+    document.addEventListener('click', (e) => {
+      const chip = e.target.closest('.admin-chip');
+      const menu = document.getElementById('adminMenu');
+      if (!chip && menu) menu.classList.remove('open');
+    });
+
+    let callsChartInstance = null;
+
+    async function loadOverview() {
+      const range = document.getElementById('callsRangeSelect').value;
+      try {
+        const res = await fetch(API_URL + '/admin/stats/overview?range=' + range, { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+
+        document.getElementById('statTotalUsers').textContent = data.total_users;
+        document.getElementById('statActiveUsers').textContent = data.active_users + ' active';
+        document.getElementById('statInactiveUsers').textContent = data.inactive_users + ' inactive';
+
+        document.getElementById('statTotalListeners').textContent = data.total_listeners;
+        document.getElementById('statActiveListeners').textContent = data.active_listeners + ' active';
+        document.getElementById('statInactiveListeners').textContent = data.inactive_listeners + ' inactive';
+
+        document.getElementById('statAvgDuration').innerHTML = formatDuration(data.avg_call_duration_seconds) + ' <small>avg</small>';
+
+        renderCallsChart(data.calls_series);
+      } catch (e) { }
+    }
+
+    function renderCallsChart(series) {
+      const ctx = document.getElementById('callsChart');
+      const labels = series.map(s => s.label);
+      const counts = series.map(s => s.count);
+      if (callsChartInstance) callsChartInstance.destroy();
+      callsChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Number of Calls',
+            data: counts,
+            borderColor: '#e63946',
+            backgroundColor: 'rgba(230,57,70,0.08)',
+            fill: true,
+            tension: 0.35,
+            pointBackgroundColor: '#e63946',
+            pointRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true, position: 'bottom' } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#ecedf1' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
     }
 
     function setLoginMsg(text, ok) {
@@ -810,12 +1251,14 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Login failed');
         setAdminToken(data.token);
+        localStorage.setItem('adminUsername', data.username || 'Admin');
         showPanel();
       } catch (e) { setLoginMsg('✗ ' + e.message, false); }
     }
 
     function doAdminLogout() {
       clearAdminToken();
+      localStorage.removeItem('adminUsername');
       if (adminWs) adminWs.close();
       showLoginScreen();
     }
@@ -870,6 +1313,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to create account');
         setAdminToken(data.token);
+        localStorage.setItem('adminUsername', username || 'Admin');
         window.history.replaceState({}, document.title, window.location.pathname);
         showPanel();
       } catch (e) { setSetupMsg('✗ ' + e.message, false); }
@@ -897,7 +1341,6 @@
       el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
     }
 
-    let peopleTab = 'user';
     let usersCache = [];
     let listenersCache = [];
     let selectedPerson = null;
@@ -955,31 +1398,114 @@
     }
 
 
+    let statsTab = 'user';
+    let statsCache = { user: [], listener: [] };
+
+    function formatDuration(totalSeconds) {
+      const s = totalSeconds || 0;
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      if (h > 0) return `${h}h ${m}m ${sec}s`;
+      if (m > 0) return `${m}m ${sec}s`;
+      return `${sec}s`;
+    }
+
+    async function loadActiveCalls() {
+      const wrap = document.getElementById('activeCallsWrap');
+      try {
+        const res = await fetch(API_URL + '/admin/calls/active', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load active calls');
+        if (data.length === 0) {
+          wrap.innerHTML = '<div class="empty-state">No calls in progress.</div>';
+          return;
+        }
+        wrap.innerHTML = `
+          <table>
+            <thead><tr><th>Room</th><th>User</th><th>Listener</th><th>Type</th><th>Status</th><th>Connected At</th></tr></thead>
+            <tbody>
+              ${data.map(c => `
+                <tr>
+                  <td>${c.room_name}</td>
+                  <td>${c.user_name || ''}</td>
+                  <td>${c.listener_name || ''}</td>
+                  <td>${c.call_type}</td>
+                  <td>${c.status}</td>
+                  <td>${c.connected_at || ''}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (e) { wrap.innerHTML = '<div class="empty-state">' + e.message + '</div>'; }
+    }
+
+    function switchStatsTab(tab) {
+      statsTab = tab;
+      document.getElementById('tabStatsUsers').classList.toggle('active', tab === 'user');
+      document.getElementById('tabStatsListeners').classList.toggle('active', tab === 'listener');
+      renderStatsTable();
+    }
+
+    async function loadStats() {
+      const wrap = document.getElementById('statsTableWrap');
+      try {
+        const [uRes, lRes] = await Promise.all([
+          fetch(API_URL + '/admin/stats/users', { headers: authHeaders() }),
+          fetch(API_URL + '/admin/stats/listeners', { headers: authHeaders() })
+        ]);
+        statsCache.user = await uRes.json();
+        statsCache.listener = await lRes.json();
+        if (!uRes.ok) throw new Error(statsCache.user.detail || 'Failed to load user stats');
+        if (!lRes.ok) throw new Error(statsCache.listener.detail || 'Failed to load listener stats');
+        renderStatsTable();
+      } catch (e) { wrap.innerHTML = '<div class="empty-state">' + e.message + '</div>'; }
+    }
+
+    function renderStatsTable() {
+      const wrap = document.getElementById('statsTableWrap');
+      const data = statsCache[statsTab] || [];
+      if (data.length === 0) {
+        wrap.innerHTML = '<div class="empty-state">No data yet.</div>';
+        return;
+      }
+      const nameCol = statsTab === 'user' ? 'User' : 'Listener';
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>${nameCol}</th><th>Phone</th><th>Total Calls</th><th>Total Call Time</th><th>Chat Messages Sent</th></tr></thead>
+          <tbody>
+            ${data.map(p => `
+              <tr>
+                <td>${p.name || ''}</td>
+                <td>${p.phone || ''}</td>
+                <td>${p.total_calls}</td>
+                <td>${formatDuration(p.total_call_seconds)}</td>
+                <td>${p.total_chat_messages}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
     async function loadPeople() {
       try {
         const [uRes, lRes] = await Promise.all([
           fetch(API_URL + '/admin/coins/users', { headers: authHeaders() }),
-          fetch(API_URL + '/admin/listeners', { headers: authHeaders() })
+          fetch(API_URL + '/admin/coins/listeners', { headers: authHeaders() })
         ]);
         usersCache = await uRes.json();
         listenersCache = await lRes.json();
         if (!uRes.ok) throw new Error(usersCache.detail || 'Failed to load users');
         if (!lRes.ok) throw new Error(listenersCache.detail || 'Failed to load listeners');
-        renderPeopleList();
+        renderPersonList('user');
+        renderPersonList('listener');
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
 
-    function switchPeopleTab(tab) {
-      peopleTab = tab;
-      document.getElementById('tabUsers').classList.toggle('active', tab === 'user');
-      document.getElementById('tabListeners').classList.toggle('active', tab === 'listener');
-      renderPeopleList();
-    }
-
-    function renderPeopleList() {
-      const list = document.getElementById('peopleList');
-      const q = document.getElementById('personSearch').value.trim().toLowerCase();
-      const source = peopleTab === 'user' ? usersCache : listenersCache;
+    function renderPersonList(type) {
+      const list = document.getElementById(type === 'user' ? 'userList' : 'listenerList');
+      const q = document.getElementById(type === 'user' ? 'userSearch' : 'listenerSearch').value.trim().toLowerCase();
+      const source = type === 'user' ? usersCache : listenersCache;
       const filtered = (source || []).filter(p =>
         (p.name || '').toLowerCase().includes(q) || (p.phone || '').includes(q)
       ).sort((a, b) => (b.is_online === true) - (a.is_online === true));
@@ -990,12 +1516,10 @@
       list.innerHTML = '';
       filtered.forEach(p => {
         const div = document.createElement('div');
-        div.className = 'person-item' + (selectedPerson && selectedPerson.type === peopleTab && selectedPerson.id === p.id ? ' selected' : '');
-        const extra = peopleTab === 'user'
-          ? `${p.coins} coins · <span class="badge ${p.is_online ? 'badge-yes' : 'badge-no'}">${p.is_online ? 'Online' : 'Offline'}</span>`
-          : `<span class="badge ${p.is_online ? 'badge-yes' : 'badge-no'}">${p.is_online ? 'Online' : 'Offline'}</span>`;
+        div.className = 'person-item' + (selectedPerson && selectedPerson.type === type && selectedPerson.id === p.id ? ' selected' : '');
+        const extra = `${p.coins} coins · <span class="badge ${p.is_online ? 'badge-yes' : 'badge-no'}">${p.is_online ? 'Online' : 'Offline'}</span>${p.is_active === false ? ' · <span class="badge badge-no">Inactive</span>' : ''}`;
         div.innerHTML = `<span class="person-name">${p.name}</span><span class="person-sub">${p.phone} · ${extra}</span>`;
-        div.onclick = () => selectPerson(peopleTab, p);
+        div.onclick = () => selectPerson(type, p);
         list.appendChild(div);
       });
     }
@@ -1005,14 +1529,14 @@
       logSection = 'calls';
       logPage = 1;
       otherPersonFilter = null;
-      renderPeopleList();
+      renderPersonList(type);
       renderPersonContent();
       loadPersonLogs();
     }
 
     function renderPersonContent() {
-      const content = document.getElementById('personContent');
       const p = selectedPerson;
+      const content = document.getElementById(p.type === 'user' ? 'userContent' : 'listenerContent');
       const roleLabel = p.type === 'user' ? 'User' : 'Listener';
       content.innerHTML = `
 <div class="detail-header">
@@ -1030,9 +1554,13 @@
           <div style="display:flex;gap:6px;align-items:center">
             <input type="number" id="amount-${p.id}" placeholder="±amount" style="width:90px">
             <button class="btn btn-leaf" onclick="adjustCoins(${p.id})">Apply</button>
+            <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('user', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
             <button class="btn btn-danger" onclick="deletePerson('user', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete User</button>
           </div>` : `
           <div style="display:flex;gap:6px;align-items:center">
+            <input type="number" id="amount-${p.id}" placeholder="±amount" style="width:90px">
+            <button class="btn btn-leaf" onclick="adjustListenerCoins(${p.id})">Apply</button>
+            <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
             <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
           </div>`}
         </div>
@@ -1249,6 +1777,23 @@ ${logSection === 'chats' ? '' : `
       logPage += delta;
       renderLogTable();
     }
+    async function toggleActive(type, id, currentActive) {
+      const newActive = !currentActive;
+      try {
+        const endpoint = type === 'user' ? `/admin/users/${id}/active` : `/admin/listeners/${id}/active`;
+        const res = await fetch(API_URL + endpoint, {
+          method: 'PATCH', headers: authHeaders(true),
+          body: JSON.stringify({ is_active: newActive })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg(`✓ ${type === 'user' ? 'User' : 'Listener'} ${newActive ? 'activated' : 'deactivated'}`, true);
+        if (selectedPerson) selectedPerson.raw.is_active = newActive;
+        loadPeople();
+        renderPersonContent();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
     async function deletePerson(type, id, name) {
       if (!confirm(`Delete ${type} "${name}"? This will permanently remove all their calls, chats, recordings, ratings, and sessions. This cannot be undone.`)) return;
       try {
@@ -1258,7 +1803,7 @@ ${logSection === 'chats' ? '' : `
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg(`✓ ${type === 'user' ? 'User' : 'Listener'} deleted`, true);
         selectedPerson = null;
-        document.getElementById('personContent').innerHTML = '<div class="empty-state">Select a user or listener from the list to view their call logs and recordings.</div>';
+        document.getElementById(type === 'user' ? 'userContent' : 'listenerContent').innerHTML = '<div class="empty-state">Select a ' + type + ' from the list to view their call logs, recordings, chats and coins.</div>';
         loadPeople();
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
@@ -1270,6 +1815,21 @@ ${logSection === 'chats' ? '' : `
         const res = await fetch(API_URL + '/admin/coins/adjust', {
           method: 'POST', headers: authHeaders(true),
           body: JSON.stringify({ user_id: userId, amount })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg('✓ Coins updated', true);
+        loadPeople();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    async function adjustListenerCoins(listenerId) {
+      const amount = parseInt(document.getElementById('amount-' + listenerId).value);
+      if (!amount) { setMsg('Enter a valid amount.', false); return; }
+      try {
+        const res = await fetch(API_URL + '/admin/coins/listener/adjust', {
+          method: 'POST', headers: authHeaders(true),
+          body: JSON.stringify({ listener_id: listenerId, amount })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
@@ -1305,10 +1865,10 @@ ${logSection === 'chats' ? '' : `
           const data = JSON.parse(evt.data);
           if (data.type === 'user_status') {
             const u = usersCache.find(x => x.id === data.id);
-            if (u) { u.is_online = data.is_online; renderPeopleList(); }
+            if (u) { u.is_online = data.is_online; renderPersonList('user'); }
           } else if (data.type === 'listener_status') {
             const l = listenersCache.find(x => x.id === data.id);
-            if (l) { l.is_online = data.is_online; renderPeopleList(); }
+            if (l) { l.is_online = data.is_online; renderPersonList('listener'); }
           }
         } catch (e) {}
       };

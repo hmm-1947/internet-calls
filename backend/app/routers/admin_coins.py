@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models.models import User, CoinSettings
+from app.models.models import User, CoinSettings, Listener
 from app.routers.admin import verify_admin
 from app.utils.coins import get_coin_settings
 from app.core.ws_manager import manager
@@ -13,6 +13,10 @@ class CoinAdjust(BaseModel):
     user_id: int
     amount: int
 
+class ListenerCoinAdjust(BaseModel):
+    listener_id: int
+    amount: int
+
 class CoinSettingsUpdate(BaseModel):
     audio_coins_per_minute: int
     video_coins_per_minute: int
@@ -22,7 +26,7 @@ class CoinSettingsUpdate(BaseModel):
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
     users = db.query(User).all()
-    result = [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins, "is_online": manager.is_user_online(u.id)} for u in users]
+    result = [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins, "is_active": u.is_active, "is_online": manager.is_user_online(u.id)} for u in users]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -36,6 +40,24 @@ def adjust_coins(payload: CoinAdjust, db: Session = Depends(get_db), _=Depends(v
         user.coins = 0
     db.commit()
     return {"id": user.id, "coins": user.coins}
+
+@router.get("/listeners")
+def list_listeners(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    listeners = db.query(Listener).all()
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "coins": l.coins, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id)} for l in listeners]
+    result.sort(key=lambda x: not x["is_online"])
+    return result
+
+@router.post("/listener/adjust")
+def adjust_listener_coins(payload: ListenerCoinAdjust, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    listener = db.query(Listener).filter(Listener.id == payload.listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    listener.coins += payload.amount
+    if listener.coins < 0:
+        listener.coins = 0
+    db.commit()
+    return {"id": listener.id, "coins": listener.coins}
 
 @router.get("/settings")
 def get_settings(db: Session = Depends(get_db), _=Depends(verify_admin)):

@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.models.models import ChatMessage
@@ -13,8 +15,14 @@ from app.utils.email_otp import generate_otp_code, send_otp_email
 from app.utils.security import hash_password, verify_password, generate_session_token
 from app.models.models import Listener
 from app.core.deps import get_current_user
+from app.utils.coins import chat_message_coin_cost
 
 router = APIRouter(prefix="/user", tags=["user-auth"])
+
+@router.get("/session/check")
+def session_check(current_user: User = Depends(get_current_user)):
+    return {"valid": True, "is_active": current_user.is_active}
+
 
 @router.post("/register/initiate")
 def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_db)):
@@ -82,7 +90,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="Account disabled")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     token = generate_session_token()
     db.add(SessionModel(token=token, user_id=user.id))
     db.commit()
@@ -92,12 +100,24 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
 @router.get("/listeners")
 def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     listeners = db.query(Listener).filter(Listener.is_active == True).all()
+    listener_ids = [l.id for l in listeners]
+    rating_rows = db.query(
+        CallRating.listener_id,
+        sqlfunc.avg(CallRating.rating),
+        sqlfunc.count(CallRating.id),
+    ).filter(CallRating.listener_id.in_(listener_ids)).group_by(CallRating.listener_id).all()
+    ratings_by_listener = {r[0]: (r[1], r[2]) for r in rating_rows}
+
     result = []
     for l in listeners:
-        avg_rating = db.query(sqlfunc.avg(CallRating.rating)).filter(CallRating.listener_id == l.id).scalar()
-        rating_count = db.query(sqlfunc.count(CallRating.id)).filter(CallRating.listener_id == l.id).scalar()
+        avg_rating, rating_count = ratings_by_listener.get(l.id, (None, 0))
+        try:
+            tags = json.loads(l.tags) if l.tags else []
+        except (TypeError, json.JSONDecodeError):
+            tags = []
         result.append({
             "id": l.id, "name": l.name, "is_online": manager.is_listener_online(l.id),
+            "tags": tags,
             "avg_rating": round(avg_rating, 1) if avg_rating else None,
             "rating_count": rating_count or 0,
         })
@@ -105,7 +125,6 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
 
 @router.get("/listener/{listener_id}")
 def get_listener_profile(listener_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    import json
     l = db.query(Listener).filter(Listener.id == listener_id, Listener.is_active == True).first()
     if not l:
         raise HTTPException(status_code=404, detail="Listener not found")
@@ -133,8 +152,16 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
 
     
 @router.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
-    return {"id": current_user.id, "name": current_user.name, "email": current_user.email, "phone": current_user.phone, "coins": current_user.coins, "bio": current_user.bio}
+def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "name": current_user.name,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "coins": current_user.coins,
+        "chat_message_coin_cost": chat_message_coin_cost(db),
+        "bio": current_user.bio,
+    }
 
 @router.post("/bio")
 def update_bio(payload: UserBioUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

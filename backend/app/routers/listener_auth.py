@@ -13,6 +13,11 @@ from app.core.deps import get_current_listener
 
 router = APIRouter(prefix="/listener", tags=["listener-auth"])
 
+@router.get("/session/check")
+def session_check(current_listener: Listener = Depends(get_current_listener)):
+    return {"valid": True, "is_active": current_listener.is_active}
+
+
 def _parse_list(value):
     if not value:
         return []
@@ -92,7 +97,7 @@ def login(payload: ListenerLogin, db: Session = Depends(get_db)):
     if not listener or not verify_password(payload.password, listener.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not listener.is_active:
-        raise HTTPException(status_code=403, detail="Account disabled")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     token = generate_session_token()
     db.add(SessionModel(token=token, listener_id=listener.id))
     listener.is_online = True
@@ -134,7 +139,6 @@ def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), cur
     db.commit()
     return {"status": "updated"}
 
-@router.get("/users")
 @router.get("/users")
 def get_users(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     from app.models.models import User

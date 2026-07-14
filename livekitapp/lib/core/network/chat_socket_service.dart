@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
@@ -16,6 +17,7 @@ class ChatSocketService {
   String? _role;
   bool _connected = false;
   bool _manuallyDisconnected = false;
+  int _failedAttempts = 0;
 
   Stream<Map<String, dynamic>> get stream {
     _controller ??= StreamController<Map<String, dynamic>>.broadcast();
@@ -26,6 +28,7 @@ class ChatSocketService {
 
   void connect(String token, String role) {
     _manuallyDisconnected = false;
+    _failedAttempts = 0;
     if (_channel != null && _token == token && _role == role) return;
     _token = token;
     _role = role;
@@ -33,23 +36,49 @@ class ChatSocketService {
     _open();
   }
 
-  void _open() {
+  void _open() async {
     final wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws');
     final path = _role == 'user' ? '/chat/ws/user' : '/chat/ws/listener';
-    _channel = WebSocketChannel.connect(Uri.parse('$wsUrl$path?token=$_token'));
+    try {
+      _channel = WebSocketChannel.connect(
+        Uri.parse('$wsUrl$path?token=$_token'),
+      );
+      await _channel!.ready;
+    } catch (_) {
+      _channel = null;
+      await _verifySessionThenReconnect();
+      return;
+    }
     _connected = true;
     _channel!.stream.listen(
       (data) {
+        _failedAttempts = 0;
         final decoded = jsonDecode(data);
         _controller?.add(decoded);
       },
-      onDone: _scheduleReconnect,
+      onDone: () {
+        final code = _channel?.closeCode;
+        if (code == 4003 || code == 4001) {
+          _stopAndForceLogout();
+          return;
+        }
+        _scheduleReconnect();
+      },
       onError: (_) => _scheduleReconnect(),
     );
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       send({'type': 'ping'});
     });
+  }
+
+  void _stopAndForceLogout() {
+    _manuallyDisconnected = true;
+    _connected = false;
+    _channel = null;
+    _pingTimer?.cancel();
+    _reconnectTimer?.cancel();
+    _controller?.add({'type': 'force_logout'});
   }
 
   void send(Map<String, dynamic> data) {
@@ -76,6 +105,38 @@ class ChatSocketService {
     _pingTimer?.cancel();
     _reconnectTimer?.cancel();
     if (_manuallyDisconnected) return;
+    _failedAttempts++;
+    if (_failedAttempts >= 2) {
+      _verifySessionThenReconnect();
+      return;
+    }
+    _reconnectTimer = Timer(const Duration(seconds: 3), () {
+      if (_token != null) _open();
+    });
+  }
+
+  Future<void> _verifySessionThenReconnect() async {
+    final token = _token;
+    final role = _role;
+    if (token == null || role == null) return;
+    try {
+      final path = role == 'user'
+          ? ApiConstants.userSessionCheck
+          : ApiConstants.listenerSessionCheck;
+      final response = await http
+          .get(
+            Uri.parse('${ApiConstants.baseUrl}$path'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 401) {
+        _stopAndForceLogout();
+        return;
+      }
+    } catch (_) {
+      // network error, keep retrying
+    }
+    _failedAttempts = 0;
     _reconnectTimer = Timer(const Duration(seconds: 3), () {
       if (_token != null) _open();
     });
@@ -83,6 +144,7 @@ class ChatSocketService {
 
   void disconnect() {
     _manuallyDisconnected = true;
+    _failedAttempts = 0;
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
     _channel?.sink.close();
