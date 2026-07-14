@@ -5,7 +5,9 @@ import 'package:livekitapp/user/screens/user_home_screen.dart';
 import 'package:livekitapp/user/screens/chats_list_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 import 'package:livekitapp/user/screens/call_history_screen.dart';
+import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/shared/widgets/faded_indexed_stack.dart';
+import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class UserMainScreen extends StatefulWidget {
   const UserMainScreen({super.key});
@@ -44,7 +46,9 @@ class _UserMainScreenState extends State<UserMainScreen> {
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,
         onDestinationSelected: _onDestinationSelected,
-        onCrownTap: () {},
+        onCrownTap: () {
+          Navigator.of(context).push(fadeRoute(const UpgradeScreen()));
+        },
         labels: const ['Home', 'Chat', 'Calls', 'Profile'],
         icons: [
           const Icon(Icons.grid_view_rounded),

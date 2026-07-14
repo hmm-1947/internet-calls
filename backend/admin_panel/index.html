@@ -635,6 +635,39 @@
   </div>
 
   <div class="card">
+    <h2 id="billingFormTitle">Add Billing Plan</h2>
+    <input type="hidden" id="billingPlanId">
+    <label style="font-size:13px;color:var(--slate);font-weight:600">Plan name</label>
+    <input id="billingName" placeholder="e.g. Value Pack">
+    <label style="font-size:13px;color:var(--slate);font-weight:600">Price</label>
+    <input id="billingPrice" placeholder="e.g. 499" type="number">
+    <label style="font-size:13px;color:var(--slate);font-weight:600">Billing cycle</label>
+    <select id="billingPlanType" style="padding:10px 12px;margin:5px 0;width:100%;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
+      <option value="monthly">Monthly</option>
+      <option value="quarterly">Quarterly</option>
+      <option value="yearly">Yearly</option>
+    </select>
+    <label style="font-size:13px;color:var(--slate);font-weight:600">Validity (number of cycles, e.g. 1)</label>
+    <input id="billingValidity" placeholder="e.g. 1" type="number">
+    <label style="font-size:13px;color:var(--slate);font-weight:600">Features / description (one per line)</label>
+    <textarea id="billingDescription" placeholder="e.g. Unlimited chat&#10;Priority support" style="padding:10px 12px;margin:5px 0;width:100%;min-height:80px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;font-family:inherit;"></textarea>
+    <label style="font-size:13px;color:var(--slate);font-weight:600;display:flex;align-items:center;gap:8px;margin-top:8px;">
+      <input type="checkbox" id="billingFeatured" style="width:auto;margin:0;"> Mark as Best Seller
+    </label>
+    <label style="font-size:13px;color:var(--slate);font-weight:600;display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="billingActive" style="width:auto;margin:0;" checked> Active (visible to users)
+    </label>
+    <button class="btn btn-leaf" onclick="saveBillingPlan()">Save Plan</button>
+    <button class="btn btn-ghost" id="billingCancelEdit" style="display:none;" onclick="resetBillingForm()">Cancel edit</button>
+    <div id="billingMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Billing Plans</h2>
+    <div id="billingPlansList"></div>
+  </div>
+
+  <div class="card">
     <h2>Invite New Admin</h2>
     <button class="btn btn-primary" style="width:auto" onclick="generateAdminInvite()">Generate Invite Link</button>
     <div id="inviteLinkWrap" style="margin-top:10px;"></div>
@@ -782,6 +815,7 @@
       document.getElementById('panelRoot').style.display = '';
       loadPeople();
       loadCoinSettings();
+      loadBillingPlans();
       connectAdminWs();
     }
 
@@ -952,6 +986,115 @@
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg('✓ Coin settings saved', true);
       } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    let billingPlansCache = [];
+
+    function setBillingMsg(text, ok) {
+      const el = document.getElementById('billingMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function loadBillingPlans() {
+      try {
+        const res = await fetch(API_URL + '/admin/billing/plans', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load billing plans');
+        billingPlansCache = data;
+        renderBillingPlans();
+      } catch (e) { setBillingMsg('✗ ' + e.message, false); }
+    }
+
+    function renderBillingPlans() {
+      const list = document.getElementById('billingPlansList');
+      if (!billingPlansCache.length) {
+        list.innerHTML = '<div class="empty-state">No billing plans yet. Add one above.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      billingPlansCache.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'person-item';
+        div.style.cursor = 'default';
+        const cycleLabel = p.plan_type.charAt(0).toUpperCase() + p.plan_type.slice(1);
+        div.innerHTML = `
+          <span class="person-name">${p.name} ${p.is_featured ? '<span class="badge badge-yes">Best Seller</span>' : ''} ${!p.is_active ? '<span class="badge badge-no">Inactive</span>' : ''}</span>
+          <span class="person-sub">₹${p.price} · ${cycleLabel} · Validity: ${p.validity_value} cycle(s)</span>
+          <div style="margin-top:8px;">
+            <button class="btn btn-ghost" style="width:auto;padding:6px 12px;font-size:11px;" onclick="editBillingPlan(${p.id})">Edit</button>
+            <button class="btn btn-ghost" style="width:auto;padding:6px 12px;font-size:11px;color:var(--danger);" onclick="deleteBillingPlan(${p.id})">Delete</button>
+          </div>`;
+        list.appendChild(div);
+      });
+    }
+
+    function editBillingPlan(id) {
+      const p = billingPlansCache.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('billingFormTitle').textContent = 'Edit Billing Plan';
+      document.getElementById('billingPlanId').value = p.id;
+      document.getElementById('billingName').value = p.name;
+      document.getElementById('billingPrice').value = p.price;
+      document.getElementById('billingPlanType').value = p.plan_type;
+      document.getElementById('billingValidity').value = p.validity_value;
+      document.getElementById('billingDescription').value = p.description || '';
+      document.getElementById('billingFeatured').checked = !!p.is_featured;
+      document.getElementById('billingActive').checked = !!p.is_active;
+      document.getElementById('billingCancelEdit').style.display = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetBillingForm() {
+      document.getElementById('billingFormTitle').textContent = 'Add Billing Plan';
+      document.getElementById('billingPlanId').value = '';
+      document.getElementById('billingName').value = '';
+      document.getElementById('billingPrice').value = '';
+      document.getElementById('billingPlanType').value = 'monthly';
+      document.getElementById('billingValidity').value = '';
+      document.getElementById('billingDescription').value = '';
+      document.getElementById('billingFeatured').checked = false;
+      document.getElementById('billingActive').checked = true;
+      document.getElementById('billingCancelEdit').style.display = 'none';
+      setBillingMsg('', null);
+    }
+
+    async function saveBillingPlan() {
+      const id = document.getElementById('billingPlanId').value;
+      const name = document.getElementById('billingName').value.trim();
+      const price = parseInt(document.getElementById('billingPrice').value);
+      const plan_type = document.getElementById('billingPlanType').value;
+      const validity_value = parseInt(document.getElementById('billingValidity').value);
+      const description = document.getElementById('billingDescription').value.trim();
+      const is_featured = document.getElementById('billingFeatured').checked;
+      const is_active = document.getElementById('billingActive').checked;
+
+      if (!name) { setBillingMsg('✗ Plan name is required.', false); return; }
+      if (!price || price <= 0) { setBillingMsg('✗ Price must be greater than 0.', false); return; }
+      if (!validity_value || validity_value <= 0) { setBillingMsg('✗ Validity must be greater than 0.', false); return; }
+
+      const payload = { name, price, plan_type, validity_value, description, is_featured, is_active, sort_order: 0 };
+      setBillingMsg('Saving…', null);
+      try {
+        const url = id ? `${API_URL}/admin/billing/plans/${id}` : `${API_URL}/admin/billing/plans`;
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, { method, headers: authHeaders(true), body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data.detail && (data.detail[0]?.msg || data.detail)) || 'Failed to save plan');
+        setBillingMsg('✓ Plan saved', true);
+        resetBillingForm();
+        loadBillingPlans();
+      } catch (e) { setBillingMsg('✗ ' + e.message, false); }
+    }
+
+    async function deleteBillingPlan(id) {
+      if (!confirm('Delete this billing plan?')) return;
+      try {
+        const res = await fetch(`${API_URL}/admin/billing/plans/${id}`, { method: 'DELETE', headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to delete plan');
+        loadBillingPlans();
+      } catch (e) { setBillingMsg('✗ ' + e.message, false); }
     }
 
 

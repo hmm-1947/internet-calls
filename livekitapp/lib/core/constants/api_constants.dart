@@ -71,4 +71,8 @@ class ApiConstants {
   static const String listenerNoteSave = '/listener/notes';
   static String listenerNoteByCall(int callId) => '/listener/notes/by-call/$callId';
   static String listenerNoteByUser(int userId) => '/listener/notes/by-user/$userId';
+
+  static const String billingPlans = '/billing/plans';
+  static String billingPurchase(int planId) => '/billing/purchase/$planId';
+  static const String billingMyPurchases = '/billing/my-purchases';
 }

@@ -1,6 +1,88 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
+
+ALLOWED_PLAN_TYPES = {"monthly", "quarterly", "yearly"}
+
+
+class BillingPlanBase(BaseModel):
+    name: str
+    price: int
+    validity_value: int
+    plan_type: str
+    description: Optional[str] = None
+    is_featured: bool = False
+    is_active: bool = True
+    sort_order: int = 0
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Plan name is required")
+        if len(v) > 100:
+            raise ValueError("Plan name must be under 100 characters")
+        return v
+
+    @field_validator("price")
+    @classmethod
+    def price_positive(cls, v: int) -> int:
+        if v is None or v <= 0:
+            raise ValueError("Price must be greater than 0")
+        return v
+
+    @field_validator("validity_value")
+    @classmethod
+    def validity_positive(cls, v: int) -> int:
+        if v is None or v <= 0:
+            raise ValueError("Validity must be greater than 0")
+        return v
+
+    @field_validator("plan_type")
+    @classmethod
+    def plan_type_allowed(cls, v: str) -> str:
+        v = (v or "").strip().lower()
+        if v not in ALLOWED_PLAN_TYPES:
+            raise ValueError("plan_type must be one of: monthly, quarterly, yearly")
+        return v
+
+    @field_validator("description")
+    @classmethod
+    def description_length(cls, v: Optional[str]) -> Optional[str]:
+        if v and len(v) > 2000:
+            raise ValueError("Description must be under 2000 characters")
+        return v
+
+
+class BillingPlanCreate(BillingPlanBase):
+    pass
+
+
+class BillingPlanUpdate(BillingPlanBase):
+    pass
+
+
+class BillingPlanOut(BillingPlanBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class BillingPurchaseOut(BaseModel):
+    id: int
+    plan_id: int
+    plan_name: str
+    price_paid: int
+    starts_at: datetime
+    expires_at: Optional[datetime] = None
+    status: str
+
+    class Config:
+        from_attributes = True
 
 class UserRegisterInitiate(BaseModel):
     name: str
