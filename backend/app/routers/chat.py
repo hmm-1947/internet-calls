@@ -4,16 +4,26 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 import os
 import uuid
 from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, or_
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_listener
 from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message
-from app.utils.coins import deduct_chat_coins
+from app.utils.coins import chat_message_coin_cost, deduct_chat_coins
 from app.core.ws_manager import manager
 
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _require_chat_coins(db: Session, user: User) -> None:
+    """Reject a chat send before the message is persisted when funds are short."""
+    cost = chat_message_coin_cost(db)
+    if cost < 0:
+        raise HTTPException(status_code=500, detail="Invalid chat coin setting")
+    if user.coins < cost:
+        raise HTTPException(status_code=402, detail="Not enough coins to send this message")
 
 def _get_settings(db, owner_type, owner_id, other_id):
     return db.query(ChatSettings).filter(
@@ -50,6 +60,7 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     listener = db.query(Listener).filter(Listener.id == payload.listener_id, Listener.is_active == True).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
+    _require_chat_coins(db, current_user)
     listener_online = manager.is_listener_online(listener.id)
     msg = ChatMessage(
         client_id=payload.client_id,
@@ -113,6 +124,7 @@ async def user_send_voice(
     listener = db.query(Listener).filter(Listener.id == listener_id, Listener.is_active == True).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
+    _require_chat_coins(db, current_user)
     ext = os.path.splitext(file.filename)[1] or ".m4a"
     filename = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join("voice_notes", filename)
@@ -134,6 +146,7 @@ async def user_send_voice(
     db.add(msg)
     db.commit()
     db.refresh(msg)
+    await deduct_chat_coins(db, current_user, listener.id, msg.id)
     await manager.send_to_listener(listener.id, _msg_dict(msg))
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if listener.fcm_token:
@@ -249,6 +262,48 @@ async def edit_message(payload: MessageEdit, db: Session = Depends(get_db)):
     await manager.send_to_listener(msg.listener_id, payload_dict)
     return msg
 
+@router.post("/user/{listener_id}/mark_read")
+async def user_mark_read(listener_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    unread = db.query(ChatMessage).filter(
+        ChatMessage.user_id == current_user.id,
+        ChatMessage.listener_id == listener_id,
+        ChatMessage.sender_type == "listener",
+        ChatMessage.is_read == False,
+    ).all()
+    now = datetime.now(timezone.utc)
+    for m in unread:
+        m.is_read = True
+        m.status = "read"
+        m.read_at = now
+    db.commit()
+    if unread:
+        await manager.send_to_listener(listener_id, {
+            "type": "read_receipt", "user_id": current_user.id, "listener_id": listener_id,
+            "message_ids": [m.id for m in unread], "read_at": now.isoformat(),
+        })
+    return {"marked": len(unread)}
+
+@router.post("/listener/{user_id}/mark_read")
+async def listener_mark_read(user_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    unread = db.query(ChatMessage).filter(
+        ChatMessage.user_id == user_id,
+        ChatMessage.listener_id == current_listener.id,
+        ChatMessage.sender_type == "user",
+        ChatMessage.is_read == False,
+    ).all()
+    now = datetime.now(timezone.utc)
+    for m in unread:
+        m.is_read = True
+        m.status = "read"
+        m.read_at = now
+    db.commit()
+    if unread:
+        await manager.send_to_user(user_id, {
+            "type": "read_receipt", "user_id": user_id, "listener_id": current_listener.id,
+            "message_ids": [m.id for m in unread], "read_at": now.isoformat(),
+        })
+    return {"marked": len(unread)}
+
 @router.delete("/message/{message_id}")
 async def delete_message(message_id: int, db: Session = Depends(get_db)):
     msg = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
@@ -295,17 +350,46 @@ def update_listener_chat_settings(payload: ChatSettingsUpdate, db: Session = Dep
 @router.get("/user/threads", response_model=list[ChatThreadOut])
 def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     listener_ids = [r[0] for r in db.query(ChatMessage.listener_id).filter(ChatMessage.user_id == current_user.id).distinct().all()]
+    if not listener_ids:
+        return []
+
+    listeners = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids)).all()}
+
+    all_msgs = db.query(ChatMessage).filter(
+        ChatMessage.user_id == current_user.id,
+        ChatMessage.listener_id.in_(listener_ids),
+    ).order_by(ChatMessage.created_at.asc()).all()
+    last_msg_by_listener = {}
+    for m in all_msgs:
+        last_msg_by_listener[m.listener_id] = m
+
+    unread_rows = db.query(
+        ChatMessage.listener_id, func.count(ChatMessage.id)
+    ).filter(
+        ChatMessage.user_id == current_user.id,
+        ChatMessage.listener_id.in_(listener_ids),
+        ChatMessage.sender_type == "listener",
+        ChatMessage.is_read == False,
+    ).group_by(ChatMessage.listener_id).all()
+    unread_by_listener = dict(unread_rows)
+
+    settings_rows = db.query(ChatSettings).filter(
+        ChatSettings.owner_type == "user",
+        ChatSettings.owner_id == current_user.id,
+        ChatSettings.other_id.in_(listener_ids),
+    ).all()
+    settings_by_listener = {s.other_id: s for s in settings_rows}
+
     result = []
     for lid in listener_ids:
-        listener = db.query(Listener).filter(Listener.id == lid).first()
-        if not listener:
+        listener = listeners.get(lid)
+        last = last_msg_by_listener.get(lid)
+        if not listener or not last:
             continue
-        last = db.query(ChatMessage).filter(ChatMessage.user_id == current_user.id, ChatMessage.listener_id == lid).order_by(ChatMessage.created_at.desc()).first()
-        unread = db.query(ChatMessage).filter(ChatMessage.user_id == current_user.id, ChatMessage.listener_id == lid, ChatMessage.sender_type == "listener", ChatMessage.is_read == False).count()
-        settings = _get_settings(db, "user", current_user.id, lid)
+        settings = settings_by_listener.get(lid)
         result.append(ChatThreadOut(
             user_id=current_user.id, user_name=current_user.name, listener_id=lid, listener_name=listener.name,
-            last_message=last.message, last_message_at=last.created_at, unread_count=unread,
+            last_message=last.message, last_message_at=last.created_at, unread_count=unread_by_listener.get(lid, 0),
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
@@ -319,17 +403,46 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
 @router.get("/listener/threads", response_model=list[ChatThreadOut])
 def listener_get_threads(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == current_listener.id).distinct().all()]
+    if not user_ids:
+        return []
+
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+
+    all_msgs = db.query(ChatMessage).filter(
+        ChatMessage.listener_id == current_listener.id,
+        ChatMessage.user_id.in_(user_ids),
+    ).order_by(ChatMessage.created_at.asc()).all()
+    last_msg_by_user = {}
+    for m in all_msgs:
+        last_msg_by_user[m.user_id] = m
+
+    unread_rows = db.query(
+        ChatMessage.user_id, func.count(ChatMessage.id)
+    ).filter(
+        ChatMessage.listener_id == current_listener.id,
+        ChatMessage.user_id.in_(user_ids),
+        ChatMessage.sender_type == "user",
+        ChatMessage.is_read == False,
+    ).group_by(ChatMessage.user_id).all()
+    unread_by_user = dict(unread_rows)
+
+    settings_rows = db.query(ChatSettings).filter(
+        ChatSettings.owner_type == "listener",
+        ChatSettings.owner_id == current_listener.id,
+        ChatSettings.other_id.in_(user_ids),
+    ).all()
+    settings_by_user = {s.other_id: s for s in settings_rows}
+
     result = []
     for uid in user_ids:
-        user = db.query(User).filter(User.id == uid).first()
-        if not user:
+        user = users.get(uid)
+        last = last_msg_by_user.get(uid)
+        if not user or not last:
             continue
-        last = db.query(ChatMessage).filter(ChatMessage.user_id == uid, ChatMessage.listener_id == current_listener.id).order_by(ChatMessage.created_at.desc()).first()
-        unread = db.query(ChatMessage).filter(ChatMessage.user_id == uid, ChatMessage.listener_id == current_listener.id, ChatMessage.sender_type == "user", ChatMessage.is_read == False).count()
-        settings = _get_settings(db, "listener", current_listener.id, uid)
+        settings = settings_by_user.get(uid)
         result.append(ChatThreadOut(
             user_id=uid, user_name=user.name, listener_id=current_listener.id, listener_name=current_listener.name,
-            last_message=last.message, last_message_at=last.created_at, unread_count=unread,
+            last_message=last.message, last_message_at=last.created_at, unread_count=unread_by_user.get(uid, 0),
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
@@ -347,6 +460,12 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
         await websocket.close(code=4001)
         return
     user_id = session.user_id
+    user_check = db.query(User).filter(User.id == user_id).first()
+    if not user_check or not user_check.is_active:
+        db.delete(session)
+        db.commit()
+        await websocket.close(code=4003, reason="deactivated")
+        return
     await manager.connect_user(user_id, websocket)
     await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": True})
     user = db.query(User).filter(User.id == user_id).first()
@@ -384,6 +503,10 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
         await websocket.close(code=4001)
         return
     listener_id = session.listener_id
+    listener_check = db.query(Listener).filter(Listener.id == listener_id).first()
+    if not listener_check or not listener_check.is_active:
+        await websocket.close(code=4003)
+        return
     await manager.connect_listener(listener_id, websocket)
     await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": True})
     listener = db.query(Listener).filter(Listener.id == listener_id).first()

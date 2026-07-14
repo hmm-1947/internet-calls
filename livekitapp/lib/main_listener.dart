@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
+import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -113,6 +114,8 @@ class ListenerApp extends StatefulWidget {
 
 class _ListenerAppState extends State<ListenerApp> {
   StreamSubscription? _chatSub;
+  StreamSubscription? _sessionSub;
+  bool _loggingOut = false;
 
   @override
   void initState() {
@@ -124,13 +127,34 @@ class _ListenerAppState extends State<ListenerApp> {
     _chatSub = ChatSocketService().stream.listen((data) {
       if (data['type'] == 'chat_message') {
         chatMessageNotifier.value++;
+      } else if (data['type'] == 'force_logout') {
+        _forceLogout();
       }
     });
+    _sessionSub = ApiClient.sessionInvalidated.listen((_) {
+      _forceLogout();
+    });
+  }
+
+  Future<void> _forceLogout() async {
+    if (_loggingOut) return;
+    _loggingOut = true;
+    await LocalStorage().clear();
+    ChatSocketService().disconnect();
+    final ctx = CallkitService.instance.navigatorKey.currentState;
+    if (ctx != null) {
+      ctx.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const ListenerLoginScreen()),
+        (route) => false,
+      );
+    }
+    _loggingOut = false;
   }
 
   @override
   void dispose() {
     _chatSub?.cancel();
+    _sessionSub?.cancel();
     super.dispose();
   }
 
@@ -153,13 +177,50 @@ class _ListenerAppState extends State<ListenerApp> {
               return const SplashScreen();
             }
             if (snapshot.data != null) {
-              return const ListenerMainScreen();
+              return _ListenerSessionGate(token: snapshot.data!);
             }
             return const ListenerLoginScreen();
           },
         ),
       ),
     );
+  }
+}
+
+class _ListenerSessionGate extends StatefulWidget {
+  final String token;
+  const _ListenerSessionGate({required this.token});
+
+  @override
+  State<_ListenerSessionGate> createState() => _ListenerSessionGateState();
+}
+
+class _ListenerSessionGateState extends State<_ListenerSessionGate> {
+  bool? _active;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    try {
+      final active = await ListenerRepository().checkSessionActive(
+        widget.token,
+      );
+      if (!active) await LocalStorage().clear();
+      if (mounted) setState(() => _active = active);
+    } catch (_) {
+      if (mounted) setState(() => _active = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_active == null) return const SplashScreen();
+    if (_active == false) return const ListenerLoginScreen();
+    return const ListenerMainScreen();
   }
 }
 
@@ -196,6 +257,7 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
       _offlineTimer?.cancel();
       _updateStatus(true);
       _reconnectSocket();
+      _checkSessionActive();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _offlineTimer?.cancel();
@@ -204,6 +266,24 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
         ChatSocketService().disconnect();
       });
     }
+  }
+
+  Future<void> _checkSessionActive() async {
+    final token = await _localStorage.getToken();
+    if (token == null) return;
+    try {
+      final active = await _repository.checkSessionActive(token);
+      if (!active) {
+        await _localStorage.clear();
+        ChatSocketService().disconnect();
+        final ctx = CallkitService.instance.navigatorKey.currentState;
+        if (ctx == null) return;
+        ctx.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const ListenerLoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _reconnectSocket() async {

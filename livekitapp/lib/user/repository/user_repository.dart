@@ -60,6 +60,14 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
+  Future<bool> checkSessionActive(String token) async {
+    final response = await _apiClient.get(
+      ApiConstants.userSessionCheck,
+      token: token,
+    );
+    return response.statusCode == 200;
+  }
+
   Future<List<Map<String, dynamic>>> getListeners(
     String token, {
     bool forceRefresh = false,

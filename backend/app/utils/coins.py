@@ -56,16 +56,21 @@ async def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: 
 
 async def deduct_chat_coins(db: Session, user: User, listener_id: int, message_id: int) -> int:
     cost = chat_message_coin_cost(db)
-    amount = min(cost, user.coins)
-    if amount <= 0:
-        return 0
-    user.coins -= amount
-    db.add(CoinTransaction(user_id=user.id, amount=-amount, reason="chat_message", call_id=None))
+    if cost < 0:
+        raise ValueError("Chat message coin cost cannot be negative")
+    if user.coins < cost:
+        raise ValueError("Not enough coins to send this message")
+
+    # A message is always charged at its configured cost.  Do not use a
+    # partial deduction here: that would allow messages when the balance is
+    # below the required price (including a zero balance).
+    user.coins -= cost
+    db.add(CoinTransaction(user_id=user.id, amount=-cost, reason="chat_message", call_id=None))
     db.commit()
     from app.core.ws_manager import manager
     await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
 
-    await _credit_listener(db, listener_id, amount // 2, "chat_message")
+    await _credit_listener(db, listener_id, cost // 2, "chat_message")
 
-    return amount
+    return cost
 

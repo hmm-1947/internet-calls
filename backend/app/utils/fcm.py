@@ -120,8 +120,19 @@ def send_call_coin_exceeded(fcm_token: str, call_id: int):
         body="User ran out of coins",
     )
 
-    
+
+def send_force_logout(fcm_token: str):
+    """Tell a device to log out immediately — used when admin deactivates the account."""
+    _send_data_only(
+        token=fcm_token,
+        data={
+            "type": "force_logout",
+        },
+    )
+
+
 def send_chat_message(fcm_token: str, sender_name: str, message: str, user_id: int, listener_id: int, sender_type: str):
+    """Notify the other party of a new chat message."""
     _send_with_notification(
         token=fcm_token,
         data={

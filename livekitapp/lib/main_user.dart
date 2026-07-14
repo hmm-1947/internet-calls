@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
+import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/shared/widgets/splash_screen.dart';
@@ -73,8 +74,12 @@ class UserApp extends StatefulWidget {
   State<UserApp> createState() => _UserAppState();
 }
 
+final userNavigatorKey = GlobalKey<NavigatorState>();
+
 class _UserAppState extends State<UserApp> {
   StreamSubscription? _chatSub;
+  StreamSubscription? _sessionSub;
+  bool _loggingOut = false;
 
   @override
   void initState() {
@@ -82,13 +87,34 @@ class _UserAppState extends State<UserApp> {
     _chatSub = ChatSocketService().stream.listen((data) {
       if (data['type'] == 'chat_message') {
         userChatDotNotifier.value = true;
+      } else if (data['type'] == 'force_logout') {
+        _forceLogout();
       }
     });
+    _sessionSub = ApiClient.sessionInvalidated.listen((_) {
+      _forceLogout();
+    });
+  }
+
+  Future<void> _forceLogout() async {
+    if (_loggingOut) return;
+    _loggingOut = true;
+    await LocalStorage().clear();
+    ChatSocketService().disconnect();
+    final ctx = userNavigatorKey.currentState;
+    if (ctx != null) {
+      ctx.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const UserLoginScreen()),
+        (route) => false,
+      );
+    }
+    _loggingOut = false;
   }
 
   @override
   void dispose() {
     _chatSub?.cancel();
+    _sessionSub?.cancel();
     super.dispose();
   }
 
@@ -96,6 +122,7 @@ class _UserAppState extends State<UserApp> {
   Widget build(BuildContext context) {
     return AppLifecycleReporter(
       child: MaterialApp(
+        navigatorKey: userNavigatorKey,
         title: 'Calling App',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -110,13 +137,48 @@ class _UserAppState extends State<UserApp> {
               return const SplashScreen();
             }
             if (snapshot.data != null) {
-              return const UserMainScreen();
+              return _UserSessionGate(token: snapshot.data!);
             }
             return const UserLoginScreen();
           },
         ),
       ),
     );
+  }
+}
+
+class _UserSessionGate extends StatefulWidget {
+  final String token;
+  const _UserSessionGate({required this.token});
+
+  @override
+  State<_UserSessionGate> createState() => _UserSessionGateState();
+}
+
+class _UserSessionGateState extends State<_UserSessionGate> {
+  bool? _active;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    try {
+      final active = await UserRepository().checkSessionActive(widget.token);
+      if (!active) await LocalStorage().clear();
+      if (mounted) setState(() => _active = active);
+    } catch (_) {
+      if (mounted) setState(() => _active = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_active == null) return const SplashScreen();
+    if (_active == false) return const UserLoginScreen();
+    return const UserMainScreen();
   }
 }
 
@@ -154,6 +216,7 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
       _offlineTimer?.cancel();
       _updateStatus(true);
       _reconnectSocket();
+      _checkSessionActive();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _offlineTimer?.cancel();
@@ -162,6 +225,24 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
         ChatSocketService().disconnect();
       });
     }
+  }
+
+  Future<void> _checkSessionActive() async {
+    final token = await _localStorage.getToken();
+    if (token == null) return;
+    try {
+      final active = await _repository.checkSessionActive(token);
+      if (!active) {
+        await _localStorage.clear();
+        ChatSocketService().disconnect();
+        final ctx = userNavigatorKey.currentState;
+        if (ctx == null) return;
+        ctx.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const UserLoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _updateStatus(bool isOnline) async {
