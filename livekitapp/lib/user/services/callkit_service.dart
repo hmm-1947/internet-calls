@@ -23,8 +23,9 @@ class UserCallkitService {
       android: const AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
-        backgroundColor: '#0955fa',
-        actionColor: '#4CAF50',
+        backgroundColor: '#0B0F1A',
+        actionColor: '#E53950',
+        incomingCallNotificationChannelName: 'Outgoing Call',
       ),
     );
     try {

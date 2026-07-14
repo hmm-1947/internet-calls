@@ -1,7 +1,5 @@
 import 'dart:ui';
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 class CrownNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -25,47 +23,29 @@ class CrownNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     const activeColor = Color(0xFFE53950);
     const inactiveColor = Colors.white70;
+    final itemCount = icons.length;
 
     Widget buildItem(int i) {
       final selected = selectedIndex == i;
       final color = selected ? activeColor : inactiveColor;
-      final itemContent = SizedBox(
-        height: 56,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconTheme(
-              data: IconThemeData(color: color, size: 22),
-              child: icons[i],
-            ),
-            const SizedBox(height: 4),
-            Text(labels[i], style: TextStyle(color: color, fontSize: 11)),
-          ],
-        ),
-      );
       return Expanded(
         child: InkWell(
           onTap: () => onDestinationSelected(i),
           borderRadius: BorderRadius.circular(22),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
+          child: SizedBox(
             height: 56,
-            decoration: BoxDecoration(
-              color: selected
-                  ? const Color.fromARGB(51, 255, 124, 141)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(22),
-              border: selected
-                  ? Border.all(
-                      color: const Color.fromARGB(83, 255, 126, 126),
-                      width: 1,
-                    )
-                  : null,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconTheme(
+                  data: IconThemeData(color: color, size: 22),
+                  child: icons[i],
+                ),
+                const SizedBox(height: 4),
+                Text(labels[i], style: TextStyle(color: color, fontSize: 11)),
+              ],
             ),
-            child: Center(child: itemContent),
           ),
         ),
       );
@@ -90,14 +70,60 @@ class CrownNavBar extends StatelessWidget {
                     padding: EdgeInsets.only(bottom: bottomInset),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        children: [
-                          buildItem(0),
-                          buildItem(1),
-                          const Expanded(child: SizedBox()),
-                          buildItem(2),
-                          buildItem(3),
-                        ],
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final slotCount = showCrown
+                              ? itemCount + 1
+                              : itemCount;
+                          final slotWidth = constraints.maxWidth / slotCount;
+                          final crownSlot = itemCount ~/ 2;
+                          final slotIndex =
+                              showCrown && selectedIndex >= crownSlot
+                              ? selectedIndex + 1
+                              : selectedIndex;
+                          return Stack(
+                            children: [
+                              AnimatedPositioned(
+                                duration: const Duration(milliseconds: 320),
+                                curve: Curves.easeOutCubic,
+                                left: slotIndex * slotWidth + 4,
+                                top: 0,
+                                width: slotWidth - 8,
+                                height: 56,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color.fromARGB(
+                                      51,
+                                      255,
+                                      124,
+                                      141,
+                                    ),
+                                    borderRadius: BorderRadius.circular(22),
+                                    border: Border.all(
+                                      color: const Color.fromARGB(
+                                        83,
+                                        255,
+                                        126,
+                                        126,
+                                      ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  buildItem(0),
+                                  buildItem(1),
+                                  if (showCrown)
+                                    const Expanded(child: SizedBox()),
+                                  for (var i = 2; i < itemCount; i++)
+                                    buildItem(i),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),

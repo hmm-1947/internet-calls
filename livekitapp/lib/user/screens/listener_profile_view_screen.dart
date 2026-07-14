@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -93,28 +94,55 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    Future<void> _load() async {
+    final isFirstLoad = _createdAt == null && _name.isEmpty;
+    if (isFirstLoad) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getListenerProfile(
         token!,
         widget.listenerId,
       );
-      setState(() {
-        _name = data['name'] ?? '';
-        _isOnline = data['is_online'] == true;
-        _about = data['about'] ?? '';
-        _tags = List<String>.from(data['tags'] ?? []);
-        _languages = List<String>.from(data['languages'] ?? []);
-        _avgRating = (data['avg_rating'] as num?)?.toDouble();
-        _ratingCount = data['rating_count'] ?? 0;
-        _createdAt = data['created_at'];
-        _loading = false;
-      });
+      final newSnapshot = {
+        'name': data['name'] ?? '',
+        'is_online': data['is_online'] == true,
+        'about': data['about'] ?? '',
+        'tags': List<String>.from(data['tags'] ?? []),
+        'languages': List<String>.from(data['languages'] ?? []),
+        'avg_rating': (data['avg_rating'] as num?)?.toDouble(),
+        'rating_count': data['rating_count'] ?? 0,
+        'created_at': data['created_at'],
+      };
+      final oldSnapshot = {
+        'name': _name,
+        'is_online': _isOnline,
+        'about': _about,
+        'tags': _tags,
+        'languages': _languages,
+        'avg_rating': _avgRating,
+        'rating_count': _ratingCount,
+        'created_at': _createdAt,
+      };
+      if (dataChanged(oldSnapshot, newSnapshot)) {
+        setState(() {
+          _name = newSnapshot['name'] as String;
+          _isOnline = newSnapshot['is_online'] as bool;
+          _about = newSnapshot['about'] as String;
+          _tags = newSnapshot['tags'] as List<String>;
+          _languages = newSnapshot['languages'] as List<String>;
+          _avgRating = newSnapshot['avg_rating'] as double?;
+          _ratingCount = newSnapshot['rating_count'] as int;
+          _createdAt = newSnapshot['created_at'] as String?;
+          _loading = false;
+        });
+      } else if (_loading) {
+        setState(() => _loading = false);
+      }
     } catch (e) {
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');

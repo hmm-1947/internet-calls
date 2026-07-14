@@ -40,6 +40,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> {
   String? _token;
   StreamSubscription? _socketSub;
   bool _userTyping = false;
+  bool _isUserOnline = false;
   Timer? _typingSendTimer;
   bool _isFavorite = false;
 
@@ -67,7 +68,10 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> {
       orElse: () => {},
     );
     if (mounted) {
-      setState(() => _isFavorite = thread['is_pinned'] ?? false);
+      setState(() {
+        _isFavorite = thread['is_pinned'] ?? false;
+        _isUserOnline = thread['is_online'] == true;
+      });
     }
   }
 
@@ -124,6 +128,9 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> {
       }
     } else if (type == 'typing' && data['user_id'] == widget.userId) {
       setState(() => _userTyping = data['is_typing'] == true);
+    } else if ((type == 'user_online' || type == 'user_offline') &&
+        data['user_id'] == widget.userId) {
+      setState(() => _isUserOnline = type == 'user_online');
     } else if (type == 'message_status') {
       setState(() {
         final idx = _messages.indexWhere(
@@ -350,6 +357,10 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> {
         backgroundColor: bg,
         elevation: 0,
         titleSpacing: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Row(
           children: [
             const CircleAvatar(
@@ -358,9 +369,28 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> {
               child: Icon(Icons.person, color: Colors.white54),
             ),
             const SizedBox(width: 10),
-            Text(
-              widget.userName,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.userName,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                Text(
+                  _userTyping
+                      ? 'typing...'
+                      : (_isUserOnline ? 'Online' : 'Offline'),
+                  style: TextStyle(
+                    color: _userTyping
+                        ? const Color(0xFFE53950)
+                        : (_isUserOnline
+                              ? const Color(0xFF74D8BD)
+                              : Colors.white54),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

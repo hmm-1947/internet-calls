@@ -84,25 +84,31 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> refresh() async {
-    setState(() => _loading = true);
+    final isFirstLoad = _name.isEmpty;
+    if (isFirstLoad) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!);
-      setState(() {
-        _coins = data['coins'] ?? 0;
-        _name = data['name'] ?? '';
-        _phone = data['phone'] ?? '';
-        _loading = false;
-      });
+      final newCoins = data['coins'] ?? 0;
+      final newName = data['name'] ?? '';
+      final newPhone = data['phone'] ?? '';
+      if (_coins != newCoins || _name != newName || _phone != newPhone) {
+        setState(() {
+          _coins = newCoins;
+          _name = newName;
+          _phone = newPhone;
+          _loading = false;
+        });
+      } else if (_loading) {
+        setState(() => _loading = false);
+      }
     } catch (_) {
       setState(() => _loading = false);
     }
   }
 
   void _openWallet() {
-    Navigator.of(context).push(
-      fadeRoute(WalletCoinsScreen(coins: _coins)),
-    );
+    Navigator.of(context).push(fadeRoute(WalletCoinsScreen(coins: _coins)));
   }
 
   void _openEnrollAsListener() {
@@ -118,7 +124,10 @@ class UserProfileScreenState extends State<UserProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK', style: TextStyle(color: _AppColors.brandRed)),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: _AppColors.brandRed),
+            ),
           ),
         ],
       ),
@@ -132,18 +141,18 @@ class UserProfileScreenState extends State<UserProfileScreen> {
       appBar: AppBar(
         backgroundColor: _AppColors.bg,
         elevation: 0,
-        centerTitle: true,
         title: const Text(
           'Profile',
-          style: TextStyle(color: _AppColors.brandRed, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: _AppColors.brandRed,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white70),
             onPressed: () {
-              Navigator.of(context).push(
-                fadeRoute(const UserSettingsScreen()),
-              );
+              Navigator.of(context).push(fadeRoute(const UserSettingsScreen()));
             },
           ),
         ],
@@ -171,12 +180,19 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: _AppColors.brandRed, width: 2),
+                        border: Border.all(
+                          color: _AppColors.brandRed,
+                          width: 2,
+                        ),
                       ),
                       child: const CircleAvatar(
                         radius: 44,
                         backgroundColor: Color(0xFF2A2A2A),
-                        child: Icon(Icons.person, color: Colors.white54, size: 44),
+                        child: Icon(
+                          Icons.person,
+                          color: Colors.white54,
+                          size: 44,
+                        ),
                       ),
                     ),
                   ),
@@ -195,7 +211,10 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                   Center(
                     child: Text(
                       _phone,
-                      style: const TextStyle(color: _AppColors.textMuted, fontSize: 13),
+                      style: const TextStyle(
+                        color: _AppColors.textMuted,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),

@@ -38,6 +38,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   String? _token;
   StreamSubscription? _socketSub;
   bool _listenerTyping = false;
+  bool _isListenerOnline = false;
   bool _isFavorite = false;
   int _profileCoins = 0;
   int _chatMessageCoinCost = 0;
@@ -56,6 +57,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     await _load();
     _loadFavoriteStatus();
     _loadCoins();
+    _loadOnlineStatus();
     ChatSocketService().connect(_token!, 'user');
     _socketSub = ChatSocketService().stream.listen(_onSocketMessage);
     _controller.addListener(_onTyping);
@@ -84,6 +86,19 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     if (mounted) {
       setState(() => _isFavorite = thread['is_pinned'] ?? false);
     }
+  }
+
+  Future<void> _loadOnlineStatus() async {
+    if (_token == null) return;
+    try {
+      final data = await _repository.getListenerProfile(
+        _token!,
+        widget.listenerId,
+      );
+      if (mounted) {
+        setState(() => _isListenerOnline = data['is_online'] == true);
+      }
+    } catch (_) {}
   }
 
   Future<void> _toggleFavorite() async {
@@ -168,6 +183,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
       }
     } else if (type == 'typing' && data['listener_id'] == widget.listenerId) {
       setState(() => _listenerTyping = data['is_typing'] == true);
+    } else if ((type == 'listener_online' || type == 'listener_offline') &&
+        data['listener_id'] == widget.listenerId) {
+      setState(() => _isListenerOnline = type == 'listener_online');
     } else if (type == 'message_status') {
       setState(() {
         final idx = _messages.indexWhere(
@@ -413,6 +431,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         backgroundColor: bg,
         elevation: 0,
         titleSpacing: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Row(
           children: [
             const CircleAvatar(
@@ -421,9 +443,28 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
               child: Icon(Icons.person, color: Colors.white54),
             ),
             const SizedBox(width: 10),
-            Text(
-              widget.listenerName,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.listenerName,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                Text(
+                  _listenerTyping
+                      ? 'typing...'
+                      : (_isListenerOnline ? 'Online' : 'Offline'),
+                  style: TextStyle(
+                    color: _listenerTyping
+                        ? const Color(0xFFE53950)
+                        : (_isListenerOnline
+                              ? const Color(0xFF74D8BD)
+                              : Colors.white54),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

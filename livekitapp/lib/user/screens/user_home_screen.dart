@@ -11,6 +11,7 @@ import 'package:livekitapp/user/screens/user_call_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -196,8 +197,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     super.dispose();
   }
 
-  Future<void> _load({bool silent = false}) async {
-    if (!silent) {
+    Future<void> _load({bool silent = false}) async {
+    final isFirstLoad = _listeners.isEmpty;
+    if (!silent && isFirstLoad) {
       setState(() {
         _loading = true;
         _error = null;
@@ -207,13 +209,22 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       final token = await _localStorage.getToken();
       final listeners = await _repository.getListeners(token!);
       final me = await _repository.getMe(token);
+      final newName = me['name'] ?? '';
+      final newCoins = me['coins'] ?? 0;
+      final changed = dataChanged(_listeners, listeners) ||
+          _profileName != newName ||
+          _profileCoins != newCoins;
       if (mounted) {
-        setState(() {
-          _listeners = listeners;
-          _profileName = me['name'] ?? '';
-          _profileCoins = me['coins'] ?? 0;
-          _loading = false;
-        });
+        if (changed) {
+          setState(() {
+            _listeners = listeners;
+            _profileName = newName;
+            _profileCoins = newCoins;
+            _loading = false;
+          });
+        } else if (_loading) {
+          setState(() => _loading = false);
+        }
       }
     } catch (e) {
       if (mounted) {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/user/screens/chat_history_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
@@ -56,6 +57,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   List<Map<String, dynamic>> _threads = [];
   int _profileCoins = 0;
   bool _loading = true;
+  bool _refreshInFlight = false;
+  DateTime? _lastRefreshAt;
   String _chatFilter = 'all';
   String _search = '';
   StreamSubscription? _socketSub;
@@ -117,19 +120,34 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (_refreshInFlight) return;
+    final now = DateTime.now();
+    if (_lastRefreshAt != null &&
+        now.difference(_lastRefreshAt!) < const Duration(seconds: 5)) {
+      return;
+    }
+    _refreshInFlight = true;
+    _lastRefreshAt = now;
+    final isFirstLoad = _threads.isEmpty;
+    if (isFirstLoad) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
       final threads = await _repository.getChatThreads(
         token!,
         forceRefresh: true,
       );
-      setState(() {
-        _threads = threads;
-        _loading = false;
-      });
+      if (dataChanged(_threads, threads)) {
+        setState(() {
+          _threads = threads;
+          _loading = false;
+        });
+      } else if (_loading) {
+        setState(() => _loading = false);
+      }
     } catch (e) {
       setState(() => _loading = false);
+    } finally {
+      _refreshInFlight = false;
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/listener/screens/listener_chat_history_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
@@ -20,6 +21,8 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
   final _localStorage = LocalStorage();
   List<Map<String, dynamic>> _threads = [];
   bool _loading = true;
+  bool _refreshInFlight = false;
+  DateTime? _lastRefreshAt;
   String _chatFilter = 'all';
   String _search = '';
   StreamSubscription? _socketSub;
@@ -46,7 +49,10 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
         type == 'read_receipt' ||
         type == 'message_status') {
       _refreshDebounce?.cancel();
-      _refreshDebounce = Timer(const Duration(milliseconds: 400), _refreshSilently);
+      _refreshDebounce = Timer(
+        const Duration(milliseconds: 400),
+        _refreshSilently,
+      );
     } else if (type == 'user_online' || type == 'user_offline') {
       final uid = data['user_id'];
       final idx = _threads.indexWhere((t) => t['user_id'] == uid);
@@ -66,19 +72,34 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (_refreshInFlight) return;
+    final now = DateTime.now();
+    if (_lastRefreshAt != null &&
+        now.difference(_lastRefreshAt!) < const Duration(seconds: 5)) {
+      return;
+    }
+    _refreshInFlight = true;
+    _lastRefreshAt = now;
+    final isFirstLoad = _threads.isEmpty;
+    if (isFirstLoad) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
       final threads = await _repository.getChatThreads(
         token!,
         forceRefresh: true,
       );
-      setState(() {
-        _threads = threads;
-        _loading = false;
-      });
+      if (dataChanged(_threads, threads)) {
+        setState(() {
+          _threads = threads;
+          _loading = false;
+        });
+      } else if (_loading) {
+        setState(() => _loading = false);
+      }
     } catch (e) {
       setState(() => _loading = false);
+    } finally {
+      _refreshInFlight = false;
     }
   }
 

@@ -39,7 +39,14 @@ class ListenerRepository {
     return data;
   }
 
-  Future<Map<String, dynamic>> getWallet(String token) async {
+  Future<Map<String, dynamic>> getWallet(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = ListenerDataCache().cachedWallet;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(
       ApiConstants.listenerWallet,
       token: token,
@@ -48,6 +55,7 @@ class ListenerRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load wallet');
     }
+    ListenerDataCache().setWallet(data);
     return data;
   }
 

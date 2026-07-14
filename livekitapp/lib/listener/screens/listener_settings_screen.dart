@@ -142,10 +142,11 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
       backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0D0D0D),
+
         title: const Text('Settings'),
       ),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.only(bottom: 100),
         children: [
           Container(
             margin: const EdgeInsets.all(16),
