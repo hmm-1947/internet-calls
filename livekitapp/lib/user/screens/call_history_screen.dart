@@ -2,6 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 
+String _fmtDateTime(String iso) {
+  final dt = DateTime.parse(iso).toLocal();
+  final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+  final m = dt.minute.toString().padLeft(2, '0');
+  final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+  return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} • $h:$m $ampm';
+}
+
+String _fmtDuration(int seconds) {
+  final m = seconds ~/ 60;
+  final s = seconds % 60;
+  return '${m}m ${s}s';
+}
+
+IconData _statusIcon(String status, String callType) {
+  if (status == 'ended') {
+    return callType == 'video' ? Icons.videocam : Icons.call;
+  }
+  if (status == 'rejected') return Icons.call_end;
+  if (status == 'cancelled') return Icons.call_missed;
+  return Icons.call_missed_outgoing;
+}
+
+Color _statusColor(String status, Color pink) {
+  if (status == 'ended') return Colors.greenAccent;
+  if (status == 'rejected' || status == 'cancelled') return Colors.redAccent;
+  return pink;
+}
+
 class CallHistoryScreen extends StatefulWidget {
   const CallHistoryScreen({super.key});
 
@@ -42,35 +71,6 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     if (token == null) return;
     final me = await _repository.getMe(token);
     if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
-  }
-
-  String _fmtDateTime(String iso) {
-    final dt = DateTime.parse(iso).toLocal();
-    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final m = dt.minute.toString().padLeft(2, '0');
-    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} • $h:$m $ampm';
-  }
-
-  String _fmtDuration(int seconds) {
-    final m = seconds ~/ 60;
-    final s = seconds % 60;
-    return '${m}m ${s}s';
-  }
-
-  IconData _statusIcon(String status, String callType) {
-    if (status == 'ended') {
-      return callType == 'video' ? Icons.videocam : Icons.call;
-    }
-    if (status == 'rejected') return Icons.call_end;
-    if (status == 'cancelled') return Icons.call_missed;
-    return Icons.call_missed_outgoing;
-  }
-
-  Color _statusColor(String status, Color pink) {
-    if (status == 'ended') return Colors.greenAccent;
-    if (status == 'rejected' || status == 'cancelled') return Colors.redAccent;
-    return pink;
   }
 
   @override

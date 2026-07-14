@@ -37,6 +37,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: FadedIndexedStack(index: _index, children: _screens),
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,

@@ -2,6 +2,18 @@ import 'dart:convert';
 import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/common/models/auth_response.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
+
+class InsufficientCoinsException implements Exception {
+  final String message;
+
+  const InsufficientCoinsException([
+    this.message = 'Not enough coins to send this message',
+  ]);
+
+  @override
+  String toString() => message;
+}
 
 class UserRepository {
   final ApiClient _apiClient = ApiClient();
@@ -48,7 +60,14 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
-  Future<List<Map<String, dynamic>>> getListeners(String token) async {
+  Future<List<Map<String, dynamic>>> getListeners(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = UserDataCache().cachedListeners;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(
       ApiConstants.userListeners,
       token: token,
@@ -57,7 +76,9 @@ class UserRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load listeners');
     }
-    return List<Map<String, dynamic>>.from(data);
+    final listeners = List<Map<String, dynamic>>.from(data);
+    UserDataCache().setListeners(listeners);
+    return listeners;
   }
 
   Future<Map<String, dynamic>> initiateCall(
@@ -159,8 +180,13 @@ class UserRepository {
     }, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
+      if (response.statusCode == 402) {
+        throw InsufficientCoinsException(data['detail']);
+      }
       throw Exception(data['detail'] ?? 'Failed to send message');
     }
+    UserDataCache().invalidateMe();
+    UserDataCache().invalidateThreads();
     return data;
   }
 
@@ -184,6 +210,9 @@ class UserRepository {
     );
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
+      if (response.statusCode == 402) {
+        throw InsufficientCoinsException(data['detail']);
+      }
       throw Exception(data['detail'] ?? 'Failed to send voice message');
     }
     return data;
@@ -204,7 +233,22 @@ class UserRepository {
     return List<Map<String, dynamic>>.from(data);
   }
 
-  Future<List<Map<String, dynamic>>> getChatThreads(String token) async {
+  Future<void> markMessagesRead(String token, int listenerId) async {
+    await _apiClient.post(
+      ApiConstants.userMarkRead(listenerId),
+      {},
+      token: token,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getChatThreads(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = UserDataCache().cachedThreads;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(
       ApiConstants.userChatThreads,
       token: token,
@@ -213,7 +257,9 @@ class UserRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load threads');
     }
-    return List<Map<String, dynamic>>.from(data);
+    final threads = List<Map<String, dynamic>>.from(data);
+    UserDataCache().setThreads(threads);
+    return threads;
   }
 
   Future<List<Map<String, dynamic>>> getCallHistory(String token) async {
@@ -295,14 +341,23 @@ class UserRepository {
       final data = jsonDecode(response.body);
       throw Exception(data['detail'] ?? 'Failed to update chat settings');
     }
+    UserDataCache().invalidateThreads();
   }
 
-  Future<Map<String, dynamic>> getMe(String token) async {
+  Future<Map<String, dynamic>> getMe(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = UserDataCache().cachedMe;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(ApiConstants.userMe, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load profile');
     }
+    UserDataCache().setMe(data);
     return data;
   }
 
@@ -329,5 +384,6 @@ class UserRepository {
       final data = jsonDecode(response.body);
       throw Exception(data['detail'] ?? 'Failed to update bio');
     }
+    UserDataCache().invalidateMe();
   }
 }

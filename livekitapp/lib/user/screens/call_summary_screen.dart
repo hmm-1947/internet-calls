@@ -2,6 +2,57 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 
+String _fmtDuration(int seconds) {
+  final m = (seconds ~/ 60).toString().padLeft(2, '0');
+  final s = (seconds % 60).toString().padLeft(2, '0');
+  return '$m:$s';
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  const _StatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    this.valueColor = Colors.white,
+  });
+
+  static const _dimText = Colors.white54;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: iconColor),
+          const SizedBox(height: 6),
+          Text(label, style: const TextStyle(color: _dimText, fontSize: 11)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class CallSummaryScreen extends StatefulWidget {
   final int callId;
   const CallSummaryScreen({super.key, required this.callId});
@@ -38,12 +89,6 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
     } catch (e) {
       setState(() => _loading = false);
     }
-  }
-
-  String _fmtDuration(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   Future<void> _submitRating() async {
@@ -151,68 +196,23 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A1A1A),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            children: [
-                              const Icon(
-                                Icons.access_time,
-                                color: Colors.white70,
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                'DURATION',
-                                style: TextStyle(color: dimText, fontSize: 11),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _fmtDuration(
-                                  _summary!['duration_seconds'] ?? 0,
-                                ),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                        child: _StatCard(
+                          icon: Icons.access_time,
+                          iconColor: Colors.white70,
+                          label: 'DURATION',
+                          value: _fmtDuration(
+                            _summary!['duration_seconds'] ?? 0,
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A1A1A),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            children: [
-                              const Icon(
-                                Icons.monetization_on,
-                                color: Colors.amber,
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                'COINS SPENT',
-                                style: TextStyle(color: dimText, fontSize: 11),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${_summary!['coins_deducted'] ?? 0} Coins',
-                                style: const TextStyle(
-                                  color: Colors.amber,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
+                        child: _StatCard(
+                          icon: Icons.monetization_on,
+                          iconColor: Colors.amber,
+                          label: 'COINS SPENT',
+                          value: '${_summary!['coins_deducted'] ?? 0} Coins',
+                          valueColor: Colors.amber,
                         ),
                       ),
                     ],

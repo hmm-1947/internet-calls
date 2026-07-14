@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 
@@ -10,6 +11,53 @@ class _AppColors {
   static const brandRed = Color(0xFFE11D48);
   static const online = Color(0xFF74D8BD);
   static const textMuted = Color(0xFF9CA3AF);
+}
+
+String _memberSinceYear(String? createdAt) {
+  if (createdAt == null) return '';
+  try {
+    return DateTime.parse(createdAt).year.toString();
+  } catch (_) {
+    return '';
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileChip extends StatelessWidget {
+  final String text;
+  final VoidCallback? onDeleted;
+  const _ProfileChip(this.text, {this.onDeleted});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      label: Text(text, style: const TextStyle(color: Colors.white, fontSize: 12)),
+      backgroundColor: _AppColors.cardBg,
+      side: const BorderSide(color: _AppColors.cardBorder),
+      onDeleted: onDeleted,
+      deleteIconColor: Colors.white54,
+    );
+  }
 }
 
 class ListenerProfileScreen extends StatefulWidget {
@@ -74,15 +122,6 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
     }
   }
 
-  String _memberSinceYear() {
-    if (_createdAt == null) return '';
-    try {
-      return DateTime.parse(_createdAt!).year.toString();
-    } catch (_) {
-      return '';
-    }
-  }
-
   void _startEditing() {
     _aboutController.text = _about;
     _editTags = List.from(_tags);
@@ -132,37 +171,13 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
     } catch (_) {
     } finally {
       await _localStorage.clear();
+      ListenerDataCache().clear();
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const ListenerLoginScreen()),
         );
       }
     }
-  }
-
-  Widget _sectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white54,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-
-  Widget _chip(String text, {VoidCallback? onDeleted}) {
-    return Chip(
-      label: Text(text, style: const TextStyle(color: Colors.white, fontSize: 12)),
-      backgroundColor: _AppColors.cardBg,
-      side: const BorderSide(color: _AppColors.cardBorder),
-      onDeleted: onDeleted,
-      deleteIconColor: Colors.white54,
-    );
   }
 
   Widget _tagInputRow(
@@ -346,7 +361,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       ],
                     ),
                   ),
-                  _sectionLabel('ABOUT'),
+                  const _SectionLabel('ABOUT'),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -371,13 +386,13 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                             style: const TextStyle(color: Colors.white70, height: 1.4),
                           ),
                   ),
-                  _sectionLabel('GOOD TO TALK ABOUT'),
+                  const _SectionLabel('GOOD TO TALK ABOUT'),
                   if (_editing) ...[
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: _editTags
-                          .map((t) => _chip(t, onDeleted: () => setState(() => _editTags.remove(t))))
+                          .map((t) => _ProfileChip(t, onDeleted: () => setState(() => _editTags.remove(t))))
                           .toList(),
                     ),
                     const SizedBox(height: 8),
@@ -388,15 +403,15 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       runSpacing: 8,
                       children: _tags.isEmpty
                           ? [const Text('Not set', style: TextStyle(color: Colors.white38))]
-                          : _tags.map((t) => _chip(t)).toList(),
+                          : _tags.map((t) => _ProfileChip(t)).toList(),
                     ),
-                  _sectionLabel('LANGUAGES'),
+                  const _SectionLabel('LANGUAGES'),
                   if (_editing) ...[
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: _editLanguages
-                          .map((t) => _chip(t, onDeleted: () => setState(() => _editLanguages.remove(t))))
+                          .map((t) => _ProfileChip(t, onDeleted: () => setState(() => _editLanguages.remove(t))))
                           .toList(),
                     ),
                     const SizedBox(height: 8),
@@ -409,7 +424,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  _sectionLabel('YOUR PRIVACY'),
+                  const _SectionLabel('YOUR PRIVACY'),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -434,7 +449,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                   const SizedBox(height: 16),
                   Center(
                     child: Text(
-                      _memberSinceYear().isEmpty ? '' : 'Member since ${_memberSinceYear()}',
+                      _memberSinceYear(_createdAt).isEmpty ? '' : 'Member since ${_memberSinceYear(_createdAt)}',
                       style: const TextStyle(color: Colors.white24, fontSize: 12),
                     ),
                   ),

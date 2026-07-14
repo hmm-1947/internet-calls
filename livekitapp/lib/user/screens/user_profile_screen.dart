@@ -12,6 +12,56 @@ class _AppColors {
   static const textMuted = Color(0xFF9CA3AF);
 }
 
+class _MenuTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _MenuTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: _AppColors.cardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _AppColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _AppColors.brandRed.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: _AppColors.brandRed, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white38),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
 
@@ -71,47 +121,6 @@ class UserProfileScreenState extends State<UserProfileScreen> {
             child: const Text('OK', style: TextStyle(color: _AppColors.brandRed)),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _menuTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: _AppColors.cardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _AppColors.cardBorder),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: _AppColors.brandRed.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: _AppColors.brandRed, size: 18),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.white38),
-          ],
-        ),
       ),
     );
   }
@@ -190,13 +199,13 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  _menuTile(
+                  _MenuTile(
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'Wallet & Coins',
                     onTap: _openWallet,
                   ),
                   const SizedBox(height: 12),
-                  _menuTile(
+                  _MenuTile(
                     icon: Icons.person_outline,
                     title: 'Enroll as a listener',
                     onTap: _openEnrollAsListener,

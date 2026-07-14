@@ -12,6 +12,57 @@ class _AppColors {
   static const textMuted = Color(0xFF9CA3AF);
 }
 
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String text;
+  const _Chip(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: _AppColors.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _AppColors.cardBorder),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
+    );
+  }
+}
+
+String _memberSinceYear(String? createdAt) {
+  if (createdAt == null) return '';
+  try {
+    return DateTime.parse(createdAt).year.toString();
+  } catch (_) {
+    return '';
+  }
+}
+
 class ListenerProfileViewScreen extends StatefulWidget {
   final int listenerId;
 
@@ -70,45 +121,6 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         _loading = false;
       });
     }
-  }
-
-  String _memberSinceYear() {
-    if (_createdAt == null) return '';
-    try {
-      return DateTime.parse(_createdAt!).year.toString();
-    } catch (_) {
-      return '';
-    }
-  }
-
-  Widget _sectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white54,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-
-  Widget _chip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: _AppColors.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _AppColors.cardBorder),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white, fontSize: 12),
-      ),
-    );
   }
 
   @override
@@ -240,7 +252,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                       ],
                     ),
                   ),
-                  _sectionLabel('ABOUT'),
+                  const _SectionLabel('ABOUT'),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -257,7 +269,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                       ),
                     ),
                   ),
-                  _sectionLabel('GOOD TO TALK ABOUT'),
+                  const _SectionLabel('GOOD TO TALK ABOUT'),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -268,9 +280,9 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                               style: TextStyle(color: Colors.white38),
                             ),
                           ]
-                        : _tags.map((t) => _chip(t)).toList(),
+                        : _tags.map((t) => _Chip(t)).toList(),
                   ),
-                  _sectionLabel('LANGUAGES'),
+                  const _SectionLabel('LANGUAGES'),
                   Text(
                     _languages.isEmpty ? 'Not set' : _languages.join(' • '),
                     style: TextStyle(
@@ -280,7 +292,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  _sectionLabel('YOUR PRIVACY'),
+                  const _SectionLabel('YOUR PRIVACY'),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -315,9 +327,9 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                   const SizedBox(height: 16),
                   Center(
                     child: Text(
-                      _memberSinceYear().isEmpty
+                      _memberSinceYear(_createdAt).isEmpty
                           ? ''
-                          : 'Member since ${_memberSinceYear()}',
+                          : 'Member since ${_memberSinceYear(_createdAt)}',
                       style: const TextStyle(
                         color: Colors.white24,
                         fontSize: 12,

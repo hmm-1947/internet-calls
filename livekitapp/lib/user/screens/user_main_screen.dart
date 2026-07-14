@@ -39,6 +39,7 @@ class _UserMainScreenState extends State<UserMainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F1A2E),
+      extendBody: true,
       body: FadedIndexedStack(index: _index, children: _screens),
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,

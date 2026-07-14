@@ -88,7 +88,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   Future<void> _loadUsers() async {
     if (_token == null) return;
     try {
-      final users = await _repository.getUsers(_token!);
+      final users = await _repository.getUsers(_token!, forceRefresh: true);
       if (mounted) {
         setState(() {
           _users = users;

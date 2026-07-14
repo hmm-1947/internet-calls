@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/common/models/auth_response.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 
 class ListenerRepository {
   final ApiClient _apiClient = ApiClient();
@@ -18,7 +19,14 @@ class ListenerRepository {
     return AuthResponse.fromJson(data);
   }
 
-  Future<Map<String, dynamic>> getMe(String token) async {
+  Future<Map<String, dynamic>> getMe(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = ListenerDataCache().cachedMe;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(
       ApiConstants.listenerMe,
       token: token,
@@ -27,6 +35,7 @@ class ListenerRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load profile');
     }
+    ListenerDataCache().setMe(data);
     return data;
   }
 
@@ -69,6 +78,7 @@ class ListenerRepository {
       final data = jsonDecode(response.body);
       throw Exception(data['detail'] ?? 'Failed to update profile');
     }
+    ListenerDataCache().invalidateMe();
   }
 
 
@@ -161,6 +171,8 @@ class ListenerRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to send message');
     }
+    ListenerDataCache().invalidateMe();
+    ListenerDataCache().invalidateThreads();
     return data;
   }
 
@@ -204,6 +216,14 @@ class ListenerRepository {
     return List<Map<String, dynamic>>.from(data);
   }
 
+  Future<void> markMessagesRead(String token, int userId) async {
+    await _apiClient.post(
+      ApiConstants.listenerMarkRead(userId),
+      {},
+      token: token,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> getCallHistory(String token) async {
     final response = await _apiClient.get(
       ApiConstants.listenerCallHistory,
@@ -216,7 +236,14 @@ class ListenerRepository {
     return List<Map<String, dynamic>>.from(data);
   }
 
-  Future<List<Map<String, dynamic>>> getChatThreads(String token) async {
+  Future<List<Map<String, dynamic>>> getChatThreads(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = ListenerDataCache().cachedThreads;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(
       ApiConstants.listenerChatThreads,
       token: token,
@@ -225,7 +252,9 @@ class ListenerRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load threads');
     }
-    return List<Map<String, dynamic>>.from(data);
+    final threads = List<Map<String, dynamic>>.from(data);
+    ListenerDataCache().setThreads(threads);
+    return threads;
   }
 
   Future<List<Map<String, dynamic>>> getReviews(String token) async {
@@ -240,7 +269,14 @@ class ListenerRepository {
     return List<Map<String, dynamic>>.from(data);
   }
 
-  Future<List<Map<String, dynamic>>> getUsers(String token) async {
+  Future<List<Map<String, dynamic>>> getUsers(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = ListenerDataCache().cachedUsers;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(
       ApiConstants.listenerUsers,
       token: token,
@@ -249,7 +285,9 @@ class ListenerRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load users');
     }
-    return List<Map<String, dynamic>>.from(data);
+    final users = List<Map<String, dynamic>>.from(data);
+    ListenerDataCache().setUsers(users);
+    return users;
   }
 
   Future<void> editMessage(String token, int messageId, String message) async {
@@ -293,6 +331,7 @@ class ListenerRepository {
       final data = jsonDecode(response.body);
       throw Exception(data['detail'] ?? 'Failed to update chat settings');
     }
+    ListenerDataCache().invalidateThreads();
   }
 
   Future<Map<String, dynamic>?> getNoteByCall(String token, int callId) async {

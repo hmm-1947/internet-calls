@@ -45,6 +45,9 @@ class ApiConstants {
   static String listenerMessages(int userId) =>
       '/chat/listener/$userId/messages';
 
+  static String listenerMarkRead(int userId) =>
+      '/chat/listener/$userId/mark_read';
+
   static String deleteMessage(int messageId) => '/chat/message/$messageId';
 
   static String callRecordingStart(int callId) =>
@@ -58,6 +61,9 @@ class ApiConstants {
 
   static String userMessages(int listenerId) =>
       '/chat/user/$listenerId/messages';
+
+  static String userMarkRead(int listenerId) =>
+      '/chat/user/$listenerId/mark_read';
 
   static const String userMe = '/user/me';
   static const String userBio = '/user/bio';

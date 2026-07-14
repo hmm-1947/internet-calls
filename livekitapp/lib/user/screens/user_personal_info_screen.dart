@@ -2,6 +2,57 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFFE11D48),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyField extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  const _ReadOnlyField(this.icon, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141B26),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x0DFFFFFF)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white38, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class UserPersonalInfoScreen extends StatefulWidget {
   const UserPersonalInfoScreen({super.key});
 
@@ -68,44 +119,6 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
     }
   }
 
-  Widget _fieldLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 4),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Color(0xFFE11D48),
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-
-  Widget _readOnlyField(IconData icon, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141B26),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0x0DFFFFFF)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white38, size: 18),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -140,16 +153,16 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                _fieldLabel('FULL NAME'),
-                _readOnlyField(Icons.person_outline, _name),
+                const _FieldLabel('FULL NAME'),
+                _ReadOnlyField(Icons.person_outline, _name),
                 const SizedBox(height: 18),
-                _fieldLabel('EMAIL ADDRESS'),
-                _readOnlyField(Icons.email_outlined, _email),
+                const _FieldLabel('EMAIL ADDRESS'),
+                _ReadOnlyField(Icons.email_outlined, _email),
                 const SizedBox(height: 18),
-                _fieldLabel('PHONE NUMBER'),
-                _readOnlyField(Icons.phone_outlined, _phone),
+                const _FieldLabel('PHONE NUMBER'),
+                _ReadOnlyField(Icons.phone_outlined, _phone),
                 const SizedBox(height: 18),
-                _fieldLabel('BIO'),
+                const _FieldLabel('BIO'),
                 TextField(
                   controller: _bioController,
                   maxLines: 4,

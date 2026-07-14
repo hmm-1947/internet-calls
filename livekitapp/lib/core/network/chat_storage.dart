@@ -117,6 +117,8 @@ class ChatStorage {
 
   Future<void> addPending(PendingMessage msg) async {
     final all = await getPending();
+    // A retry must replace its existing queue entry, not create another copy.
+    all.removeWhere((pending) => pending.clientId == msg.clientId);
     all.add(msg);
     await _writePending(all);
   }

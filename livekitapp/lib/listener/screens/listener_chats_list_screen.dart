@@ -23,6 +23,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
   String _chatFilter = 'all';
   String _search = '';
   StreamSubscription? _socketSub;
+  Timer? _refreshDebounce;
   String? _token;
   @override
   void initState() {
@@ -39,12 +40,28 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
     }
   }
 
-  void _onSocketEvent(Map<String, dynamic> data) {
+    void _onSocketEvent(Map<String, dynamic> data) {
     final type = data['type'];
     if (type == 'chat_message' ||
         type == 'read_receipt' ||
         type == 'message_status') {
-      _load();
+      _refreshDebounce?.cancel();
+      _refreshDebounce = Timer(const Duration(milliseconds: 400), _refreshSilently);
+    } else if (type == 'user_online' || type == 'user_offline') {
+      final uid = data['user_id'];
+      final idx = _threads.indexWhere((t) => t['user_id'] == uid);
+      if (idx != -1) {
+        setState(() {
+          _threads[idx]['is_online'] = type == 'user_online';
+        });
+      }
+    }
+  } {
+    final type = data['type'];
+    if (type == 'chat_message' ||
+        type == 'read_receipt' ||
+        type == 'message_status') {
+      _refreshSilently();
     } else if (type == 'user_online' || type == 'user_offline') {
       final uid = data['user_id'];
       final idx = _threads.indexWhere((t) => t['user_id'] == uid);
@@ -59,6 +76,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
   @override
   void dispose() {
     _socketSub?.cancel();
+    _refreshDebounce?.cancel();
     super.dispose();
   }
 
@@ -66,7 +84,10 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
     setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
-      final threads = await _repository.getChatThreads(token!);
+      final threads = await _repository.getChatThreads(
+        token!,
+        forceRefresh: true,
+      );
       setState(() {
         _threads = threads;
         _loading = false;
@@ -74,6 +95,18 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _refreshSilently() async {
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      final threads = await _repository.getChatThreads(
+        token,
+        forceRefresh: true,
+      );
+      if (mounted) setState(() => _threads = threads);
+    } catch (_) {}
   }
 
   List<Map<String, dynamic>> get _filteredThreads {
@@ -404,7 +437,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                                   barrierColor: bg,
                                 ),
                               );
-                              _load();
+                              _refreshSilently();
                             },
                             onLongPress: () => _showThreadOptions(thread),
                           ),

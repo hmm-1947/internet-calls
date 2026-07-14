@@ -2,56 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
-class ListenerWalletScreen extends StatefulWidget {
-  const ListenerWalletScreen({super.key});
+class _EarnTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final int coins;
+
+  const _EarnTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.coins,
+  });
 
   @override
-  State<ListenerWalletScreen> createState() => _ListenerWalletScreenState();
-}
-
-class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
-  final _repository = ListenerRepository();
-  final _localStorage = LocalStorage();
-  bool _loading = true;
-  int _coins = 0;
-  int _audioCoins = 0;
-  int _audioMinutes = 0;
-  int _videoCoins = 0;
-  int _videoMinutes = 0;
-  int _chatCoins = 0;
-  int _giftCoins = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final token = await _localStorage.getToken();
-      final data = await _repository.getWallet(token!);
-      setState(() {
-        _coins = data['coins'] ?? 0;
-        _audioCoins = data['audio_call_coins'] ?? 0;
-        _audioMinutes = data['audio_call_minutes'] ?? 0;
-        _videoCoins = data['video_call_coins'] ?? 0;
-        _videoMinutes = data['video_call_minutes'] ?? 0;
-        _chatCoins = data['chat_coins'] ?? 0;
-        _giftCoins = data['gift_coins'] ?? 0;
-      });
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Widget _earnTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required int coins,
-  }) {
+  Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -102,6 +67,51 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
         ],
       ),
     );
+  }
+}
+
+class ListenerWalletScreen extends StatefulWidget {
+  const ListenerWalletScreen({super.key});
+
+  @override
+  State<ListenerWalletScreen> createState() => _ListenerWalletScreenState();
+}
+
+class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
+  final _repository = ListenerRepository();
+  final _localStorage = LocalStorage();
+  bool _loading = true;
+  int _coins = 0;
+  int _audioCoins = 0;
+  int _audioMinutes = 0;
+  int _videoCoins = 0;
+  int _videoMinutes = 0;
+  int _chatCoins = 0;
+  int _giftCoins = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final token = await _localStorage.getToken();
+      final data = await _repository.getWallet(token!);
+      setState(() {
+        _coins = data['coins'] ?? 0;
+        _audioCoins = data['audio_call_coins'] ?? 0;
+        _audioMinutes = data['audio_call_minutes'] ?? 0;
+        _videoCoins = data['video_call_coins'] ?? 0;
+        _videoMinutes = data['video_call_minutes'] ?? 0;
+        _chatCoins = data['chat_coins'] ?? 0;
+        _giftCoins = data['gift_coins'] ?? 0;
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -176,25 +186,25 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _earnTile(
+                _EarnTile(
                   icon: Icons.chat_bubble_outline,
                   title: 'Chat Messages',
                   subtitle: 'Total interaction volume',
                   coins: _chatCoins,
                 ),
-                _earnTile(
+                _EarnTile(
                   icon: Icons.call_outlined,
                   title: 'Audio Calls',
                   subtitle: '$_audioMinutes minutes total',
                   coins: _audioCoins,
                 ),
-                _earnTile(
+                _EarnTile(
                   icon: Icons.videocam_outlined,
                   title: 'Video Calls',
                   subtitle: 'Premium quality sessions',
                   coins: _videoCoins,
                 ),
-                _earnTile(
+                _EarnTile(
                   icon: Icons.card_giftcard_outlined,
                   title: 'Gift Earnings',
                   subtitle: 'Virtual collectibles received',

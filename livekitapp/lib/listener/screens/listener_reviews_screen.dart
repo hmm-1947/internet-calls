@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
+String _timeAgo(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return '${dt.day}/${dt.month}/${dt.year}';
+}
+
 class ListenerReviewsScreen extends StatefulWidget {
   const ListenerReviewsScreen({super.key});
 
@@ -34,14 +42,6 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.day}/${dt.month}/${dt.year}';
   }
 
   @override

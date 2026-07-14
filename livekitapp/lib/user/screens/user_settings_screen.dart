@@ -1,9 +1,81 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_personal_info_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    this.trailing,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: Colors.white70),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      trailing:
+          trailing ??
+          (onTap != null
+              ? const Icon(Icons.chevron_right, color: Colors.white38)
+              : null),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  final List<Widget> children;
+  const _SettingsCard(this.children);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: children),
+      ),
+    );
+  }
+}
 
 class UserSettingsScreen extends StatefulWidget {
   const UserSettingsScreen({super.key});
@@ -38,60 +110,12 @@ class UserSettingsScreenState extends State<UserSettingsScreen> {
   Future<void> _logout() async {
     setState(() => _loggingOut = true);
     await _localStorage.clear();
+    UserDataCache().clear();
     if (mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const UserLoginScreen()),
       );
     }
-  }
-
-  Widget _sectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white54,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-
-  Widget _tile({
-    required IconData icon,
-    required String title,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    return ListTile(
-      onTap: onTap,
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
-      trailing:
-          trailing ??
-          (onTap != null
-              ? const Icon(Icons.chevron_right, color: Colors.white38)
-              : null),
-    );
-  }
-
-  Widget _card(List<Widget> children) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: Column(children: children),
-      ),
-    );
   }
 
   @override
@@ -134,9 +158,9 @@ class UserSettingsScreenState extends State<UserSettingsScreen> {
               ],
             ),
           ),
-          _sectionLabel('ACCOUNT'),
-          _card([
-            _tile(
+          _SectionLabel('ACCOUNT'),
+          _SettingsCard([
+            _SettingsTile(
               icon: Icons.person_outline,
               title: 'Edit Profile',
               onTap: () {
@@ -146,15 +170,15 @@ class UserSettingsScreenState extends State<UserSettingsScreen> {
               },
             ),
             const Divider(height: 1, color: Colors.white12),
-            _tile(
+            _SettingsTile(
               icon: Icons.lock_reset,
               title: 'Change Password',
               onTap: () {},
             ),
           ]),
-          _sectionLabel('PREFERENCES'),
-          _card([
-            _tile(
+          _SectionLabel('PREFERENCES'),
+          _SettingsCard([
+            _SettingsTile(
               icon: Icons.notifications_none,
               title: 'Notifications',
               trailing: Switch(
@@ -164,34 +188,34 @@ class UserSettingsScreenState extends State<UserSettingsScreen> {
               ),
             ),
             const Divider(height: 1, color: Colors.white12),
-            _tile(
+            _SettingsTile(
               icon: Icons.shield_outlined,
               title: 'Privacy & Security',
               onTap: () {},
             ),
           ]),
-          _sectionLabel('SUPPORT'),
-          _card([
-            _tile(
+          _SectionLabel('SUPPORT'),
+          _SettingsCard([
+            _SettingsTile(
               icon: Icons.help_outline,
               title: 'Help & Support',
               onTap: () {},
             ),
             const Divider(height: 1, color: Colors.white12),
-            _tile(
+            _SettingsTile(
               icon: Icons.description_outlined,
               title: 'Terms of Service',
               onTap: () {},
             ),
             const Divider(height: 1, color: Colors.white12),
-            _tile(
+            _SettingsTile(
               icon: Icons.privacy_tip_outlined,
               title: 'Privacy Policy',
               onTap: () {},
             ),
           ]),
           const SizedBox(height: 16),
-          _card([
+          _SettingsCard([
             ListTile(
               onTap: _loggingOut ? null : _logout,
               leading: const Icon(Icons.logout, color: Colors.red),

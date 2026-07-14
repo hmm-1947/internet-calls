@@ -7,6 +7,42 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/chat_history_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color activeColor;
+
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? activeColor : const Color(0xFF1A2032),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : Colors.white54,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
 
@@ -23,6 +59,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   String _chatFilter = 'all';
   String _search = '';
   StreamSubscription? _socketSub;
+  Timer? _refreshDebounce;
   String? _token;
 
   @override
@@ -52,7 +89,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     if (type == 'chat_message' ||
         type == 'read_receipt' ||
         type == 'message_status') {
-      _load();
+      _refreshDebounce?.cancel();
+      _refreshDebounce = Timer(
+        const Duration(milliseconds: 400),
+        _refreshSilently,
+      );
     } else if (type == 'listener_online' || type == 'listener_offline') {
       final lid = data['listener_id'];
       final idx = _threads.indexWhere((t) => t['listener_id'] == lid);
@@ -71,6 +112,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   @override
   void dispose() {
     _socketSub?.cancel();
+    _refreshDebounce?.cancel();
     super.dispose();
   }
 
@@ -78,7 +120,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
-      final threads = await _repository.getChatThreads(token!);
+      final threads = await _repository.getChatThreads(
+        token!,
+        forceRefresh: true,
+      );
       setState(() {
         _threads = threads;
         _loading = false;
@@ -86,6 +131,18 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _refreshSilently() async {
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      final threads = await _repository.getChatThreads(
+        token,
+        forceRefresh: true,
+      );
+      if (mounted) setState(() => _threads = threads);
+    } catch (_) {}
   }
 
   List<Map<String, dynamic>> get _filteredThreads {
@@ -216,7 +273,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                     fit: BoxFit.contain,
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0x1AFFFFFF),
                       borderRadius: BorderRadius.circular(20),
@@ -281,44 +341,49 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                               scrollDirection: Axis.horizontal,
                               padding: EdgeInsets.zero,
                               children: [
-                                _filterChip('All', _chatFilter == 'all', () {
-                                  setState(() => _chatFilter = 'all');
-                                }, pink),
+                                _FilterChip(
+                                  label: 'All',
+                                  selected: _chatFilter == 'all',
+                                  onTap: () {
+                                    setState(() => _chatFilter = 'all');
+                                  },
+                                  activeColor: pink,
+                                ),
                                 const SizedBox(width: 8),
-                                _filterChip(
-                                  'Unread',
-                                  _chatFilter == 'unread',
-                                  () {
+                                _FilterChip(
+                                  label: 'Unread',
+                                  selected: _chatFilter == 'unread',
+                                  onTap: () {
                                     setState(() => _chatFilter = 'unread');
                                   },
-                                  pink,
+                                  activeColor: pink,
                                 ),
                                 const SizedBox(width: 8),
-                                _filterChip(
-                                  'Favorites',
-                                  _chatFilter == 'favorites',
-                                  () {
+                                _FilterChip(
+                                  label: 'Favorites',
+                                  selected: _chatFilter == 'favorites',
+                                  onTap: () {
                                     setState(() => _chatFilter = 'favorites');
                                   },
-                                  pink,
+                                  activeColor: pink,
                                 ),
                                 const SizedBox(width: 8),
-                                _filterChip(
-                                  'Archived',
-                                  _chatFilter == 'archived',
-                                  () {
+                                _FilterChip(
+                                  label: 'Archived',
+                                  selected: _chatFilter == 'archived',
+                                  onTap: () {
                                     setState(() => _chatFilter = 'archived');
                                   },
-                                  pink,
+                                  activeColor: pink,
                                 ),
                                 const SizedBox(width: 8),
-                                _filterChip(
-                                  'Group(Beta)',
-                                  _chatFilter == 'group',
-                                  () {
+                                _FilterChip(
+                                  label: 'Group(Beta)',
+                                  selected: _chatFilter == 'group',
+                                  onTap: () {
                                     setState(() => _chatFilter = 'group');
                                   },
-                                  pink,
+                                  activeColor: pink,
                                 ),
                               ],
                             ),
@@ -506,32 +571,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _filterChip(
-    String label,
-    bool selected,
-    VoidCallback onTap,
-    Color activeColor,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? activeColor : const Color(0xFF1A2032),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.white54,
-            fontWeight: FontWeight.w500,
-          ),
         ),
       ),
     );

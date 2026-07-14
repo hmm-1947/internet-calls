@@ -119,6 +119,9 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> {
     if (type == 'chat_message' && data['user_id'] == widget.userId) {
       setState(() => _messages.add(data));
       _scrollToBottom();
+      if (data['sender_type'] == 'user' && _token != null) {
+        _repository.markMessagesRead(_token!, widget.userId);
+      }
     } else if (type == 'typing' && data['user_id'] == widget.userId) {
       setState(() => _userTyping = data['is_typing'] == true);
     } else if (type == 'message_status') {

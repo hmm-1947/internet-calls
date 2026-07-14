@@ -1,4 +1,7 @@
+import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 class CrownNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -22,48 +25,84 @@ class CrownNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     const activeColor = Color(0xFFE53950);
     const inactiveColor = Colors.white70;
-    const barColor = Color(0xFF0F1A2E);
 
     Widget buildItem(int i) {
       final selected = selectedIndex == i;
       final color = selected ? activeColor : inactiveColor;
+      final itemContent = SizedBox(
+        height: 56,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconTheme(
+              data: IconThemeData(color: color, size: 22),
+              child: icons[i],
+            ),
+            const SizedBox(height: 4),
+            Text(labels[i], style: TextStyle(color: color, fontSize: 11)),
+          ],
+        ),
+      );
       return Expanded(
         child: InkWell(
           onTap: () => onDestinationSelected(i),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconTheme(
-                data: IconThemeData(color: color, size: 22),
-                child: icons[i],
-              ),
-              const SizedBox(height: 4),
-              Text(labels[i], style: TextStyle(color: color, fontSize: 11)),
-            ],
+          borderRadius: BorderRadius.circular(22),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            height: 56,
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color.fromARGB(51, 255, 124, 141)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(22),
+              border: selected
+                  ? Border.all(
+                      color: const Color.fromARGB(83, 255, 126, 126),
+                      width: 1,
+                    )
+                  : null,
+            ),
+            child: Center(child: itemContent),
           ),
         ),
       );
     }
 
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    return Container(
-      color: barColor,
-      padding: EdgeInsets.only(bottom: bottomInset),
+    return SizedBox(
       height: 78 + bottomInset,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Container(
-            decoration: const BoxDecoration(color: barColor),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                buildItem(0),
-                buildItem(1),
-                const Expanded(child: SizedBox()),
-                buildItem(2),
-                buildItem(3),
-              ],
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0x400F1A2E),
+                border: Border(top: BorderSide(color: Color(0x55FFFFFF))),
+              ),
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          buildItem(0),
+                          buildItem(1),
+                          const Expanded(child: SizedBox()),
+                          buildItem(2),
+                          buildItem(3),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
           if (showCrown)

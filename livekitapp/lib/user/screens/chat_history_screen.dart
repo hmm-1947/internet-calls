@@ -40,6 +40,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   bool _listenerTyping = false;
   bool _isFavorite = false;
   int _profileCoins = 0;
+  int _chatMessageCoinCost = 0;
+  bool _coinsLoaded = false;
   Timer? _typingStopTimer;
   Timer? _typingSendTimer;
 
@@ -63,7 +65,13 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   Future<void> _loadCoins() async {
     if (_token == null) return;
     final me = await _repository.getMe(_token!);
-    if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
+    if (mounted) {
+      setState(() {
+        _profileCoins = me['coins'] ?? 0;
+        _chatMessageCoinCost = me['chat_message_coin_cost'] ?? 0;
+        _coinsLoaded = true;
+      });
+    }
   }
 
   Future<void> _loadFavoriteStatus() async {
@@ -155,6 +163,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     if (type == 'chat_message' && data['listener_id'] == widget.listenerId) {
       setState(() => _messages.add(data));
       _scrollToBottom();
+      if (data['sender_type'] == 'listener' && _token != null) {
+        _repository.markMessagesRead(_token!, widget.listenerId);
+      }
     } else if (type == 'typing' && data['listener_id'] == widget.listenerId) {
       setState(() => _listenerTyping = data['is_typing'] == true);
     } else if (type == 'message_status') {
@@ -226,6 +237,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _token == null) return;
+    if (_coinsLoaded && _profileCoins < _chatMessageCoinCost) {
+      _showInsufficientCoins();
+      return;
+    }
     if (text.length > 100) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Message too long, only 100 characters allowed')),
@@ -260,6 +275,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
 
   Future<void> _sendVoice(String filePath, int duration) async {
     if (_token == null) return;
+    if (_coinsLoaded && _profileCoins < _chatMessageCoinCost) {
+      _showInsufficientCoins();
+      return;
+    }
     final clientId = const Uuid().v4();
     setState(() {
       _messages.add({
@@ -285,6 +304,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         clientId: clientId,
       );
       await _load();
+    } on InsufficientCoinsException {
+      _removeRejectedMessage(clientId);
     } catch (_) {
       setState(() {
         final idx = _messages.indexWhere((m) => m['client_id'] == clientId);
@@ -303,6 +324,12 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
       );
       await _chatStorage.removePending(clientId);
       await _load();
+    } on InsufficientCoinsException {
+      // A 402 is a permanent rejection, not a network failure.  Never put it
+      // in the offline queue or schedule another attempt.
+      await _chatStorage.removePending(clientId);
+      _removeRejectedMessage(clientId);
+      await _loadCoins();
     } catch (_) {
       setState(() {
         final idx = _messages.indexWhere((m) => m['client_id'] == clientId);
@@ -320,6 +347,19 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         () => _retrySend(clientId, text),
       );
     }
+  }
+
+  void _removeRejectedMessage(String clientId) {
+    if (!mounted) return;
+    setState(() => _messages.removeWhere((m) => m['client_id'] == clientId));
+    _showInsufficientCoins();
+  }
+
+  void _showInsufficientCoins() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Not enough coins to send this message')),
+    );
   }
 
   Widget _statusIcon(String? status) {

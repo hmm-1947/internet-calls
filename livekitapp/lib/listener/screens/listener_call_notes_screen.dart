@@ -2,6 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
+String _formatDate(DateTime date) {
+  const months = [
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
+  ];
+  final local = date.toLocal();
+  final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${months[local.month - 1]} ${local.day}, ${local.year} • $hour:$minute $period';
+}
+
 class ListenerCallNotesScreen extends StatefulWidget {
   final int? callId;
   final int? userId;
@@ -127,28 +149,6 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  String _formatDate(DateTime date) {
-    const months = [
-      'JAN',
-      'FEB',
-      'MAR',
-      'APR',
-      'MAY',
-      'JUN',
-      'JUL',
-      'AUG',
-      'SEP',
-      'OCT',
-      'NOV',
-      'DEC',
-    ];
-    final local = date.toLocal();
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final period = local.hour >= 12 ? 'PM' : 'AM';
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '${months[local.month - 1]} ${local.day}, ${local.year} • $hour:$minute $period';
   }
 
   @override

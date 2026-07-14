@@ -12,9 +12,6 @@ import 'package:livekitapp/shared/utils/fade_page_route.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 
-// ---------------------------------------------------------------------------
-// Design tokens (pulled from Figma "Home screen" frame)
-// ---------------------------------------------------------------------------
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
   static const headerBg = Color(0xCC0B0B0B);
@@ -25,6 +22,85 @@ class _AppColors {
   static const online = Color(0xFF74D8BD);
   static const textSecondary = Color(0xFFD4E4FA);
   static const textMuted = Color(0xFFE5BDBE);
+}
+
+class _DummyOfferCard extends StatelessWidget {
+  final String badge;
+  final String title;
+  final Gradient gradient;
+
+  const _DummyOfferCard({
+    required this.badge,
+    required this.title,
+    required this.gradient,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 160,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.fromLTRB(20, 17, 20, 20),
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2.5,
+                ),
+                decoration: BoxDecoration(
+                  color: _AppColors.brandRed,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  badge,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: _AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'Claim Offer',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF05141E),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class UserHomeScreen extends StatefulWidget {
@@ -60,7 +136,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     _load();
     _initSocket();
     _pollTimer = Timer.periodic(
-      const Duration(seconds: 15),
+      const Duration(minutes: 2),
       (_) => _load(silent: true),
     );
     _offersAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -343,9 +419,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    fadeRoute(const UserProfileScreen()),
-                  );
+                  Navigator.of(
+                    context,
+                  ).push(fadeRoute(const UserProfileScreen()));
                 },
               ),
               ListTile(
@@ -429,31 +505,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  Widget _buildHeaderWithDrawer() {
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: _AppColors.headerBg,
-        border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset(
-            'assets/images/banner.png',
-            height: 32,
-            fit: BoxFit.contain,
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-          ),
-        ],
-      ),
-    );
-  }
-
   // -------------------------------------------------------------------------
   // Search bar — dummy, non-functional (no search endpoint yet)
   // -------------------------------------------------------------------------
@@ -512,17 +563,17 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             controller: _offersController,
             onPageChanged: (index) => _offersCurrentPage = index,
             children: [
-              _dummyOfferCard(
+              const _DummyOfferCard(
                 badge: 'LIMITED TIME',
                 title: '50% Off First Call',
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)],
                 ),
               ),
-              _dummyOfferCard(
+              const _DummyOfferCard(
                 badge: 'NEW',
                 title: 'Free 5-min Trial',
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [_AppColors.brandRed, Color(0xFF681A19)],
@@ -532,76 +583,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _dummyOfferCard({
-    required String badge,
-    required String title,
-    required Gradient gradient,
-  }) {
-    return Container(
-      height: 160,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.fromLTRB(20, 17, 20, 20),
-      decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _AppColors.cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2.5,
-                ),
-                decoration: BoxDecoration(
-                  color: _AppColors.brandRed,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  badge,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: _AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Claim Offer',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF05141E),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -679,6 +660,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     final bool isOnline = listener['is_online'] == true;
     final bool isCalling = _callingListenerId == listener['id'];
     final bool canAct = isOnline && _callingListenerId == null;
+    final tags = List<String>.from(listener['tags'] ?? const []);
 
     return GestureDetector(
       onTap: () => _openListenerProfile(listener),
@@ -761,6 +743,37 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       ],
                     ],
                   ),
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: tags
+                          .take(3)
+                          .map(
+                            (tag) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _AppColors.brandRed.withOpacity(0.16),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                tag,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -839,8 +852,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   void _openListenerProfile(Map<String, dynamic> listener) {
-    Navigator.of(context).push(
-      fadeRoute(ListenerProfileViewScreen(listenerId: listener['id'])),
-    );
+    Navigator.of(
+      context,
+    ).push(fadeRoute(ListenerProfileViewScreen(listenerId: listener['id'])));
   }
 }
