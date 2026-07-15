@@ -101,11 +101,15 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     try {
       final token = await _localStorage.getToken();
       if (token == null) throw Exception('Not logged in');
-      await _billingRepository.purchasePlan(token, _selectedPlanId!);
+      final result = await _billingRepository.purchasePlan(
+        token,
+        _selectedPlanId!,
+      );
+      final coinsPurchased = (result['coins_purchased'] as num?)?.toInt() ?? 0;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Plan purchased successfully'),
+        SnackBar(
+          content: Text('$coinsPurchased coins added to your balance'),
           backgroundColor: _AppColors.brandRed,
         ),
       );
@@ -123,28 +127,40 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     }
   }
 
-  IconData _iconForPlan(Map<String, dynamic> plan) {
-    final type = plan['plan_type'] as String? ?? 'monthly';
-    switch (type) {
-      case 'yearly':
+  IconData _iconForType(String? icon) {
+    switch (icon) {
+      case 'diamond':
         return Icons.diamond_outlined;
-      case 'quarterly':
-        return Icons.star_outline;
+      case 'star':
+        return Icons.star_rounded;
+      case 'coin':
       default:
         return Icons.monetization_on_outlined;
     }
   }
 
-  String _cycleLabel(Map<String, dynamic> plan) {
-    final type = plan['plan_type'] as String? ?? 'monthly';
-    final validity = plan['validity_value'] ?? 1;
-    final unit = type == 'monthly'
-        ? 'month'
-        : type == 'quarterly'
-        ? 'quarter'
-        : 'year';
-    final plural = validity == 1 ? unit : '${unit}s';
-    return '$validity $plural';
+  IconData _iconForPlan(Map<String, dynamic> plan) =>
+      _iconForType(plan['icon'] as String?);
+
+  // Icon theme follows Best Seller status, not the icon type itself:
+  // gold for regular plans, red for the featured/best-seller plan.
+  Color _colorForPlan(Map<String, dynamic> plan) =>
+      plan['is_featured'] == true ? _AppColors.brandRed : _AppColors.gold;
+
+  Widget _planIconGlyph(Map<String, dynamic> plan, Color color) {
+    final type = plan['icon'] as String?;
+    if (type == 'star') {
+      // Compose a star inside a circle outline (no single Material icon
+      // matches this exactly).
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(Icons.circle_outlined, color: color, size: 22),
+          Icon(Icons.star_rounded, color: color, size: 12),
+        ],
+      );
+    }
+    return Icon(_iconForPlan(plan), color: color, size: 22);
   }
 
   @override
@@ -342,7 +358,11 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.savings_outlined, color: _AppColors.gold, size: 22),
+            const Icon(
+              Icons.payments_rounded,
+              color: _AppColors.gold,
+              size: 22,
+            ),
             const SizedBox(width: 8),
             Text(
               '$_coins Coins',
@@ -362,7 +382,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     final id = plan['id'] as int;
     final selected = _selectedPlanId == id;
     final featured = plan['is_featured'] == true;
-    final description = (plan['description'] as String?)?.trim();
+    final coins = plan['coins'] as int? ?? 0;
+    final iconColor = _colorForPlan(plan);
 
     return GestureDetector(
       onTap: () => setState(() => _selectedPlanId = id),
@@ -386,14 +407,12 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
+                    color: featured
+                        ? _AppColors.brandRed.withOpacity(0.16)
+                        : const Color(0xFF13212F),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _iconForPlan(plan),
-                    color: _AppColors.gold,
-                    size: 22,
-                  ),
+                  child: _planIconGlyph(plan, iconColor),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -410,22 +429,12 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Valid for ${_cycleLabel(plan)}',
+                        '$coins Coins',
                         style: const TextStyle(
                           color: _AppColors.textMuted,
                           fontSize: 12,
                         ),
                       ),
-                      if (description != null && description.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          description,
-                          style: const TextStyle(
-                            color: _AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
