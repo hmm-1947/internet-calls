@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -32,10 +33,23 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   int? _selectedPlanId;
   bool _purchasing = false;
 
+  late final Razorpay _razorpay;
+  String? _pendingOrderId;
+
   @override
   void initState() {
     super.initState();
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _razorpay.clear();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -101,12 +115,62 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     try {
       final token = await _localStorage.getToken();
       if (token == null) throw Exception('Not logged in');
-      final result = await _billingRepository.purchasePlan(
+      // Step 1: ask the backend to create a Razorpay order for this plan.
+      // No coins are granted yet - that only happens after a verified
+      // payment (see _onPaymentSuccess).
+      final order = await _billingRepository.purchasePlan(
         token,
         _selectedPlanId!,
       );
-      final coinsPurchased = (result['coins_purchased'] as num?)?.toInt() ?? 0;
+      _pendingOrderId = order['order_id'] as String?;
+
+      final options = {
+        'key': order['key_id'],
+        'amount': order['amount'],
+        'currency': order['currency'] ?? 'INR',
+        'order_id': order['order_id'],
+        'name': 'Coin Purchase',
+        'description': order['plan_name'],
+        'prefill': {
+          'contact': order['contact'] ?? '',
+          'email': order['email'] ?? '',
+          'name': order['name'] ?? '',
+        },
+        // The app already knows the user's email/phone, so lock these
+        // fields instead of making the user retype them at checkout.
+        'readonly': {'contact': true, 'email': true},
+        'theme': {'color': '#E11D48'},
+      };
+
+      _razorpay.open(options);
+    } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      setState(() => _purchasing = false);
+    }
+  }
+
+  Future<void> _onPaymentSuccess(PaymentSuccessResponse response) async {
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) throw Exception('Not logged in');
+      // Step 2: verify the payment signature on the backend. Coins are
+      // credited server-side only once this succeeds.
+      final result = await _billingRepository.verifyPayment(
+        token,
+        razorpayOrderId: response.orderId ?? _pendingOrderId ?? '',
+        razorpayPaymentId: response.paymentId ?? '',
+        razorpaySignature: response.signature ?? '',
+      );
+      final coinsPurchased = (result['coins_purchased'] as num?)?.toInt() ?? 0;
+      final newBalance = (result['coins_balance'] as num?)?.toInt();
+      if (!mounted) return;
+      if (newBalance != null) setState(() => _coins = newBalance);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$coinsPurchased coins added to your balance'),
@@ -118,13 +182,52 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(
+            'Payment received but verification failed: '
+            '${e.toString().replaceFirst('Exception: ', '')}',
+          ),
           backgroundColor: Colors.redAccent,
         ),
       );
     } finally {
+      _pendingOrderId = null;
       if (mounted) setState(() => _purchasing = false);
     }
+  }
+
+  Future<void> _onPaymentError(PaymentFailureResponse response) async {
+    final orderId = _pendingOrderId;
+    if (orderId != null) {
+      final token = await _localStorage.getToken();
+      if (token != null) {
+        await _billingRepository.reportPaymentFailed(
+          token,
+          razorpayOrderId: orderId,
+          reason: response.message,
+        );
+      }
+    }
+    _pendingOrderId = null;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+  (response.message == null || response.message == 'undefined')
+      ? 'Payment failed'
+      : response.message!,
+),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+    setState(() => _purchasing = false);
+  }
+
+  void _onExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening ${response.walletName ?? 'wallet'}...')),
+    );
+    setState(() => _purchasing = false);
   }
 
   IconData _iconForType(String? icon) {

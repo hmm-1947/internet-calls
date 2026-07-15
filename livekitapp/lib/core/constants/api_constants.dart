@@ -76,5 +76,7 @@ class ApiConstants {
 
   static const String billingPlans = '/billing/plans';
   static String billingPurchase(int planId) => '/billing/purchase/$planId';
+  static const String billingVerifyPayment = '/billing/verify-payment';
+  static const String billingPaymentFailed = '/billing/payment-failed';
   static const String billingMyPurchases = '/billing/my-purchases';
 }

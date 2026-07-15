@@ -495,6 +495,11 @@
       color: var(--danger);
     }
 
+    .badge-pending {
+      background: #fff4dd;
+      color: #b3760a;
+    }
+
     .badge-role {
       background: #fdeceb;
       color: var(--leaf);
@@ -1043,6 +1048,22 @@
       <h2>Coin Packs</h2>
       <div id="billingPlansList"></div>
     </div>
+
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Purchase History</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <select id="billingPurchaseStatusFilter" onchange="renderBillingPurchases()" style="padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
+            <option value="">All statuses</option>
+            <option value="completed">Successful</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+          <button class="btn btn-ghost" onclick="loadBillingPurchases()">Refresh</button>
+        </span>
+      </h2>
+      <div id="billingPurchasesList"></div>
+    </div>
   </div>
 
       </div>
@@ -1173,6 +1194,7 @@
       loadPeople();
       loadCoinSettings();
       loadBillingPlans();
+      loadBillingPurchases();
       loadActiveCalls();
       loadStats();
       loadOverview();
@@ -1556,6 +1578,79 @@
         if (!res.ok) throw new Error(data.detail || 'Failed to delete coin pack');
         loadBillingPlans();
       } catch (e) { setBillingMsg('✗ ' + e.message, false); }
+    }
+
+    const PURCHASE_STATUS_LABELS = { completed: 'Successful', pending: 'Pending', failed: 'Failed' };
+    const PURCHASE_STATUS_BADGE = { completed: 'badge-yes', pending: 'badge-pending', failed: 'badge-no' };
+    let billingPurchasesCache = [];
+
+    function formatPurchaseDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString();
+    }
+
+    async function loadBillingPurchases() {
+      const wrap = document.getElementById('billingPurchasesList');
+      try {
+        const res = await fetch(API_URL + '/admin/billing/purchases', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load purchase history');
+        billingPurchasesCache = data;
+        renderBillingPurchases();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load purchase history.</div>';
+      }
+    }
+
+    function renderBillingPurchases() {
+      const wrap = document.getElementById('billingPurchasesList');
+      const filter = document.getElementById('billingPurchaseStatusFilter').value;
+      const rows = filter ? billingPurchasesCache.filter(p => p.status === filter) : billingPurchasesCache;
+
+      if (!rows.length) {
+        wrap.innerHTML = '<div class="empty-state">No purchases yet.</div>';
+        return;
+      }
+
+      wrap.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Plan / Coins</th>
+              <th>Amount</th>
+              <th>Payment ID</th>
+              <th>Order ID</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(p => `
+              <tr>
+                <td>
+                  ${p.user_name || '—'}
+                  ${p.user_phone ? `<div style="font-size:11px;color:var(--slate);">${p.user_phone}</div>` : ''}
+                </td>
+                <td>
+                  ${p.plan_name}
+                  <div style="font-size:11px;color:var(--slate);">${p.coins_purchased} coins</div>
+                </td>
+                <td>₹${p.price_paid}</td>
+                <td style="font-family:monospace;font-size:12px;">${p.razorpay_payment_id || '—'}</td>
+                <td style="font-family:monospace;font-size:12px;">${p.razorpay_order_id || '—'}</td>
+                <td>
+                  <span class="badge ${PURCHASE_STATUS_BADGE[p.status] || 'badge-pending'}">${PURCHASE_STATUS_LABELS[p.status] || p.status}</span>
+                  ${p.status === 'failed' && p.failure_reason ? `<div style="font-size:11px;color:var(--danger);margin-top:2px;">${p.failure_reason}</div>` : ''}
+                </td>
+                <td style="font-size:12px;color:var(--slate);white-space:nowrap;">${formatPurchaseDate(p.created_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
     }
 
 

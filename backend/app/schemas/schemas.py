@@ -74,6 +74,47 @@ class BillingPurchaseOut(BaseModel):
     class Config:
         from_attributes = True
 
+
+class RazorpayOrderOut(BaseModel):
+    purchase_id: int
+    order_id: str
+    amount: int  # in paise
+    currency: str = "INR"
+    key_id: str
+    plan_name: str
+    coins: int
+    name: str
+    email: Optional[str] = None
+    contact: Optional[str] = None
+
+
+class RazorpayVerifyPayment(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+class RazorpayPaymentFailed(BaseModel):
+    razorpay_order_id: str
+    reason: Optional[str] = None
+
+
+class AdminPurchaseOut(BaseModel):
+    id: int
+    user_id: int
+    user_name: str
+    user_phone: Optional[str] = None
+    plan_id: int
+    plan_name: str
+    price_paid: int
+    coins_purchased: int
+    status: str
+    razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    failure_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
 class UserRegisterInitiate(BaseModel):
     name: str
     email: str

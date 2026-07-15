@@ -221,8 +221,14 @@ class UserBillingPurchase(Base):
     plan_name = Column(String, nullable=False)
     price_paid = Column(Integer, nullable=False)
     coins_purchased = Column(Integer, nullable=False, default=0)
-    status = Column(String, default="completed", nullable=False)
+    status = Column(String, default="pending", nullable=False)  # pending | completed | failed
+    razorpay_order_id = Column(String, nullable=True, index=True)
+    razorpay_payment_id = Column(String, nullable=True, index=True)
+    razorpay_signature = Column(String, nullable=True)
+    failure_reason = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
 
 
 class EmailOtp(Base):
