@@ -13,7 +13,11 @@ class Settings(BaseSettings):
     smtp_password: str
     smtp_from_email: str
 
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()

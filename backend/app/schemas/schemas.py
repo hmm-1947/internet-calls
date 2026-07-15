@@ -2,18 +2,16 @@ from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
 
-ALLOWED_PLAN_TYPES = {"monthly", "quarterly", "yearly"}
+ALLOWED_PLAN_ICONS = {"coin", "diamond", "star"}
 
 
 class BillingPlanBase(BaseModel):
     name: str
     price: int
-    validity_value: int
-    plan_type: str
-    description: Optional[str] = None
+    coins: int
+    icon: str = "coin"
     is_featured: bool = False
     is_active: bool = True
-    sort_order: int = 0
 
     @field_validator("name")
     @classmethod
@@ -32,26 +30,19 @@ class BillingPlanBase(BaseModel):
             raise ValueError("Price must be greater than 0")
         return v
 
-    @field_validator("validity_value")
+    @field_validator("coins")
     @classmethod
-    def validity_positive(cls, v: int) -> int:
+    def coins_positive(cls, v: int) -> int:
         if v is None or v <= 0:
-            raise ValueError("Validity must be greater than 0")
+            raise ValueError("Number of coins must be greater than 0")
         return v
 
-    @field_validator("plan_type")
+    @field_validator("icon")
     @classmethod
-    def plan_type_allowed(cls, v: str) -> str:
+    def icon_allowed(cls, v: str) -> str:
         v = (v or "").strip().lower()
-        if v not in ALLOWED_PLAN_TYPES:
-            raise ValueError("plan_type must be one of: monthly, quarterly, yearly")
-        return v
-
-    @field_validator("description")
-    @classmethod
-    def description_length(cls, v: Optional[str]) -> Optional[str]:
-        if v and len(v) > 2000:
-            raise ValueError("Description must be under 2000 characters")
+        if v not in ALLOWED_PLAN_ICONS:
+            raise ValueError("icon must be one of: coin, diamond, star")
         return v
 
 
@@ -77,8 +68,7 @@ class BillingPurchaseOut(BaseModel):
     plan_id: int
     plan_name: str
     price_paid: int
-    starts_at: datetime
-    expires_at: Optional[datetime] = None
+    coins_purchased: int
     status: str
 
     class Config:

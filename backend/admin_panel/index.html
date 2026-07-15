@@ -861,6 +861,8 @@
       <div class="nav-item active" id="navDashboard" onclick="switchPage('dashboard')"><span class="nav-ic">&#9635;</span>Dashboard</div>
       <div class="nav-item" id="navUsers" onclick="switchPage('users')"><span class="nav-ic">&#128100;</span>Users</div>
       <div class="nav-item" id="navListeners" onclick="switchPage('listeners')"><span class="nav-ic">&#127911;</span>Listeners</div>
+      <div class="nav-item" id="navCoinSettings" onclick="switchPage('coinsettings')"><span class="nav-ic">&#9881;</span>Coin Settings</div>
+      <div class="nav-item" id="navBilling" onclick="switchPage('billing')"><span class="nav-ic">&#128179;</span>Billing</div>
     </div>
     <div class="main-col">
       <div class="top-bar">
@@ -929,62 +931,6 @@
   </div>
 
 
-  <div class="grid-2">
-    <div class="card">
-      <h2>Register Listener</h2>
-      <input id="name" placeholder="Name">
-      <input id="phone" placeholder="Phone">
-      <input id="password" placeholder="Password" type="password">
-      <button class="btn btn-primary" onclick="registerListener()">Register Listener</button>
-      <div id="msg"></div>
-    </div>
-
-    <div class="card">
-      <h2>Coin Settings</h2>
-      <label style="font-size:13px;color:var(--slate);font-weight:600">Audio call coin deduction / minute</label>
-      <input id="audioCoins" placeholder="e.g. 10" type="number">
-      <label style="font-size:13px;color:var(--slate);font-weight:600">Video call coin deduction / minute</label>
-      <input id="videoCoins" placeholder="e.g. 20" type="number">
-      <label style="font-size:13px;color:var(--slate);font-weight:600">Chat message coin deduction / message</label>
-      <input id="chatCoins" placeholder="e.g. 1" type="number">
-      <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
-
-    </div>
-  </div>
-
-  <div class="card">
-    <h2 id="billingFormTitle">Add Billing Plan</h2>
-    <input type="hidden" id="billingPlanId">
-    <label style="font-size:13px;color:var(--slate);font-weight:600">Plan name</label>
-    <input id="billingName" placeholder="e.g. Value Pack">
-    <label style="font-size:13px;color:var(--slate);font-weight:600">Price</label>
-    <input id="billingPrice" placeholder="e.g. 499" type="number">
-    <label style="font-size:13px;color:var(--slate);font-weight:600">Billing cycle</label>
-    <select id="billingPlanType" style="padding:10px 12px;margin:5px 0;width:100%;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
-      <option value="monthly">Monthly</option>
-      <option value="quarterly">Quarterly</option>
-      <option value="yearly">Yearly</option>
-    </select>
-    <label style="font-size:13px;color:var(--slate);font-weight:600">Validity (number of cycles, e.g. 1)</label>
-    <input id="billingValidity" placeholder="e.g. 1" type="number">
-    <label style="font-size:13px;color:var(--slate);font-weight:600">Features / description (one per line)</label>
-    <textarea id="billingDescription" placeholder="e.g. Unlimited chat&#10;Priority support" style="padding:10px 12px;margin:5px 0;width:100%;min-height:80px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;font-family:inherit;"></textarea>
-    <label style="font-size:13px;color:var(--slate);font-weight:600;display:flex;align-items:center;gap:8px;margin-top:8px;">
-      <input type="checkbox" id="billingFeatured" style="width:auto;margin:0;"> Mark as Best Seller
-    </label>
-    <label style="font-size:13px;color:var(--slate);font-weight:600;display:flex;align-items:center;gap:8px;">
-      <input type="checkbox" id="billingActive" style="width:auto;margin:0;" checked> Active (visible to users)
-    </label>
-    <button class="btn btn-leaf" onclick="saveBillingPlan()">Save Plan</button>
-    <button class="btn btn-ghost" id="billingCancelEdit" style="display:none;" onclick="resetBillingForm()">Cancel edit</button>
-    <div id="billingMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
-  </div>
-
-  <div class="card">
-    <h2>Billing Plans</h2>
-    <div id="billingPlansList"></div>
-  </div>
-
   <div class="card">
     <h2>Invite New Admin</h2>
     <button class="btn btn-primary" style="width:auto" onclick="generateAdminInvite()">Generate Invite Link</button>
@@ -1030,6 +976,14 @@
 
   <div id="page-listeners" style="display:none;">
     <div class="card">
+      <h2>Register Listener</h2>
+      <input id="name" placeholder="Name">
+      <input id="phone" placeholder="Phone">
+      <input id="password" placeholder="Password" type="password">
+      <button class="btn btn-primary" onclick="registerListener()">Register Listener</button>
+      <div id="msg"></div>
+    </div>
+    <div class="card">
       <h2>Listeners
         <button class="btn btn-ghost" onclick="loadPeople()">↻ Refresh</button>
       </h2>
@@ -1042,6 +996,52 @@
           <div class="empty-state">Select a listener from the list to view their call logs, recordings, chats and coins.</div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="page-coinsettings" style="display:none;">
+    <div class="card">
+      <h2>Coin Settings</h2>
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Audio call coin deduction / minute</label>
+      <input id="audioCoins" placeholder="e.g. 10" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Video call coin deduction / minute</label>
+      <input id="videoCoins" placeholder="e.g. 20" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Chat message coin deduction / message</label>
+      <input id="chatCoins" placeholder="e.g. 1" type="number">
+      <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
+    </div>
+  </div>
+
+  <div id="page-billing" style="display:none;">
+    <div class="card">
+      <h2 id="billingFormTitle">Add Coin Pack</h2>
+      <input type="hidden" id="billingPlanId">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Plan name</label>
+      <input id="billingName" placeholder="e.g. Value Pack">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Price</label>
+      <input id="billingPrice" placeholder="e.g. 499" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Number of coins</label>
+      <input id="billingCoins" placeholder="e.g. 500" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Icon</label>
+      <select id="billingIcon" style="padding:10px 12px;margin:5px 0;width:100%;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
+        <option value="coin">Coin</option>
+        <option value="diamond">Diamond</option>
+        <option value="star">Star</option>
+      </select>
+      <label style="font-size:13px;color:var(--slate);font-weight:600;display:flex;align-items:center;gap:8px;margin-top:8px;">
+        <input type="checkbox" id="billingFeatured" style="width:auto;margin:0;"> Mark as Best Seller
+      </label>
+      <label style="font-size:13px;color:var(--slate);font-weight:600;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="billingActive" style="width:auto;margin:0;" checked> Display to users
+      </label>
+      <button class="btn btn-leaf" onclick="saveBillingPlan()">Save Plan</button>
+      <button class="btn btn-ghost" id="billingCancelEdit" style="display:none;" onclick="resetBillingForm()">Cancel edit</button>
+      <div id="billingMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Coin Packs</h2>
+      <div id="billingPlansList"></div>
     </div>
   </div>
 
@@ -1172,6 +1172,7 @@
       document.getElementById('panelRoot').style.display = '';
       loadPeople();
       loadCoinSettings();
+      loadBillingPlans();
       loadActiveCalls();
       loadStats();
       loadOverview();
@@ -1183,10 +1184,15 @@
       document.getElementById('page-dashboard').style.display = page === 'dashboard' ? '' : 'none';
       document.getElementById('page-users').style.display = page === 'users' ? '' : 'none';
       document.getElementById('page-listeners').style.display = page === 'listeners' ? '' : 'none';
+      document.getElementById('page-coinsettings').style.display = page === 'coinsettings' ? '' : 'none';
+      document.getElementById('page-billing').style.display = page === 'billing' ? '' : 'none';
       document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
       document.getElementById('navUsers').classList.toggle('active', page === 'users');
       document.getElementById('navListeners').classList.toggle('active', page === 'listeners');
-      document.getElementById('topBarTitle').textContent = page === 'dashboard' ? 'Dashboard' : page === 'users' ? 'Users' : 'Listeners';
+      document.getElementById('navCoinSettings').classList.toggle('active', page === 'coinsettings');
+      document.getElementById('navBilling').classList.toggle('active', page === 'billing');
+      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing' };
+      document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
     }
 
     function setAdminNameLabel() {
@@ -1428,6 +1434,128 @@
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg('✓ Coin settings saved', true);
       } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    const BILLING_ICON_LABELS = { coin: '🪙 Coin', diamond: '💎 Diamond', star: '⭐ Star' };
+    let billingPlansCache = [];
+
+    function setBillingMsg(text, ok) {
+      const el = document.getElementById('billingMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function loadBillingPlans() {
+      const wrap = document.getElementById('billingPlansList');
+      try {
+        const res = await fetch(API_URL + '/admin/billing/plans', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load coin packs');
+        billingPlansCache = data;
+        renderBillingPlans();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load coin packs.</div>';
+      }
+    }
+
+    function renderBillingPlans() {
+      const wrap = document.getElementById('billingPlansList');
+      if (!billingPlansCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No coin packs yet. Add one above.</div>';
+        return;
+      }
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Icon</th><th>Name</th><th>Price</th><th>Coins</th><th>Best Seller</th><th>Visible</th><th></th></tr></thead>
+          <tbody>
+            ${billingPlansCache.map(p => `
+              <tr>
+                <td>${BILLING_ICON_LABELS[p.icon] || p.icon}</td>
+                <td>${p.name}</td>
+                <td>₹${p.price}</td>
+                <td>${p.coins} coins</td>
+                <td>${p.is_featured ? '<span class="badge badge-yes">Yes</span>' : '—'}</td>
+                <td><span class="badge ${p.is_active ? 'badge-yes' : 'badge-no'}">${p.is_active ? 'Visible' : 'Hidden'}</span></td>
+                <td style="white-space:nowrap;">
+                  <button class="btn btn-ghost" onclick="editBillingPlan(${p.id})">Edit</button>
+                  <button class="btn btn-danger" onclick="deleteBillingPlan(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function editBillingPlan(id) {
+      const plan = billingPlansCache.find(p => p.id === id);
+      if (!plan) return;
+      document.getElementById('billingFormTitle').textContent = 'Edit Coin Pack';
+      document.getElementById('billingPlanId').value = plan.id;
+      document.getElementById('billingName').value = plan.name;
+      document.getElementById('billingPrice').value = plan.price;
+      document.getElementById('billingCoins').value = plan.coins;
+      document.getElementById('billingIcon').value = plan.icon;
+      document.getElementById('billingFeatured').checked = !!plan.is_featured;
+      document.getElementById('billingActive').checked = !!plan.is_active;
+      document.getElementById('billingCancelEdit').style.display = '';
+      setBillingMsg('', null);
+      document.getElementById('billingFormTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function resetBillingForm() {
+      document.getElementById('billingFormTitle').textContent = 'Add Coin Pack';
+      document.getElementById('billingPlanId').value = '';
+      document.getElementById('billingName').value = '';
+      document.getElementById('billingPrice').value = '';
+      document.getElementById('billingCoins').value = '';
+      document.getElementById('billingIcon').value = 'coin';
+      document.getElementById('billingFeatured').checked = false;
+      document.getElementById('billingActive').checked = true;
+      document.getElementById('billingCancelEdit').style.display = 'none';
+      setBillingMsg('', null);
+    }
+
+    async function saveBillingPlan() {
+      const id = document.getElementById('billingPlanId').value;
+      const name = document.getElementById('billingName').value.trim();
+      const price = parseInt(document.getElementById('billingPrice').value);
+      const coins = parseInt(document.getElementById('billingCoins').value);
+      const icon = document.getElementById('billingIcon').value;
+      const is_featured = document.getElementById('billingFeatured').checked;
+      const is_active = document.getElementById('billingActive').checked;
+
+      if (!name || !price || !coins) {
+        setBillingMsg('Please fill in name, price and number of coins.', false);
+        return;
+      }
+
+      setBillingMsg('Saving…', null);
+      try {
+        const url = id ? `${API_URL}/admin/billing/plans/${id}` : `${API_URL}/admin/billing/plans`;
+        const res = await fetch(url, {
+          method: id ? 'PUT' : 'POST',
+          headers: authHeaders(true),
+          body: JSON.stringify({ name, price, coins, icon, is_featured, is_active })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to save coin pack');
+        setBillingMsg('✓ Coin pack saved', true);
+        resetBillingForm();
+        loadBillingPlans();
+      } catch (e) { setBillingMsg('✗ ' + e.message, false); }
+    }
+
+    async function deleteBillingPlan(id, name) {
+      if (!confirm(`Delete coin pack "${name}"?`)) return;
+      try {
+        const res = await fetch(`${API_URL}/admin/billing/plans/${id}`, {
+          method: 'DELETE', headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to delete coin pack');
+        loadBillingPlans();
+      } catch (e) { setBillingMsg('✗ ' + e.message, false); }
     }
 
 

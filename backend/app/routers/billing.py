@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -17,12 +17,10 @@ def _plan_to_dict(p: BillingPlan) -> dict:
         "id": p.id,
         "name": p.name,
         "price": p.price,
-        "validity_value": p.validity_value,
-        "plan_type": p.plan_type,
-        "description": p.description,
+        "coins": p.coins,
+        "icon": p.icon,
         "is_featured": p.is_featured,
         "is_active": p.is_active,
-        "sort_order": p.sort_order,
         "created_at": p.created_at,
         "updated_at": p.updated_at,
     }
@@ -32,7 +30,7 @@ def _plan_to_dict(p: BillingPlan) -> dict:
 
 @router.get("/admin/billing/plans")
 def admin_list_plans(db: Session = Depends(get_db), _=Depends(verify_admin)):
-    plans = db.query(BillingPlan).order_by(BillingPlan.sort_order.asc(), BillingPlan.id.asc()).all()
+    plans = db.query(BillingPlan).order_by(BillingPlan.price.asc(), BillingPlan.id.asc()).all()
     return [_plan_to_dict(p) for p in plans]
 
 
@@ -41,12 +39,10 @@ def admin_create_plan(payload: BillingPlanCreate, db: Session = Depends(get_db),
     plan = BillingPlan(
         name=payload.name,
         price=payload.price,
-        validity_value=payload.validity_value,
-        plan_type=payload.plan_type,
-        description=payload.description,
+        coins=payload.coins,
+        icon=payload.icon,
         is_featured=payload.is_featured,
         is_active=payload.is_active,
-        sort_order=payload.sort_order,
     )
     db.add(plan)
     db.commit()
@@ -61,12 +57,10 @@ def admin_update_plan(plan_id: int, payload: BillingPlanUpdate, db: Session = De
         raise HTTPException(status_code=404, detail="Plan not found")
     plan.name = payload.name
     plan.price = payload.price
-    plan.validity_value = payload.validity_value
-    plan.plan_type = payload.plan_type
-    plan.description = payload.description
+    plan.coins = payload.coins
+    plan.icon = payload.icon
     plan.is_featured = payload.is_featured
     plan.is_active = payload.is_active
-    plan.sort_order = payload.sort_order
     db.commit()
     db.refresh(plan)
     return _plan_to_dict(plan)
@@ -89,15 +83,10 @@ def user_list_plans(db: Session = Depends(get_db), current_user: User = Depends(
     plans = (
         db.query(BillingPlan)
         .filter(BillingPlan.is_active == True)  # noqa: E712
-        .order_by(BillingPlan.sort_order.asc(), BillingPlan.price.asc())
+        .order_by(BillingPlan.price.asc())
         .all()
     )
     return [_plan_to_dict(p) for p in plans]
-
-
-def _validity_delta(plan: BillingPlan) -> timedelta:
-    days_per_unit = {"monthly": 30, "quarterly": 91, "yearly": 365}.get(plan.plan_type, 30)
-    return timedelta(days=days_per_unit * plan.validity_value)
 
 
 @router.post("/billing/purchase/{plan_id}")
@@ -106,15 +95,16 @@ def purchase_plan(plan_id: int, db: Session = Depends(get_db), current_user: Use
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
 
-    now = datetime.now(timezone.utc)
+    user = db.query(User).filter(User.id == current_user.id).first()
+    user.coins = (user.coins or 0) + plan.coins
+
     purchase = UserBillingPurchase(
         user_id=current_user.id,
         plan_id=plan.id,
         plan_name=plan.name,
         price_paid=plan.price,
-        starts_at=now,
-        expires_at=now + _validity_delta(plan),
-        status="active",
+        coins_purchased=plan.coins,
+        status="completed",
     )
     db.add(purchase)
     db.commit()
@@ -124,9 +114,9 @@ def purchase_plan(plan_id: int, db: Session = Depends(get_db), current_user: Use
         "plan_id": purchase.plan_id,
         "plan_name": purchase.plan_name,
         "price_paid": purchase.price_paid,
-        "starts_at": purchase.starts_at,
-        "expires_at": purchase.expires_at,
+        "coins_purchased": purchase.coins_purchased,
         "status": purchase.status,
+        "coins_balance": user.coins,
     }
 
 
@@ -144,9 +134,9 @@ def my_purchases(db: Session = Depends(get_db), current_user: User = Depends(get
             "plan_id": p.plan_id,
             "plan_name": p.plan_name,
             "price_paid": p.price_paid,
-            "starts_at": p.starts_at,
-            "expires_at": p.expires_at,
+            "coins_purchased": p.coins_purchased,
             "status": p.status,
+            "created_at": p.created_at,
         }
         for p in purchases
     ]

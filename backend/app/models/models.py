@@ -204,12 +204,10 @@ class BillingPlan(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     price = Column(Integer, nullable=False)
-    validity_value = Column(Integer, nullable=False)  # e.g. 1, 3, 12
-    plan_type = Column(String, nullable=False, index=True)  # monthly | quarterly | yearly
-    description = Column(Text, nullable=True)  # other features, newline separated
+    coins = Column(Integer, nullable=False)  # coins granted to the user on purchase
+    icon = Column(String, nullable=False, default="coin")  # coin | diamond | star
     is_featured = Column(Boolean, default=False, nullable=False)  # "Best Seller" style badge
-    is_active = Column(Boolean, default=True, nullable=False)
-    sort_order = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)  # visible to users
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -222,9 +220,8 @@ class UserBillingPurchase(Base):
     plan_id = Column(Integer, ForeignKey("billing_plans.id"), nullable=False, index=True)
     plan_name = Column(String, nullable=False)
     price_paid = Column(Integer, nullable=False)
-    starts_at = Column(DateTime(timezone=True), server_default=func.now())
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    status = Column(String, default="active", nullable=False)
+    coins_purchased = Column(Integer, nullable=False, default=0)
+    status = Column(String, default="completed", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
