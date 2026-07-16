@@ -20,8 +20,10 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
   int _videoCoins = 0;
   int _videoMinutes = 0;
   int _chatCoins = 0;
-  int _giftCoins = 0;
 
+int _giftCoins = 0;
+  Map<String, dynamic> _day = {};
+  Map<String, dynamic> _night = {};
   double _percentOf(int coins) {
     final total = _audioCoins + _videoCoins + _chatCoins + _giftCoins;
     if (total <= 0) return 0;
@@ -40,6 +42,8 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
       _videoMinutes = cached['video_call_minutes'] ?? 0;
       _chatCoins = cached['chat_coins'] ?? 0;
       _giftCoins = cached['gift_coins'] ?? 0;
+      _day = cached['day'] ?? {};
+      _night = cached['night'] ?? {};
       _loading = false;
     }
     _load();
@@ -57,13 +61,56 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
         _videoMinutes = data['video_call_minutes'] ?? 0;
         _chatCoins = data['chat_coins'] ?? 0;
         _giftCoins = data['gift_coins'] ?? 0;
+        _day = data['day'] ?? {};
+        _night = data['night'] ?? {};
         _loading = false;
       });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
+Widget _buildTimeSection(String title, Map<String, dynamic> data) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFFE53950),
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _statTile('Audio Calls', '${data['audio_call_minutes'] ?? 0} min'),
+          _statTile('Video Calls', '${data['video_call_minutes'] ?? 0} min'),
+          _statTile('Chat Messages', '${data['chat_messages'] ?? 0}'),
+          _statTile('Voice Chats', '${data['voice_messages'] ?? 0}'),
+          _statTile('Gift Earnings', '${data['gift_coins'] ?? 0}'),
+        ],
+      ),
+    );
+  }
 
+  Widget _statTile(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -138,8 +185,10 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-
+            const SizedBox(height: 24),
+                _buildTimeSection('DAY TIME', _day),
+                const SizedBox(height: 16),
+                _buildTimeSection('NIGHT TIME', _night),
               ],
             ),
     );

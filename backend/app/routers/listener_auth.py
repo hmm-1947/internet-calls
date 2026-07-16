@@ -52,7 +52,36 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
 
 @router.get("/wallet")
 def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
-    from app.models.models import ListenerCoinTransaction
+    from app.models.models import ListenerCoinTransaction, GiftTransaction
+    from sqlalchemy import extract, case
+
+    def is_day(col):
+        return extract('hour', col) >= 5 and extract('hour', col) < 21
+
+    def split_sum(model, amount_col, time_col, filters):
+        day_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
+            *filters,
+            extract('hour', time_col) >= 5,
+            extract('hour', time_col) < 21,
+        ).scalar()
+        night_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
+            *filters,
+            (extract('hour', time_col) < 5) | (extract('hour', time_col) >= 21),
+        ).scalar()
+        return int(day_sum), int(night_sum)
+
+    def split_count(model, time_col, filters):
+        day_count = db.query(sa_func.count(model.id)).filter(
+            *filters,
+            extract('hour', time_col) >= 5,
+            extract('hour', time_col) < 21,
+        ).scalar()
+        night_count = db.query(sa_func.count(model.id)).filter(
+            *filters,
+            (extract('hour', time_col) < 5) | (extract('hour', time_col) >= 21),
+        ).scalar()
+        return int(day_count), int(night_count)
+
     audio_coins = db.query(sa_func.coalesce(sa_func.sum(ListenerCoinTransaction.amount), 0)).filter(
         ListenerCoinTransaction.listener_id == current_listener.id,
         ListenerCoinTransaction.reason == "audio_call",
@@ -61,24 +90,57 @@ def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depen
         ListenerCoinTransaction.listener_id == current_listener.id,
         ListenerCoinTransaction.reason == "video_call",
     ).scalar()
-    audio_seconds = db.query(sa_func.coalesce(sa_func.sum(Call.duration_seconds), 0)).filter(
-        Call.callee_listener_id == current_listener.id, Call.call_type == "audio",
-    ).scalar()
-    video_seconds = db.query(sa_func.coalesce(sa_func.sum(Call.duration_seconds), 0)).filter(
-        Call.callee_listener_id == current_listener.id, Call.call_type == "video",
-    ).scalar()
     chat_coins = db.query(sa_func.coalesce(sa_func.sum(ListenerCoinTransaction.amount), 0)).filter(
         ListenerCoinTransaction.listener_id == current_listener.id,
         ListenerCoinTransaction.reason == "chat_message",
     ).scalar()
+
+    audio_seconds_day, audio_seconds_night = split_sum(
+        Call, Call.duration_seconds, Call.created_at,
+        [Call.callee_listener_id == current_listener.id, Call.call_type == "audio"],
+    )
+    video_seconds_day, video_seconds_night = split_sum(
+        Call, Call.duration_seconds, Call.created_at,
+        [Call.callee_listener_id == current_listener.id, Call.call_type == "video"],
+    )
+    text_msgs_day, text_msgs_night = split_count(
+        ChatMessage, ChatMessage.created_at,
+        [ChatMessage.listener_id == current_listener.id, ChatMessage.sender_type == "user", ChatMessage.message_type == "text"],
+    )
+    voice_msgs_day, voice_msgs_night = split_count(
+        ChatMessage, ChatMessage.created_at,
+        [ChatMessage.listener_id == current_listener.id, ChatMessage.sender_type == "user", ChatMessage.message_type == "audio"],
+    )
+    gift_coins_day, gift_coins_night = split_sum(
+        GiftTransaction, GiftTransaction.coins, GiftTransaction.created_at,
+        [GiftTransaction.listener_id == current_listener.id],
+    )
+    gift_coins_total = db.query(sa_func.coalesce(sa_func.sum(GiftTransaction.coins), 0)).filter(
+        GiftTransaction.listener_id == current_listener.id,
+    ).scalar()
+
     return {
         "coins": current_listener.coins,
         "audio_call_coins": int(audio_coins),
-        "audio_call_minutes": int(audio_seconds) // 60,
+        "audio_call_minutes": (int(audio_seconds_day) + int(audio_seconds_night)) // 60,
         "video_call_coins": int(video_coins),
-        "video_call_minutes": int(video_seconds) // 60,
+        "video_call_minutes": (int(video_seconds_day) + int(video_seconds_night)) // 60,
         "chat_coins": int(chat_coins),
-        "gift_coins": 0,
+        "gift_coins": int(gift_coins_total),
+        "day": {
+            "audio_call_minutes": audio_seconds_day // 60,
+            "video_call_minutes": video_seconds_day // 60,
+            "chat_messages": text_msgs_day,
+            "voice_messages": voice_msgs_day,
+            "gift_coins": gift_coins_day,
+        },
+        "night": {
+            "audio_call_minutes": audio_seconds_night // 60,
+            "video_call_minutes": video_seconds_night // 60,
+            "chat_messages": text_msgs_night,
+            "voice_messages": voice_msgs_night,
+            "gift_coins": gift_coins_night,
+        },
     }
 
 
