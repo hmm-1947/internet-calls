@@ -212,6 +212,19 @@ class BillingPlan(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class BillingPlanAuditLog(Base):
+    __tablename__ = "billing_plan_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String, nullable=False, index=True)  # created | updated | deleted
+    plan_id = Column(Integer, nullable=True, index=True)  # kept even if the plan is later deleted
+    plan_name = Column(String, nullable=False)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    admin_username = Column(String, nullable=True)  # snapshot in case the admin is later removed
+    details = Column(Text, nullable=True)  # human-readable summary of what changed
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class UserBillingPurchase(Base):
     __tablename__ = "user_billing_purchases"
 

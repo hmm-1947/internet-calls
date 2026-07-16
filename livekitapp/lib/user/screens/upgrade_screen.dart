@@ -196,6 +196,9 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   }
 
   Future<void> _onPaymentError(PaymentFailureResponse response) async {
+    final reason = (response.message == null || response.message == 'undefined')
+        ? 'Payment failed'
+        : response.message!;
     final orderId = _pendingOrderId;
     if (orderId != null) {
       final token = await _localStorage.getToken();
@@ -203,7 +206,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         await _billingRepository.reportPaymentFailed(
           token,
           razorpayOrderId: orderId,
-          reason: response.message,
+          reason: reason,
         );
       }
     }
@@ -211,11 +214,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-  (response.message == null || response.message == 'undefined')
-      ? 'Payment failed'
-      : response.message!,
-),
+        content: Text(reason),
         backgroundColor: Colors.redAccent,
       ),
     );

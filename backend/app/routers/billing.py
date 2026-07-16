@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 from datetime import datetime, timezone
+from typing import Optional
 
 import razorpay
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,10 +10,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.models import BillingPlan, UserBillingPurchase, User
+from app.models.models import AdminUser, BillingPlan, BillingPlanAuditLog, UserBillingPurchase, User
 from app.routers.admin import verify_admin
 from app.schemas.schemas import (
     AdminPurchaseOut,
+    BillingPlanAuditLogOut,
     BillingPlanCreate,
     BillingPlanUpdate,
     RazorpayOrderOut,
@@ -27,6 +29,19 @@ def _razorpay_client() -> razorpay.Client:
     if not settings.razorpay_key_id or not settings.razorpay_key_secret:
         raise HTTPException(status_code=500, detail="Razorpay is not configured on the server")
     return razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
+
+
+def _log_plan_action(db: Session, admin: AdminUser, action: str, plan_id: Optional[int], plan_name: str, details: str) -> None:
+    db.add(
+        BillingPlanAuditLog(
+            action=action,
+            plan_id=plan_id,
+            plan_name=plan_name,
+            admin_id=admin.id,
+            admin_username=admin.username,
+            details=details,
+        )
+    )
 
 
 def _plan_to_dict(p: BillingPlan) -> dict:
@@ -52,7 +67,7 @@ def admin_list_plans(db: Session = Depends(get_db), _=Depends(verify_admin)):
 
 
 @router.post("/admin/billing/plans")
-def admin_create_plan(payload: BillingPlanCreate, db: Session = Depends(get_db), _=Depends(verify_admin)):
+def admin_create_plan(payload: BillingPlanCreate, db: Session = Depends(get_db), admin: AdminUser = Depends(verify_admin)):
     plan = BillingPlan(
         name=payload.name,
         price=payload.price,
@@ -62,35 +77,93 @@ def admin_create_plan(payload: BillingPlanCreate, db: Session = Depends(get_db),
         is_active=payload.is_active,
     )
     db.add(plan)
+    db.flush()  # assign plan.id before logging
+
+    _log_plan_action(
+        db,
+        admin,
+        action="created",
+        plan_id=plan.id,
+        plan_name=plan.name,
+        details=f"Price ₹{plan.price}, {plan.coins} coins, icon={plan.icon}, "
+        f"featured={plan.is_featured}, visible={plan.is_active}",
+    )
+
     db.commit()
     db.refresh(plan)
     return _plan_to_dict(plan)
 
 
 @router.put("/admin/billing/plans/{plan_id}")
-def admin_update_plan(plan_id: int, payload: BillingPlanUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
+def admin_update_plan(plan_id: int, payload: BillingPlanUpdate, db: Session = Depends(get_db), admin: AdminUser = Depends(verify_admin)):
     plan = db.query(BillingPlan).filter(BillingPlan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    changes = []
+    for field, new_value in (
+        ("name", payload.name),
+        ("price", payload.price),
+        ("coins", payload.coins),
+        ("icon", payload.icon),
+        ("is_featured", payload.is_featured),
+        ("is_active", payload.is_active),
+    ):
+        old_value = getattr(plan, field)
+        if old_value != new_value:
+            changes.append(f"{field}: {old_value} → {new_value}")
+
     plan.name = payload.name
     plan.price = payload.price
     plan.coins = payload.coins
     plan.icon = payload.icon
     plan.is_featured = payload.is_featured
     plan.is_active = payload.is_active
+
+    _log_plan_action(
+        db,
+        admin,
+        action="updated",
+        plan_id=plan.id,
+        plan_name=plan.name,
+        details="; ".join(changes) if changes else "No field changes",
+    )
+
     db.commit()
     db.refresh(plan)
     return _plan_to_dict(plan)
 
 
 @router.delete("/admin/billing/plans/{plan_id}")
-def admin_delete_plan(plan_id: int, db: Session = Depends(get_db), _=Depends(verify_admin)):
+def admin_delete_plan(plan_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(verify_admin)):
     plan = db.query(BillingPlan).filter(BillingPlan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    _log_plan_action(
+        db,
+        admin,
+        action="deleted",
+        plan_id=plan.id,
+        plan_name=plan.name,
+        details=f"Was: price ₹{plan.price}, {plan.coins} coins, icon={plan.icon}, "
+        f"featured={plan.is_featured}, visible={plan.is_active}",
+    )
+
     db.delete(plan)
     db.commit()
     return {"detail": "Plan deleted"}
+
+
+@router.get("/admin/billing/plans/audit-log", response_model=list[BillingPlanAuditLogOut])
+def admin_billing_plan_audit_log(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    """Returns coin pack add/update/delete history, most recent first."""
+    return (
+        db.query(BillingPlanAuditLog)
+        .order_by(BillingPlanAuditLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
 
 
 @router.get("/admin/billing/purchases", response_model=list[AdminPurchaseOut])

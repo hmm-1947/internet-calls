@@ -1051,9 +1051,17 @@
 
     <div class="card">
       <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Coin Pack Audit Log</span>
+        <button class="btn btn-ghost" onclick="loadBillingAuditLog()">Refresh</button>
+      </h2>
+      <div id="billingAuditLogList"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <span>Purchase History</span>
         <span style="display:flex;align-items:center;gap:8px;">
-          <select id="billingPurchaseStatusFilter" onchange="renderBillingPurchases()" style="padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
+          <select id="billingPurchaseStatusFilter" onchange="filterBillingPurchases()" style="padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
             <option value="">All statuses</option>
             <option value="completed">Successful</option>
             <option value="pending">Pending</option>
@@ -1194,6 +1202,7 @@
       loadPeople();
       loadCoinSettings();
       loadBillingPlans();
+      loadBillingAuditLog();
       loadBillingPurchases();
       loadActiveCalls();
       loadStats();
@@ -1565,6 +1574,7 @@
         setBillingMsg('✓ Coin pack saved', true);
         resetBillingForm();
         loadBillingPlans();
+        loadBillingAuditLog();
       } catch (e) { setBillingMsg('✗ ' + e.message, false); }
     }
 
@@ -1577,12 +1587,81 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to delete coin pack');
         loadBillingPlans();
+        loadBillingAuditLog();
       } catch (e) { setBillingMsg('✗ ' + e.message, false); }
+    }
+
+    const BILLING_AUDIT_ACTION_LABELS = { created: 'Added', updated: 'Updated', deleted: 'Deleted' };
+    const BILLING_AUDIT_ACTION_BADGE = { created: 'badge-yes', updated: 'badge-pending', deleted: 'badge-no' };
+    const AUDIT_LOG_PAGE_SIZE = 10;
+    let billingAuditLogCache = [];
+    let billingAuditLogPage = 1;
+
+    async function loadBillingAuditLog() {
+      const wrap = document.getElementById('billingAuditLogList');
+      try {
+        const res = await fetch(API_URL + '/admin/billing/plans/audit-log', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load audit log');
+        billingAuditLogCache = data;
+        billingAuditLogPage = 1;
+        renderBillingAuditLog();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load coin pack audit log.</div>';
+      }
+    }
+
+    function goToAuditLogPage(delta) {
+      billingAuditLogPage += delta;
+      renderBillingAuditLog();
+    }
+
+    function renderBillingAuditLog() {
+      const wrap = document.getElementById('billingAuditLogList');
+      if (!billingAuditLogCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No coin pack changes yet.</div>';
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(billingAuditLogCache.length / AUDIT_LOG_PAGE_SIZE));
+      if (billingAuditLogPage > totalPages) billingAuditLogPage = totalPages;
+      if (billingAuditLogPage < 1) billingAuditLogPage = 1;
+      const start = (billingAuditLogPage - 1) * AUDIT_LOG_PAGE_SIZE;
+      const pageRows = billingAuditLogCache.slice(start, start + AUDIT_LOG_PAGE_SIZE);
+
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Time</th><th>Action</th><th>Plan</th><th>Details</th><th>Admin</th></tr></thead>
+          <tbody>
+            ${pageRows.map(l => `
+              <tr>
+                <td style="white-space:nowrap;">${formatPurchaseDate(l.created_at)}</td>
+                <td><span class="badge ${BILLING_AUDIT_ACTION_BADGE[l.action] || ''}">${BILLING_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
+                <td>${l.plan_name}</td>
+                <td style="color:var(--slate);font-size:13px;">${l.details || '—'}</td>
+                <td>${l.admin_username || '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;">
+          <button class="btn btn-ghost" onclick="goToAuditLogPage(-1)" ${billingAuditLogPage <= 1 ? 'disabled' : ''}>← Prev</button>
+          <span style="font-size:13px;color:var(--slate);">Page ${billingAuditLogPage} of ${totalPages}</span>
+          <button class="btn btn-ghost" onclick="goToAuditLogPage(1)" ${billingAuditLogPage >= totalPages ? 'disabled' : ''}>Next →</button>
+        </div>
+      `;
     }
 
     const PURCHASE_STATUS_LABELS = { completed: 'Successful', pending: 'Pending', failed: 'Failed' };
     const PURCHASE_STATUS_BADGE = { completed: 'badge-yes', pending: 'badge-pending', failed: 'badge-no' };
+    const PURCHASES_PAGE_SIZE = 10;
     let billingPurchasesCache = [];
+    let billingPurchasesPage = 1;
+
+    function filterBillingPurchases() {
+      billingPurchasesPage = 1;
+      renderBillingPurchases();
+    }
 
     function formatPurchaseDate(iso) {
       if (!iso) return '—';
@@ -1598,10 +1677,16 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to load purchase history');
         billingPurchasesCache = data;
+        billingPurchasesPage = 1;
         renderBillingPurchases();
       } catch (e) {
         wrap.innerHTML = '<div class="empty-state">Failed to load purchase history.</div>';
       }
+    }
+
+    function goToPurchasesPage(delta) {
+      billingPurchasesPage += delta;
+      renderBillingPurchases();
     }
 
     function renderBillingPurchases() {
@@ -1613,6 +1698,12 @@
         wrap.innerHTML = '<div class="empty-state">No purchases yet.</div>';
         return;
       }
+
+      const totalPages = Math.max(1, Math.ceil(rows.length / PURCHASES_PAGE_SIZE));
+      if (billingPurchasesPage > totalPages) billingPurchasesPage = totalPages;
+      if (billingPurchasesPage < 1) billingPurchasesPage = 1;
+      const start = (billingPurchasesPage - 1) * PURCHASES_PAGE_SIZE;
+      const pageRows = rows.slice(start, start + PURCHASES_PAGE_SIZE);
 
       wrap.innerHTML = `
         <table>
@@ -1628,7 +1719,7 @@
             </tr>
           </thead>
           <tbody>
-            ${rows.map(p => `
+            ${pageRows.map(p => `
               <tr>
                 <td>
                   ${p.user_name || '—'}
@@ -1650,6 +1741,11 @@
             `).join('')}
           </tbody>
         </table>
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;">
+          <button class="btn btn-ghost" onclick="goToPurchasesPage(-1)" ${billingPurchasesPage <= 1 ? 'disabled' : ''}>← Prev</button>
+          <span style="font-size:13px;color:var(--slate);">Page ${billingPurchasesPage} of ${totalPages}</span>
+          <button class="btn btn-ghost" onclick="goToPurchasesPage(1)" ${billingPurchasesPage >= totalPages ? 'disabled' : ''}>Next →</button>
+        </div>
       `;
     }
 

@@ -99,6 +99,20 @@ class RazorpayPaymentFailed(BaseModel):
     reason: Optional[str] = None
 
 
+class BillingPlanAuditLogOut(BaseModel):
+    id: int
+    action: str
+    plan_id: Optional[int] = None
+    plan_name: str
+    admin_id: Optional[int] = None
+    admin_username: Optional[str] = None
+    details: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class AdminPurchaseOut(BaseModel):
     id: int
     user_id: int
