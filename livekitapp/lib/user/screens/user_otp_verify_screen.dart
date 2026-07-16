@@ -3,10 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
+import 'package:livekitapp/shared/widgets/auth_card.dart';
+import 'package:livekitapp/shared/widgets/otp_countdown.dart';
 
 class UserOtpVerifyScreen extends StatefulWidget {
   final String email;
-  const UserOtpVerifyScreen({super.key, required this.email});
+  final String? name;
+  final String? phone;
+  final String? password;
+
+  const UserOtpVerifyScreen({
+    super.key,
+    required this.email,
+    this.name,
+    this.phone,
+    this.password,
+  });
 
   @override
   State<UserOtpVerifyScreen> createState() => _UserOtpVerifyScreenState();
@@ -17,6 +29,10 @@ class _UserOtpVerifyScreenState extends State<UserOtpVerifyScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   bool _loading = false;
+  bool _expired = false;
+
+  bool get _canResend =>
+      widget.name != null && widget.phone != null && widget.password != null;
 
   @override
   void dispose() {
@@ -24,7 +40,36 @@ class _UserOtpVerifyScreenState extends State<UserOtpVerifyScreen> {
     super.dispose();
   }
 
+  Future<void> _resend() async {
+    if (!_canResend) return;
+    try {
+      await _repository.registerInitiate(
+        widget.name!,
+        widget.email,
+        widget.phone!,
+        widget.password!,
+      );
+      if (!mounted) return;
+      _otpController.clear();
+      setState(() => _expired = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('A new OTP has been sent')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
   Future<void> _verify() async {
+    if (_expired) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OTP expired, please resend')),
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
       final result = await _repository.registerVerifyOtp(
@@ -64,42 +109,71 @@ class _UserOtpVerifyScreenState extends State<UserOtpVerifyScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Enter the OTP sent to ${widget.email}',
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _otpController,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'OTP',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+          child: Center(
+            child: SingleChildScrollView(
+              child: AuthCard(
+                icon: Icons.mark_email_read_outlined,
+                title: 'Verify OTP',
+                subtitle: 'Enter the code sent to ${widget.email}',
+                children: [
+                  AuthTextField(
+                    controller: _otpController,
+                    label: 'OTP',
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    letterSpacing: 8,
+                    fontSize: 20,
+                  ),
+                  const SizedBox(height: 18),
+                  OtpCountdown(
+                    seconds: 60,
+                    onExpire: () => setState(() => _expired = true),
+                    onResend: _canResend
+                        ? _resend
+                        : () async {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Please go back and register again to resend the OTP',
+                                ),
+                              ),
+                            );
+                          },
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.black,
+                        disabledBackgroundColor: Colors.red.withOpacity(0.3),
+                        disabledForegroundColor: Colors.black45,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: (_loading || _expired) ? null : _verify,
+                      child: _loading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.black,
+                                strokeWidth: 2.4,
+                              ),
+                            )
+                          : const Text(
+                              'Verify & Continue',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
                     ),
                   ),
-                  onPressed: _loading ? null : _verify,
-                  child: _loading
-                      ? const CircularProgressIndicator(color: Colors.black)
-                      : const Text('Verify & Continue'),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

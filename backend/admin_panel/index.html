@@ -798,6 +798,65 @@
       padding: 4px 12px;
       border-radius: 12px;
     }
+
+    .pw-rules {
+      margin: 6px 0 10px;
+      padding: 10px 12px;
+      background: var(--mint);
+      border-radius: 10px;
+      border: 1px solid var(--line);
+    }
+
+    .pw-rule {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 0;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--danger);
+      transition: color .15s;
+    }
+
+    .pw-rule.pass {
+      color: #1c9a5b;
+    }
+
+    .pw-rule .pw-ic {
+      width: 16px;
+      text-align: center;
+      font-size: 12px;
+    }
+
+    .otp-timer {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--slate);
+      margin: 6px 0 4px;
+    }
+
+    .otp-timer.expired {
+      color: var(--danger);
+    }
+
+    .otp-resend-btn {
+      background: none;
+      border: none;
+      color: var(--leaf);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+      margin-left: 6px;
+    }
+
+    .otp-resend-btn:disabled {
+      color: var(--slate);
+      text-decoration: none;
+      cursor: default;
+    }
   </style>
 </head>
 
@@ -825,12 +884,14 @@
       </div>
       <div id="forgotStepOtp" style="display:none;">
         <input id="forgotOtp" placeholder="Enter OTP">
-        <button class="btn btn-primary" onclick="verifyForgotOtp()">Verify code</button>
+        <div id="forgotOtpTimer" class="otp-timer"></div>
+        <button class="btn btn-primary" id="forgotVerifyBtn" onclick="verifyForgotOtp()">Verify code</button>
       </div>
       <div id="forgotStepReset" style="display:none;">
         <input id="forgotNewPassword" placeholder="New password" type="password">
+        <div id="forgotPwRules" class="pw-rules"></div>
         <input id="forgotConfirmPassword" placeholder="Confirm password" type="password">
-        <button class="btn btn-primary" onclick="resetForgotPassword()">Reset password</button>
+        <button class="btn btn-primary" id="forgotResetBtn" onclick="resetForgotPassword()" disabled>Reset password</button>
       </div>
       <div id="forgotMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
       <div style="margin-top:8px;">
@@ -848,12 +909,14 @@
       </div>
       <div id="setupStepOtp" style="display:none;">
         <input id="setupOtp" placeholder="Enter OTP">
-        <button class="btn btn-primary" onclick="verifySetupOtp()">Verify code</button>
+        <div id="setupOtpTimer" class="otp-timer"></div>
+        <button class="btn btn-primary" id="setupVerifyBtn" onclick="verifySetupOtp()">Verify code</button>
       </div>
       <div id="setupStepCreds" style="display:none;">
         <input id="setupUsername" placeholder="Choose a username">
         <input id="setupPassword" placeholder="Choose a password" type="password">
-        <button class="btn btn-primary" onclick="completeSetup()">Create account</button>
+        <div id="setupPwRules" class="pw-rules"></div>
+        <button class="btn btn-primary" id="setupCompleteBtn" onclick="completeSetup()" disabled>Create account</button>
       </div>
       <div id="setupMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
     </div>
@@ -977,6 +1040,13 @@
         </div>
       </div>
     </div>
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>User Login Activity</span>
+        <button class="btn btn-ghost" onclick="loadUserAuditLog()">Refresh</button>
+      </h2>
+      <div id="userAuditLogList"></div>
+    </div>
   </div>
 
   <div id="page-listeners" style="display:none;">
@@ -1001,6 +1071,13 @@
           <div class="empty-state">Select a listener from the list to view their call logs, recordings, chats and coins.</div>
         </div>
       </div>
+    </div>
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Listener Login Activity</span>
+        <button class="btn btn-ghost" onclick="loadListenerAuditLog()">Refresh</button>
+      </h2>
+      <div id="listenerAuditLogList"></div>
     </div>
   </div>
 
@@ -1125,6 +1202,10 @@
       document.getElementById('forgotOtp').value = '';
       document.getElementById('forgotNewPassword').value = '';
       document.getElementById('forgotConfirmPassword').value = '';
+      document.getElementById('forgotResetBtn').disabled = true;
+      renderPasswordRules('forgotPwRules', '');
+      clearOtpTimer('forgotOtpTimer');
+      document.getElementById('forgotOtpTimer').textContent = '';
       setForgotMsg('', null);
     }
 
@@ -1133,6 +1214,76 @@
       el.textContent = text;
       el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
     }
+
+    const PASSWORD_RULES = [
+      { label: 'At least 8 characters', test: p => p.length >= 8 },
+      { label: 'At least one uppercase letter', test: p => /[A-Z]/.test(p) },
+      { label: 'At least one lowercase letter', test: p => /[a-z]/.test(p) },
+      { label: 'At least one number', test: p => /[0-9]/.test(p) },
+      { label: 'At least one special character', test: p => /[^A-Za-z0-9]/.test(p) },
+      { label: 'Must not contain spaces', test: p => !/\s/.test(p) },
+    ];
+
+    function isPasswordValidAdmin(password) {
+      return !!password && PASSWORD_RULES.every(r => r.test(password));
+    }
+
+    function renderPasswordRules(containerId, password) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const pwd = password || '';
+      el.innerHTML = PASSWORD_RULES.map(r => {
+        const ok = r.test(pwd);
+        return '<div class="pw-rule' + (ok ? ' pass' : '') + '"><span class="pw-ic">' + (ok ? '✓' : '✗') + '</span>' + r.label + '</div>';
+      }).join('');
+    }
+
+    const _otpTimers = {};
+
+    function clearOtpTimer(timerId) {
+      if (_otpTimers[timerId]) {
+        clearInterval(_otpTimers[timerId]);
+        delete _otpTimers[timerId];
+      }
+    }
+
+    function startOtpTimer(timerId, buttonId, seconds, resendFnName) {
+      clearOtpTimer(timerId);
+      let remaining = seconds;
+      const el = document.getElementById(timerId);
+      const btn = document.getElementById(buttonId);
+      if (btn) btn.disabled = false;
+
+      function tick() {
+        if (remaining <= 0) {
+          clearInterval(_otpTimers[timerId]);
+          delete _otpTimers[timerId];
+          if (el) {
+            el.className = 'otp-timer expired';
+            el.innerHTML = 'OTP expired.<button type="button" class="otp-resend-btn" onclick="' + resendFnName + '()">Resend OTP</button>';
+          }
+          if (btn) btn.disabled = true;
+          return;
+        }
+        const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const s = String(remaining % 60).padStart(2, '0');
+        if (el) { el.className = 'otp-timer'; el.textContent = 'OTP expires in ' + m + ':' + s; }
+        remaining -= 1;
+      }
+      tick();
+      _otpTimers[timerId] = setInterval(tick, 1000);
+    }
+
+    document.getElementById('forgotNewPassword').addEventListener('input', function () {
+      renderPasswordRules('forgotPwRules', this.value);
+      document.getElementById('forgotResetBtn').disabled = !isPasswordValidAdmin(this.value);
+    });
+
+    document.getElementById('setupPassword').addEventListener('input', function () {
+      renderPasswordRules('setupPwRules', this.value);
+      document.getElementById('setupCompleteBtn').disabled = !isPasswordValidAdmin(this.value);
+    });
+
 
     async function requestForgotOtp() {
       const email = document.getElementById('forgotEmail').value.trim();
@@ -1146,8 +1297,10 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to send code');
         setForgotMsg('✓ Code sent to ' + email, true);
+        document.getElementById('forgotOtp').value = '';
         document.getElementById('forgotStepEmail').style.display = 'none';
         document.getElementById('forgotStepOtp').style.display = '';
+        startOtpTimer('forgotOtpTimer', 'forgotVerifyBtn', 60, 'requestForgotOtp');
       } catch (e) { setForgotMsg('✗ ' + e.message, false); }
     }
 
@@ -1155,6 +1308,10 @@
       const email = document.getElementById('forgotEmail').value.trim();
       const otp_code = document.getElementById('forgotOtp').value.trim();
       if (!otp_code) { setForgotMsg('Enter the OTP.', false); return; }
+      if (document.getElementById('forgotVerifyBtn').disabled) {
+        setForgotMsg('OTP expired, please resend.', false);
+        return;
+      }
       setForgotMsg('Verifying…', null);
       try {
         const res = await fetch(API_URL + '/admin/auth/forgot-password/verify-otp', {
@@ -1164,8 +1321,11 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Invalid code');
         setForgotMsg('✓ Code verified', true);
+        clearOtpTimer('forgotOtpTimer');
         document.getElementById('forgotStepOtp').style.display = 'none';
         document.getElementById('forgotStepReset').style.display = '';
+        renderPasswordRules('forgotPwRules', '');
+        document.getElementById('forgotResetBtn').disabled = true;
       } catch (e) { setForgotMsg('✗ ' + e.message, false); }
     }
 
@@ -1175,6 +1335,7 @@
       const newPassword = document.getElementById('forgotNewPassword').value;
       const confirmPassword = document.getElementById('forgotConfirmPassword').value;
       if (!newPassword || !confirmPassword) { setForgotMsg('Please fill in all fields.', false); return; }
+      if (!isPasswordValidAdmin(newPassword)) { setForgotMsg('Please satisfy all password rules.', false); return; }
       if (newPassword !== confirmPassword) { setForgotMsg('Passwords do not match.', false); return; }
       setForgotMsg('Resetting…', null);
       try {
@@ -1193,6 +1354,11 @@
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('setupScreen').style.display = '';
       document.getElementById('panelRoot').style.display = 'none';
+      document.getElementById('setupPassword').value = '';
+      document.getElementById('setupCompleteBtn').disabled = true;
+      renderPasswordRules('setupPwRules', '');
+      clearOtpTimer('setupOtpTimer');
+      document.getElementById('setupOtpTimer').textContent = '';
     }
 
     function showPanel() {
@@ -1224,6 +1390,12 @@
       document.getElementById('navBilling').classList.toggle('active', page === 'billing');
       const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing' };
       document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
+      if (page === 'users') {
+        loadUserAuditLog();
+      }
+      if (page === 'listeners') {
+        loadListenerAuditLog();
+      }
     }
 
     function setAdminNameLabel() {
@@ -1347,8 +1519,10 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to send code');
         setSetupMsg('✓ Code sent to ' + email, true);
+        document.getElementById('setupOtp').value = '';
         document.getElementById('setupStepEmail').style.display = 'none';
         document.getElementById('setupStepOtp').style.display = '';
+        startOtpTimer('setupOtpTimer', 'setupVerifyBtn', 60, 'requestSetupOtp');
       } catch (e) { setSetupMsg('✗ ' + e.message, false); }
     }
 
@@ -1356,6 +1530,10 @@
       const email = document.getElementById('setupEmail').value.trim();
       const otp_code = document.getElementById('setupOtp').value.trim();
       if (!otp_code) { setSetupMsg('Enter the OTP.', false); return; }
+      if (document.getElementById('setupVerifyBtn').disabled) {
+        setSetupMsg('OTP expired, please resend.', false);
+        return;
+      }
       setSetupMsg('Verifying…', null);
       try {
         const res = await fetch(API_URL + '/admin/auth/invite/verify-otp', {
@@ -1365,8 +1543,11 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Invalid code');
         setSetupMsg('✓ Email verified', true);
+        clearOtpTimer('setupOtpTimer');
         document.getElementById('setupStepOtp').style.display = 'none';
         document.getElementById('setupStepCreds').style.display = '';
+        renderPasswordRules('setupPwRules', '');
+        document.getElementById('setupCompleteBtn').disabled = true;
       } catch (e) { setSetupMsg('✗ ' + e.message, false); }
     }
 
@@ -1374,6 +1555,7 @@
       const username = document.getElementById('setupUsername').value.trim();
       const password = document.getElementById('setupPassword').value;
       if (!username || !password) { setSetupMsg('Please fill in all fields.', false); return; }
+      if (!isPasswordValidAdmin(password)) { setSetupMsg('Please satisfy all password rules.', false); return; }
       setSetupMsg('Creating account…', null);
       try {
         const res = await fetch(API_URL + '/admin/auth/invite/complete', {
@@ -1596,6 +1778,73 @@
     const AUDIT_LOG_PAGE_SIZE = 10;
     let billingAuditLogCache = [];
     let billingAuditLogPage = 1;
+
+    const LOGIN_AUDIT_ACTION_LABELS = { login: 'Login', logout: 'Logout' };
+    const LOGIN_AUDIT_ACTION_BADGE = { login: 'badge-yes', logout: 'badge-no' };
+    let userAuditLogPage = 1;
+    let listenerAuditLogPage = 1;
+
+    async function loadUserAuditLog(page) {
+      userAuditLogPage = page || 1;
+      const wrap = document.getElementById('userAuditLogList');
+      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      try {
+        const res = await fetch(
+          API_URL + '/admin/audit-log/users?page=' + userAuditLogPage + '&page_size=' + AUDIT_LOG_PAGE_SIZE,
+          { headers: authHeaders() }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load audit log');
+        renderLoginAuditLog(wrap, data, 'loadUserAuditLog');
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load user login activity.</div>';
+      }
+    }
+
+    async function loadListenerAuditLog(page) {
+      listenerAuditLogPage = page || 1;
+      const wrap = document.getElementById('listenerAuditLogList');
+      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      try {
+        const res = await fetch(
+          API_URL + '/admin/audit-log/listeners?page=' + listenerAuditLogPage + '&page_size=' + AUDIT_LOG_PAGE_SIZE,
+          { headers: authHeaders() }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load audit log');
+        renderLoginAuditLog(wrap, data, 'loadListenerAuditLog');
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load listener login activity.</div>';
+      }
+    }
+
+    function renderLoginAuditLog(wrap, data, loaderFnName) {
+      const items = data.items || [];
+      if (!items.length) {
+        wrap.innerHTML = '<div class="empty-state">No login activity yet.</div>';
+        return;
+      }
+      const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Name</th><th>Action</th><th>Timestamp</th></tr></thead>
+          <tbody>
+            ${items.map(l => `
+              <tr>
+                <td>${l.name}</td>
+                <td><span class="badge ${LOGIN_AUDIT_ACTION_BADGE[l.action] || ''}">${LOGIN_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
+                <td style="white-space:nowrap;">${formatPurchaseDate(l.created_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;">
+          <button class="btn btn-ghost" onclick="${loaderFnName}(${data.page - 1})" ${data.page <= 1 ? 'disabled' : ''}>← Prev</button>
+          <span style="font-size:13px;color:var(--slate);">Page ${data.page} of ${totalPages}</span>
+          <button class="btn btn-ghost" onclick="${loaderFnName}(${data.page + 1})" ${data.page >= totalPages ? 'disabled' : ''}>Next →</button>
+        </div>
+      `;
+    }
 
     async function loadBillingAuditLog() {
       const wrap = document.getElementById('billingAuditLogList');

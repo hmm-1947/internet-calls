@@ -11,6 +11,7 @@ from app.models.models import ChatMessage
 from app.core.ws_manager import manager
 from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate
 from app.utils.security import verify_password, generate_session_token
+from app.utils.audit import record_audit_event
 from app.core.deps import get_current_listener
 
 router = APIRouter(prefix="/listener", tags=["listener-auth"])
@@ -114,6 +115,7 @@ def login(payload: ListenerLogin, db: Session = Depends(get_db)):
     token = generate_session_token()
     db.add(SessionModel(token=token, listener_id=listener.id))
     listener.is_online = True
+    record_audit_event(db, "listener", listener.id, listener.name, "login")
     db.commit()
     return AuthResponse(token=token, id=listener.id, name=listener.name)
 
@@ -137,6 +139,7 @@ async def logout(authorization: str = Header(...), db: Session = Depends(get_db)
     db.query(SessionModel).filter(SessionModel.token == token).delete()
     current_listener.is_online = False
     current_listener.last_seen = datetime.now(timezone.utc)
+    record_audit_event(db, "listener", current_listener.id, current_listener.name, "logout")
     db.commit()
     manager.disconnect_listener(current_listener.id)
     await manager.broadcast_to_all_users({

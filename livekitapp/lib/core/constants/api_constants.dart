@@ -7,6 +7,10 @@ class ApiConstants {
   static const String userRegisterVerifyOtp = '/user/register/verify-otp';
   static const String userLogin = '/user/login';
   static const String userSessionCheck = '/user/session/check';
+  static const String userForgotPasswordRequestOtp = '/user/forgot-password/request-otp';
+  static const String userForgotPasswordVerifyOtp = '/user/forgot-password/verify-otp';
+  static const String userForgotPasswordReset = '/user/forgot-password/reset';
+  static const String userLogout = '/user/logout';
   static const String userListeners = '/user/listeners';
   static const String listenerLogin = '/listener/login';
   static const String listenerSessionCheck = '/listener/session/check';

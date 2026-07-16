@@ -1,8 +1,28 @@
+import re
+
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
 
 ALLOWED_PLAN_ICONS = {"coin", "diamond", "star"}
+
+
+def validate_password_strength(v: str) -> str:
+    v = v or ""
+    if len(v) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if " " in v:
+        raise ValueError("Password must not contain spaces")
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", v):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"[0-9]", v):
+        raise ValueError("Password must contain at least one number")
+    if not re.search(r"[^A-Za-z0-9]", v):
+        raise ValueError("Password must contain at least one special character")
+    return v
+
 
 
 class BillingPlanBase(BaseModel):
@@ -135,6 +155,11 @@ class UserRegisterInitiate(BaseModel):
     phone: str
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 class UserRegisterVerifyOtp(BaseModel):
     email: str
     otp_code: str
@@ -145,6 +170,23 @@ class UserLogin(BaseModel):
 
 class UserBioUpdate(BaseModel):
     bio: str
+
+class UserForgotPasswordRequestOtp(BaseModel):
+    email: str
+
+class UserForgotPasswordVerifyOtp(BaseModel):
+    email: str
+    otp_code: str
+
+class UserForgotPasswordReset(BaseModel):
+    email: str
+    otp_code: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 class ListenerLogin(BaseModel):
     phone: str
@@ -327,6 +369,11 @@ class AdminInviteComplete(BaseModel):
     username: str
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 class AdminLogin(BaseModel):
     identifier: str
     password: str
@@ -342,6 +389,11 @@ class AdminForgotPasswordReset(BaseModel):
     email: str
     otp_code: str
     new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 class AdminAuthResponse(BaseModel):
     token: str

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -124,10 +125,17 @@ Future<void> refresh() async {
     try {
       final token = await _localStorage.getToken();
       if (token != null) {
-        await _repository.updateStatus(token, false);
+        try {
+          await _repository.updateStatus(token, false);
+        } catch (e) {
+          debugPrint('Logout: updateStatus failed, continuing to logout: $e');
+        }
         await _repository.logout(token);
+      } else {
+        debugPrint('Logout: no token found in local storage, skipping API call');
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Logout: API call failed: $e');
     } finally {
       await _localStorage.clear();
       ListenerDataCache().clear();
