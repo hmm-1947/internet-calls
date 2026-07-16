@@ -931,6 +931,7 @@
       <div class="nav-item" id="navListeners" onclick="switchPage('listeners')"><span class="nav-ic">&#127911;</span>Listeners</div>
       <div class="nav-item" id="navCoinSettings" onclick="switchPage('coinsettings')"><span class="nav-ic">&#9881;</span>Coin Settings</div>
       <div class="nav-item" id="navBilling" onclick="switchPage('billing')"><span class="nav-ic">&#128179;</span>Billing</div>
+      <div class="nav-item" id="navGifts" onclick="switchPage('gifts')"><span class="nav-ic">&#127873;</span>Gifts</div>
     </div>
     <div class="main-col">
       <div class="top-bar">
@@ -1090,6 +1091,8 @@
       <input id="videoCoins" placeholder="e.g. 20" type="number">
       <label style="font-size:13px;color:var(--slate);font-weight:600">Chat message coin deduction / message</label>
       <input id="chatCoins" placeholder="e.g. 1" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Voice message coin deduction / message</label>
+      <input id="voiceCoins" placeholder="e.g. 1" type="number">
       <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
     </div>
   </div>
@@ -1148,6 +1151,30 @@
         </span>
       </h2>
       <div id="billingPurchasesList"></div>
+    </div>
+  </div>
+
+  <div id="page-gifts" style="display:none;">
+    <div class="card">
+      <h2 id="giftFormTitle">Add Gift</h2>
+      <input type="hidden" id="giftId">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Gift name</label>
+      <input id="giftName" placeholder="e.g. Rose">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Coins</label>
+      <input id="giftCoins" placeholder="e.g. 50" type="number">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Icon image</label>
+      <input id="giftIconFile" type="file" accept="image/*">
+      <div id="giftIconPreviewWrap" style="display:none;margin:8px 0;">
+        <img id="giftIconPreview" src="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
+      </div>
+      <button class="btn btn-leaf" onclick="saveGift()">Save Gift</button>
+      <button class="btn btn-ghost" id="giftCancelEdit" style="display:none;" onclick="resetGiftForm()">Cancel edit</button>
+      <div id="giftMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Gifts</h2>
+      <div id="giftsList"></div>
     </div>
   </div>
 
@@ -1370,6 +1397,7 @@
       loadBillingPlans();
       loadBillingAuditLog();
       loadBillingPurchases();
+      loadGifts();
       loadActiveCalls();
       loadStats();
       loadOverview();
@@ -1383,12 +1411,14 @@
       document.getElementById('page-listeners').style.display = page === 'listeners' ? '' : 'none';
       document.getElementById('page-coinsettings').style.display = page === 'coinsettings' ? '' : 'none';
       document.getElementById('page-billing').style.display = page === 'billing' ? '' : 'none';
+      document.getElementById('page-gifts').style.display = page === 'gifts' ? '' : 'none';
       document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
       document.getElementById('navUsers').classList.toggle('active', page === 'users');
       document.getElementById('navListeners').classList.toggle('active', page === 'listeners');
       document.getElementById('navCoinSettings').classList.toggle('active', page === 'coinsettings');
       document.getElementById('navBilling').classList.toggle('active', page === 'billing');
-      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing' };
+      document.getElementById('navGifts').classList.toggle('active', page === 'gifts');
+      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts' };
       document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
       if (page === 'users') {
         loadUserAuditLog();
@@ -1631,6 +1661,7 @@
         document.getElementById('audioCoins').value = data.audio_coins_per_minute;
         document.getElementById('videoCoins').value = data.video_coins_per_minute;
         document.getElementById('chatCoins').value = data.chat_message_coins;
+        document.getElementById('voiceCoins').value = data.voice_message_coins;
       } catch (e) { }
     }
 
@@ -1638,10 +1669,11 @@
       const audio_coins_per_minute = parseInt(document.getElementById('audioCoins').value);
       const video_coins_per_minute = parseInt(document.getElementById('videoCoins').value);
       const chat_message_coins = parseInt(document.getElementById('chatCoins').value);
+      const voice_message_coins = parseInt(document.getElementById('voiceCoins').value);
       try {
         const res = await fetch(API_URL + '/admin/coins/settings', {
           method: 'POST', headers: authHeaders(true),
-          body: JSON.stringify({ audio_coins_per_minute, video_coins_per_minute, chat_message_coins })
+          body: JSON.stringify({ audio_coins_per_minute, video_coins_per_minute, chat_message_coins, voice_message_coins })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
@@ -1771,6 +1803,151 @@
         loadBillingPlans();
         loadBillingAuditLog();
       } catch (e) { setBillingMsg('✗ ' + e.message, false); }
+    }
+
+    let giftsCache = [];
+    let giftIconFileData = null;
+
+    function setGiftMsg(text, ok) {
+      const el = document.getElementById('giftMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    function giftIconUrl(icon) {
+      if (!icon) return '';
+      if (icon.startsWith('http') || icon.startsWith('/')) return API_URL + icon;
+      return '';
+    }
+
+    document.getElementById('giftIconFile').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      giftIconFileData = file || null;
+      const wrap = document.getElementById('giftIconPreviewWrap');
+      const img = document.getElementById('giftIconPreview');
+      if (file) {
+        img.src = URL.createObjectURL(file);
+        wrap.style.display = '';
+      } else {
+        wrap.style.display = 'none';
+      }
+    });
+
+    async function loadGifts() {
+      const wrap = document.getElementById('giftsList');
+      try {
+        const res = await fetch(API_URL + '/gift/admin/list', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load gifts');
+        giftsCache = data;
+        renderGifts();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load gifts.</div>';
+      }
+    }
+
+    function renderGifts() {
+      const wrap = document.getElementById('giftsList');
+      if (!giftsCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No gifts yet. Add one above.</div>';
+        return;
+      }
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Icon</th><th>Name</th><th>Coins</th><th></th></tr></thead>
+          <tbody>
+            ${giftsCache.map(g => `
+              <tr>
+                <td>${giftIconUrl(g.icon) ? `<img src="${giftIconUrl(g.icon)}" style="width:36px;height:36px;object-fit:cover;border-radius:8px;">` : '🎁'}</td>
+                <td>${g.name}</td>
+                <td>${g.coins} coins</td>
+                <td style="white-space:nowrap;">
+                  <button class="btn btn-ghost" onclick="editGift(${g.id})">Edit</button>
+                  <button class="btn btn-danger" onclick="deleteGift(${g.id}, '${g.name.replace(/'/g, "\\'")}')">Delete</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function editGift(id) {
+      const gift = giftsCache.find(g => g.id === id);
+      if (!gift) return;
+      document.getElementById('giftFormTitle').textContent = 'Edit Gift';
+      document.getElementById('giftId').value = gift.id;
+      document.getElementById('giftName').value = gift.name;
+      document.getElementById('giftCoins').value = gift.coins;
+      document.getElementById('giftIconFile').value = '';
+      giftIconFileData = null;
+      const wrap = document.getElementById('giftIconPreviewWrap');
+      const img = document.getElementById('giftIconPreview');
+      const url = giftIconUrl(gift.icon);
+      if (url) {
+        img.src = url;
+        wrap.style.display = '';
+      } else {
+        wrap.style.display = 'none';
+      }
+      document.getElementById('giftCancelEdit').style.display = '';
+      setGiftMsg('', null);
+      document.getElementById('giftFormTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function resetGiftForm() {
+      document.getElementById('giftFormTitle').textContent = 'Add Gift';
+      document.getElementById('giftId').value = '';
+      document.getElementById('giftName').value = '';
+      document.getElementById('giftCoins').value = '';
+      document.getElementById('giftIconFile').value = '';
+      giftIconFileData = null;
+      document.getElementById('giftIconPreviewWrap').style.display = 'none';
+      document.getElementById('giftCancelEdit').style.display = 'none';
+      setGiftMsg('', null);
+    }
+
+    async function saveGift() {
+      const id = document.getElementById('giftId').value;
+      const name = document.getElementById('giftName').value.trim();
+      const coins = parseInt(document.getElementById('giftCoins').value);
+
+      if (!name || !coins) {
+        setGiftMsg('Please fill in name and coins.', false);
+        return;
+      }
+
+      setGiftMsg('Saving…', null);
+      try {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('coins', coins);
+        if (giftIconFileData) formData.append('icon_file', giftIconFileData);
+
+        const url = id ? `${API_URL}/gift/admin/${id}` : `${API_URL}/gift/admin/create`;
+        const res = await fetch(url, {
+          method: id ? 'PUT' : 'POST',
+          headers: authHeaders(),
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to save gift');
+        setGiftMsg('✓ Gift saved', true);
+        resetGiftForm();
+        loadGifts();
+      } catch (e) { setGiftMsg('✗ ' + e.message, false); }
+    }
+
+    async function deleteGift(id, name) {
+      if (!confirm(`Delete gift "${name}"?`)) return;
+      try {
+        const res = await fetch(`${API_URL}/gift/admin/${id}`, {
+          method: 'DELETE', headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to delete gift');
+        loadGifts();
+      } catch (e) { setGiftMsg('✗ ' + e.message, false); }
     }
 
     const BILLING_AUDIT_ACTION_LABELS = { created: 'Added', updated: 'Updated', deleted: 'Deleted' };

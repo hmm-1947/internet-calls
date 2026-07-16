@@ -54,6 +54,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _micEnabled = true;
   bool _speakerOn = false;
   double _remoteAudioLevel = 0;
+  Timer? _audioLevelTimer;
   ConnectionQuality _connectionQuality = ConnectionQuality.unknown;
   VideoTrack? _localVideoTrack;
   VideoTrack? _remoteVideoTrack;
@@ -190,6 +191,12 @@ Future<void> _requestMicAndStartCall() async {
         if (event.participant is RemoteParticipant && mounted) {
           setState(() => _remoteAudioLevel = event.participant.audioLevel);
         }
+      });
+      _audioLevelTimer?.cancel();
+      _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+        if (!mounted || room.remoteParticipants.isEmpty) return;
+        final level = room.remoteParticipants.values.first.audioLevel;
+        setState(() => _remoteAudioLevel = level);
       });
       roomListener.on<ParticipantConnectionQualityUpdatedEvent>((event) {
         if (event.participant is LocalParticipant && mounted) {
@@ -375,6 +382,7 @@ Future<void> _requestMicAndStartCall() async {
     } catch (_) {}
     _roomListener?.dispose();
     _roomListener = null;
+    _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
     await UserCallkitService.instance.endCall(widget.callId.toString());
@@ -394,6 +402,7 @@ Future<void> _requestMicAndStartCall() async {
     final wasConnected = _phase == _CallPhase.connected;
     _roomListener?.dispose();
     _roomListener = null;
+    _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
     UserCallkitService.instance.endCall(widget.callId.toString());
@@ -433,6 +442,7 @@ Future<void> _requestMicAndStartCall() async {
     } catch (_) {}
     _roomListener?.dispose();
     _roomListener = null;
+    _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
     await UserCallkitService.instance.endCall(widget.callId.toString());
@@ -461,6 +471,7 @@ Future<void> _requestMicAndStartCall() async {
     _coinTimer?.cancel();
     _fcmSubscription?.cancel();
     _roomListener?.dispose();
+    _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
     _busyPlayer?.dispose();

@@ -10,6 +10,8 @@ import 'package:livekitapp/user/widgets/gift_sheet.dart';
 import 'package:uuid/uuid.dart';
 import 'package:livekitapp/common/widgets/voice_record_button.dart';
 import 'package:livekitapp/common/widgets/voice_message_bubble.dart';
+import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
+import 'package:livekitapp/user/screens/user_call_screen.dart';
 
 class ChatHistoryScreen extends StatefulWidget {
   final int listenerId;
@@ -47,6 +49,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> with WidgetsBindi
   int _profileCoins = 0;
   int _chatMessageCoinCost = 0;
   bool _coinsLoaded = false;
+  bool _callingListener = false;
 Timer? _typingStopTimer;
   Timer? _typingSendTimer;
   bool _isNearBottom = true;
@@ -534,6 +537,51 @@ void _onScroll() {
     );
   }
 
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            ListenerProfileViewScreen(listenerId: widget.listenerId),
+      ),
+    );
+  }
+
+  Future<void> _callListener({bool video = false}) async {
+    if (_callingListener || _token == null) return;
+    setState(() => _callingListener = true);
+    try {
+      final result = await _repository.initiateCall(
+        _token!,
+        widget.listenerId,
+        callType: video ? 'video' : 'audio',
+      );
+      if (!mounted) return;
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => CallScreen(
+            callId: result['call_id'],
+            otherPartyName: widget.listenerName,
+            otherPartyPhotoUrl: widget.listenerPhotoUrl,
+            startWithVideo: video,
+            listenerId: widget.listenerId,
+          ),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          opaque: true,
+          barrierColor: Colors.black,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _callingListener = false);
+    }
+  }
+
   Widget _statusIcon(String? status) {
     IconData icon;
     Color color = Colors.white70;
@@ -591,7 +639,10 @@ void _onScroll() {
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Row(
+        title: GestureDetector(
+          onTap: _openProfile,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
           children: [
       AvatarImage(
               photoUrl: widget.listenerPhotoUrl,
@@ -624,8 +675,17 @@ void _onScroll() {
               ],
             ),
           ],
+          ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.call, color: Colors.white),
+            onPressed: _callingListener ? null : () => _callListener(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.videocam, color: Colors.white),
+            onPressed: _callingListener ? null : () => _callListener(video: true),
+          ),
           IconButton(
             icon: const Icon(Icons.card_giftcard, color: Colors.white),
             onPressed: () => showGiftSheet(

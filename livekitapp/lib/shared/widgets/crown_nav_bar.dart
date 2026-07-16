@@ -42,8 +42,6 @@ class CrownNavBar extends StatelessWidget {
                   data: IconThemeData(color: color, size: 22),
                   child: icons[i],
                 ),
-                const SizedBox(height: 4),
-                Text(labels[i], style: TextStyle(color: color, fontSize: 11)),
               ],
             ),
           ),

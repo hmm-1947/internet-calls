@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 
 String _fmtDateTime(String iso) {
   final dt = DateTime.parse(iso).toLocal();
@@ -163,14 +164,22 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                   final call = _calls[index];
                   final status = call['status'] as String;
                   final callType = call['call_type'] as String;
+                  final photoUrl = ApiConstants.resolveMediaUrl(
+                    call['other_party_photo_url'],
+                  );
                   return ListTile(
                     leading: CircleAvatar(
                       radius: 24,
                       backgroundColor: const Color(0xFF2A3145),
-                      child: Icon(
-                        _statusIcon(status, callType),
-                        color: _statusColor(status, pink),
-                      ),
+                      backgroundImage: photoUrl.isNotEmpty
+                          ? NetworkImage(photoUrl)
+                          : null,
+                      child: photoUrl.isEmpty
+                          ? Icon(
+                              _statusIcon(status, callType),
+                              color: _statusColor(status, pink),
+                            )
+                          : null,
                     ),
                     title: Text(
                       call['listener_name'],

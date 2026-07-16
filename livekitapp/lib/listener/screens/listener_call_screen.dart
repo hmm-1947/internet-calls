@@ -55,6 +55,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
   Timer? _durationTimer;
   int _callDurationSeconds = 0;
   StreamSubscription? _giftSub;
+  Timer? _audioLevelTimer;
 
   @override
   void initState() {
@@ -158,6 +159,12 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
         if (event.participant is RemoteParticipant && mounted) {
           setState(() => _remoteAudioLevel = event.participant.audioLevel);
         }
+      });
+      _audioLevelTimer?.cancel();
+     _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+        if (!mounted || room.remoteParticipants.isEmpty) return;
+        final level = room.remoteParticipants.values.first.audioLevel;
+        setState(() => _remoteAudioLevel = level);
       });
       roomListener.on<ParticipantConnectionQualityUpdatedEvent>((event) {
         if (event.participant is LocalParticipant && mounted) {
@@ -306,8 +313,9 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
     _isEnding = true;
     _roomListener?.dispose();
     _roomListener = null;
-    _room?.disconnect();
+_room?.disconnect();
     _durationTimer?.cancel();
+    _audioLevelTimer?.cancel();
     await _localStorage.clearActiveCall();
     if (widget.callId != null) {
       await CallkitService.instance.endCall(widget.callId.toString());
@@ -337,11 +345,12 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
         'livekitapp/lockscreen',
       ).invokeMethod('hideOverLockscreen');
     } catch (_) {}
-    _fcmSubscription?.cancel();
+_fcmSubscription?.cancel();
     _giftSub?.cancel();
     _roomListener?.dispose();
     _room?.disconnect();
     _durationTimer?.cancel();
+    _audioLevelTimer?.cancel();
     super.dispose();
   }
 

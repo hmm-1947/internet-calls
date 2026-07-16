@@ -1,12 +1,100 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.models import User, Listener, Gift, GiftTransaction, CoinTransaction, Call, ListenerCoinTransaction
+from app.models.models import User, Listener, Gift, GiftTransaction, CoinTransaction, Call, ListenerCoinTransaction, AdminUser
 from app.core.ws_manager import manager
+from app.routers.admin import verify_admin
 
 router = APIRouter(prefix="/gift", tags=["gift"])
+
+
+def _gift_to_dict(g: Gift) -> dict:
+    return {"id": g.id, "name": g.name, "coins": g.coins, "icon": g.icon}
+
+
+@router.get("/admin/list")
+def admin_list_gifts(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    gifts = db.query(Gift).order_by(Gift.coins.asc()).all()
+    return [_gift_to_dict(g) for g in gifts]
+
+
+@router.post("/admin/create")
+async def admin_create_gift(
+    name: str = Form(...),
+    coins: int = Form(...),
+    icon_file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(verify_admin),
+):
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Gift name is required")
+    if coins is None or coins <= 0:
+        raise HTTPException(status_code=400, detail="Coins must be greater than 0")
+
+    icon_path = None
+    if icon_file is not None and icon_file.filename:
+        ext = os.path.splitext(icon_file.filename)[1] or ".png"
+        filename = f"gift_{uuid.uuid4().hex}{ext}"
+        filepath = os.path.join("gift_icons", filename)
+        with open(filepath, "wb") as f:
+            f.write(await icon_file.read())
+        icon_path = f"/gift_icons/{filename}"
+
+    gift = Gift(name=name, coins=coins, icon=icon_path)
+    db.add(gift)
+    db.commit()
+    db.refresh(gift)
+    return _gift_to_dict(gift)
+
+
+@router.put("/admin/{gift_id}")
+async def admin_update_gift(
+    gift_id: int,
+    name: str = Form(...),
+    coins: int = Form(...),
+    icon_file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(verify_admin),
+):
+    gift = db.query(Gift).filter(Gift.id == gift_id).first()
+    if not gift:
+        raise HTTPException(status_code=404, detail="Gift not found")
+
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Gift name is required")
+    if coins is None or coins <= 0:
+        raise HTTPException(status_code=400, detail="Coins must be greater than 0")
+
+    gift.name = name
+    gift.coins = coins
+
+    if icon_file is not None and icon_file.filename:
+        ext = os.path.splitext(icon_file.filename)[1] or ".png"
+        filename = f"gift_{uuid.uuid4().hex}{ext}"
+        filepath = os.path.join("gift_icons", filename)
+        with open(filepath, "wb") as f:
+            f.write(await icon_file.read())
+        gift.icon = f"/gift_icons/{filename}"
+
+    db.commit()
+    db.refresh(gift)
+    return _gift_to_dict(gift)
+
+
+@router.delete("/admin/{gift_id}")
+def admin_delete_gift(gift_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(verify_admin)):
+    gift = db.query(Gift).filter(Gift.id == gift_id).first()
+    if not gift:
+        raise HTTPException(status_code=404, detail="Gift not found")
+    db.delete(gift)
+    db.commit()
+    return {"detail": "Gift deleted"}
 
 
 class GiftSend(BaseModel):

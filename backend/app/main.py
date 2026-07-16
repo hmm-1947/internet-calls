@@ -12,12 +12,14 @@ import os
 os.makedirs("recordings", exist_ok=True)
 os.makedirs("voice_notes", exist_ok=True)
 os.makedirs("profile_photos", exist_ok=True)
+os.makedirs("gift_icons", exist_ok=True)
 
 app = FastAPI(title="Calling App Backend")
 
 app.mount("/recordings", StaticFiles(directory=r"recordings"), name="recordings")
 app.mount("/voice_notes", StaticFiles(directory="voice_notes"), name="voice_notes")
 app.mount("/profile_photos", StaticFiles(directory="profile_photos"), name="profile_photos")
+app.mount("/gift_icons", StaticFiles(directory="gift_icons"), name="gift_icons")
 app.mount("/panel", StaticFiles(directory="admin_panel", html=True), name="admin_panel")
 
 

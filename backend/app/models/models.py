@@ -154,6 +154,7 @@ class CoinSettings(Base):
     audio_coins_per_minute = Column(Integer, default=10)
     video_coins_per_minute = Column(Integer, default=10)
     chat_message_coins = Column(Integer, default=1, nullable=False)
+    voice_message_coins = Column(Integer, default=1, nullable=False)
 
 
 class CoinTransaction(Base):

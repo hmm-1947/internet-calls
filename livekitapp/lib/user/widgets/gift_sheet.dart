@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
 
@@ -13,6 +14,45 @@ IconData giftIconFor(String? icon) {
     default:
       return Icons.card_giftcard;
   }
+}
+
+Widget buildGiftIcon(String? icon, {double size = 34}) {
+  if (icon != null && (icon.startsWith('/') || icon.startsWith('http'))) {
+    final url = icon.startsWith('http') ? icon : '${ApiConstants.baseUrl}$icon';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        loadingBuilder: (ctx, child, progress) {
+          if (progress == null) return child;
+          return SizedBox(
+            width: size,
+            height: size,
+            child: const Center(
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (ctx, error, stack) => Icon(
+          giftIconFor(icon),
+          color: const Color(0xFFE53950),
+          size: size,
+        ),
+      ),
+    );
+  }
+  return Icon(
+    giftIconFor(icon),
+    color: const Color(0xFFE53950),
+    size: size,
+  );
 }
 
 Future<void> showGiftSheet(
@@ -175,26 +215,24 @@ class _GiftSheetState extends State<GiftSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 10,
+            runSpacing: 14,
             children: widget.gifts
                 .map(
-                  (g) => Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        children: [
+                  (g) => SizedBox(
+                    width: (MediaQuery.of(context).size.width - 40 - 20) / 3,
+                    child: Column(
+                      children: [
                           Container(
                             height: 80,
+                            width: double.infinity,
+                            alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: const Color(0xFF1F2430),
                               borderRadius: BorderRadius.circular(14),
                             ),
-                            child: Icon(
-                              giftIconFor(g['icon'] as String?),
-                              color: const Color(0xFFE53950),
-                              size: 34,
-                            ),
+                            child: buildGiftIcon(g['icon'] as String?),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -253,9 +291,8 @@ class _GiftSheetState extends State<GiftSheet> {
                         ],
                       ),
                     ),
-                  ),
-                )
-                .toList(),
+                  )
+                    .toList(),
           ),
           const SizedBox(height: 20),
           Row(

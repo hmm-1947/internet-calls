@@ -83,6 +83,16 @@ class BillingPlanOut(BillingPlanBase):
         from_attributes = True
 
 
+class GiftOut(BaseModel):
+    id: int
+    name: str
+    coins: int
+    icon: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class BillingPurchaseOut(BaseModel):
     id: int
     plan_id: int
@@ -328,6 +338,7 @@ class CallHistoryOut(BaseModel):
     coins_deducted: int
     created_at: datetime
     connected_at: Optional[datetime] = None
+    other_party_photo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

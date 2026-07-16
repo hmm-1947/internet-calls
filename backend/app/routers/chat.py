@@ -12,7 +12,7 @@ from app.core.deps import get_current_user, get_current_listener
 from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary
-from app.utils.coins import chat_message_coin_cost, deduct_chat_coins
+from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
 from app.core.ws_manager import manager
 
 
@@ -26,6 +26,14 @@ def _require_chat_coins(db: Session, user: User) -> None:
         raise HTTPException(status_code=500, detail="Invalid chat coin setting")
     if user.coins < cost:
         raise HTTPException(status_code=402, detail="Not enough coins to send this message")
+
+def _require_voice_coins(db: Session, user: User) -> None:
+    """Reject a voice-note send before the message is persisted when funds are short."""
+    cost = voice_message_coin_cost(db)
+    if cost < 0:
+        raise HTTPException(status_code=500, detail="Invalid voice coin setting")
+    if user.coins < cost:
+        raise HTTPException(status_code=402, detail="Not enough coins to send this voice message")
 
 def _get_settings(db, owner_type, owner_id, other_id):
     return db.query(ChatSettings).filter(
@@ -152,7 +160,7 @@ async def user_send_voice(
     listener = db.query(Listener).filter(Listener.id == listener_id, Listener.is_active == True).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
-    _require_chat_coins(db, current_user)
+    _require_voice_coins(db, current_user)
     ext = os.path.splitext(file.filename)[1] or ".m4a"
     filename = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join("voice_notes", filename)
@@ -174,7 +182,7 @@ async def user_send_voice(
     db.add(msg)
     db.commit()
     db.refresh(msg)
-    await deduct_chat_coins(db, current_user, listener.id, msg.id)
+    await deduct_voice_message_coins(db, current_user, listener.id, msg.id)
     await manager.send_to_listener(listener.id, _msg_dict(msg))
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if listener.fcm_token:

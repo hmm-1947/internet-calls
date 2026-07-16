@@ -295,6 +295,7 @@ def user_call_history(db: Session = Depends(get_db), current_user: User = Depend
             listener_id=c.callee_listener_id, listener_name=listener.name if listener else "Unknown",
             call_type=c.call_type, status=c.status, duration_seconds=c.duration_seconds,
             coins_deducted=c.coins_deducted, created_at=c.created_at, connected_at=c.connected_at,
+            other_party_photo_url=listener.photo_url if listener else None,
         ))
     return result
 
@@ -309,6 +310,7 @@ def listener_call_history(db: Session = Depends(get_db), current_listener: Liste
             listener_id=current_listener.id, listener_name=current_listener.name,
             call_type=c.call_type, status=c.status, duration_seconds=c.duration_seconds,
             coins_deducted=c.coins_deducted, created_at=c.created_at, connected_at=c.connected_at,
+            other_party_photo_url=user.photo_url if user else None,
         ))
     return result
 

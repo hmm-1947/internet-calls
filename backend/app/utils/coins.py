@@ -4,7 +4,7 @@ from app.models.models import CoinSettings, User, CoinTransaction, Call, Listene
 def get_coin_settings(db: Session) -> CoinSettings:
     settings = db.query(CoinSettings).first()
     if not settings:
-        settings = CoinSettings(audio_coins_per_minute=10, video_coins_per_minute=10, chat_message_coins=1)
+        settings = CoinSettings(audio_coins_per_minute=10, video_coins_per_minute=10, chat_message_coins=1, voice_message_coins=1)
         db.add(settings)
         db.commit()
         db.refresh(settings)
@@ -17,6 +17,10 @@ def coins_per_minute(db: Session, call_type: str) -> int:
 def chat_message_coin_cost(db: Session) -> int:
     settings = get_coin_settings(db)
     return settings.chat_message_coins
+
+def voice_message_coin_cost(db: Session) -> int:
+    settings = get_coin_settings(db)
+    return settings.voice_message_coins
 
 def max_call_seconds(db: Session, user: User, call_type: str) -> int:
     per_minute = coins_per_minute(db, call_type)
@@ -62,6 +66,21 @@ async def deduct_chat_coins(db: Session, user: User, listener_id: int, message_i
     # below the required price (including a zero balance).
     user.coins -= cost
     db.add(CoinTransaction(user_id=user.id, amount=-cost, reason="chat_message", call_id=None))
+    db.commit()
+    from app.core.ws_manager import manager
+    await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
+
+    return cost
+
+async def deduct_voice_message_coins(db: Session, user: User, listener_id: int, message_id: int) -> int:
+    cost = voice_message_coin_cost(db)
+    if cost < 0:
+        raise ValueError("Voice message coin cost cannot be negative")
+    if user.coins < cost:
+        raise ValueError("Not enough coins to send this voice message")
+
+    user.coins -= cost
+    db.add(CoinTransaction(user_id=user.id, amount=-cost, reason="voice_message", call_id=None))
     db.commit()
     from app.core.ws_manager import manager
     await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
