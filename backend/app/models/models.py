@@ -18,6 +18,8 @@ class User(Base):
     last_seen = Column(DateTime(timezone=True), nullable=True)
     coins = Column(Integer, default=0)
     bio = Column(String, nullable=True)
+    reset_otp_code = Column(String, nullable=True)
+    reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Listener(Base):
@@ -263,6 +265,21 @@ class UserBillingPurchase(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_type = Column(String, nullable=False, index=True)  # "user" | "listener"
+    subject_id = Column(Integer, nullable=False, index=True)
+    subject_name = Column(String, nullable=False)  # snapshot in case the account is later renamed/deleted
+    action = Column(String, nullable=False, index=True)  # "login" | "logout"
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index('ix_audit_logs_subject_type_created_at', 'subject_type', 'created_at'),
+    )
 
 
 class EmailOtp(Base):

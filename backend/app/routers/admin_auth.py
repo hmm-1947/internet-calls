@@ -61,7 +61,7 @@ def request_invite_otp(payload: AdminInviteRequestOtp, db: Session = Depends(get
     otp_code = generate_otp_code()
     invite.email = payload.email
     invite.otp_code = otp_code
-    invite.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    invite.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
     invite.email_verified = False
     db.commit()
 
@@ -130,7 +130,7 @@ def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, db: Sess
 
     otp_code = generate_otp_code()
     admin.reset_otp_code = otp_code
-    admin.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    admin.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
     db.commit()
 
     send_otp_email(payload.email, otp_code)
@@ -159,6 +159,9 @@ def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depen
         raise HTTPException(status_code=400, detail="Invalid OTP")
     if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
+
+    if verify_password(payload.new_password, admin.password_hash):
+        raise HTTPException(status_code=400, detail="New password must be different from your current password")
 
     admin.password_hash = hash_password(payload.new_password)
     admin.reset_otp_code = None

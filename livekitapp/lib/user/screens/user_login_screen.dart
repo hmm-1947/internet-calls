@@ -4,6 +4,7 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
 import 'package:livekitapp/user/screens/user_register_screen.dart';
+import 'package:livekitapp/user/screens/user_forgot_password_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class UserLoginScreen extends StatefulWidget {
@@ -106,7 +107,21 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      fadeRoute(const UserForgotPasswordScreen()),
+                    );
+                  },
+                  child: const Text(
+                    'Forgot Password?',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

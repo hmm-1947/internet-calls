@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
@@ -8,11 +8,12 @@ from app.schemas.schemas import ListenerStatusUpdate
 from app.models.models import CallRating
 from sqlalchemy import func as sqlfunc
 from datetime import datetime, timedelta, timezone
-from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate
+from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate, UserForgotPasswordRequestOtp, UserForgotPasswordVerifyOtp, UserForgotPasswordReset
 from app.core.database import get_db
 from app.models.models import User, Session as SessionModel, EmailOtp
 from app.utils.email_otp import generate_otp_code, send_otp_email
 from app.utils.security import hash_password, verify_password, generate_session_token
+from app.utils.audit import record_audit_event
 from app.models.models import Listener
 from app.core.deps import get_current_user
 from app.utils.coins import chat_message_coin_cost
@@ -33,7 +34,7 @@ def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="Phone or email already registered")
 
     otp_code = generate_otp_code()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
 
     db.query(EmailOtp).filter(EmailOtp.email == payload.email).delete()
     db.add(EmailOtp(
@@ -93,8 +94,67 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = generate_session_token()
     db.add(SessionModel(token=token, user_id=user.id))
+    record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
     return AuthResponse(token=token, id=user.id, name=user.name)
+
+
+@router.post("/logout")
+def logout(authorization: str = Header(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    token = authorization.replace("Bearer ", "")
+    db.query(SessionModel).filter(SessionModel.token == token).delete()
+    record_audit_event(db, "user", current_user.id, current_user.name, "logout")
+    db.commit()
+    return {"status": "logged_out"}
+
+
+@router.post("/forgot-password/request-otp")
+def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="enter a registered email id")
+
+    otp_code = generate_otp_code()
+    user.reset_otp_code = otp_code
+    user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+    db.commit()
+
+    send_otp_email(payload.email, otp_code)
+    return {"status": "otp_sent"}
+
+
+@router.post("/forgot-password/verify-otp")
+def forgot_password_verify_otp(payload: UserForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="enter a registered email id")
+    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if not user.reset_otp_expires_at or user.reset_otp_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    return {"status": "otp_verified"}
+
+
+@router.post("/forgot-password/reset")
+def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="enter a registered email id")
+    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if not user.reset_otp_expires_at or user.reset_otp_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="New password must be different from your current password")
+
+    user.password_hash = hash_password(payload.new_password)
+    user.reset_otp_code = None
+    user.reset_otp_expires_at = None
+    db.commit()
+
+    return {"status": "password_reset"}
 
 
 @router.get("/listeners")

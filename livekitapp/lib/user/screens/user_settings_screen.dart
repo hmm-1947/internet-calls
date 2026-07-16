@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
@@ -109,12 +110,23 @@ class UserSettingsScreenState extends State<UserSettingsScreen> {
 
   Future<void> _logout() async {
     setState(() => _loggingOut = true);
-    await _localStorage.clear();
-    UserDataCache().clear();
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const UserLoginScreen()),
-      );
+    try {
+      final token = await _localStorage.getToken();
+      if (token != null) {
+        await _repository.logout(token);
+      } else {
+        debugPrint('Logout: no token found in local storage, skipping API call');
+      }
+    } catch (e) {
+      debugPrint('Logout: API call failed: $e');
+    } finally {
+      await _localStorage.clear();
+      UserDataCache().clear();
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const UserLoginScreen()),
+        );
+      }
     }
   }
 

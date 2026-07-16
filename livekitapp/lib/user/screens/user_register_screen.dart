@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_otp_verify_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
+import 'package:livekitapp/shared/widgets/password_rules_checklist.dart';
 
 class UserRegisterScreen extends StatefulWidget {
   const UserRegisterScreen({super.key});
@@ -17,6 +18,15 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
   final _passwordController = TextEditingController();
   final _repository = UserRepository();
   bool _loading = false;
+  String _password = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(() {
+      setState(() => _password = _passwordController.text);
+    });
+  }
 
   @override
   void dispose() {
@@ -28,6 +38,14 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
   }
 
   Future<void> _register() async {
+    if (!isPasswordValid(_passwordController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please satisfy all password rules'),
+        ),
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
       await _repository.registerInitiate(
@@ -38,7 +56,14 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
       );
       if (!mounted) return;
       Navigator.of(context).push(
-        fadeRoute(UserOtpVerifyScreen(email: _emailController.text.trim())),
+        fadeRoute(
+          UserOtpVerifyScreen(
+            email: _emailController.text.trim(),
+            name: _nameController.text.trim(),
+            phone: _phoneController.text.trim(),
+            password: _passwordController.text,
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -49,6 +74,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
       if (mounted) setState(() => _loading = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +87,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -115,6 +141,11 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PasswordRulesChecklist(password: _password),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -127,7 +158,9 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: _loading ? null : _register,
+                  onPressed: (_loading || !isPasswordValid(_password))
+                      ? null
+                      : _register,
                   child: _loading
                       ? const CircularProgressIndicator(color: Colors.black)
                       : const Text('Send OTP'),

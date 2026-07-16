@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
-    CoinTransaction, CallRating, Session as SessionModel, AdminUser,
+    CoinTransaction, CallRating, Session as SessionModel, AdminUser, AuditLog,
 )
 from app.schemas.schemas import ListenerCreate
 from app.utils.security import hash_password
@@ -333,3 +333,56 @@ def list_listener_stats(db: Session = Depends(get_db), _=Depends(verify_admin)):
         })
     result.sort(key=lambda x: x["total_calls"], reverse=True)
     return result
+
+
+def _paginated_audit_log(db: Session, subject_type: str, page: int, page_size: int):
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+
+    query = db.query(AuditLog).filter(AuditLog.subject_type == subject_type)
+    total = query.count()
+    rows = (
+        query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": r.id,
+                "subject_id": r.subject_id,
+                "name": r.subject_name,
+                "action": r.action,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/audit-log/users")
+def list_user_audit_log(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _=Depends(verify_admin),
+):
+    """Login/logout history for users, most recent first. Failed login
+    attempts are never recorded, so only successful events appear here."""
+    return _paginated_audit_log(db, "user", page, page_size)
+
+
+@router.get("/audit-log/listeners")
+def list_listener_audit_log(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _=Depends(verify_admin),
+):
+    """Login/logout history for listeners, most recent first. Failed login
+    attempts are never recorded, so only successful events appear here."""
+    return _paginated_audit_log(db, "listener", page, page_size)

@@ -60,6 +60,56 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
+  Future<void> forgotPasswordRequestOtp(String email) async {
+    final response = await _apiClient.post(
+      ApiConstants.userForgotPasswordRequestOtp,
+      {'email': email},
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to send OTP');
+    }
+  }
+
+  Future<void> forgotPasswordVerifyOtp(String email, String otpCode) async {
+    final response = await _apiClient.post(
+      ApiConstants.userForgotPasswordVerifyOtp,
+      {'email': email, 'otp_code': otpCode},
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'OTP verification failed');
+    }
+  }
+
+  Future<void> forgotPasswordReset(
+    String email,
+    String otpCode,
+    String newPassword,
+  ) async {
+    final response = await _apiClient.post(ApiConstants.userForgotPasswordReset, {
+      'email': email,
+      'otp_code': otpCode,
+      'new_password': newPassword,
+    });
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to reset password');
+    }
+  }
+
+  Future<void> logout(String token) async {
+    final response = await _apiClient.post(
+      ApiConstants.userLogout,
+      {},
+      token: token,
+    );
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Logout failed');
+    }
+  }
+
   Future<bool> checkSessionActive(String token) async {
     final response = await _apiClient.get(
       ApiConstants.userSessionCheck,
