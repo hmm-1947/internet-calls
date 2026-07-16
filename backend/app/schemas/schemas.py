@@ -238,6 +238,7 @@ class ChatThreadOut(BaseModel):
     is_muted: bool = False
     is_online: bool = False
     last_seen: Optional[datetime] = None
+    photo_url: Optional[str] = None
 
 class TypingEvent(BaseModel):
     listener_id: Optional[int] = None
@@ -304,6 +305,7 @@ class ListenerNoteOut(BaseModel):
 
 class ListenerReviewOut(BaseModel):
     user_name: str
+    user_photo_url: Optional[str] = None
     rating: int
     review: Optional[str] = None
     created_at: datetime

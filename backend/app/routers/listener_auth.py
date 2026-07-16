@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File
+import os
+import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
 from app.core.database import get_db
@@ -44,6 +46,7 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "avg_rating": round(avg_rating, 1) if avg_rating else None,
         "rating_count": rating_count or 0,
         "created_at": current_listener.created_at.isoformat() if current_listener.created_at else None,
+        "photo_url": current_listener.photo_url,
     }
 
 @router.get("/wallet")
@@ -90,6 +93,16 @@ def update_profile(payload: ListenerProfileUpdate, db: Session = Depends(get_db)
     db.commit()
     return {"status": "updated"}
 
+@router.post("/photo")
+async def update_photo(file: UploadFile = File(...), db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    filename = f"listener_{current_listener.id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join("profile_photos", filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    current_listener.photo_url = f"/profile_photos/{filename}"
+    db.commit()
+    return {"status": "updated", "photo_url": current_listener.photo_url}
 
 @router.post("/login", response_model=AuthResponse)
 def login(payload: ListenerLogin, db: Session = Depends(get_db)):
@@ -144,6 +157,6 @@ def get_users(db: Session = Depends(get_db), current_listener: Listener = Depend
     from app.models.models import User
     users = db.query(User).filter(User.is_active == True).all()
     return [
-        {"id": u.id, "name": u.name, "is_online": manager.is_user_online(u.id), "bio": u.bio}
+        {"id": u.id, "name": u.name, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url}
         for u in users
     ]

@@ -1,6 +1,7 @@
 import json
-
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
@@ -120,6 +121,7 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             "tags": tags,
             "avg_rating": round(avg_rating, 1) if avg_rating else None,
             "rating_count": rating_count or 0,
+            "photo_url": l.photo_url,
         })
     return result
 
@@ -148,6 +150,7 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
         "avg_rating": round(avg_rating, 1) if avg_rating else None,
         "rating_count": rating_count or 0,
         "created_at": l.created_at.isoformat() if l.created_at else None,
+        "photo_url": l.photo_url,
     }
 
     
@@ -161,6 +164,7 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         "coins": current_user.coins,
         "chat_message_coin_cost": chat_message_coin_cost(db),
         "bio": current_user.bio,
+        "photo_url": current_user.photo_url,
     }
 
 @router.post("/bio")
@@ -168,6 +172,17 @@ def update_bio(payload: UserBioUpdate, db: Session = Depends(get_db), current_us
     current_user.bio = payload.bio
     db.commit()
     return {"status": "updated", "bio": current_user.bio}
+
+@router.post("/photo")
+async def update_photo(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    filename = f"user_{current_user.id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join("profile_photos", filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    current_user.photo_url = f"/profile_photos/{filename}"
+    db.commit()
+    return {"status": "updated", "photo_url": current_user.photo_url}
 
 @router.post("/fcm-token")
 def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

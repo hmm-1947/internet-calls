@@ -2,6 +2,7 @@
 import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Form
+from pydantic import BaseModel
 import os
 import uuid
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_listener
 from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
-from app.utils.fcm import send_chat_message
+from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins
 from app.core.ws_manager import manager
 
@@ -81,7 +82,20 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if listener.fcm_token:
         try:
-            send_chat_message(listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user")
+            if listener_online:
+                send_chat_message(listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user", msg.id, msg.client_id)
+            else:
+                undelivered = db.query(ChatMessage).filter(
+                    ChatMessage.user_id == current_user.id,
+                    ChatMessage.listener_id == listener.id,
+                    ChatMessage.sender_type == "user",
+                    ChatMessage.status == "sent",
+                ).order_by(ChatMessage.id.asc()).all()
+                payload_msgs = [
+                    {"id": m.id, "client_id": m.client_id, "message": m.message}
+                    for m in undelivered
+                ]
+                send_chat_summary(listener.fcm_token, current_user.name, payload_msgs, current_user.id, listener.id, "user")
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of chat message: {e}")
     return msg
@@ -108,7 +122,20 @@ async def listener_send_message(payload: ListenerChatMessageSend, db: Session = 
     await manager.send_to_listener(current_listener.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if user.fcm_token:
         try:
-            send_chat_message(user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener")
+            if user_online:
+                send_chat_message(user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener", msg.id, msg.client_id)
+            else:
+                undelivered = db.query(ChatMessage).filter(
+                    ChatMessage.user_id == user.id,
+                    ChatMessage.listener_id == current_listener.id,
+                    ChatMessage.sender_type == "listener",
+                    ChatMessage.status == "sent",
+                ).order_by(ChatMessage.id.asc()).all()
+                payload_msgs = [
+                    {"id": m.id, "client_id": m.client_id, "message": m.message}
+                    for m in undelivered
+                ]
+                send_chat_summary(user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener")
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of chat message: {e}")
     return msg
@@ -200,11 +227,15 @@ async def listener_send_voice(
     return msg
 
 @router.get("/user/{listener_id}/messages", response_model=list[ChatMessageOut])
-async def user_get_messages(listener_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    messages = db.query(ChatMessage).filter(
+async def user_get_messages(listener_id: int, before_id: int | None = None, limit: int = 25, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(ChatMessage).filter(
         ChatMessage.user_id == current_user.id,
         ChatMessage.listener_id == listener_id,
-    ).order_by(ChatMessage.created_at.asc()).all()
+    )
+    if before_id is not None:
+        query = query.filter(ChatMessage.id < before_id)
+    messages = query.order_by(ChatMessage.id.desc()).limit(limit).all()
+    messages.reverse()
     unread = db.query(ChatMessage).filter(
         ChatMessage.user_id == current_user.id,
         ChatMessage.listener_id == listener_id,
@@ -225,11 +256,15 @@ async def user_get_messages(listener_id: int, db: Session = Depends(get_db), cur
     return messages
 
 @router.get("/listener/{user_id}/messages", response_model=list[ChatMessageOut])
-async def listener_get_messages(user_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
-    messages = db.query(ChatMessage).filter(
+async def listener_get_messages(user_id: int, before_id: int | None = None, limit: int = 25, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    query = db.query(ChatMessage).filter(
         ChatMessage.user_id == user_id,
         ChatMessage.listener_id == current_listener.id,
-    ).order_by(ChatMessage.created_at.asc()).all()
+    )
+    if before_id is not None:
+        query = query.filter(ChatMessage.id < before_id)
+    messages = query.order_by(ChatMessage.id.desc()).limit(limit).all()
+    messages.reverse()
     unread = db.query(ChatMessage).filter(
         ChatMessage.user_id == user_id,
         ChatMessage.listener_id == current_listener.id,
@@ -248,6 +283,73 @@ async def listener_get_messages(user_id: int, db: Session = Depends(get_db), cur
             "message_ids": [m.id for m in unread], "read_at": now.isoformat(),
         })
     return messages
+
+class DeliveredAck(BaseModel):
+    message_ids: list[int]
+
+@router.post("/user/delivered")
+async def user_mark_delivered(payload: DeliveredAck, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    msgs = db.query(ChatMessage).filter(
+        ChatMessage.id.in_(payload.message_ids),
+        ChatMessage.user_id == current_user.id,
+        ChatMessage.sender_type == "listener",
+        ChatMessage.status == "sent",
+    ).all()
+    now = datetime.now(timezone.utc)
+    for m in msgs:
+        m.status = "delivered"
+        m.delivered_at = now
+    db.commit()
+    if msgs:
+        listener_id = msgs[0].listener_id
+        ids = [m.id for m in msgs]
+        if manager.is_listener_online(listener_id):
+            await manager.send_to_listener(listener_id, {
+                "type": "message_status_bulk",
+                "ids": ids,
+                "status": "delivered",
+            })
+        else:
+            listener = db.query(Listener).filter(Listener.id == listener_id).first()
+            if listener and listener.fcm_token:
+                try:
+                    send_delivery_status(listener.fcm_token, ids, "delivered", current_user.id, listener_id)
+                except Exception as e:
+                    print(f"[FCM ERROR] Failed to notify listener {listener_id} of delivery status: {e}")
+    return {"updated": len(msgs)}
+
+@router.post("/listener/delivered")
+async def listener_mark_delivered(payload: DeliveredAck, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    msgs = db.query(ChatMessage).filter(
+        ChatMessage.id.in_(payload.message_ids),
+        ChatMessage.listener_id == current_listener.id,
+        ChatMessage.sender_type == "user",
+        ChatMessage.status == "sent",
+    ).all()
+    now = datetime.now(timezone.utc)
+    for m in msgs:
+        m.status = "delivered"
+        m.delivered_at = now
+    db.commit()
+    if msgs:
+        user_id = msgs[0].user_id
+        ids = [m.id for m in msgs]
+        if manager.is_user_online(user_id):
+            await manager.send_to_user(user_id, {
+                "type": "message_status_bulk",
+                "ids": ids,
+                "status": "delivered",
+            })
+        else:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and user.fcm_token:
+                try:
+                    send_delivery_status(user.fcm_token, ids, "delivered", user_id, current_listener.id)
+                except Exception as e:
+                    print(f"[FCM ERROR] Failed to notify user {user_id} of delivery status: {e}")
+    return {"updated": len(msgs)}
+
+
 
 @router.post("/message/edit", response_model=ChatMessageOut)
 async def edit_message(payload: MessageEdit, db: Session = Depends(get_db)):
@@ -396,6 +498,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             is_muted=settings.is_muted if settings else False,
             is_online=manager.is_listener_online(lid),
             last_seen=listener.last_seen,
+            photo_url=listener.photo_url,
         ))
     result.sort(key=lambda t: (not t.is_pinned, t.last_message_at), reverse=False)
     result.sort(key=lambda t: t.is_pinned, reverse=True)
@@ -449,6 +552,7 @@ def listener_get_threads(db: Session = Depends(get_db), current_listener: Listen
             is_muted=settings.is_muted if settings else False,
             is_online=manager.is_user_online(uid),
             last_seen=user.last_seen,
+            photo_url=user.photo_url,
         ))
     result.sort(key=lambda t: t.last_message_at, reverse=True)
     result.sort(key=lambda t: t.is_pinned, reverse=True)

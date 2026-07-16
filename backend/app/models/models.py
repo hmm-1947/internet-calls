@@ -18,6 +18,7 @@ class User(Base):
     last_seen = Column(DateTime(timezone=True), nullable=True)
     coins = Column(Integer, default=0)
     bio = Column(String, nullable=True)
+    photo_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Listener(Base):
@@ -35,6 +36,7 @@ class Listener(Base):
     tags = Column(String, nullable=True)
     languages = Column(String, nullable=True)
     coins = Column(Integer, default=0, nullable=False)
+    photo_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

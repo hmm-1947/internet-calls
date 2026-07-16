@@ -58,7 +58,7 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
     # No token returned yet — user joins LiveKit only after listener accepts
     if listener.fcm_token:
         try:
-            send_call_notification(listener.fcm_token, room_name, current_user.name, current_user.id, call.id, call_type=call_type)
+            send_call_notification(listener.fcm_token, room_name, current_user.name, current_user.id, call.id, call_type=call_type, caller_photo_url=current_user.photo_url or "")
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id}: {e}")
     return {"call_id": call.id}
@@ -367,6 +367,7 @@ def listener_reviews(db: Session = Depends(get_db), current_listener: Listener =
         user = db.query(User).filter(User.id == r.user_id).first()
         result.append(ListenerReviewOut(
             user_name=user.name if user else "Unknown",
+            user_photo_url=user.photo_url if user else None,
             rating=r.rating,
             review=r.review,
             created_at=r.created_at,
