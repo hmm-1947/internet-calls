@@ -110,6 +110,21 @@ class UserRepository {
     }
   }
 
+  Future<void> changePassword(
+    String token,
+    String currentPassword,
+    String newPassword,
+  ) async {
+    final response = await _apiClient.post(ApiConstants.userChangePassword, {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    }, token: token);
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to change password');
+    }
+  }
+
   Future<bool> checkSessionActive(String token) async {
     final response = await _apiClient.get(
       ApiConstants.userSessionCheck,

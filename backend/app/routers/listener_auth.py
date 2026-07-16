@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 import json
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
-from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate
-from app.utils.security import verify_password, generate_session_token
+from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate, ListenerChangePassword
+from app.utils.security import verify_password, generate_session_token, hash_password
 from app.utils.audit import record_audit_event
 from app.core.deps import get_current_listener
 
@@ -210,6 +210,17 @@ async def logout(authorization: str = Header(...), db: Session = Depends(get_db)
         "last_seen": current_listener.last_seen.isoformat(),
     })
     return {"status": "logged_out"}
+
+@router.post("/change-password")
+def change_password(payload: ListenerChangePassword, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    if not verify_password(payload.current_password, current_listener.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if verify_password(payload.new_password, current_listener.password_hash):
+        raise HTTPException(status_code=400, detail="New password must be different from your current password")
+    current_listener.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"status": "password_changed"}
+
 
 @router.post("/fcm-token")
 def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):

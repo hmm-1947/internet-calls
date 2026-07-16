@@ -6,6 +6,7 @@ import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_personal_info_screen.dart';
+import 'package:livekitapp/shared/screens/change_password_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class _SectionLabel extends StatelessWidget {
@@ -195,7 +196,22 @@ Future<void> refresh() async {
             _SettingsTile(
               icon: Icons.lock_reset,
               title: 'Change Password',
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChangePasswordScreen(
+                      onSubmit: (current, next) async {
+                        final token = await _localStorage.getToken();
+                        await _repository.changePassword(
+                          token!,
+                          current,
+                          next,
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
           ]),
           _SectionLabel('PREFERENCES'),
