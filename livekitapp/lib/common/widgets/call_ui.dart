@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 
 class PulsingAvatarRing extends StatelessWidget {
   final double audioLevel;
   final bool showVideo;
   final VideoTrack? videoTrack;
+  final String? photoUrl;
   const PulsingAvatarRing({
     super.key,
     required this.audioLevel,
     this.showVideo = false,
     this.videoTrack,
+    this.photoUrl,
   });
 
   @override
@@ -46,17 +49,24 @@ class PulsingAvatarRing extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: pink, width: 3),
             ),
-            child: ClipOval(
+      child: ClipOval(
               child: showVideo && videoTrack != null
                   ? VideoTrackRenderer(videoTrack!)
-                  : Container(
-                      color: const Color(0xFF2A2A2A),
-                      child: const Icon(
-                        Icons.person,
-                        color: Colors.white54,
-                        size: 90,
-                      ),
-                    ),
+                  : (ApiConstants.resolveMediaUrl(photoUrl).isEmpty
+                      ? Container(
+                          color: const Color(0xFF2A2A2A),
+                          child: const Icon(
+                            Icons.person,
+                            color: Colors.white54,
+                            size: 90,
+                          ),
+                        )
+                      : Image.network(
+                          ApiConstants.resolveMediaUrl(photoUrl),
+                          fit: BoxFit.cover,
+                          width: 200,
+                          height: 200,
+                        )),
             ),
           ),
         ],

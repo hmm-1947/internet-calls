@@ -197,7 +197,20 @@ class UserRepository {
     UserDataCache().invalidateThreads();
     return data;
   }
-
+Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
+    final response = await _apiClient.postMultipart(
+      ApiConstants.userPhoto,
+      {},
+      filePath,
+      'file',
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to update photo');
+    }
+    return data;
+  }
   Future<Map<String, dynamic>> sendVoiceMessage(
     String token,
     int listenerId,
@@ -228,10 +241,13 @@ class UserRepository {
 
   Future<List<Map<String, dynamic>>> getChatMessages(
     String token,
-    int listenerId,
-  ) async {
+    int listenerId, {
+    int? beforeId,
+  }) async {
+    var path = ApiConstants.userMessages(listenerId);
+    if (beforeId != null) path = '$path?before_id=$beforeId';
     final response = await _apiClient.get(
-      ApiConstants.userMessages(listenerId),
+      path,
       token: token,
     );
     final data = jsonDecode(response.body);
@@ -239,6 +255,14 @@ class UserRepository {
       throw Exception(data['detail'] ?? 'Failed to load messages');
     }
     return List<Map<String, dynamic>>.from(data);
+  }
+
+  Future<void> markMessagesDelivered(String token, List<int> messageIds) async {
+    await _apiClient.post(
+      ApiConstants.userMarkDelivered,
+      {'message_ids': messageIds},
+      token: token,
+    );
   }
 
   Future<void> markMessagesRead(String token, int listenerId) async {

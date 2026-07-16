@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -28,6 +29,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   String _search = '';
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   String _profileName = '';
+  String? _profilePhotoUrl;
   @override
   void initState() {
     super.initState();
@@ -62,13 +64,18 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
     }
   }
 
-  Future<void> _loadProfile() async {
-    if (_token == null) return;
-    try {
-      final me = await _repository.getMe(_token!);
-      if (mounted) setState(() => _profileName = me['name'] ?? '');
-    } catch (_) {}
-  }
+Future<void> _loadProfile() async {
+  if (_token == null) return;
+  try {
+    final me = await _repository.getMe(_token!);
+    if (mounted) {
+      setState(() {
+        _profileName = me['name'] ?? '';
+        _profilePhotoUrl = me['photo_url'];
+      });
+    }
+  } catch (_) {}
+}
 
   List<Map<String, dynamic>> get _visibleUsers {
     var list = _users.where((u) {
@@ -230,11 +237,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
                     ),
                   ],
                 ),
-                child: const CircleAvatar(
-                  radius: 44,
-                  backgroundColor: Color(0xFF2A2A2A),
-                  child: Icon(Icons.person, color: Colors.white54, size: 44),
-                ),
+          child: AvatarImage(photoUrl: _profilePhotoUrl, radius: 44, iconSize: 44),
               ),
               const SizedBox(height: 12),
               Text(
@@ -356,11 +359,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              const CircleAvatar(
-                radius: 28,
-                backgroundColor: Color(0xFF2A2A2A),
-                child: Icon(Icons.person, color: Colors.white54, size: 28),
-              ),
+          AvatarImage(photoUrl: user['photo_url'], radius: 28, iconSize: 28),
               Positioned(
                 right: -2,
                 bottom: -2,

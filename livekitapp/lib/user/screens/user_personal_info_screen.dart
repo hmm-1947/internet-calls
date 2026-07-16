@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 
 class _FieldLabel extends StatelessWidget {
@@ -64,11 +67,13 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   final _bioController = TextEditingController();
-  String _name = '';
+String _name = '';
   String _email = '';
   String _phone = '';
+  String? _photoUrl;
   bool _loading = true;
   bool _saving = false;
+  bool _uploadingPhoto = false;
 
   @override
   void initState() {
@@ -86,10 +91,11 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!);
-      setState(() {
+    setState(() {
         _name = data['name'] ?? '';
         _email = data['email'] ?? '';
         _phone = data['phone'] ?? '';
+        _photoUrl = data['photo_url'];
         _bioController.text = data['bio'] ?? '';
         _loading = false;
       });
@@ -97,7 +103,31 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
       setState(() => _loading = false);
     }
   }
-
+Future<void> _pickAndUploadPhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1024,
+    );
+    if (picked == null) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      final token = await _localStorage.getToken();
+      final result = await _repository.updatePhoto(token!, picked.path);
+      UserDataCache().invalidateMe();
+      if (mounted) {
+        setState(() => _photoUrl = result['photo_url']);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
@@ -141,18 +171,37 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
               children: [
                 Center(
-                  child: Container(
-                    width: 96,
-                    height: 96,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFE11D48), width: 2),
-                    ),
-                    child: const CircleAvatar(
-                      radius: 44,
-                      backgroundColor: Color(0xFF2A2A2A),
-                      child: Icon(Icons.person, color: Colors.white54, size: 44),
+                  child: GestureDetector(
+                    onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFE11D48), width: 2),
+                          ),
+                          child: _uploadingPhoto
+                              ? const CircularProgressIndicator()
+                              : AvatarImage(photoUrl: _photoUrl, radius: 44, iconSize: 44),
+                        ),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE11D48),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

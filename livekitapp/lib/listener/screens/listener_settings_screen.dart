@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -98,6 +99,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
   String _name = '';
+  String? _photoUrl;
   bool _statusOnline = true;
   bool _notificationsOn = true;
 
@@ -107,12 +109,13 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     refresh();
   }
 
-  Future<void> refresh() async {
+Future<void> refresh() async {
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!);
       setState(() {
         _name = data['name'] ?? '';
+        _photoUrl = data['photo_url'];
       });
     } catch (_) {}
   }
@@ -161,10 +164,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
             ),
             child: Row(
               children: [
-                const CircleAvatar(
-                  radius: 28,
-                  child: Icon(Icons.person, size: 28),
-                ),
+            AvatarImage(photoUrl: _photoUrl, radius: 28, iconSize: 28),
                 const SizedBox(width: 16),
                 Text(
                   _name,

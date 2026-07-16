@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_settings_screen.dart';
@@ -72,9 +73,10 @@ class UserProfileScreen extends StatefulWidget {
 class UserProfileScreenState extends State<UserProfileScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
-  int _coins = 0;
+int _coins = 0;
   String _name = '';
   String _phone = '';
+  String? _photoUrl;
   bool _loading = true;
 
   @override
@@ -82,8 +84,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     super.initState();
     refresh();
   }
-
-  Future<void> refresh() async {
+Future<void> refresh() async {
     final isFirstLoad = _name.isEmpty;
     if (isFirstLoad) setState(() => _loading = true);
     try {
@@ -92,11 +93,13 @@ class UserProfileScreenState extends State<UserProfileScreen> {
       final newCoins = data['coins'] ?? 0;
       final newName = data['name'] ?? '';
       final newPhone = data['phone'] ?? '';
-      if (_coins != newCoins || _name != newName || _phone != newPhone) {
+      final newPhotoUrl = data['photo_url'];
+      if (_coins != newCoins || _name != newName || _phone != newPhone || _photoUrl != newPhotoUrl) {
         setState(() {
           _coins = newCoins;
           _name = newName;
           _phone = newPhone;
+          _photoUrl = newPhotoUrl;
           _loading = false;
         });
       } else if (_loading) {
@@ -185,15 +188,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                           width: 2,
                         ),
                       ),
-                      child: const CircleAvatar(
-                        radius: 44,
-                        backgroundColor: Color(0xFF2A2A2A),
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.white54,
-                          size: 44,
-                        ),
-                      ),
+                 child: AvatarImage(photoUrl: _photoUrl, radius: 44, iconSize: 44),
                     ),
                   ),
                   const SizedBox(height: 12),

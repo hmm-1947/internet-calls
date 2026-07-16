@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
@@ -88,14 +89,10 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const CircleAvatar(
+                          AvatarImage(
+                            photoUrl: r['user_photo_url'],
                             radius: 20,
-                            backgroundColor: Color(0xFF2A2A2A),
-                            child: Icon(
-                              Icons.person,
-                              color: Colors.white54,
-                              size: 20,
-                            ),
+                            iconSize: 20,
                           ),
                           const SizedBox(width: 12),
                           Expanded(

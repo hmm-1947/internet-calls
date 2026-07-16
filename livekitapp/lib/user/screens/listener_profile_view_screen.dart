@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
@@ -87,6 +88,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   double? _avgRating;
   int _ratingCount = 0;
   String? _createdAt;
+  String? _photoUrl;
 
   @override
   void initState() {
@@ -117,6 +119,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         'avg_rating': (data['avg_rating'] as num?)?.toDouble(),
         'rating_count': data['rating_count'] ?? 0,
         'created_at': data['created_at'],
+        'photo_url': data['photo_url'],
       };
       final oldSnapshot = {
         'name': _name,
@@ -127,6 +130,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         'avg_rating': _avgRating,
         'rating_count': _ratingCount,
         'created_at': _createdAt,
+        'photo_url': _photoUrl,
       };
       if (dataChanged(oldSnapshot, newSnapshot)) {
         setState(() {
@@ -138,6 +142,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
           _avgRating = newSnapshot['avg_rating'] as double?;
           _ratingCount = newSnapshot['rating_count'] as int;
           _createdAt = newSnapshot['created_at'] as String?;
+          _photoUrl = newSnapshot['photo_url'] as String?;
           _loading = false;
         });
       } else if (_loading) {
@@ -190,15 +195,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                               width: 2,
                             ),
                           ),
-                          child: const CircleAvatar(
-                            radius: 44,
-                            backgroundColor: Color(0xFF2A2A2A),
-                            child: Icon(
-                              Icons.person,
-                              color: Colors.white54,
-                              size: 44,
-                            ),
-                          ),
+                          child: AvatarImage(photoUrl: _photoUrl, radius: 44, iconSize: 44),
                         ),
                         Positioned(
                           right: 2,

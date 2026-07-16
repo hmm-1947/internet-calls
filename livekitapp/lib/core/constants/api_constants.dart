@@ -31,7 +31,8 @@ class ApiConstants {
   static const String listenerMe = '/listener/me';
   static const String listenerWallet = '/listener/wallet';
 
-  static const String listenerProfile = '/listener/profile';
+static const String listenerProfile = '/listener/profile';
+  static const String listenerPhoto = '/listener/photo';
   static const String listenerUsers = '/listener/users';
   static const String listenerReviews = '/call/listener/reviews';
   static String userListenerProfile(int listenerId) => '/user/listener/$listenerId';
@@ -67,8 +68,12 @@ class ApiConstants {
   static String userMarkRead(int listenerId) =>
       '/chat/user/$listenerId/mark_read';
 
+  static const String userMarkDelivered = '/chat/user/delivered';
+  static const String listenerMarkDelivered = '/chat/listener/delivered';
+
   static const String userMe = '/user/me';
-  static const String userBio = '/user/bio';
+static const String userBio = '/user/bio';
+  static const String userPhoto = '/user/photo';
 
   static const String giftCatalog = '/gift/catalog';
   static const String giftSend = '/gift/send';
@@ -82,4 +87,11 @@ class ApiConstants {
   static const String billingVerifyPayment = '/billing/verify-payment';
   static const String billingPaymentFailed = '/billing/payment-failed';
   static const String billingMyPurchases = '/billing/my-purchases';
+
+
+  static String resolveMediaUrl(String? path) {
+    if (path == null || path.isEmpty) return '';
+    if (path.startsWith('http')) return path;
+    return '$baseUrl$path';
+  }
 }

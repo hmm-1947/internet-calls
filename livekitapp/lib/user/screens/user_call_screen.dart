@@ -3,6 +3,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/user/services/pip_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
@@ -19,6 +21,7 @@ class CallScreen extends StatefulWidget {
   final int callId;
   final bool startWithVideo;
   final String otherPartyName;
+  final String? otherPartyPhotoUrl;
   final bool busy;
   final int? listenerId;
 
@@ -26,6 +29,7 @@ class CallScreen extends StatefulWidget {
     super.key,
     required this.callId,
     required this.otherPartyName,
+    this.otherPartyPhotoUrl,
     this.startWithVideo = false,
     this.busy = false,
     this.listenerId,
@@ -80,11 +84,12 @@ class _CallScreenState extends State<CallScreen> {
     _requestMicAndStartCall();
   }
 
-  Future<void> _requestMicAndStartCall() async {
+Future<void> _requestMicAndStartCall() async {
     await Permission.microphone.request();
     UserCallkitService.instance.startOutgoingCall(
       widget.callId.toString(),
       widget.otherPartyName,
+      calleePhotoUrl: ApiConstants.resolveMediaUrl(widget.otherPartyPhotoUrl),
     );
   }
 
@@ -521,10 +526,11 @@ class _CallScreenState extends State<CallScreen> {
             style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
           ),
           const Spacer(),
-          PulsingAvatarRing(
+    PulsingAvatarRing(
             audioLevel: _remoteAudioLevel,
             showVideo: false,
             videoTrack: _remoteVideoTrack,
+            photoUrl: widget.otherPartyPhotoUrl,
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -614,15 +620,11 @@ class _CallScreenState extends State<CallScreen> {
               ? VideoTrackRenderer(_remoteVideoTrack!)
               : Container(
                   color: const Color(0xFF0B0B0B),
-                  child: const Center(
-                    child: CircleAvatar(
+                  child: Center(
+                    child: AvatarImage(
+                      photoUrl: widget.otherPartyPhotoUrl,
                       radius: 60,
-                      backgroundColor: Color(0xFF2A2A2A),
-                      child: Icon(
-                        Icons.person,
-                        color: Colors.white54,
-                        size: 60,
-                      ),
+                      iconSize: 60,
                     ),
                   ),
                 ),

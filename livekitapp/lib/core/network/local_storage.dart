@@ -34,6 +34,7 @@ class LocalStorage {
   static const _activeCallTokenKey = 'active_call_token';
   static const _activeCallVideoKey = 'active_call_video';
   static const _activeCallNameKey = 'active_call_name';
+  static const _activeCallPhotoKey = 'active_call_photo';
 
   Future<void> saveActiveCall(
     int callId,
@@ -41,20 +42,23 @@ class LocalStorage {
     String token, {
     bool isVideo = false,
     String callerName = 'User',
+    String? callerPhotoUrl,
   }) async {
     await _storage.write(key: _activeCallIdKey, value: callId.toString());
     await _storage.write(key: _activeCallUrlKey, value: url);
     await _storage.write(key: _activeCallTokenKey, value: token);
     await _storage.write(key: _activeCallVideoKey, value: isVideo.toString());
     await _storage.write(key: _activeCallNameKey, value: callerName);
+    await _storage.write(key: _activeCallPhotoKey, value: callerPhotoUrl ?? '');
   }
 
-  Future<Map<String, dynamic>?> getActiveCall() async {
+Future<Map<String, dynamic>?> getActiveCall() async {
     final idStr = await _storage.read(key: _activeCallIdKey);
     final url = await _storage.read(key: _activeCallUrlKey);
     final token = await _storage.read(key: _activeCallTokenKey);
     final videoStr = await _storage.read(key: _activeCallVideoKey);
     final callerName = await _storage.read(key: _activeCallNameKey);
+    final callerPhotoUrl = await _storage.read(key: _activeCallPhotoKey);
     if (idStr != null && url != null && token != null) {
       final id = int.tryParse(idStr);
       if (id != null) {
@@ -64,6 +68,7 @@ class LocalStorage {
           'token': token,
           'isVideo': videoStr == 'true',
           'callerName': callerName ?? 'User',
+          'callerPhotoUrl': (callerPhotoUrl != null && callerPhotoUrl.isNotEmpty) ? callerPhotoUrl : null,
         };
       }
     }
@@ -76,5 +81,6 @@ class LocalStorage {
     await _storage.delete(key: _activeCallTokenKey);
     await _storage.delete(key: _activeCallVideoKey);
     await _storage.delete(key: _activeCallNameKey);
+    await _storage.delete(key: _activeCallPhotoKey);
   }
 }

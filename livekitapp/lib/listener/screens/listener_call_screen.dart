@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
@@ -19,6 +20,7 @@ class ListenerCallScreen extends StatefulWidget {
   final int? callId;
   final bool isVideo;
   final String otherPartyName;
+  final String? otherPartyPhotoUrl;
 
   const ListenerCallScreen({
     super.key,
@@ -27,6 +29,7 @@ class ListenerCallScreen extends StatefulWidget {
     this.callId,
     this.isVideo = false,
     this.otherPartyName = 'User',
+    this.otherPartyPhotoUrl,
   });
 
   @override
@@ -375,10 +378,11 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
             style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
           ),
           const Spacer(),
-          PulsingAvatarRing(
+      PulsingAvatarRing(
             audioLevel: _remoteAudioLevel,
             showVideo: false,
             videoTrack: _remoteVideoTrack,
+            photoUrl: widget.otherPartyPhotoUrl,
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -459,17 +463,13 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
         Positioned.fill(
           child: showRemoteVideo
               ? VideoTrackRenderer(_remoteVideoTrack!)
-              : Container(
+           : Container(
                   color: const Color(0xFF0B0B0B),
-                  child: const Center(
-                    child: CircleAvatar(
+                  child: Center(
+                    child: AvatarImage(
+                      photoUrl: widget.otherPartyPhotoUrl,
                       radius: 60,
-                      backgroundColor: Color(0xFF2A2A2A),
-                      child: Icon(
-                        Icons.person,
-                        color: Colors.white54,
-                        size: 60,
-                      ),
+                      iconSize: 60,
                     ),
                   ),
                 ),

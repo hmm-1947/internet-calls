@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -87,7 +88,8 @@ class UserSettingsScreen extends StatefulWidget {
 class UserSettingsScreenState extends State<UserSettingsScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
-  String _name = '';
+String _name = '';
+  String? _photoUrl;
   bool _notificationsOn = true;
   bool _loggingOut = false;
 
@@ -97,12 +99,13 @@ class UserSettingsScreenState extends State<UserSettingsScreen> {
     refresh();
   }
 
-  Future<void> refresh() async {
+Future<void> refresh() async {
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!);
       setState(() {
         _name = data['name'] ?? '';
+        _photoUrl = data['photo_url'];
       });
     } catch (_) {}
   }
@@ -152,10 +155,7 @@ class UserSettingsScreenState extends State<UserSettingsScreen> {
             ),
             child: Row(
               children: [
-                const CircleAvatar(
-                  radius: 28,
-                  child: Icon(Icons.person, size: 28),
-                ),
+           AvatarImage(photoUrl: _photoUrl, radius: 28, iconSize: 28),
                 const SizedBox(width: 16),
                 Text(
                   _name,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/screens/listener_call_screen.dart';
@@ -6,10 +7,12 @@ import 'package:livekitapp/listener/screens/listener_call_screen.dart';
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
   final String callerName;
+  final String? callerPhotoUrl;
   const IncomingCallScreen({
     super.key,
     required this.callId,
     required this.callerName,
+    this.callerPhotoUrl,
   });
 
   @override
@@ -35,12 +38,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   Route _callRoute(Map<String, dynamic> result) {
     return PageRouteBuilder(
-      pageBuilder: (_, __, ___) => ListenerCallScreen(
+   pageBuilder: (_, __, ___) => ListenerCallScreen(
         url: result['livekit_url'],
         token: result['token'],
         callId: widget.callId,
         isVideo: result['call_type'] == 'video',
         otherPartyName: widget.callerName,
+        otherPartyPhotoUrl: widget.callerPhotoUrl,
       ),
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
@@ -68,7 +72,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.call, color: Colors.white, size: 64),
+         AvatarImage(photoUrl: widget.callerPhotoUrl, radius: 48, iconSize: 48),
               const SizedBox(height: 16),
               Text(
                 widget.callerName,

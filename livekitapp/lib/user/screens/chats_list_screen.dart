@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -468,13 +469,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                     ),
                                     leading: Stack(
                                       children: [
-                                        const CircleAvatar(
+                                    AvatarImage(
+                                          photoUrl: thread['photo_url'],
                                           radius: 26,
-                                          backgroundColor: Color(0xFF2A3145),
-                                          child: Icon(
-                                            Icons.person,
-                                            color: Colors.white54,
-                                          ),
+                                          iconSize: 26,
+                                          backgroundColor: const Color(0xFF2A3145),
                                         ),
                                         if (thread['is_online'] == true)
                                           Positioned(
@@ -568,10 +567,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                     onTap: () async {
                                       await Navigator.of(context).push(
                                         fadeRoute(
-                                          ChatHistoryScreen(
+                                      ChatHistoryScreen(
                                             listenerId: thread['listener_id'],
                                             listenerName:
                                                 thread['listener_name'],
+                                            listenerPhotoUrl: thread['photo_url'],
                                           ),
                                           barrierColor: bg,
                                         ),

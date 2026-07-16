@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart' as ls;
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -114,6 +115,7 @@ class UserHomeScreen extends StatefulWidget {
 class _UserHomeScreenState extends State<UserHomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   String _profileName = '';
+  String? _profilePhotoUrl;
   int _profileCoins = 0;
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
@@ -197,7 +199,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     super.dispose();
   }
 
-    Future<void> _load({bool silent = false}) async {
+  Future<void> _load({bool silent = false}) async {
     final isFirstLoad = _listeners.isEmpty;
     if (!silent && isFirstLoad) {
       setState(() {
@@ -210,15 +212,18 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       final listeners = await _repository.getListeners(token!);
       final me = await _repository.getMe(token);
       final newName = me['name'] ?? '';
+      final newPhoto = me['photo_url'];
       final newCoins = me['coins'] ?? 0;
       final changed = dataChanged(_listeners, listeners) ||
           _profileName != newName ||
+          _profilePhotoUrl != newPhoto ||
           _profileCoins != newCoins;
       if (mounted) {
         if (changed) {
           setState(() {
             _listeners = listeners;
             _profileName = newName;
+            _profilePhotoUrl = newPhoto;
             _profileCoins = newCoins;
             _loading = false;
           });
@@ -226,13 +231,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           setState(() => _loading = false);
         }
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          if (!silent) _error = e.toString().replaceFirst('Exception: ', '');
-          _loading = false;
-        });
-      }
+} catch (e) {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -247,13 +247,19 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         callType: video ? 'video' : 'audio',
       );
       if (!mounted) return;
-      final listenerName = _listeners.firstWhere(
+      final listener = _listeners.firstWhere(
         (l) => l['id'] == listenerId,
         orElse: () => {'name': 'Listener'},
-      )['name'];
-      Navigator.of(
-        context,
-      ).push(_callRoute(result['call_id'], listenerName, video, listenerId));
+      );
+      Navigator.of(context).push(
+        _callRoute(
+          result['call_id'],
+          listener['name'],
+          listener['photo_url'],
+          video,
+          listenerId,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -265,11 +271,12 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     }
   }
 
-  Route _callRoute(int callId, String listenerName, bool video, int listenerId) {
+ Route _callRoute(int callId, String listenerName, String? listenerPhotoUrl, bool video, int listenerId) {
     return PageRouteBuilder(
       pageBuilder: (_, __, ___) => CallScreen(
         callId: callId,
         otherPartyName: listenerName,
+        otherPartyPhotoUrl: listenerPhotoUrl,
         startWithVideo: video,
         listenerId: listenerId,
       ),
@@ -283,9 +290,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   void _openChat(Map<String, dynamic> listener) {
     Navigator.of(context).push(
       fadeRoute(
-        ChatHistoryScreen(
+ChatHistoryScreen(
           listenerId: listener['id'],
           listenerName: listener['name'],
+          listenerPhotoUrl: listener['photo_url'],
         ),
         barrierColor: _AppColors.bg,
       ),
@@ -325,9 +333,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Header — "LAILA NOW" brand (dummy menu icon, no action yet)
-  // -------------------------------------------------------------------------
   Widget _buildProfileDrawer() {
     return Drawer(
       backgroundColor: Colors.transparent,
@@ -372,11 +377,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     ),
                   ],
                 ),
-                child: const CircleAvatar(
-                  radius: 44,
-                  backgroundColor: Color(0xFF2A2A2A),
-                  child: Icon(Icons.person, color: Colors.white54, size: 44),
-                ),
+           child: AvatarImage(photoUrl: _profilePhotoUrl, radius: 44, iconSize: 44),
               ),
               const SizedBox(height: 12),
               Text(
@@ -690,11 +691,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                const CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Color(0xFF2A2A2A),
-                  child: Icon(Icons.person, color: Colors.white54, size: 28),
-                ),
+              AvatarImage(photoUrl: listener['photo_url'], radius: 28, iconSize: 28),
                 Positioned(
                   right: -2,
                   bottom: -2,

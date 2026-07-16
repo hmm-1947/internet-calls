@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -337,13 +338,11 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                             ),
                             leading: Stack(
                               children: [
-                                const CircleAvatar(
+                          AvatarImage(
+                                  photoUrl: thread['photo_url'],
                                   radius: 26,
-                                  backgroundColor: Color(0xFF2A3145),
-                                  child: Icon(
-                                    Icons.person,
-                                    color: Colors.white54,
-                                  ),
+                                  iconSize: 26,
+                                  backgroundColor: const Color(0xFF2A3145),
                                 ),
                                 if (thread['is_online'] == true)
                                   Positioned(
@@ -439,6 +438,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                                   ListenerChatHistoryScreen(
                                     userId: thread['user_id'],
                                     userName: thread['user_name'],
+                                    userPhotoUrl: thread['photo_url'],
                                   ),
                                   barrierColor: bg,
                                 ),

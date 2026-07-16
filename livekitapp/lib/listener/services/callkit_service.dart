@@ -15,12 +15,14 @@ class PendingCallNav {
   final int callId;
   final bool isVideo;
   final String callerName;
+  final String? callerPhotoUrl;
   PendingCallNav({
     required this.url,
     required this.token,
     required this.callId,
     this.isVideo = false,
     this.callerName = 'User',
+    this.callerPhotoUrl,
   });
 }
 
@@ -70,13 +72,14 @@ class CallkitService {
         FlutterCallkitIncoming.endAllCalls();
       }
 
-      if (event is CallEventActionCallAccept) {
+if (event is CallEventActionCallAccept) {
         final extra = event.callKitParams.extra;
         final callId = int.tryParse(extra?['call_id'] ?? '');
         final isVideo = extra?['call_type'] == 'video';
         final callerName = extra?['caller_name'] ?? 'User';
+        final callerPhotoUrl = extra?['caller_photo_url'] as String?;
         if (callId != null && _acceptingCallId != callId) {
-          _acceptCallFromSystem(callId, isVideo, callerName: callerName);
+          _acceptCallFromSystem(callId, isVideo, callerName: callerName, callerPhotoUrl: callerPhotoUrl);
         }
       }
 
@@ -117,6 +120,7 @@ class CallkitService {
         callId: activeCall['callId'],
         isVideo: activeCall['isVideo'] ?? false,
         callerName: activeCall['callerName'] ?? 'User',
+        callerPhotoUrl: activeCall['callerPhotoUrl'],
       );
       _navigateToCallScreen(nav);
     } else if (_acceptingCallId != null) {
@@ -165,6 +169,7 @@ class CallkitService {
     int callId,
     bool isVideo, {
     String callerName = 'User',
+    String? callerPhotoUrl,
   }) async {
     if (_acceptingCallId == callId) return;
     _acceptingCallId = callId;
@@ -182,6 +187,7 @@ class CallkitService {
         callId: callId,
         isVideo: result['call_type'] == 'video' ? true : isVideo,
         callerName: callerName,
+        callerPhotoUrl: callerPhotoUrl,
       );
       await localStorage.saveActiveCall(
         callId,
@@ -189,6 +195,7 @@ class CallkitService {
         nav.token,
         isVideo: nav.isVideo,
         callerName: callerName,
+        callerPhotoUrl: callerPhotoUrl,
       );
       _pendingCallNav = nav;
       if (navigatorKey.currentState != null) {
@@ -200,7 +207,7 @@ class CallkitService {
     }
   }
 
-  Route _callRoute(PendingCallNav nav) {
+Route _callRoute(PendingCallNav nav) {
     return PageRouteBuilder(
       pageBuilder: (_, __, ___) => ListenerCallScreen(
         url: nav.url,
@@ -208,6 +215,7 @@ class CallkitService {
         callId: nav.callId,
         isVideo: nav.isVideo,
         otherPartyName: nav.callerName,
+        otherPartyPhotoUrl: nav.callerPhotoUrl,
       ),
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
@@ -312,6 +320,7 @@ class CallkitService {
     _lastShownCallId = callId.toString();
     final callerName = data['caller_name'] ?? 'Unknown';
     final callType = data['call_type'] ?? 'audio';
+    final callerPhotoUrl = data['caller_photo_url'] ?? '';
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
@@ -329,6 +338,7 @@ class CallkitService {
         'call_id': callId,
         'caller_name': callerName,
         'call_type': callType,
+        'caller_photo_url': callerPhotoUrl,
       },
       android: const AndroidParams(
         isCustomNotification: true,
@@ -345,7 +355,6 @@ class CallkitService {
       await FlutterCallkitIncoming.showCallkitIncoming(params);
     } catch (e) {}
   }
-
   Future<void> setCallConnected(String callId) async {
     try {
       await FlutterCallkitIncoming.setCallConnected(_callIdToUuid(callId));

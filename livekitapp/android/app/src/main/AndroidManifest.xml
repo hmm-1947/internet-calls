@@ -22,7 +22,7 @@
     <application
         android:label="livekitapp"
         android:usesCleartextTraffic="true"
-        android:name="${applicationName}"
+        android:name="com.example.livekitapp.MainApplication"
         android:icon="@mipmap/ic_launcher">
         <service
             android:name="com.hiennv.flutter_callkit_incoming.CallkitNotificationService"
@@ -62,6 +62,9 @@
         <action android:name="com.google.firebase.MESSAGING_EVENT" />
     </intent-filter>
 </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="chat_messages" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/api_client.dart';
+import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/shared/widgets/splash_screen.dart';
@@ -24,10 +26,88 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();
   }
+  await _cacheAndAckChatMessage(message);
+  await _cacheAndAckChatSummary(message);
+  await _applyStatusPush(message);
+}
+
+Future<void> _cacheAndAckChatSummary(RemoteMessage message) async {
+  if (message.data['type'] != 'chat_summary') return;
+  final listenerId = int.tryParse(message.data['listener_id'] ?? '');
+  if (listenerId == null) return;
+  final List<dynamic> items = jsonDecode(message.data['messages'] ?? '[]');
+  final ids = <int>[];
+  for (final item in items) {
+    final messageId = item['id'] is int ? item['id'] as int : int.tryParse('${item['id']}');
+    await ChatStorage().upsertMessage(
+      listenerId,
+      LocalChatMessage(
+        id: messageId,
+        clientId: item['client_id'] ?? '',
+        otherId: listenerId,
+        senderType: message.data['sender_type'] ?? 'listener',
+        message: item['message'] ?? '',
+        status: 'sent',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+    if (messageId != null) ids.add(messageId);
+  }
+  if (ids.isEmpty) return;
+  final token = await LocalStorage().getToken();
+  if (token == null) return;
+  try {
+    await UserRepository().markMessagesDelivered(token, ids);
+    await ChatStorage().updateStatusByServerIds(ids, 'delivered');
+  } catch (_) {}
+}
+
+Future<void> _applyStatusPush(RemoteMessage message) async {
+  if (message.data['type'] != 'message_status_bulk') return;
+  final ids = (message.data['ids'] ?? '')
+      .split(',')
+      .where((s) => s.isNotEmpty)
+      .map(int.parse)
+      .toList();
+  final status = message.data['status'] ?? 'delivered';
+  if (ids.isEmpty) return;
+  await ChatStorage().updateStatusByServerIds(ids, status);
+}
+
+Future<void> _cacheAndAckChatMessage(RemoteMessage message) async {
+  if (message.data['type'] != 'chat_message') return;
+  final listenerId = int.tryParse(message.data['listener_id'] ?? '');
+  final messageId = int.tryParse(message.data['id'] ?? '');
+  if (listenerId == null) return;
+  await ChatStorage().upsertMessage(
+    listenerId,
+    LocalChatMessage(
+      id: messageId,
+      clientId: message.data['client_id'] ?? '',
+      otherId: listenerId,
+      senderType: message.data['sender_type'] ?? 'listener',
+      message: message.data['message'] ?? '',
+      status: 'sent',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    ),
+  );
+  if (messageId == null) return;
+  final token = await LocalStorage().getToken();
+  if (token == null) return;
+  try {
+    await UserRepository().markMessagesDelivered(token, [messageId]);
+    await ChatStorage().updateStatusByServerIds([messageId], 'delivered');
+  } catch (_) {}
 }
 
 void _handleChatMessage(RemoteMessage message) {
-  if (message.data['type'] != 'chat_message') return;
+  if (message.data['type'] == 'chat_message') {
+    _cacheAndAckChatMessage(message);
+  } else if (message.data['type'] == 'chat_summary') {
+    _cacheAndAckChatSummary(message);
+  } else if (message.data['type'] == 'message_status_bulk') {
+    _applyStatusPush(message);
+  }
 }
 
 void main() async {

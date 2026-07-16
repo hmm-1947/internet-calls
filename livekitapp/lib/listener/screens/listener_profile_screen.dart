@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
@@ -72,7 +75,9 @@ class ListenerProfileScreen extends StatefulWidget {
 class ListenerProfileScreenState extends State<ListenerProfileScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
-  String _name = '';
+String _name = '';
+  String? _photoUrl;
+  bool _uploadingPhoto = false;
   String _about = '';
   List<String> _tags = [];
   List<String> _languages = [];
@@ -109,8 +114,9 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!);
-      final newSnapshot = {
+final newSnapshot = {
         'name': data['name'] ?? '',
+        'photo_url': data['photo_url'],
         'about': data['about'] ?? '',
         'tags': List<String>.from(data['tags'] ?? []),
         'languages': List<String>.from(data['languages'] ?? []),
@@ -118,8 +124,9 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
         'rating_count': data['rating_count'] ?? 0,
         'created_at': data['created_at'],
       };
-      final oldSnapshot = {
+final oldSnapshot = {
         'name': _name,
+        'photo_url': _photoUrl,
         'about': _about,
         'tags': _tags,
         'languages': _languages,
@@ -129,7 +136,8 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
       };
       if (dataChanged(oldSnapshot, newSnapshot)) {
         setState(() {
-          _name = newSnapshot['name'] as String;
+  _name = newSnapshot['name'] as String;
+          _photoUrl = newSnapshot['photo_url'] as String?;
           _about = newSnapshot['about'] as String;
           _tags = newSnapshot['tags'] as List<String>;
           _languages = newSnapshot['languages'] as List<String>;
@@ -152,7 +160,29 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
     _editLanguages = List.from(_languages);
     setState(() => _editing = true);
   }
-
+Future<void> _pickAndUploadPhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1024,
+    );
+    if (picked == null) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      final token = await _localStorage.getToken();
+      final result = await _repository.updatePhoto(token!, picked.path);
+      ListenerDataCache().invalidateMe();
+      if (mounted) setState(() => _photoUrl = result['photo_url']);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
   void _cancelEditing() {
     setState(() => _editing = false);
   }
@@ -303,47 +333,58 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                 children: [
                   Center(
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 96,
-                          height: 96,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _AppColors.brandRed,
-                              width: 2,
-                            ),
-                          ),
-                          child: const CircleAvatar(
-                            radius: 44,
-                            backgroundColor: Color(0xFF2A2A2A),
-                            child: Icon(
-                              Icons.person,
-                              color: Colors.white54,
-                              size: 44,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          right: 2,
-                          bottom: 4,
-                          child: Container(
-                            width: 16,
-                            height: 16,
+                    child: GestureDetector(
+                      onTap: _editing && !_uploadingPhoto ? _pickAndUploadPhoto : null,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 96,
+                            height: 96,
+                            alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: _AppColors.online,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: _AppColors.bg,
+                                color: _AppColors.brandRed,
                                 width: 2,
                               ),
                             ),
+                            child: _uploadingPhoto
+                                ? const CircularProgressIndicator()
+                                : AvatarImage(photoUrl: _photoUrl, radius: 44, iconSize: 44),
                           ),
-                        ),
-                      ],
+                          Positioned(
+                            right: 2,
+                            bottom: 4,
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: _AppColors.online,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _AppColors.bg,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_editing)
+                            Positioned(
+                              right: -4,
+                              top: -4,
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: const BoxDecoration(
+                                  color: _AppColors.brandRed,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),

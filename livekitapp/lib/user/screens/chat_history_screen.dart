@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/voice_recording_indicator.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
@@ -13,18 +14,20 @@ import 'package:livekitapp/common/widgets/voice_message_bubble.dart';
 class ChatHistoryScreen extends StatefulWidget {
   final int listenerId;
   final String listenerName;
+  final String? listenerPhotoUrl;
 
   const ChatHistoryScreen({
     super.key,
     required this.listenerId,
     required this.listenerName,
+    this.listenerPhotoUrl,
   });
 
   @override
   State<ChatHistoryScreen> createState() => _ChatHistoryScreenState();
 }
 
-class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
+class _ChatHistoryScreenState extends State<ChatHistoryScreen> with WidgetsBindingObserver {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   final _chatStorage = ChatStorage();
@@ -44,15 +47,28 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   int _profileCoins = 0;
   int _chatMessageCoinCost = 0;
   bool _coinsLoaded = false;
-  Timer? _typingStopTimer;
+Timer? _typingStopTimer;
   Timer? _typingSendTimer;
+  bool _isNearBottom = true;
+  bool _showScrollToBottom = false;
+  double _lastBottomInset = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
   }
 
+  @override
+  void didChangeMetrics() {
+    final bottomInset = WidgetsBinding.instance.platformDispatcher.views.first.viewInsets.bottom;
+    final keyboardOpened = bottomInset > _lastBottomInset;
+    _lastBottomInset = bottomInset;
+    if (keyboardOpened && _isNearBottom) {
+      _scrollToBottom();
+    }
+  }
   Future<void> _init() async {
     _token = await _localStorage.getToken();
     await _load();
@@ -62,7 +78,23 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     ChatSocketService().connect(_token!, 'user');
     _socketSub = ChatSocketService().stream.listen(_onSocketMessage);
     _controller.addListener(_onTyping);
+    _scrollController.addListener(_onScroll);
     await _flushPending();
+  }
+
+void _onScroll() {
+    if (_scrollController.position.pixels <= 100) {
+      _loadOlder();
+    }
+    if (!_scrollController.hasClients) return;
+    final distanceFromBottom = _scrollController.position.maxScrollExtent - _scrollController.position.pixels;
+    final nearBottom = distanceFromBottom < 150;
+    if (nearBottom != _isNearBottom || (!nearBottom) != _showScrollToBottom) {
+      setState(() {
+        _isNearBottom = nearBottom;
+        _showScrollToBottom = !nearBottom;
+      });
+    }
   }
 
   Future<void> _loadCoins() async {
@@ -179,8 +211,15 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     if (type == 'chat_message' && data['listener_id'] == widget.listenerId) {
       setState(() => _messages.add(data));
       _scrollToBottom();
+      _chatStorage.upsertMessage(
+        widget.listenerId,
+        LocalChatMessage.fromJson(data, widget.listenerId),
+      );
       if (data['sender_type'] == 'listener' && _token != null) {
         _repository.markMessagesRead(_token!, widget.listenerId);
+        if (data['id'] != null) {
+          _repository.markMessagesDelivered(_token!, [data['id'] as int]);
+        }
       }
     } else if (type == 'typing' && data['listener_id'] == widget.listenerId) {
       setState(() => _listenerTyping = data['is_typing'] == true);
@@ -194,6 +233,17 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         );
         if (idx != -1) _messages[idx]['status'] = data['status'];
       });
+      if (data['client_id'] != null) {
+        _chatStorage.updateStatus(data['client_id'], data['status']);
+      }
+    } else if (type == 'message_status_bulk') {
+      final ids = List<int>.from(data['ids'] ?? []);
+      setState(() {
+        for (final m in _messages) {
+          if (ids.contains(m['id'])) m['status'] = data['status'];
+        }
+      });
+      _chatStorage.updateStatusByServerIds(ids, data['status']);
     } else if (type == 'read_receipt' &&
         data['listener_id'] == widget.listenerId) {
       setState(() {
@@ -205,6 +255,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
           }
         }
       });
+      _chatStorage.markReadUpTo(
+        widget.listenerId,
+        List<int>.from(data['message_ids'] ?? []),
+      );
     } else if (type == 'message_edited') {
       setState(() {
         final idx = _messages.indexWhere((m) => m['id'] == data['id']);
@@ -233,12 +287,30 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     });
   }
 
+  bool _hasMoreOlder = true;
+  bool _loadingOlder = false;
+
   Future<void> _load() async {
     if (_token == null) return;
+    final cached = await _chatStorage.getMessages(widget.listenerId);
+    if (cached.isNotEmpty && mounted) {
+      setState(() => _messages = cached.map((m) => m.toJson()).toList());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
+    }
     try {
       final messages = await _repository.getChatMessages(
         _token!,
         widget.listenerId,
+      );
+      await _chatStorage.saveMessages(
+        widget.listenerId,
+        messages
+            .map((m) => LocalChatMessage.fromJson(m, widget.listenerId))
+            .toList(),
       );
       if (mounted) {
         setState(() => _messages = messages);
@@ -250,7 +322,79 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
           }
         });
       }
+      await _ackDelivered(messages);
     } catch (_) {}
+  }
+
+  Future<void> _ackDelivered(List<Map<String, dynamic>> messages) async {
+    if (_token == null) return;
+    final ids = messages
+        .where((m) => m['sender_type'] == 'listener' && m['status'] == 'sent' && m['id'] != null)
+        .map<int>((m) => m['id'] as int)
+        .toList();
+    if (ids.isEmpty) return;
+    try {
+      await _repository.markMessagesDelivered(_token!, ids);
+      await _chatStorage.updateStatusByServerIds(ids, 'delivered');
+    } catch (_) {}
+  }
+
+  Future<void> _loadOlder() async {
+    if (_loadingOlder || !_hasMoreOlder || _token == null) return;
+    final oldestId = _messages
+        .map((m) => m['id'])
+        .whereType<int>()
+        .fold<int?>(null, (min, id) => min == null || id < min ? id : min);
+    if (oldestId == null) return;
+    _loadingOlder = true;
+    try {
+      final cachedOlder = await _chatStorage.getBeforePage(
+        widget.listenerId,
+        oldestId,
+      );
+      if (cachedOlder.isNotEmpty && mounted) {
+        final prevExtent = _scrollController.position.maxScrollExtent;
+        setState(() {
+          _messages = [
+            ...cachedOlder.map((m) => m.toJson()),
+            ..._messages,
+          ];
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            final newExtent = _scrollController.position.maxScrollExtent;
+            _scrollController.jumpTo(newExtent - prevExtent);
+          }
+        });
+        return;
+      }
+      final older = await _repository.getChatMessages(
+        _token!,
+        widget.listenerId,
+        beforeId: oldestId,
+      );
+      if (older.isEmpty) {
+        _hasMoreOlder = false;
+        return;
+      }
+      await _chatStorage.saveMessages(
+        widget.listenerId,
+        older.map((m) => LocalChatMessage.fromJson(m, widget.listenerId)).toList(),
+      );
+      if (mounted) {
+        final prevExtent = _scrollController.position.maxScrollExtent;
+        setState(() => _messages = [...older, ..._messages]);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            final newExtent = _scrollController.position.maxScrollExtent;
+            _scrollController.jumpTo(newExtent - prevExtent);
+          }
+        });
+      }
+    } catch (_) {
+    } finally {
+      _loadingOlder = false;
+    }
   }
 
   Future<void> _send() async {
@@ -335,14 +479,23 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
 
   Future<void> _retrySend(String clientId, String text) async {
     try {
-      await _repository.sendChatMessage(
+      final sent = await _repository.sendChatMessage(
         _token!,
         widget.listenerId,
         text,
         clientId: clientId,
       );
       await _chatStorage.removePending(clientId);
-      await _load();
+      if (mounted) {
+        setState(() {
+          final idx = _messages.indexWhere((m) => m['client_id'] == clientId);
+          if (idx != -1) _messages[idx] = sent;
+        });
+      }
+      await _chatStorage.upsertMessage(
+        widget.listenerId,
+        LocalChatMessage.fromJson(sent, widget.listenerId),
+      );
     } on InsufficientCoinsException {
       // A 402 is a permanent rejection, not a network failure.  Never put it
       // in the offline queue or schedule another attempt.
@@ -409,12 +562,14 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     return Icon(icon, size: 14, color: color);
   }
 
-  @override
+ @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _socketSub?.cancel();
     _typingStopTimer?.cancel();
     _typingSendTimer?.cancel();
     _controller.removeListener(_onTyping);
+    _scrollController.removeListener(_onScroll);
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -438,10 +593,11 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         ),
         title: Row(
           children: [
-            const CircleAvatar(
+      AvatarImage(
+              photoUrl: widget.listenerPhotoUrl,
               radius: 18,
-              backgroundColor: Color(0xFF2A3145),
-              child: Icon(Icons.person, color: Colors.white54),
+              iconSize: 18,
+              backgroundColor: const Color(0xFF2A3145),
             ),
             const SizedBox(width: 10),
             Column(
@@ -514,8 +670,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
           ),
         ],
       ),
-      body: Column(
+body: Stack(
         children: [
+          Column(
+            children: [
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -730,9 +888,28 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                       ],
                     ),
                   ),
-              ],
+         ],
             ),
           ),
+            ],
+          ),
+          if (_showScrollToBottom)
+            Positioned(
+              right: 16,
+              bottom: 90 + MediaQuery.of(context).padding.bottom,
+              child: FloatingActionButton(
+                mini: true,
+                backgroundColor: const Color(0xFF1F2430),
+                onPressed: () {
+                  _scrollToBottom();
+                  setState(() {
+                    _isNearBottom = true;
+                    _showScrollToBottom = false;
+                  });
+                },
+                child: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+              ),
+            ),
         ],
       ),
     );

@@ -10,8 +10,7 @@ class UserCallkitService {
     final padded = callId.padLeft(12, '0');
     return '00000000-0000-0000-0000-$padded';
   }
-
-  Future<void> startOutgoingCall(String callId, String calleeName) async {
+Future<void> startOutgoingCall(String callId, String calleeName, {String? calleePhotoUrl}) async {
     await Permission.microphone.request();
     final params = CallKitParams(
       id: _callIdToUuid(callId),
@@ -19,6 +18,7 @@ class UserCallkitService {
       appName: 'User App',
       handle: calleeName,
       type: 0,
+      avatar: calleePhotoUrl,
       extra: {'call_id': callId},
       android: const AndroidParams(
         isCustomNotification: true,
