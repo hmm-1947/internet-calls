@@ -188,9 +188,27 @@ class UserForgotPasswordReset(BaseModel):
     def password_strength(cls, v: str) -> str:
         return validate_password_strength(v)
 
+class UserChangePassword(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 class ListenerLogin(BaseModel):
     phone: str
     password: str
+
+class ListenerChangePassword(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 class ListenerCreate(BaseModel):
     name: str

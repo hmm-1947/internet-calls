@@ -9,7 +9,7 @@ from app.schemas.schemas import ListenerStatusUpdate
 from app.models.models import CallRating
 from sqlalchemy import func as sqlfunc
 from datetime import datetime, timedelta, timezone
-from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate, UserForgotPasswordRequestOtp, UserForgotPasswordVerifyOtp, UserForgotPasswordReset
+from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate, UserForgotPasswordRequestOtp, UserForgotPasswordVerifyOtp, UserForgotPasswordReset, UserChangePassword
 from app.core.database import get_db
 from app.models.models import User, Session as SessionModel, EmailOtp
 from app.utils.email_otp import generate_otp_code, send_otp_email
@@ -156,6 +156,17 @@ def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depend
     db.commit()
 
     return {"status": "password_reset"}
+
+
+@router.post("/change-password")
+def change_password(payload: UserChangePassword, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if verify_password(payload.new_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="New password must be different from your current password")
+    current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"status": "password_changed"}
 
 
 @router.get("/listeners")

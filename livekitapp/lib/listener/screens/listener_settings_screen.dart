@@ -7,6 +7,7 @@ import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
 import 'package:livekitapp/listener/screens/listener_wallet_screen.dart';
+import 'package:livekitapp/shared/screens/change_password_screen.dart';
 
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
@@ -211,7 +212,22 @@ Future<void> refresh() async {
             _SettingsTile(
               icon: Icons.lock_reset,
               title: 'Change Password',
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChangePasswordScreen(
+                      onSubmit: (current, next) async {
+                        final token = await _localStorage.getToken();
+                        await _repository.changePassword(
+                          token!,
+                          current,
+                          next,
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
           ]),
 

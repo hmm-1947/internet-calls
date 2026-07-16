@@ -110,6 +110,22 @@ class ListenerRepository {
     }
   }
 
+  Future<void> changePassword(
+    String token,
+    String currentPassword,
+    String newPassword,
+  ) async {
+    final response = await _apiClient.post(
+      ApiConstants.listenerChangePassword,
+      {'current_password': currentPassword, 'new_password': newPassword},
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to change password');
+    }
+  }
+
   Future<Map<String, dynamic>> acceptCall(String token, int callId) async {
     final res = await _apiClient.post(
       ApiConstants.callAccept(callId),
