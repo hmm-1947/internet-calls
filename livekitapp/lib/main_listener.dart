@@ -129,11 +129,24 @@ class _ListenerAppState extends State<ListenerApp> {
         chatMessageNotifier.value++;
       } else if (data['type'] == 'force_logout') {
         _forceLogout();
+      } else if (data['type'] == 'gift_received') {
+        _showGiftToast(data);
       }
     });
     _sessionSub = ApiClient.sessionInvalidated.listen((_) {
       _forceLogout();
     });
+  }
+
+  void _showGiftToast(Map<String, dynamic> data) {
+    final ctx = CallkitService.instance.navigatorKey.currentState?.overlay?.context;
+    if (ctx == null) return;
+    final giftName = data['gift_name'] ?? 'Gift';
+    final credited = data['credited_coins'] ?? 0;
+    final fromName = data['from_user_name'] ?? 'Someone';
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(content: Text('$fromName sent you a $giftName · +$credited coins')),
+    );
   }
 
   Future<void> _forceLogout() async {

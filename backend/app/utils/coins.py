@@ -48,10 +48,6 @@ async def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: 
     from app.core.ws_manager import manager
     await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
 
-    call = db.query(Call).filter(Call.id == call_id).first()
-    if call and call.callee_listener_id and amount > 0:
-        await _credit_listener(db, call.callee_listener_id, amount // 2, f"{call_type}_call", call_id)
-
     return amount
 
 async def deduct_chat_coins(db: Session, user: User, listener_id: int, message_id: int) -> int:
@@ -69,8 +65,6 @@ async def deduct_chat_coins(db: Session, user: User, listener_id: int, message_i
     db.commit()
     from app.core.ws_manager import manager
     await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
-
-    await _credit_listener(db, listener_id, cost // 2, "chat_message")
 
     return cost
 

@@ -11,13 +11,16 @@ import 'package:livekitapp/user/services/callkit_service.dart';
 import 'package:livekitapp/user/screens/call_summary_screen.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/user/widgets/gift_sheet.dart';
 import 'package:volume_controller/volume_controller.dart';
+
 
 class CallScreen extends StatefulWidget {
   final int callId;
   final bool startWithVideo;
   final String otherPartyName;
   final bool busy;
+  final int? listenerId;
 
   const CallScreen({
     super.key,
@@ -25,6 +28,7 @@ class CallScreen extends StatefulWidget {
     required this.otherPartyName,
     this.startWithVideo = false,
     this.busy = false,
+    this.listenerId,
   });
 
   @override
@@ -316,7 +320,19 @@ class _CallScreenState extends State<CallScreen> {
     }
   }
 
+  Future<void> _openGiftSheet() async {
+    if (widget.listenerId == null) return;
+    await showGiftSheet(
+      context,
+      listenerId: widget.listenerId!,
+      callId: widget.callId,
+      fromTop: false,
+    );
+  }
+
   Future<void> _startCoinTimer() async {
+
+
     try {
       final token = await _localStorage.getToken();
       if (token == null) return;
@@ -556,7 +572,7 @@ class _CallScreenState extends State<CallScreen> {
                 CallActionButton(
                   icon: Icons.card_giftcard,
                   label: 'Gift',
-                  onTap: () {},
+                  onTap: _openGiftSheet,
                 ),
                 CallActionButton(
                   icon: Icons.more_horiz,
@@ -741,3 +757,4 @@ class _CallScreenState extends State<CallScreen> {
 }
 
 enum _CallPhase { ringing, connecting, connected }
+

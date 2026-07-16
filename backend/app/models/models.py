@@ -172,7 +172,28 @@ class ListenerCoinTransaction(Base):
     call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class Gift(Base):
+    __tablename__ = "gifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    coins = Column(Integer, nullable=False)
+    icon = Column(String, nullable=True)
+
+class GiftTransaction(Base):
+    __tablename__ = "gift_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False)
+    gift_id = Column(Integer, ForeignKey("gifts.id"), nullable=False)
+    coins = Column(Integer, nullable=False)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    notified = Column(Boolean, nullable=False, server_default="false")
+
 class CallRating(Base):
+
     __tablename__ = "call_ratings"
 
     id = Column(Integer, primary_key=True, index=True)

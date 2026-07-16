@@ -253,7 +253,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       )['name'];
       Navigator.of(
         context,
-      ).push(_callRoute(result['call_id'], listenerName, video));
+      ).push(_callRoute(result['call_id'], listenerName, video, listenerId));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -265,12 +265,13 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     }
   }
 
-  Route _callRoute(int callId, String listenerName, bool video) {
+  Route _callRoute(int callId, String listenerName, bool video, int listenerId) {
     return PageRouteBuilder(
       pageBuilder: (_, __, ___) => CallScreen(
         callId: callId,
         otherPartyName: listenerName,
         startWithVideo: video,
+        listenerId: listenerId,
       ),
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
@@ -670,7 +671,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   Widget _buildProfileCard(Map<String, dynamic> listener) {
     final bool isOnline = listener['is_online'] == true;
     final bool isCalling = _callingListenerId == listener['id'];
-    final bool canAct = isOnline && _callingListenerId == null;
+    final bool canAct = _callingListenerId == null;
     final tags = List<String>.from(listener['tags'] ?? const []);
 
     return GestureDetector(

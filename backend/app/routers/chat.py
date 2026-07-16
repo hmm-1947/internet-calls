@@ -1,4 +1,5 @@
 #chat.py
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Form
 import os
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_listener
-from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings
+from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins
@@ -475,7 +476,11 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
     await manager.broadcast_to_all_listeners({"type": "user_online", "user_id": user_id})
     try:
         while True:
-            raw = await websocket.receive_json()
+            try:
+                raw = await asyncio.wait_for(websocket.receive_json(), timeout=15)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+                continue
             await _handle_user_ws_event(raw, user_id, db)
     except Exception:
         manager.disconnect_user(user_id, websocket)
@@ -516,9 +521,29 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
     user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
     for uid in manager.get_online_user_ids(user_ids):
         await manager.send_to_user(uid, {"type": "listener_online", "listener_id": listener_id})
+
+    pending_gifts = db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id, GiftTransaction.notified == False).order_by(GiftTransaction.created_at.asc()).all()
+    for gt in pending_gifts:
+        gift_row = db.query(Gift).filter(Gift.id == gt.gift_id).first()
+        sender = db.query(User).filter(User.id == gt.user_id).first()
+        await manager.send_to_listener(listener_id, {
+            "type": "gift_received",
+            "gift_name": gift_row.name if gift_row else "",
+            "coins": gt.coins,
+            "credited_coins": gt.coins // 2,
+            "from_user_id": gt.user_id,
+            "from_user_name": sender.name if sender else "",
+        })
+        gt.notified = True
+    if pending_gifts:
+        db.commit()
     try:
         while True:
-            raw = await websocket.receive_json()
+            try:
+                raw = await asyncio.wait_for(websocket.receive_json(), timeout=15)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+                continue
             await _handle_listener_ws_event(raw, listener_id, db)
     except Exception:
         manager.disconnect_listener(listener_id, websocket)
@@ -535,6 +560,8 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
         user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
         for uid in user_ids:
             await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
+
+
 
 async def _handle_listener_ws_event(raw: dict, listener_id: int, db: Session):
     etype = raw.get("type")

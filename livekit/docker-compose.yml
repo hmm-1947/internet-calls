@@ -1,0 +1,30 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "3478:3478/udp"
+      - "52000-52100:52000-52100/udp"
+      - "30000-30100:30000-30100/udp"
+    volumes:
+      - ./livekit.yaml:/livekit.yaml:ro
+    command: --config /livekit.yaml
+    depends_on:
+      - redis
+
+  egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    volumes:
+      - ./egress.yaml:/egress.yaml:ro
+    environment:
+      EGRESS_CONFIG_FILE: /egress.yaml
+    depends_on:
+      - redis
+      - livekit

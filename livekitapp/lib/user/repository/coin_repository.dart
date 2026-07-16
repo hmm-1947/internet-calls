@@ -28,4 +28,35 @@ class CoinRepository {
   Future<void> reportCoinExceeded(String token, int callId) async {
     await _apiClient.post('/call/$callId/coin-exceeded', {}, token: token);
   }
+
+  Future<List<Map<String, dynamic>>> getGiftCatalog(String token) async {
+    final response = await _apiClient.get('/gift/catalog', token: token);
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load gifts');
+    }
+    return List<Map<String, dynamic>>.from(data);
+  }
+
+  Future<Map<String, dynamic>> sendGift(
+    String token, {
+    required int listenerId,
+    required int giftId,
+    int? callId,
+  }) async {
+    final response = await _apiClient.post(
+      '/gift/send',
+      {
+        'listener_id': listenerId,
+        'gift_id': giftId,
+        if (callId != null) 'call_id': callId,
+      },
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to send gift');
+    }
+    return data;
+  }
 }

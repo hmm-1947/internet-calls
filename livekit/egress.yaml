@@ -1,0 +1,10 @@
+api_key: devkey
+api_secret: 9wQ8dT4mL2pX7kNs5VbR1cHy6ZjEaUfM
+
+ws_url: ws://livekit:7880
+
+redis:
+  address: redis:6379
+
+file_output:
+  output_type: OGG

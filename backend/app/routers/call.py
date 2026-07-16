@@ -31,8 +31,6 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
     listener = db.query(Listener).filter(Listener.id == payload.listener_id).first()
     if not listener or not listener.is_active:
         raise HTTPException(status_code=404, detail="Listener not found")
-    if not manager.is_listener_online(listener.id):
-        raise HTTPException(status_code=400, detail="Listener not online")
     call_type = payload.call_type if payload.call_type in ("audio", "video") else "audio"
     per_minute = coins_per_minute(db, call_type)
     if current_user.coins < per_minute:

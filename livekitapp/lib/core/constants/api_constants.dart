@@ -70,6 +70,9 @@ class ApiConstants {
   static const String userMe = '/user/me';
   static const String userBio = '/user/bio';
 
+  static const String giftCatalog = '/gift/catalog';
+  static const String giftSend = '/gift/send';
+
   static const String listenerNoteSave = '/listener/notes';
   static String listenerNoteByCall(int callId) => '/listener/notes/by-call/$callId';
   static String listenerNoteByUser(int userId) => '/listener/notes/by-user/$userId';

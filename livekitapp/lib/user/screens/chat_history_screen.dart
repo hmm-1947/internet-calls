@@ -5,6 +5,7 @@ import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/user/widgets/gift_sheet.dart';
 import 'package:uuid/uuid.dart';
 import 'package:livekitapp/common/widgets/voice_record_button.dart';
 import 'package:livekitapp/common/widgets/voice_message_bubble.dart';
@@ -469,6 +470,14 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.card_giftcard, color: Colors.white),
+            onPressed: () => showGiftSheet(
+              context,
+              listenerId: widget.listenerId,
+              fromTop: true,
+            ),
+          ),
           IconButton(
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,

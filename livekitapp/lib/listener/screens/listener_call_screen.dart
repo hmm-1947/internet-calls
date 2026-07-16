@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
+import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -50,12 +51,27 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
   bool _remoteVideoMuted = false;
   Timer? _durationTimer;
   int _callDurationSeconds = 0;
+  StreamSubscription? _giftSub;
 
   @override
   void initState() {
     super.initState();
     _connect();
     _listenForSignals();
+    _listenForGifts();
+  }
+
+  void _listenForGifts() {
+    _giftSub = ChatSocketService().stream.listen((data) {
+      if (data['type'] != 'gift_received') return;
+      if (!mounted) return;
+      final giftName = data['gift_name'] ?? 'Gift';
+      final credited = data['credited_coins'] ?? 0;
+      final fromName = data['from_user_name'] ?? widget.otherPartyName;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$fromName sent you a $giftName · +$credited coins')),
+      );
+    });
   }
 
   void _listenForSignals() {
@@ -319,6 +335,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
       ).invokeMethod('hideOverLockscreen');
     } catch (_) {}
     _fcmSubscription?.cancel();
+    _giftSub?.cancel();
     _roomListener?.dispose();
     _room?.disconnect();
     _durationTimer?.cancel();

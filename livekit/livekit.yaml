@@ -1,0 +1,41 @@
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 52000
+  port_range_end: 52100
+  use_external_ip: false
+  node_ip: 192.168.44.87
+  turn_servers:
+    - host: global.relay.metered.ca
+      port: 80
+      protocol: udp
+      username: ef0c9c93e9200df0ff93e4a0
+      credential: rZKQllGSj+d4dzyV
+    - host: global.relay.metered.ca
+      port: 443
+      protocol: tls
+      username: ef0c9c93e9200df0ff93e4a0
+      credential: rZKQllGSj+d4dzyV
+
+turn:
+  enabled: true
+  udp_port: 3478
+  relay_range_start: 30000
+  relay_range_end: 30100
+
+keys:
+  devkey: 9wQ8dT4mL2pX7kNs5VbR1cHy6ZjEaUfM
+
+logging:
+  level: info
+  pion_level: error
+  json: false
+
+redis:
+  address: redis:6379
+
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:8005/call/livekit/webhook
