@@ -17,6 +17,24 @@ class BillingRepository {
     return List<Map<String, dynamic>>.from(data);
   }
 
+  /// Returns the admin-configured banner image shown at the top of the
+  /// Upgrade screen, or null if no banner has been uploaded yet.
+  Future<String?> getUpgradeBannerUrl() async {
+    final response = await _apiClient.get(ApiConstants.appUpgradeBanner);
+    if (response.statusCode != 200) return null;
+    final data = jsonDecode(response.body);
+    return data['upgrade_banner_url'] as String?;
+  }
+
+  /// Returns the admin-configured Special Offers images shown on the
+  /// user's home screen, ordered by sort_order.
+  Future<List<Map<String, dynamic>>> getSpecialOffers() async {
+    final response = await _apiClient.get(ApiConstants.specialOffers);
+    if (response.statusCode != 200) return [];
+    final data = jsonDecode(response.body);
+    return List<Map<String, dynamic>>.from(data);
+  }
+
   /// Creates a Razorpay order on the backend for the given plan.
   /// Returns order details (order_id, amount, currency, key_id, etc.) needed
   /// to open the Razorpay checkout - no coins are granted yet.

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:audio_session/audio_session.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -43,6 +44,8 @@ class _CallScreenState extends State<CallScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   AudioPlayer? _busyPlayer;
+  AudioPlayer? _ringingPlayer;
+  AudioPlayer? _missedPlayer;
   bool _isInPip = false;
   Room? _room;
   EventsListener<RoomEvent>? _roomListener;
@@ -82,11 +85,33 @@ class _CallScreenState extends State<CallScreen> {
     }
     _listenForSignals();
     _startRingingTimeout();
+    _startRingingTone();
     _requestMicAndStartCall();
   }
 
+  Future<void> _startRingingTone() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.speech());
+      await session.setActive(true);
+      _ringingPlayer = AudioPlayer();
+      await _ringingPlayer?.setAsset('assets/audio/ringing_tone.mp3');
+      await _ringingPlayer?.setLoopMode(LoopMode.one);
+      await _ringingPlayer?.setVolume(1.0);
+      await _ringingPlayer?.play();
+    } catch (_) {}
+  }
+
+
+  Future<void> _stopRingingTone() async {
+    try {
+      await _ringingPlayer?.stop();
+      await _ringingPlayer?.dispose();
+    } catch (_) {}
+    _ringingPlayer = null;
+  }
+
 Future<void> _requestMicAndStartCall() async {
-    await Permission.microphone.request();
     UserCallkitService.instance.startOutgoingCall(
       widget.callId.toString(),
       widget.otherPartyName,
@@ -157,20 +182,52 @@ Future<void> _requestMicAndStartCall() async {
       _onCallEnded(rejected: true);
     } else if (type == 'call_ended') {
       _onCallEnded();
+    } else if (type == 'call_missed') {
+      _onCallMissed();
     }
   }
 
   void _startRingingTimeout() {
-    _ringingTimer = Timer(const Duration(seconds: 60), () {
+    _ringingTimer = Timer(const Duration(seconds: 30), () {
       if (_phase == _CallPhase.ringing) {
-        _hangUp();
+        _onCallMissed();
       }
     });
+  }
+
+  Future<void> _onCallMissed() async {
+    if (_isEnding) return;
+    _isEnding = true;
+    _stopRingingTone();
+    unawaited(_finishCallMissed());
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _finishCallMissed() async {
+    try {
+      final token = await _localStorage.getToken();
+      if (token != null) {
+        await _repository.timeoutCall(token, widget.callId);
+      }
+    } catch (_) {}
+    _roomListener?.dispose();
+    _roomListener = null;
+    _audioLevelTimer?.cancel();
+    _room?.disconnect();
+    await UserCallkitService.instance.endCall(widget.callId.toString());
+    PipService.instance.setCallActive(false);
+    try {
+      _missedPlayer = AudioPlayer();
+      await _missedPlayer?.setAsset('assets/audio/listener_no_response.mp3');
+      final player = _missedPlayer;
+      if (player != null) unawaited(player.play());
+    } catch (_) {}
   }
 
   /// Listener accepted — now connect to the LiveKit room.
   Future<void> _onCallAccepted(String url, String token) async {
     _ringingTimer?.cancel();
+    _stopRingingTone();
     if (!mounted || _isEnding) return;
     setState(() => _phase = _CallPhase.connecting);
     try {
@@ -398,6 +455,7 @@ Future<void> _requestMicAndStartCall() async {
   void _onCallEnded({bool rejected = false}) {
     if (!mounted || _isEnding) return;
     _isEnding = true;
+    _stopRingingTone();
     _coinTimer?.cancel();
     final wasConnected = _phase == _CallPhase.connected;
     _roomListener?.dispose();
@@ -428,6 +486,7 @@ Future<void> _requestMicAndStartCall() async {
   Future<void> _hangUp() async {
     if (_isEnding) return;
     _isEnding = true;
+    _stopRingingTone();
     _coinTimer?.cancel();
     final wasConnected = _phase == _CallPhase.connected;
     try {
@@ -475,6 +534,8 @@ Future<void> _requestMicAndStartCall() async {
     _room?.disconnect();
     _durationTimer?.cancel();
     _busyPlayer?.dispose();
+    _ringingPlayer?.dispose();
+    _missedPlayer?.dispose();
     UserCallkitService.instance.endCall(widget.callId.toString());
     PipService.instance.onPipModeChanged = null;
     PipService.instance.onUserLeaveHint = null;

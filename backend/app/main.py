@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
-from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing
+from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing, app_settings, special_offers
 from fastapi.staticfiles import StaticFiles
 from app.core.database import SessionLocal
 from app.models.models import User, Listener
@@ -13,6 +13,10 @@ os.makedirs("recordings", exist_ok=True)
 os.makedirs("voice_notes", exist_ok=True)
 os.makedirs("profile_photos", exist_ok=True)
 os.makedirs("gift_icons", exist_ok=True)
+os.makedirs("ringtones", exist_ok=True)
+os.makedirs("upgrade_banners", exist_ok=True)
+os.makedirs("special_offers", exist_ok=True)
+
 
 app = FastAPI(title="Calling App Backend")
 
@@ -20,6 +24,10 @@ app.mount("/recordings", StaticFiles(directory=r"recordings"), name="recordings"
 app.mount("/voice_notes", StaticFiles(directory="voice_notes"), name="voice_notes")
 app.mount("/profile_photos", StaticFiles(directory="profile_photos"), name="profile_photos")
 app.mount("/gift_icons", StaticFiles(directory="gift_icons"), name="gift_icons")
+app.mount("/ringtones", StaticFiles(directory="ringtones"), name="ringtones")
+app.mount("/upgrade_banners", StaticFiles(directory="upgrade_banners"), name="upgrade_banners")
+app.mount("/special_offers", StaticFiles(directory="special_offers"), name="special_offers")
+
 app.mount("/panel", StaticFiles(directory="admin_panel", html=True), name="admin_panel")
 
 
@@ -40,6 +48,8 @@ app.include_router(chat.router)
 app.include_router(listener_notes.router)
 app.include_router(gift.router)
 app.include_router(billing.router)
+app.include_router(app_settings.router)
+app.include_router(special_offers.router)
 
 @app.get("/health")
 def health():

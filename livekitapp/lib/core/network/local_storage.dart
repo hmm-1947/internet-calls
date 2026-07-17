@@ -83,4 +83,14 @@ Future<Map<String, dynamic>?> getActiveCall() async {
     await _storage.delete(key: _activeCallNameKey);
     await _storage.delete(key: _activeCallPhotoKey);
   }
+
+  Future<void> setFlag(String key, bool value) async {
+    await _storage.write(key: 'flag_$key', value: value.toString());
+  }
+
+  Future<bool> getFlag(String key) async {
+    final value = await _storage.read(key: 'flag_$key');
+    return value == 'true';
+  }
 }
+

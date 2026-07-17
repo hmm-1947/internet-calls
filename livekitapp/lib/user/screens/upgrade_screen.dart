@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -32,6 +33,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   int _coins = 0;
   int? _selectedPlanId;
   bool _purchasing = false;
+  String? _bannerUrl;
 
   late final Razorpay _razorpay;
   String? _pendingOrderId;
@@ -94,9 +96,17 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       plans = [];
     }
 
+    String? bannerUrl;
+    try {
+      bannerUrl = await _billingRepository.getUpgradeBannerUrl();
+    } catch (_) {
+      bannerUrl = null;
+    }
+
     if (!mounted) return;
     setState(() {
       _coins = coins;
+      _bannerUrl = bannerUrl;
       _plans = plans;
       _selectedPlanId = plans.isNotEmpty
           ? (plans.firstWhere(
@@ -424,22 +434,45 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   }
 
   Widget _buildBanner() {
-    return Container(
-      height: 180,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: RadialGradient(
-          center: Alignment.center,
-          radius: 0.9,
-          colors: [
-            _AppColors.gold.withOpacity(0.35),
-            const Color(0xFF1A1410),
-          ],
-        ),
-        border: Border.all(color: _AppColors.cardBorder),
-      ),
-      child: const Center(
-        child: Icon(Icons.workspace_premium, color: _AppColors.gold, size: 72),
+    final url = ApiConstants.resolveMediaUrl(_bannerUrl);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 220),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(60),
+                boxShadow: [
+                  BoxShadow(
+                    color: _AppColors.brandRed.withOpacity(0.55),
+                    blurRadius: 60,
+                    spreadRadius: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          url.isEmpty
+              ? Icon(Icons.workspace_premium, color: _AppColors.gold, size: 72)
+              : ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220, maxWidth: 260,),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.workspace_premium,
+                        color: _AppColors.gold,
+                        size: 72,
+                      ),
+                    ),
+                  ),
+                ),
+        ],
       ),
     );
   }

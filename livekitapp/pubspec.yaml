@@ -46,6 +46,7 @@ dependencies:
   uuid: ^4.5.3
   record: ^7.1.1
   just_audio: ^0.10.6
+  audio_session: ^0.2.4
   path_provider: ^2.1.6
   vibration: ^3.2.0
   collection: ^1.19.1
@@ -83,6 +84,9 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/audio/busy_tone.mp3
+    - assets/audio/ringing_tone.mp3
+    - assets/audio/listener_no_response.mp3
+    - assets/audio/ringtone_default.mp3
     - assets/images/banner.png
     - assets/images/splash.png
     - .env

@@ -157,6 +157,16 @@ class CoinSettings(Base):
     voice_message_coins = Column(Integer, default=1, nullable=False)
 
 
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ringtone_url = Column(String, nullable=True)
+    ringtone_version = Column(Integer, default=0, nullable=False)
+    upgrade_banner_url = Column(String, nullable=True)
+
+
+
 class CoinTransaction(Base):
     __tablename__ = "coin_transactions"
 
@@ -196,6 +206,15 @@ class GiftTransaction(Base):
     call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     notified = Column(Boolean, nullable=False, server_default="false")
+
+class SpecialOffer(Base):
+    __tablename__ = "special_offers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_url = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, server_default="0")
+    is_active = Column(Boolean, nullable=False, server_default="true")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class CallRating(Base):
 

@@ -64,6 +64,8 @@ static const String listenerProfile = '/listener/profile';
 
   static String callCancel(int callId) => '/call/$callId/cancel';
 
+  static String callTimeout(int callId) => '/call/$callId/timeout';
+
   static String callCoinExceeded(int callId) => '/call/$callId/coin-exceeded';
 
   static const String userFcmToken = '/user/fcm-token';
@@ -93,6 +95,10 @@ static const String userBio = '/user/bio';
   static const String billingVerifyPayment = '/billing/verify-payment';
   static const String billingPaymentFailed = '/billing/payment-failed';
   static const String billingMyPurchases = '/billing/my-purchases';
+
+  static const String appRingtone = '/app-settings/ringtone';
+  static const String appUpgradeBanner = '/app-settings/upgrade-banner';
+  static const String specialOffers = '/special-offers';
 
 
   static String resolveMediaUrl(String? path) {

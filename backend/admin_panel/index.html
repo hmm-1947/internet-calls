@@ -932,6 +932,7 @@
       <div class="nav-item" id="navCoinSettings" onclick="switchPage('coinsettings')"><span class="nav-ic">&#9881;</span>Coin Settings</div>
       <div class="nav-item" id="navBilling" onclick="switchPage('billing')"><span class="nav-ic">&#128179;</span>Billing</div>
       <div class="nav-item" id="navGifts" onclick="switchPage('gifts')"><span class="nav-ic">&#127873;</span>Gifts</div>
+      <div class="nav-item" id="navSpecialOffers" onclick="switchPage('specialoffers')"><span class="nav-ic">&#127942;</span>Special Offers</div>
     </div>
     <div class="main-col">
       <div class="top-bar">
@@ -1095,9 +1096,28 @@
       <input id="voiceCoins" placeholder="e.g. 1" type="number">
       <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
     </div>
+
+    <div class="card">
+      <h2>Listener Ringtone</h2>
+      <p style="font-size:13px;color:var(--slate);margin:0 0 10px;">Upload an audio file to use as the incoming-call ringtone shown on the in-app incoming call screen. All listener devices will download and cache it automatically.</p>
+      <input type="file" id="ringtoneFile" accept="audio/*">
+      <div id="ringtoneCurrent" style="font-size:13px;color:var(--slate);margin:8px 0;"></div>
+      <button class="btn btn-leaf" onclick="uploadRingtone()">Upload Ringtone</button>
+      <div id="ringtoneMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
   </div>
 
   <div id="page-billing" style="display:none;">
+    <div class="card">
+      <h2>Upgrade Screen Banner</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:0;">This image is shown at the top of the Upgrade screen in the user app, replacing the default badge icon.</p>
+      <div id="upgradeBannerPreviewWrap" style="margin-bottom:10px;"></div>
+      <input type="file" id="upgradeBannerFile" accept="image/*">
+      <button class="btn btn-leaf" onclick="uploadUpgradeBanner()">Upload Banner</button>
+      <button class="btn btn-ghost" id="upgradeBannerRemoveBtn" style="display:none;" onclick="removeUpgradeBanner()">Remove Banner</button>
+      <div id="upgradeBannerMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+
     <div class="card">
       <h2 id="billingFormTitle">Add Coin Pack</h2>
       <input type="hidden" id="billingPlanId">
@@ -1175,6 +1195,26 @@
     <div class="card">
       <h2>Gifts</h2>
       <div id="giftsList"></div>
+    </div>
+  </div>
+
+  <div id="page-specialoffers" style="display:none;">
+    <div class="card">
+      <h2>Add Special Offer Image</h2>
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Offer image</label>
+      <input id="offerImageFile" type="file" accept="image/*">
+      <div id="offerImagePreviewWrap" style="display:none;margin:8px 0;">
+        <img id="offerImagePreview" src="" style="width:120px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
+      </div>
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Sort order</label>
+      <input id="offerSortOrder" placeholder="0" type="number" value="0">
+      <button class="btn btn-leaf" onclick="createSpecialOffer()">Upload Offer</button>
+      <div id="offerMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Special Offers</h2>
+      <div id="offersList"></div>
     </div>
   </div>
 
@@ -1394,10 +1434,13 @@
       document.getElementById('panelRoot').style.display = '';
       loadPeople();
       loadCoinSettings();
+      loadRingtoneSettings();
+      loadUpgradeBanner();
       loadBillingPlans();
       loadBillingAuditLog();
       loadBillingPurchases();
       loadGifts();
+      loadSpecialOffers();
       loadActiveCalls();
       loadStats();
       loadOverview();
@@ -1412,13 +1455,15 @@
       document.getElementById('page-coinsettings').style.display = page === 'coinsettings' ? '' : 'none';
       document.getElementById('page-billing').style.display = page === 'billing' ? '' : 'none';
       document.getElementById('page-gifts').style.display = page === 'gifts' ? '' : 'none';
+      document.getElementById('page-specialoffers').style.display = page === 'specialoffers' ? '' : 'none';
       document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
       document.getElementById('navUsers').classList.toggle('active', page === 'users');
       document.getElementById('navListeners').classList.toggle('active', page === 'listeners');
       document.getElementById('navCoinSettings').classList.toggle('active', page === 'coinsettings');
       document.getElementById('navBilling').classList.toggle('active', page === 'billing');
       document.getElementById('navGifts').classList.toggle('active', page === 'gifts');
-      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts' };
+      document.getElementById('navSpecialOffers').classList.toggle('active', page === 'specialoffers');
+      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers' };
       document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
       if (page === 'users') {
         loadUserAuditLog();
@@ -1679,6 +1724,115 @@
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg('✓ Coin settings saved', true);
       } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    async function loadRingtoneSettings() {
+      try {
+        const res = await fetch(API_URL + '/app-settings/ringtone');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        const el = document.getElementById('ringtoneCurrent');
+        el.textContent = data.ringtone_url
+          ? `Current ringtone: ${data.ringtone_url} (version ${data.ringtone_version})`
+          : 'No custom ringtone uploaded yet — using each device default.';
+      } catch (e) { }
+    }
+
+    async function loadUpgradeBanner() {
+      const wrap = document.getElementById('upgradeBannerPreviewWrap');
+      const removeBtn = document.getElementById('upgradeBannerRemoveBtn');
+      try {
+        const res = await fetch(API_URL + '/app-settings/upgrade-banner');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        if (data.upgrade_banner_url) {
+          wrap.innerHTML = `<img src="${API_URL}${data.upgrade_banner_url}" style="max-width:280px;max-height:140px;border-radius:10px;border:1px solid rgba(255,255,255,.14);">`;
+          removeBtn.style.display = '';
+        } else {
+          wrap.innerHTML = '<div class="empty-state">No banner uploaded yet — showing the default badge icon.</div>';
+          removeBtn.style.display = 'none';
+        }
+      } catch (e) { }
+    }
+
+    async function uploadUpgradeBanner() {
+      const fileInput = document.getElementById('upgradeBannerFile');
+      const file = fileInput.files[0];
+      const msgEl = document.getElementById('upgradeBannerMsg');
+      if (!file) {
+        msgEl.textContent = '✗ Please choose an image file first';
+        msgEl.style.color = '#e5534b';
+        return;
+      }
+      msgEl.textContent = 'Uploading…';
+      msgEl.style.color = '';
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(API_URL + '/app-settings/admin/upgrade-banner', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to upload banner');
+        msgEl.textContent = '✓ Banner updated';
+        msgEl.style.color = '#3ba55d';
+        fileInput.value = '';
+        loadUpgradeBanner();
+      } catch (e) {
+        msgEl.textContent = '✗ ' + e.message;
+        msgEl.style.color = '#e5534b';
+      }
+    }
+
+    async function removeUpgradeBanner() {
+      const msgEl = document.getElementById('upgradeBannerMsg');
+      try {
+        const res = await fetch(API_URL + '/app-settings/admin/upgrade-banner', {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to remove banner');
+        msgEl.textContent = '✓ Banner removed';
+        msgEl.style.color = '#3ba55d';
+        loadUpgradeBanner();
+      } catch (e) {
+        msgEl.textContent = '✗ ' + e.message;
+        msgEl.style.color = '#e5534b';
+      }
+    }
+
+    async function uploadRingtone() {
+      const fileInput = document.getElementById('ringtoneFile');
+      const file = fileInput.files[0];
+      const msgEl = document.getElementById('ringtoneMsg');
+      if (!file) {
+        msgEl.textContent = '✗ Please choose an audio file first';
+        msgEl.style.color = '#e5534b';
+        return;
+      }
+      msgEl.textContent = 'Uploading…';
+      msgEl.style.color = '';
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(API_URL + '/app-settings/admin/ringtone', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to upload ringtone');
+        msgEl.textContent = '✓ Ringtone updated — pushing to all listener devices';
+        msgEl.style.color = '#3ba55d';
+        fileInput.value = '';
+        loadRingtoneSettings();
+      } catch (e) {
+        msgEl.textContent = '✗ ' + e.message;
+        msgEl.style.color = '#e5534b';
+      }
     }
 
     const BILLING_ICON_LABELS = { coin: '🪙 Coin', diamond: '💎 Diamond', star: '⭐ Star' };
@@ -1948,6 +2102,126 @@
         if (!res.ok) throw new Error(data.detail || 'Failed to delete gift');
         loadGifts();
       } catch (e) { setGiftMsg('✗ ' + e.message, false); }
+    }
+
+    let offersCache = [];
+    let offerImageFileData = null;
+
+    document.getElementById('offerImageFile').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      offerImageFileData = file || null;
+      const wrap = document.getElementById('offerImagePreviewWrap');
+      const img = document.getElementById('offerImagePreview');
+      if (file) {
+        img.src = URL.createObjectURL(file);
+        wrap.style.display = '';
+      } else {
+        wrap.style.display = 'none';
+      }
+    });
+
+    function offerImageUrl(path) {
+      if (!path) return '';
+      return path.startsWith('http') ? path : API_URL + path;
+    }
+
+    async function loadSpecialOffers() {
+      const wrap = document.getElementById('offersList');
+      try {
+        const res = await fetch(API_URL + '/special-offers/admin/list', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load special offers');
+        offersCache = data;
+        renderSpecialOffers();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load special offers.</div>';
+      }
+    }
+
+    function renderSpecialOffers() {
+      const wrap = document.getElementById('offersList');
+      if (!offersCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No special offers yet. Add one above.</div>';
+        return;
+      }
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Image</th><th>Sort Order</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            ${offersCache.map(o => `
+              <tr>
+                <td><img src="${offerImageUrl(o.image_url)}" style="width:80px;height:56px;object-fit:cover;border-radius:8px;"></td>
+                <td>${o.sort_order}</td>
+                <td>${o.is_active ? 'Active' : 'Hidden'}</td>
+                <td style="white-space:nowrap;">
+                  <button class="btn btn-ghost" onclick="toggleSpecialOffer(${o.id}, ${!o.is_active})">${o.is_active ? 'Hide' : 'Show'}</button>
+                  <button class="btn btn-danger" onclick="deleteSpecialOffer(${o.id})">Delete</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function createSpecialOffer() {
+      const sortOrder = parseInt(document.getElementById('offerSortOrder').value) || 0;
+      if (!offerImageFileData) {
+        setOfferMsg('Please choose an image.', false);
+        return;
+      }
+      setOfferMsg('Uploading…', null);
+      try {
+        const formData = new FormData();
+        formData.append('image_file', offerImageFileData);
+        formData.append('sort_order', sortOrder);
+        const res = await fetch(API_URL + '/special-offers/admin/create', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to upload offer');
+        setOfferMsg('✓ Offer uploaded', true);
+        document.getElementById('offerImageFile').value = '';
+        document.getElementById('offerSortOrder').value = '0';
+        offerImageFileData = null;
+        document.getElementById('offerImagePreviewWrap').style.display = 'none';
+        loadSpecialOffers();
+      } catch (e) { setOfferMsg('✗ ' + e.message, false); }
+    }
+
+    async function toggleSpecialOffer(id, newActive) {
+      try {
+        const formData = new FormData();
+        formData.append('is_active', newActive);
+        const res = await fetch(`${API_URL}/special-offers/admin/${id}`, {
+          method: 'PUT',
+          headers: authHeaders(),
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to update offer');
+        loadSpecialOffers();
+      } catch (e) { setOfferMsg('✗ ' + e.message, false); }
+    }
+
+    async function deleteSpecialOffer(id) {
+      if (!confirm('Delete this special offer?')) return;
+      try {
+        const res = await fetch(`${API_URL}/special-offers/admin/${id}`, {
+          method: 'DELETE', headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to delete offer');
+        loadSpecialOffers();
+      } catch (e) { setOfferMsg('✗ ' + e.message, false); }
+    }
+
+    function setOfferMsg(text, ok) {
+      const el = document.getElementById('offerMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
     }
 
     const BILLING_AUDIT_ACTION_LABELS = { created: 'Added', updated: 'Updated', deleted: 'Deleted' };

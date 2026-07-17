@@ -5,6 +5,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart' as ls;
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
@@ -13,6 +14,7 @@ import 'package:livekitapp/shared/utils/fade_page_route.dart';
 import 'package:livekitapp/user/screens/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -105,6 +107,33 @@ class _DummyOfferCard extends StatelessWidget {
   }
 }
 
+class _SpecialOfferImageCard extends StatelessWidget {
+  final String imageUrl;
+
+  const _SpecialOfferImageCard({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageUrl.isEmpty
+          ? Container(color: _AppColors.cardBg)
+          : Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              errorBuilder: (context, error, stackTrace) =>
+                  Container(color: _AppColors.cardBg),
+            ),
+    );
+  }
+}
+
 class UserHomeScreen extends StatefulWidget {
   const UserHomeScreen({super.key});
 
@@ -118,6 +147,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   String? _profilePhotoUrl;
   int _profileCoins = 0;
   final _repository = UserRepository();
+  final _billingRepository = BillingRepository();
   final _localStorage = LocalStorage();
   bool _loading = true;
   String? _error;
@@ -132,6 +162,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   Timer? _offersAutoScrollTimer;
   int _offersCurrentPage = 0;
   static const int _offersCardCount = 2;
+  List<Map<String, dynamic>> _specialOffers = [];
 
   @override
   void initState() {
@@ -143,14 +174,25 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       (_) => _load(silent: true),
     );
     _offersAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!_offersController.hasClients) return;
-      _offersCurrentPage = (_offersCurrentPage + 1) % _offersCardCount;
+      if (!_offersController.hasClients || _specialOffers.isEmpty) return;
+      _offersCurrentPage = (_offersCurrentPage + 1) % _specialOffers.length;
       _offersController.animateToPage(
         _offersCurrentPage,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
     });
+    _loadSpecialOffers();
+  }
+
+  Future<void> _loadSpecialOffers() async {
+    try {
+      final offers = await _billingRepository.getSpecialOffers();
+      if (!mounted) return;
+      setState(() => _specialOffers = offers);
+    } catch (_) {
+      // Silently ignore - offers are optional decoration.
+    }
   }
 
   Future<void> _initSocket() async {
@@ -546,9 +588,11 @@ ChatHistoryScreen(
   }
 
   // -------------------------------------------------------------------------
-  // Special Offers carousel — dummy placeholder cards (no backend data yet)
+  // Special Offers carousel — admin-uploaded images, falls back to dummy
+  // placeholder cards when the admin hasn't uploaded any offers yet.
   // -------------------------------------------------------------------------
   Widget _buildDummyOffersSection() {
+    final hasRealOffers = _specialOffers.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -574,27 +618,56 @@ ChatHistoryScreen(
           height: 160,
           child: PageView(
             controller: _offersController,
-            onPageChanged: (index) => _offersCurrentPage = index,
-            children: [
-              const _DummyOfferCard(
-                badge: 'LIMITED TIME',
-                title: '50% Off First Call',
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)],
-                ),
-              ),
-              const _DummyOfferCard(
-                badge: 'NEW',
-                title: 'Free 5-min Trial',
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [_AppColors.brandRed, Color(0xFF681A19)],
-                ),
-              ),
-            ],
+            onPageChanged: (index) => setState(() => _offersCurrentPage = index),
+            children: hasRealOffers
+                ? _specialOffers
+                    .map((offer) => _SpecialOfferImageCard(
+                          imageUrl: ApiConstants.resolveMediaUrl(
+                            offer['image_url'] as String?,
+                          ),
+                        ))
+                    .toList()
+                : const [
+                    _DummyOfferCard(
+                      badge: 'LIMITED TIME',
+                      title: '50% Off First Call',
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)],
+                      ),
+                    ),
+                    _DummyOfferCard(
+                      badge: 'NEW',
+                      title: 'Free 5-min Trial',
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [_AppColors.brandRed, Color(0xFF681A19)],
+                      ),
+                    ),
+                  ],
           ),
         ),
+        if (hasRealOffers && _specialOffers.length > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_specialOffers.length, (index) {
+              final isActive = index == _offersCurrentPage;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: isActive ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? _AppColors.brandRed
+                      : _AppColors.textMuted.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
       ],
     );
   }

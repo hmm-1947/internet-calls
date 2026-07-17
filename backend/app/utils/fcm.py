@@ -101,6 +101,29 @@ def send_call_rejected(fcm_token: str, call_id: int):
         },
     )
 
+def send_call_missed(fcm_token: str, call_id: int):
+    """Notify the listener that they missed a call (did not respond in time)."""
+    _send_with_notification(
+        token=fcm_token,
+        data={
+            "type": "call_missed",
+            "call_id": str(call_id),
+        },
+        title="Missed Call",
+        body="You missed a call.",
+    )
+
+def send_ringtone_updated(fcm_token: str, ringtone_url: str, ringtone_version: int):
+    """Notify a listener that the admin changed the ringtone, so it can be re-downloaded and cached."""
+    _send_data_only(
+        token=fcm_token,
+        data={
+            "type": "ringtone_updated",
+            "ringtone_url": ringtone_url,
+            "ringtone_version": str(ringtone_version),
+        },
+    )
+
 def send_call_ended(fcm_token: str, call_id: int):
     """Notify a participant that the call has ended."""
     _send_data_only(

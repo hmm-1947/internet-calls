@@ -195,6 +195,18 @@ class UserRepository {
     }
   }
 
+  Future<void> timeoutCall(String token, int callId) async {
+    final response = await _apiClient.post(
+      ApiConstants.callTimeout(callId),
+      {},
+      token: token,
+    );
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to mark call as missed');
+    }
+  }
+
   Future<void> endCall(String token, int callId) async {
     final response = await _apiClient.post(
       ApiConstants.callEnd(callId),

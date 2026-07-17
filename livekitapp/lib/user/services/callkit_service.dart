@@ -27,7 +27,12 @@ Future<void> startOutgoingCall(String callId, String calleeName, {String? callee
         actionColor: '#E53950',
         incomingCallNotificationChannelName: 'Outgoing Call',
       ),
+      ios: const IOSParams(
+        ringtonePath: '',
+        configureAudioSession: false,
+      ),
     );
+
     try {
       await FlutterCallkitIncoming.startCall(params);
     } catch (e) {}

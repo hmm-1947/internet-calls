@@ -9,6 +9,7 @@ import 'package:livekitapp/listener/screens/listener_call_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+
 class PendingCallNav {
   final String url;
   final String token;
@@ -38,6 +39,27 @@ class CallkitService {
   PendingCallNav? _pendingCallNav;
   StreamSubscription? _eventSub;
 
+
+  Future<void> _playCustomRingtone() async {
+    try {
+      await const MethodChannel(
+        'livekitapp/ringtone',
+      ).invokeMethod('startNativeRingtone');
+    } catch (_) {}
+  }
+
+
+  Future<void> _stopCustomRingtone() async {
+    try {
+
+      await const MethodChannel(
+        'livekitapp/ringtone',
+      ).invokeMethod('stopNativeRingtone');
+    } catch (_) {}
+  }
+
+
+
   void init() {
     print('[Callkit] init called in UI Isolate');
     if (_eventSub != null) {
@@ -52,6 +74,7 @@ class CallkitService {
       print('[Callkit] event received: $event');
       if (event is CallEventActionCallEnded) {
         _lastShownCallId = null;
+        _stopCustomRingtone();
         if (_acceptingCallId != null || _pendingCallNav != null) {
           print(
             '[Callkit] CallEventActionCallEnded ignored — call already accepted/in progress',
@@ -69,8 +92,14 @@ class CallkitService {
 
       if (event is CallEventActionCallTimeout) {
         _lastShownCallId = null;
+        _stopCustomRingtone();
+        final callId = _uuidToCallId(event.id);
+        if (callId != null) {
+          _rejectCallFromSystem(callId);
+        }
         FlutterCallkitIncoming.endAllCalls();
       }
+
 
 if (event is CallEventActionCallAccept) {
         final extra = event.callKitParams.extra;
@@ -78,6 +107,7 @@ if (event is CallEventActionCallAccept) {
         final isVideo = extra?['call_type'] == 'video';
         final callerName = extra?['caller_name'] ?? 'User';
         final callerPhotoUrl = extra?['caller_photo_url'] as String?;
+        _stopCustomRingtone();
         if (callId != null && _acceptingCallId != callId) {
           _acceptCallFromSystem(callId, isVideo, callerName: callerName, callerPhotoUrl: callerPhotoUrl);
         }
@@ -87,16 +117,19 @@ if (event is CallEventActionCallAccept) {
         final extra = event.callKitParams.extra;
         final callId = int.tryParse(extra?['call_id'] ?? '');
         print('[Callkit] Decline event action parsed callId: $callId');
+        _stopCustomRingtone();
         if (callId != null) {
           _rejectCallFromSystem(callId);
         }
       }
+
     });
   }
 
   void dispose() {
     print('[Callkit] Service dispose called');
     _eventSub?.cancel();
+    _stopCustomRingtone();
   }
 
   Future<void> flushPendingNav() async {
@@ -264,6 +297,7 @@ Route _callRoute(PendingCallNav nav) {
     final uuid = _callIdToUuid(callId);
     print('[Callkit] handleCallCancelled: callId=$callId uuid=$uuid');
     _lastShownCallId = null;
+    _stopCustomRingtone();
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
@@ -271,6 +305,7 @@ Route _callRoute(PendingCallNav nav) {
     if (state != null && state.mounted) {
       print(
         '[Callkit] handleCallCancelled: navigatorState found, pushing home',
+
       );
       state.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const ListenerMainScreen()),
@@ -343,7 +378,8 @@ Route _callRoute(PendingCallNav nav) {
       android: const AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
-        ringtonePath: 'system_ringtone_default',
+        ringtonePath: 'silent_ring',
+
         backgroundColor: '#0B0F1A',
         actionColor: '#E53950',
         incomingCallNotificationChannelName: 'Incoming Call',
@@ -354,6 +390,7 @@ Route _callRoute(PendingCallNav nav) {
     try {
       await FlutterCallkitIncoming.showCallkitIncoming(params);
     } catch (e) {}
+    await _playCustomRingtone();
   }
   Future<void> setCallConnected(String callId) async {
     try {
@@ -366,14 +403,22 @@ Route _callRoute(PendingCallNav nav) {
     return '00000000-0000-0000-0000-$padded';
   }
 
+  int? _uuidToCallId(String uuid) {
+    final parts = uuid.split('-');
+    if (parts.length != 5) return null;
+    return int.tryParse(parts.last);
+  }
+
   Future<void> dismissCall(Map<String, dynamic> data) async {
     final callId = data['call_id']?.toString() ?? '';
 
     _rejectingCallId = int.tryParse(callId);
     _acceptingCallId = null;
     _lastShownCallId = null;
+    _stopCustomRingtone();
 
     await _forceEndCall(_callIdToUuid(callId));
+
 
     final state = navigatorKey.currentState;
     if (state != null && state.mounted) {
@@ -387,12 +432,14 @@ Route _callRoute(PendingCallNav nav) {
   Future<void> endCall(String callId) async {
     _acceptingCallId = null;
     _pendingCallNav = null;
+    _stopCustomRingtone();
     await FlutterCallkitIncoming.endCall(_callIdToUuid(callId));
   }
 
   Future<void> endAllCalls() async {
     _acceptingCallId = null;
     _pendingCallNav = null;
+    _stopCustomRingtone();
     await FlutterCallkitIncoming.endAllCalls();
   }
 }

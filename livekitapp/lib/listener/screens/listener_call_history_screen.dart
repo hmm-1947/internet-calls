@@ -20,17 +20,35 @@ String _fmtDuration(int seconds) {
 
 IconData _statusIcon(String status, String callType) {
   if (status == 'ended') {
-    return callType == 'video' ? Icons.videocam : Icons.call;
+    return Icons.call_received;
   }
   if (status == 'rejected') return Icons.call_end;
-  if (status == 'cancelled') return Icons.call_missed;
-  return Icons.call_missed_outgoing;
+  if (status == 'cancelled') return Icons.call_missed_outgoing;
+  if (status == 'missed') return Icons.call_missed;
+  return Icons.call_received;
 }
 
 Color _statusColor(String status, Color pink) {
   if (status == 'ended') return Colors.greenAccent;
-  if (status == 'rejected' || status == 'cancelled') return Colors.redAccent;
+  if (status == 'rejected' || status == 'cancelled' || status == 'missed') {
+    return Colors.redAccent;
+  }
   return pink;
+}
+
+String _statusLabel(String status) {
+  switch (status) {
+    case 'ended':
+      return 'Completed';
+    case 'rejected':
+      return 'Rejected';
+    case 'cancelled':
+      return 'Cancelled';
+    case 'missed':
+      return 'Missed';
+    default:
+      return status[0].toUpperCase() + status.substring(1);
+  }
 }
 
 class _CallFilterChip extends StatelessWidget {
@@ -204,18 +222,38 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                     call['other_party_photo_url'],
                   );
                   return ListTile(
-                    leading: CircleAvatar(
-                      radius: 24,
-                      backgroundColor: const Color(0xFF2A3145),
-                      backgroundImage: photoUrl.isNotEmpty
-                          ? NetworkImage(photoUrl)
-                          : null,
-                      child: photoUrl.isEmpty
-                          ? Icon(
-                              _statusIcon(status, callType),
-                              color: _statusColor(status, pink),
-                            )
-                          : null,
+                    leading: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: const Color(0xFF2A3145),
+                          backgroundImage: photoUrl.isNotEmpty
+                              ? NetworkImage(photoUrl)
+                              : null,
+                          child: photoUrl.isEmpty
+                              ? const Icon(Icons.person, color: Colors.white54)
+                              : null,
+                        ),
+                        Positioned(
+                          bottom: -2,
+                          right: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: bg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              callType == 'video'
+                                  ? Icons.videocam
+                                  : Icons.call,
+                              size: 12,
+                              color: pink,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     title: Text(
                       call['user_name'],
@@ -224,11 +262,21 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    subtitle: Text(
-                      status == 'ended'
-                          ? _fmtDuration(call['duration_seconds'])
-                          : status[0].toUpperCase() + status.substring(1),
-                      style: const TextStyle(color: dimText),
+                    subtitle: Row(
+                      children: [
+                        Icon(
+                          _statusIcon(status, callType),
+                          size: 14,
+                          color: _statusColor(status, pink),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          status == 'ended'
+                              ? _fmtDuration(call['duration_seconds'])
+                              : _statusLabel(status),
+                          style: const TextStyle(color: dimText),
+                        ),
+                      ],
                     ),
                     trailing: Text(
                       _fmtDateTime(call['created_at']),

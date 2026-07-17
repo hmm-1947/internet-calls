@@ -14,9 +14,12 @@ from app.core.deps import get_current_user, get_current_listener, get_current_pa
 from app.models.models import Listener, Call, User
 from app.schemas.schemas import CallInitiate
 from app.utils.livekit_token import generate_token
-from app.utils.fcm import send_call_notification, send_call_cancelled, send_call_rejected, send_call_accepted, send_call_ended, send_call_coin_exceeded
+from app.utils.fcm import send_call_notification, send_call_cancelled, send_call_rejected, send_call_accepted, send_call_ended, send_call_coin_exceeded, send_call_missed
 from app.models.models import CallRecording
 from app.utils.livekit_egress import start_recording, stop_recording
+from app.utils.livekit_room import delete_room_background
+
+
 from app.utils.coins import max_call_seconds, deduct_coins, coins_per_minute
 from app.schemas.schemas import CallInitiate
 from app.core.ws_manager import manager
@@ -78,7 +81,7 @@ def accept_call(call_id: int, db: Session = Depends(get_db), current_listener: L
     if call.status != "ringing":
         raise HTTPException(status_code=400, detail="Call has already been cancelled, ended, or accepted")
     if datetime.now(timezone.utc) - call.created_at.replace(tzinfo=timezone.utc) > RINGING_TIMEOUT:
-        call.status = "cancelled"
+        call.status = "missed"
         db.commit()
         raise HTTPException(status_code=408, detail="Call timed out")
     call.status = "accepted"
@@ -128,17 +131,19 @@ async def start_call_recording(call_id: int, db: Session = Depends(get_db), _=De
         return {"status": "failed"}
 
 @router.post("/{call_id}/reject")
-def reject_call(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+async def reject_call(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     call = db.query(Call).filter(Call.id == call_id, Call.callee_listener_id == current_listener.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    if call.status in ("rejected", "ended", "cancelled"):
+    if call.status in ("rejected", "ended", "cancelled", "missed"):
         return {"status": call.status}
     if call.status != "ringing":
         raise HTTPException(status_code=400, detail="Call is not in a rejectable state")
     call.status = "rejected"
     db.commit()
+    delete_room_background(call.room_name)
     user = db.query(User).filter(User.id == call.caller_user_id).first()
+
     if user and user.fcm_token:
         try:
             send_call_rejected(user.fcm_token, call_id)
@@ -150,24 +155,51 @@ def reject_call(call_id: int, db: Session = Depends(get_db), current_listener: L
     return {"status": "rejected"}
 
 @router.post("/{call_id}/cancel")
-def cancel_call(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def cancel_call(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    if call.status in ("rejected", "ended", "cancelled"):
+    if call.status in ("rejected", "ended", "cancelled", "missed"):
         return {"status": call.status}
     call.status = "cancelled"
     db.commit()
+    delete_room_background(call.room_name)
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     if listener and listener.fcm_token:
         try:
             send_call_cancelled(listener.fcm_token, call_id)
+
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of cancellation: {e}")
             if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
                 listener.fcm_token = None
                 db.commit()
     return {"status": "cancelled"}
+
+@router.post("/{call_id}/timeout")
+async def timeout_call(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Called by the caller's app when the listener has not responded within the ringing window.
+    Marks the call as missed (distinct from a user-initiated cancel or listener rejection)."""
+    call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    if call.status in ("rejected", "ended", "cancelled", "missed", "accepted"):
+        return {"status": call.status}
+    call.status = "missed"
+    db.commit()
+    delete_room_background(call.room_name)
+    listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
+    if listener and listener.fcm_token:
+        try:
+            send_call_missed(listener.fcm_token, call_id)
+
+        except Exception as e:
+            print(f"[FCM ERROR] Failed to notify listener {listener.id} of missed call: {e}")
+            if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
+                listener.fcm_token = None
+                db.commit()
+    return {"status": "missed"}
+
 
 @router.post("/{call_id}/end")
 async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_current_participant)):

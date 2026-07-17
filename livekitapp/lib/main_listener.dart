@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
@@ -14,6 +16,7 @@ import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
+import 'package:livekitapp/listener/services/ringtone_manager.dart';
 import 'package:livekitapp/shared/widgets/splash_screen.dart';
 
 /// Top-level function — runs in a separate isolate when the app is
@@ -177,6 +180,12 @@ Future<void> _handleMessage(RemoteMessage message) async {
     await CallkitService.instance.showIncomingCall(message.data);
   } else if (type == 'call_cancelled') {
     await CallkitService.instance.handleCallCancelled(message.data);
+  } else if (type == 'ringtone_updated') {
+    final url = message.data['ringtone_url'] ?? '';
+    final version = int.tryParse(message.data['ringtone_version'] ?? '') ?? 0;
+    if (url.isNotEmpty) {
+      await RingtoneManager.instance.handleRingtoneUpdated(url, version);
+    }
   }
 }
 
@@ -198,8 +207,10 @@ class _ListenerAppState extends State<ListenerApp> {
   void initState() {
     super.initState();
     CallkitService.instance.init();
+    RingtoneManager.instance.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallkitService.instance.flushPendingNav();
+      _maybePromptNotificationAccess();
     });
     _chatSub = ChatSocketService().stream.listen((data) {
       if (data['type'] == 'chat_message') {
@@ -213,6 +224,46 @@ class _ListenerAppState extends State<ListenerApp> {
     _sessionSub = ApiClient.sessionInvalidated.listen((_) {
       _forceLogout();
     });
+  }
+
+  Future<void> _maybePromptNotificationAccess() async {
+    const channel = MethodChannel('livekitapp/ringtone');
+    try {
+      final alreadyEnabled = await channel.invokeMethod<bool>(
+        'isNotificationListenerEnabled',
+      );
+      if (alreadyEnabled == true) return;
+      final localStorage = LocalStorage();
+      final alreadyAsked = await localStorage.getFlag(
+        'notification_access_prompted',
+      );
+      if (alreadyAsked) return;
+      await localStorage.setFlag('notification_access_prompted', true);
+      final ctx = CallkitService.instance.navigatorKey.currentState?.overlay?.context;
+      if (ctx == null || !ctx.mounted) return;
+      await showDialog(
+        context: ctx,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Enable reliable ringtone'),
+          content: const Text(
+            'To make sure your custom ringtone always plays for incoming calls — even when the app is in the background — please allow notification access for this app.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('Not now'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogCtx).pop();
+                channel.invokeMethod('requestNotificationListenerAccess');
+              },
+              child: const Text('Allow'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {}
   }
 
   void _showGiftToast(Map<String, dynamic> data) {

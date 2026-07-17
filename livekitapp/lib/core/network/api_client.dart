@@ -22,11 +22,13 @@ class ApiClient {
   }) async {
     final headers = {'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    final response = await http.post(
-      Uri.parse('${ApiConstants.baseUrl}$path'),
-      headers: headers,
-      body: jsonEncode(body),
-    );
+    final response = await http
+        .post(
+          Uri.parse('${ApiConstants.baseUrl}$path'),
+          headers: headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 10));
     _checkAuthStatus(response);
     return response;
   }
@@ -52,10 +54,12 @@ class ApiClient {
   Future<http.Response> get(String path, {String? token}) async {
     final headers = {'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    final response = await http.get(
-      Uri.parse('${ApiConstants.baseUrl}$path'),
-      headers: headers,
-    );
+    final response = await http
+        .get(
+          Uri.parse('${ApiConstants.baseUrl}$path'),
+          headers: headers,
+        )
+        .timeout(const Duration(seconds: 10));
     _checkAuthStatus(response);
     return response;
   }
@@ -67,11 +71,13 @@ class ApiClient {
   }) async {
     final headers = {'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    final response = await http.put(
-      Uri.parse('${ApiConstants.baseUrl}$path'),
-      headers: headers,
-      body: jsonEncode(body),
-    );
+    final response = await http
+        .put(
+          Uri.parse('${ApiConstants.baseUrl}$path'),
+          headers: headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 10));
     _checkAuthStatus(response);
     return response;
   }
@@ -80,10 +86,12 @@ class ApiClient {
   Future<http.Response> delete(String path, {String? token}) async {
     final headers = {'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';
-    final response = await http.delete(
-      Uri.parse('${ApiConstants.baseUrl}$path'),
-      headers: headers,
-    );
+    final response = await http
+        .delete(
+          Uri.parse('${ApiConstants.baseUrl}$path'),
+          headers: headers,
+        )
+        .timeout(const Duration(seconds: 10));
     _checkAuthStatus(response);
     return response;
   }

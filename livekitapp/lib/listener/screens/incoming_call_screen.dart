@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/screens/listener_call_screen.dart';
+import 'package:livekitapp/listener/services/ringtone_manager.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
@@ -23,9 +26,48 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
   bool _loading = false;
+  AudioPlayer? _ringtonePlayer;
+
+  @override
+  void initState() {
+    super.initState();
+    _playRingtone();
+  }
+
+  Future<void> _playRingtone() async {
+    try {
+      _ringtonePlayer = AudioPlayer();
+      final cachedPath = RingtoneManager.instance.currentRingtonePath;
+      await _ringtonePlayer?.setLoopMode(LoopMode.one);
+      if (cachedPath != null) {
+        await _ringtonePlayer?.setFilePath(cachedPath);
+      } else {
+        await _ringtonePlayer?.setAsset('assets/audio/ringtone_default.mp3');
+      }
+      await _ringtonePlayer?.play();
+    } catch (_) {}
+  }
+
+  Future<void> _stopRingtone() async {
+    try {
+      await _ringtonePlayer?.stop();
+      await _ringtonePlayer?.dispose();
+    } catch (_) {}
+    _ringtonePlayer = null;
+    try {
+      await const MethodChannel('livekitapp/ringtone').invokeMethod('stopNativeRingtone');
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _stopRingtone();
+    super.dispose();
+  }
 
   Future<void> _accept() async {
     setState(() => _loading = true);
+    _stopRingtone();
     try {
       final token = await _localStorage.getToken();
       final result = await _repository.acceptCall(token!, widget.callId);
@@ -56,6 +98,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Future<void> _reject() async {
     if (_loading) return;
     setState(() => _loading = true);
+    _stopRingtone();
     try {
       final token = await _localStorage.getToken();
       await _repository.rejectCall(token!, widget.callId);

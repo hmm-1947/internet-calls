@@ -19,8 +19,10 @@ class MainActivity : FlutterActivity() {
     private var pendingUnlockResult: MethodChannel.Result? = null
     private var unlockReceiver: BroadcastReceiver? = null
 private val PIP_CHANNEL = "livekitapp/pip"
+    private val RINGTONE_CHANNEL = "livekitapp/ringtone"
     private var isInPipMode = false
     private var isInCallState = false
+
 
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -102,7 +104,46 @@ private val PIP_CHANNEL = "livekitapp/pip"
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, RINGTONE_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startNativeRingtone" -> {
+                    val intent = Intent(this, RingtoneService::class.java)
+                    intent.action = RingtoneService.ACTION_START_APP
+                    startForegroundService(intent)
+                    result.success(null)
+                }
+                "stopNativeRingtone" -> {
+                    val intent = Intent(this, RingtoneService::class.java)
+                    intent.action = RingtoneService.ACTION_STOP
+                    startService(intent)
+                    result.success(null)
+                }
+                "isNotificationListenerEnabled" -> {
+                    result.success(isNotificationListenerEnabled())
+                }
+                "requestNotificationListenerAccess" -> {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    } catch (e: Exception) {
+                        android.util.Log.w("Ringtone", "requestNotificationListenerAccess threw: $e")
+                    }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        val enabledListeners = android.provider.Settings.Secure.getString(
+            contentResolver,
+            "enabled_notification_listeners"
+        ) ?: return false
+        return enabledListeners.contains(packageName)
+    }
+
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (isInCallState) {
