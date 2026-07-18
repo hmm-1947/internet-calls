@@ -207,10 +207,14 @@ async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_cu
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
 
-    if call.status == "ended":
+    claimed = db.query(Call).filter(Call.id == call_id, Call.status != "ended").update(
+        {"status": "ended"}, synchronize_session=False
+    )
+    db.commit()
+    if claimed == 0:
         return {"status": "ended"}
+    db.refresh(call)
 
-    call.status = "ended"
     if call.connected_at:
         connected_at = call.connected_at
         if connected_at.tzinfo is None:
@@ -229,8 +233,9 @@ async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_cu
         except Exception as e:
             print(f"[EGRESS ERROR] Failed to stop recording for call {call_id}: {e}")
         recording.status = "ended"
-        recording.ended_at = datetime.utcnow()
+        recording.ended_at = datetime.now(timezone.utc)
         db.commit()
+
 
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     if user and user.fcm_token:
@@ -267,9 +272,13 @@ async def coin_exceeded(call_id: int, db: Session = Depends(get_db), current_use
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    if call.status == "ended":
+    claimed = db.query(Call).filter(Call.id == call_id, Call.status != "ended").update(
+        {"status": "ended"}, synchronize_session=False
+    )
+    db.commit()
+    if claimed == 0:
         return {"status": "ended"}
-    call.status = "ended"
+    db.refresh(call)
     if call.connected_at:
         connected_at = call.connected_at
         if connected_at.tzinfo is None:
@@ -279,6 +288,7 @@ async def coin_exceeded(call_id: int, db: Session = Depends(get_db), current_use
         deducted = await deduct_coins(db, current_user, call.id, int(duration), call.call_type)
         call.coins_deducted = deducted
     db.commit()
+
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     if listener and listener.fcm_token:
         try:
@@ -297,9 +307,15 @@ async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
     room_name = room.get("name")
     livekit_duration = room.get("duration")
     call = db.query(Call).filter(Call.room_name == room_name).first()
-    if not call or call.status == "ended":
+    if not call:
         return {"ok": True}
-    call.status = "ended"
+    claimed = db.query(Call).filter(Call.id == call.id, Call.status != "ended").update(
+        {"status": "ended"}, synchronize_session=False
+    )
+    db.commit()
+    if claimed == 0:
+        return {"ok": True}
+    db.refresh(call)
     if livekit_duration is not None:
         duration = int(livekit_duration)
     elif call.connected_at:
@@ -315,6 +331,7 @@ async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
         call.coins_deducted = await deduct_coins(db, user, call.id, duration, call.call_type)
     db.commit()
     return {"ok": True}
+
 
 @router.get("/user/history", response_model=list[CallHistoryOut])
 def user_call_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

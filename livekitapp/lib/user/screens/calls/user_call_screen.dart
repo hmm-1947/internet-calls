@@ -11,7 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
 import 'package:livekitapp/user/services/callkit_service.dart';
-import 'package:livekitapp/user/screens/call_summary_screen.dart';
+import 'package:livekitapp/user/screens/calls/call_summary_screen.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/widgets/gift_sheet.dart';
@@ -143,18 +143,21 @@ Future<void> _requestMicAndStartCall() async {
   }
 
   Future<void> _toggleSpeaker() async {
-    if (_room == null) return;
     final newSpeakerOn = !_speakerOn;
-    await _room!.setSpeakerOn(newSpeakerOn);
+    if (_room != null) {
+      await _room!.setSpeakerOn(newSpeakerOn);
+    }
     VolumeController.instance.showSystemUI = false;
     VolumeController.instance.setVolume(newSpeakerOn ? 1.0 : 0.3);
     if (mounted) setState(() => _speakerOn = newSpeakerOn);
   }
 
   Future<void> _toggleMic() async {
-    if (_room == null) return;
-    await _room!.localParticipant?.setMicrophoneEnabled(!_micEnabled);
-    if (mounted) setState(() => _micEnabled = !_micEnabled);
+    final newMicEnabled = !_micEnabled;
+    if (_room != null) {
+      await _room!.localParticipant?.setMicrophoneEnabled(newMicEnabled);
+    }
+    if (mounted) setState(() => _micEnabled = newMicEnabled);
   }
 
   void _startDurationTimer() {
@@ -314,7 +317,7 @@ Future<void> _requestMicAndStartCall() async {
         return;
       }
 
-      await room.localParticipant?.setMicrophoneEnabled(true);
+      await room.localParticipant?.setMicrophoneEnabled(_micEnabled);
       _startCoinTimer();
       if (room.remoteParticipants.isNotEmpty) {
         _startDurationTimer();
@@ -631,7 +634,7 @@ Future<void> _requestMicAndStartCall() async {
                   background: _micEnabled
                       ? null
                       : Colors.redAccent.withOpacity(0.3),
-                  onTap: _phase == _CallPhase.connected ? _toggleMic : null,
+                  onTap: _toggleMic,
                 ),
                 CallActionButton(
                   icon: _speakerOn ? Icons.volume_up : Icons.volume_off,
@@ -639,7 +642,7 @@ Future<void> _requestMicAndStartCall() async {
                   background: _speakerOn
                       ? const Color(0xFF1F2430)
                       : Colors.redAccent.withOpacity(0.3),
-                  onTap: _phase == _CallPhase.connected ? _toggleSpeaker : null,
+                  onTap: _toggleSpeaker,
                 ),
                 CallActionButton(
                   icon: Icons.call_end,
@@ -800,7 +803,7 @@ Future<void> _requestMicAndStartCall() async {
                 background: _cameraEnabled
                     ? Colors.black.withOpacity(0.35)
                     : Colors.redAccent.withOpacity(0.3),
-                onTap: _toggleCamera,
+                onTap: _phase == _CallPhase.connected ? _toggleCamera : null,
               ),
               CallActionButton(
                 icon: Icons.call_end,

@@ -34,6 +34,10 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
     total_seconds = db.query(sa_func.coalesce(sa_func.sum(Call.duration_seconds), 0)).filter(
         Call.callee_listener_id == current_listener.id
     ).scalar()
+    total_calls = db.query(sa_func.count(Call.id)).filter(
+        Call.callee_listener_id == current_listener.id,
+        Call.status == "ended",
+    ).scalar()
     avg_rating = db.query(sa_func.avg(CallRating.rating)).filter(CallRating.listener_id == current_listener.id).scalar()
     rating_count = db.query(sa_func.count(CallRating.id)).filter(CallRating.listener_id == current_listener.id).scalar()
     return {
@@ -41,6 +45,8 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "name": current_listener.name,
         "phone": current_listener.phone,
         "total_talk_time_seconds": int(total_seconds),
+        "total_calls": total_calls or 0,
+        "is_online": bool(current_listener.is_online) and manager.is_listener_online(current_listener.id),
         "about": current_listener.about,
         "tags": _parse_list(current_listener.tags),
         "languages": _parse_list(current_listener.languages),
@@ -49,6 +55,7 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "created_at": current_listener.created_at.isoformat() if current_listener.created_at else None,
         "photo_url": current_listener.photo_url,
     }
+
 
 @router.get("/wallet")
 def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):

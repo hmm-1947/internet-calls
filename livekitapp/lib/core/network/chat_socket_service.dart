@@ -50,6 +50,7 @@ class ChatSocketService {
       return;
     }
     _connected = true;
+    _controller?.add({'type': 'socket_connected'});
     _channel!.stream.listen(
       (data) {
         _failedAttempts = 0;

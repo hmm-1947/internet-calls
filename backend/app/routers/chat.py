@@ -8,7 +8,7 @@ import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_current_listener
+from app.core.deps import get_current_user, get_current_listener, get_current_participant
 from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary
@@ -360,10 +360,16 @@ async def listener_mark_delivered(payload: DeliveredAck, db: Session = Depends(g
 
 
 @router.post("/message/edit", response_model=ChatMessageOut)
-async def edit_message(payload: MessageEdit, db: Session = Depends(get_db)):
+async def edit_message(payload: MessageEdit, db: Session = Depends(get_db), current=Depends(get_current_participant)):
     msg = db.query(ChatMessage).filter(ChatMessage.id == payload.message_id).first()
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
+    is_owner = (
+        (isinstance(current, User) and msg.sender_type == "user" and msg.user_id == current.id) or
+        (isinstance(current, Listener) and msg.sender_type == "listener" and msg.listener_id == current.id)
+    )
+    if not is_owner:
+        raise HTTPException(status_code=403, detail="Not allowed to edit this message")
     msg.message = payload.message
     msg.edited_at = datetime.now(timezone.utc)
     db.commit()
@@ -372,6 +378,7 @@ async def edit_message(payload: MessageEdit, db: Session = Depends(get_db)):
     await manager.send_to_user(msg.user_id, payload_dict)
     await manager.send_to_listener(msg.listener_id, payload_dict)
     return msg
+
 
 @router.post("/user/{listener_id}/mark_read")
 async def user_mark_read(listener_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -416,10 +423,16 @@ async def listener_mark_read(user_id: int, db: Session = Depends(get_db), curren
     return {"marked": len(unread)}
 
 @router.delete("/message/{message_id}")
-async def delete_message(message_id: int, db: Session = Depends(get_db)):
+async def delete_message(message_id: int, db: Session = Depends(get_db), current=Depends(get_current_participant)):
     msg = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
+    is_owner = (
+        (isinstance(current, User) and msg.sender_type == "user" and msg.user_id == current.id) or
+        (isinstance(current, Listener) and msg.sender_type == "listener" and msg.listener_id == current.id)
+    )
+    if not is_owner:
+        raise HTTPException(status_code=403, detail="Not allowed to delete this message")
     msg.is_deleted = True
     msg.message = ""
     db.commit()
@@ -427,6 +440,7 @@ async def delete_message(message_id: int, db: Session = Depends(get_db)):
     await manager.send_to_user(msg.user_id, data)
     await manager.send_to_listener(msg.listener_id, data)
     return {"status": "deleted"}
+
 
 @router.post("/settings")
 def update_chat_settings(payload: ChatSettingsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -504,7 +518,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
-            is_online=manager.is_listener_online(lid),
+            is_online=bool(listener.is_online) and manager.is_listener_online(lid),
             last_seen=listener.last_seen,
             photo_url=listener.photo_url,
         ))
@@ -625,14 +639,13 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
         await websocket.close(code=4003)
         return
     await manager.connect_listener(listener_id, websocket)
-    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": True})
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
-    if listener and not listener.is_online:
-        listener.is_online = True
-        db.commit()
+    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": bool(listener and listener.is_online)})
     user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
-    for uid in manager.get_online_user_ids(user_ids):
-        await manager.send_to_user(uid, {"type": "listener_online", "listener_id": listener_id})
+    if listener and listener.is_online:
+        for uid in manager.get_online_user_ids(user_ids):
+            await manager.send_to_user(uid, {"type": "listener_online", "listener_id": listener_id})
+
 
     pending_gifts = db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id, GiftTransaction.notified == False).order_by(GiftTransaction.created_at.asc()).all()
     for gt in pending_gifts:

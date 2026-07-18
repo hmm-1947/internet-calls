@@ -188,7 +188,7 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
         except (TypeError, json.JSONDecodeError):
             tags = []
         result.append({
-            "id": l.id, "name": l.name, "is_online": manager.is_listener_online(l.id),
+            "id": l.id, "name": l.name, "is_online": bool(l.is_online) and manager.is_listener_online(l.id),
             "tags": tags,
             "avg_rating": round(avg_rating, 1) if avg_rating else None,
             "rating_count": rating_count or 0,
@@ -214,7 +214,7 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
     return {
         "id": l.id,
         "name": l.name,
-        "is_online": manager.is_listener_online(l.id),
+        "is_online": bool(l.is_online) and manager.is_listener_online(l.id),
         "about": l.about,
         "tags": tags,
         "languages": languages,

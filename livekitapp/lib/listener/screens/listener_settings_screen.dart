@@ -114,12 +114,33 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
 Future<void> refresh() async {
     try {
       final token = await _localStorage.getToken();
-      final data = await _repository.getMe(token!);
+      final data = await _repository.getMe(token!, forceRefresh: true);
       setState(() {
         _name = data['name'] ?? '';
         _photoUrl = data['photo_url'];
+        if (data['is_online'] is bool) {
+          _statusOnline = data['is_online'] as bool;
+        }
       });
     } catch (_) {}
+  }
+
+
+  Future<void> _toggleStatus(bool value) async {
+    final previous = _statusOnline;
+    setState(() => _statusOnline = value);
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      await _repository.updateStatus(token, value);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _statusOnline = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update status: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _logout() async {
@@ -155,38 +176,14 @@ Future<void> refresh() async {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0D0D0D),
 
-        title: const Text('Settings'),
+        title: const Text('Settings',style: TextStyle(color: Color(0xFFE53950), fontWeight: FontWeight.bold)),
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 100),
         children: [
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4A0E0E), Color(0xFF1A0505)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-            AvatarImage(photoUrl: _photoUrl, radius: 28, iconSize: 28),
-                const SizedBox(width: 16),
-                Text(
-                  _name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 16),
           _SectionLabel('ACCOUNT'),
+
           _SettingsCard([
             _SettingsTile(
               icon: Icons.account_balance_wallet_outlined,
@@ -240,7 +237,7 @@ Future<void> refresh() async {
               trailing: Switch(
                 value: _statusOnline,
                 activeColor: Colors.green,
-                onChanged: (v) => setState(() => _statusOnline = v),
+                onChanged: _toggleStatus,
               ),
             ),
             const Divider(height: 1, color: Colors.white12),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:livekitapp/listener/screens/listener_call_history_screen.dart';
+import 'package:livekitapp/listener/screens/calls/listener_call_history_screen.dart';
 import 'package:livekitapp/listener/screens/listener_home_screen.dart';
-import 'package:livekitapp/listener/screens/listener_chats_list_screen.dart';
+import 'package:livekitapp/listener/screens/chats/listener_chats_list_screen.dart';
 import 'package:livekitapp/listener/screens/listener_settings_screen.dart';
 import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/shared/widgets/crown_nav_bar.dart';

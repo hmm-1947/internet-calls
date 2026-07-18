@@ -11,7 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
-import 'package:livekitapp/listener/screens/listener_call_notes_screen.dart';
+import 'package:livekitapp/listener/screens/calls/listener_call_notes_screen.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 class ListenerCallScreen extends StatefulWidget {
@@ -420,7 +420,7 @@ _fcmSubscription?.cancel();
                   background: _micEnabled
                       ? null
                       : Colors.redAccent.withOpacity(0.3),
-                  onTap: _status.isEmpty ? _toggleMic : null,
+                  onTap: _room != null ? _toggleMic : null,
                 ),
                 CallActionButton(
                   icon: _speakerOn ? Icons.volume_up : Icons.volume_off,
@@ -428,7 +428,7 @@ _fcmSubscription?.cancel();
                   background: _speakerOn
                       ? const Color(0xFF1F2430)
                       : Colors.redAccent.withOpacity(0.3),
-                  onTap: _status.isEmpty ? _toggleSpeaker : null,
+                  onTap: _room != null ? _toggleSpeaker : null,
                 ),
                 CallActionButton(
                   icon: Icons.call_end,
@@ -574,7 +574,7 @@ _fcmSubscription?.cancel();
                 background: _micEnabled
                     ? Colors.black.withOpacity(0.35)
                     : Colors.redAccent.withOpacity(0.3),
-                onTap: _toggleMic,
+                onTap: _room != null ? _toggleMic : null,
               ),
               CallActionButton(
                 icon: _cameraEnabled ? Icons.videocam : Icons.videocam_off,
@@ -582,7 +582,7 @@ _fcmSubscription?.cancel();
                 background: _cameraEnabled
                     ? Colors.black.withOpacity(0.35)
                     : Colors.redAccent.withOpacity(0.3),
-                onTap: _toggleCamera,
+                onTap: _status.isEmpty ? _toggleCamera : null,
               ),
               CallActionButton(
                 icon: Icons.call_end,
@@ -596,7 +596,7 @@ _fcmSubscription?.cancel();
                 background: _speakerOn
                     ? Colors.black.withOpacity(0.35)
                     : Colors.redAccent.withOpacity(0.3),
-                onTap: _toggleSpeaker,
+                onTap: _room != null ? _toggleSpeaker : null,
               ),
               CallActionButton(
                 icon: Icons.more_horiz,

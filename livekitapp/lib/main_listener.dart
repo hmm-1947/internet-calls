@@ -396,7 +396,6 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _offlineTimer?.cancel();
-      _updateStatus(true);
       _reconnectSocket();
       _checkSessionActive();
     } else if (state == AppLifecycleState.paused ||

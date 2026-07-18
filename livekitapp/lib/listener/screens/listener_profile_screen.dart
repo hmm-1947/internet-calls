@@ -83,7 +83,10 @@ String _name = '';
   List<String> _languages = [];
   double? _avgRating;
   int _ratingCount = 0;
+  int _totalCalls = 0;
+  bool _isOnline = false;
   String? _createdAt;
+
   bool _loading = true;
   bool _editing = false;
   bool _saving = false;
@@ -122,6 +125,8 @@ final newSnapshot = {
         'languages': List<String>.from(data['languages'] ?? []),
         'avg_rating': (data['avg_rating'] as num?)?.toDouble(),
         'rating_count': data['rating_count'] ?? 0,
+        'total_calls': data['total_calls'] ?? 0,
+        'is_online': data['is_online'] ?? false,
         'created_at': data['created_at'],
       };
 final oldSnapshot = {
@@ -132,6 +137,8 @@ final oldSnapshot = {
         'languages': _languages,
         'avg_rating': _avgRating,
         'rating_count': _ratingCount,
+        'total_calls': _totalCalls,
+        'is_online': _isOnline,
         'created_at': _createdAt,
       };
       if (dataChanged(oldSnapshot, newSnapshot)) {
@@ -143,9 +150,12 @@ final oldSnapshot = {
           _languages = newSnapshot['languages'] as List<String>;
           _avgRating = newSnapshot['avg_rating'] as double?;
           _ratingCount = newSnapshot['rating_count'] as int;
+          _totalCalls = newSnapshot['total_calls'] as int;
+          _isOnline = newSnapshot['is_online'] as bool;
           _createdAt = newSnapshot['created_at'] as String?;
           _loading = false;
         });
+
       } else if (_loading) {
         setState(() => _loading = false);
       }
@@ -360,7 +370,7 @@ Future<void> _pickAndUploadPhoto() async {
                               width: 16,
                               height: 16,
                               decoration: BoxDecoration(
-                                color: _AppColors.online,
+                                color: _isOnline ? _AppColors.online : _AppColors.textMuted,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: _AppColors.bg,
@@ -369,6 +379,7 @@ Future<void> _pickAndUploadPhoto() async {
                               ),
                             ),
                           ),
+
                           if (_editing)
                             Positioned(
                               right: -4,
@@ -399,11 +410,11 @@ Future<void> _pickAndUploadPhoto() async {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Center(
+                  Center(
                     child: Text(
-                      'ONLINE NOW',
+                      _isOnline ? 'ONLINE NOW' : 'OFFLINE',
                       style: TextStyle(
-                        color: _AppColors.online,
+                        color: _isOnline ? _AppColors.online : _AppColors.textMuted,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1,
@@ -411,39 +422,80 @@ Future<void> _pickAndUploadPhoto() async {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: _AppColors.cardBg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _AppColors.cardBorder),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 20),
-                        const SizedBox(height: 4),
-                        Text(
-                          _avgRating != null
-                              ? _avgRating!.toStringAsFixed(1)
-                              : '—',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: _AppColors.cardBg,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _AppColors.cardBorder),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.star, color: Colors.amber, size: 20),
+                              const SizedBox(height: 4),
+                              Text(
+                                _avgRating != null
+                                    ? _avgRating!.toStringAsFixed(1)
+                                    : '—',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'RATING',
+                                style: TextStyle(
+                                  color: _AppColors.textMuted,
+                                  fontSize: 11,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'RATING',
-                          style: TextStyle(
-                            color: _AppColors.textMuted,
-                            fontSize: 11,
-                            letterSpacing: 1,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: _AppColors.cardBg,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _AppColors.cardBorder),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.call, color: _AppColors.brandRed, size: 20),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$_totalCalls',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'TOTAL CALLS',
+                                style: TextStyle(
+                                  color: _AppColors.textMuted,
+                                  fontSize: 11,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+
                   const _SectionLabel('ABOUT'),
                   Container(
                     width: double.infinity,

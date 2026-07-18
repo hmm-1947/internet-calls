@@ -162,7 +162,7 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
         automaticallyImplyLeading: false,
         title: const Text(
           'Calls',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: pink, fontWeight: FontWeight.bold),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),

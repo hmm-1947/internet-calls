@@ -1081,6 +1081,14 @@
       </h2>
       <div id="listenerAuditLogList"></div>
     </div>
+    <div class="card">
+      <h2>Listener Ringtone</h2>
+      <p style="font-size:13px;color:var(--slate);margin:0 0 10px;">Upload an audio file to use as the incoming-call ringtone shown on the in-app incoming call screen. All listener devices will download and cache it automatically.</p>
+      <input type="file" id="ringtoneFile" accept="audio/*">
+      <div id="ringtoneCurrent" style="font-size:13px;color:var(--slate);margin:8px 0;"></div>
+      <button class="btn btn-leaf" onclick="uploadRingtone()">Upload Ringtone</button>
+      <div id="ringtoneMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
   </div>
 
   <div id="page-coinsettings" style="display:none;">
@@ -1095,15 +1103,6 @@
       <label style="font-size:13px;color:var(--slate);font-weight:600">Voice message coin deduction / message</label>
       <input id="voiceCoins" placeholder="e.g. 1" type="number">
       <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
-    </div>
-
-    <div class="card">
-      <h2>Listener Ringtone</h2>
-      <p style="font-size:13px;color:var(--slate);margin:0 0 10px;">Upload an audio file to use as the incoming-call ringtone shown on the in-app incoming call screen. All listener devices will download and cache it automatically.</p>
-      <input type="file" id="ringtoneFile" accept="audio/*">
-      <div id="ringtoneCurrent" style="font-size:13px;color:var(--slate);margin:8px 0;"></div>
-      <button class="btn btn-leaf" onclick="uploadRingtone()">Upload Ringtone</button>
-      <div id="ringtoneMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
     </div>
   </div>
 

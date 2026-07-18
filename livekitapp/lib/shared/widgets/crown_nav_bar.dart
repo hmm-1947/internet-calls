@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-class CrownNavBar extends StatelessWidget {
+class CrownNavBar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final List<Widget> icons;
@@ -20,17 +20,36 @@ class CrownNavBar extends StatelessWidget {
   });
 
   @override
+  State<CrownNavBar> createState() => _CrownNavBarState();
+}
+
+class _CrownNavBarState extends State<CrownNavBar> {
+  DateTime? _lastTapAt;
+  static const _debounceDuration = Duration(milliseconds: 350);
+
+  void _handleTap(int index) {
+    final now = DateTime.now();
+    if (_lastTapAt != null && now.difference(_lastTapAt!) < _debounceDuration) {
+      return;
+    }
+    _lastTapAt = now;
+    if (index != widget.selectedIndex) {
+      widget.onDestinationSelected(index);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     const activeColor = Color(0xFFE53950);
     const inactiveColor = Colors.white70;
-    final itemCount = icons.length;
+    final itemCount = widget.icons.length;
 
     Widget buildItem(int i) {
-      final selected = selectedIndex == i;
+      final selected = widget.selectedIndex == i;
       final color = selected ? activeColor : inactiveColor;
       return Expanded(
         child: InkWell(
-          onTap: () => onDestinationSelected(i),
+          onTap: () => _handleTap(i),
           borderRadius: BorderRadius.circular(22),
           child: SizedBox(
             height: 56,
@@ -38,9 +57,18 @@ class CrownNavBar extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconTheme(
-                  data: IconThemeData(color: color, size: 22),
-                  child: icons[i],
+                TweenAnimationBuilder<double>(
+                  key: ValueKey('nav_icon_$i\_$selected'),
+                  tween: Tween<double>(begin: 1.0, end: selected ? 1.25 : 1.0),
+                  duration: const Duration(milliseconds: 260),
+                  curve: selected ? Curves.elasticOut : Curves.easeOut,
+                  builder: (context, scale, child) {
+                    return Transform.scale(scale: scale, child: child);
+                  },
+                  child: IconTheme(
+                    data: IconThemeData(color: color, size: 22),
+                    child: widget.icons[i],
+                  ),
                 ),
               ],
             ),
@@ -70,15 +98,16 @@ class CrownNavBar extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final slotCount = showCrown
+                          final slotCount = widget.showCrown
                               ? itemCount + 1
                               : itemCount;
                           final slotWidth = constraints.maxWidth / slotCount;
                           final crownSlot = itemCount ~/ 2;
                           final slotIndex =
-                              showCrown && selectedIndex >= crownSlot
-                              ? selectedIndex + 1
-                              : selectedIndex;
+                              widget.showCrown &&
+                                  widget.selectedIndex >= crownSlot
+                              ? widget.selectedIndex + 1
+                              : widget.selectedIndex;
                           return Stack(
                             children: [
                               AnimatedPositioned(
@@ -113,7 +142,7 @@ class CrownNavBar extends StatelessWidget {
                                 children: [
                                   buildItem(0),
                                   buildItem(1),
-                                  if (showCrown)
+                                  if (widget.showCrown)
                                     const Expanded(child: SizedBox()),
                                   for (var i = 2; i < itemCount; i++)
                                     buildItem(i),
@@ -129,14 +158,14 @@ class CrownNavBar extends StatelessWidget {
               ),
             ),
           ),
-          if (showCrown)
+          if (widget.showCrown)
             Positioned(
               top: -22,
               left: 0,
               right: 0,
               child: Center(
                 child: GestureDetector(
-                  onTap: onCrownTap,
+                  onTap: widget.onCrownTap,
                   child: Container(
                     width: 60,
                     height: 60,

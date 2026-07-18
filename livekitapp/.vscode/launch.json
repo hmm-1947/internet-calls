@@ -17,7 +17,7 @@
             "type": "dart",
             "request": "launch",
             "program": "lib/main_user.dart",
-            "deviceId": "ZY322M9MNH",
+            "deviceId": "1A081FDEE005FT",
             "args": [
                 "--flavor",
                 "user"
@@ -39,7 +39,7 @@
             "type": "dart",
             "request": "launch",
             "program": "lib/main_listener.dart",
-            "deviceId": "1A081FDEE005FT",
+            "deviceId": "ZY322M9MNH",
             "args": [
                 "--flavor",
                 "listener"

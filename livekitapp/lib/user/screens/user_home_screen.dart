@@ -7,11 +7,11 @@ import 'package:livekitapp/core/network/local_storage.dart' as ls;
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
-import 'package:livekitapp/user/screens/chat_history_screen.dart';
+import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
-import 'package:livekitapp/user/screens/user_call_screen.dart';
+import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
-import 'package:livekitapp/user/screens/user_login_screen.dart';
+import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
@@ -171,7 +171,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     _initSocket();
     _pollTimer = Timer.periodic(
       const Duration(minutes: 2),
-      (_) => _load(silent: true),
+      (_) {
+        _load(silent: true);
+        _loadSpecialOffers();
+      },
     );
     _offersAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!_offersController.hasClients || _specialOffers.isEmpty) return;
@@ -204,6 +207,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   void _onSocketEvent(Map<String, dynamic> data) {
     final type = data['type'];
+    if (type == 'socket_connected') {
+      _load(silent: true);
+      return;
+    }
     if (type == 'listener_online' || type == 'listener_offline') {
       final listenerId = data['listener_id'];
       if (listenerId == null) return;
@@ -251,7 +258,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     }
     try {
       final token = await _localStorage.getToken();
-      final listeners = await _repository.getListeners(token!);
+      final listeners = await _repository.getListeners(
+        token!,
+        forceRefresh: true,
+      );
       final me = await _repository.getMe(token);
       final newName = me['name'] ?? '';
       final newPhoto = me['photo_url'];
@@ -728,15 +738,13 @@ ChatHistoryScreen(
             ),
           )
         else
-          Column(
-            children: _listeners
-                .map(
-                  (listener) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildProfileCard(listener),
-                  ),
-                )
-                .toList(),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _listeners.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 16),
+            itemBuilder: (context, index) =>
+                _buildProfileCard(_listeners[index]),
           ),
       ],
     );
@@ -757,176 +765,185 @@ ChatHistoryScreen(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: _AppColors.cardBorder),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Avatar with real online status dot
-            Stack(
-              clipBehavior: Clip.none,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-              AvatarImage(photoUrl: listener['photo_url'], radius: 28, iconSize: 28),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: isOnline
-                          ? _AppColors.online
-                          : Colors.grey.shade600,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF050E17),
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    listener['name'] ?? 'Listener',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        isOnline ? 'Online now' : 'Offline',
-                        style: TextStyle(
-                          fontSize: 13,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    AvatarImage(photoUrl: listener['photo_url'], radius: 28, iconSize: 28),
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
                           color: isOnline
                               ? _AppColors.online
-                              : _AppColors.textMuted,
-                        ),
-                      ),
-                      if (listener['avg_rating'] != null) ...[
-                        const SizedBox(width: 8),
-                        const Icon(Icons.star, color: Colors.amber, size: 14),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${listener['avg_rating']}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.amber,
+                              : Colors.grey.shade600,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFF050E17),
+                            width: 2,
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                  if (tags.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: tags
-                          .take(3)
-                          .map(
-                            (tag) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _AppColors.brandRed.withOpacity(0.16),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                tag,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                      ),
                     ),
                   ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Chat — real, opens ChatHistoryScreen
-            IconButton(
-              icon: const Icon(
-                Icons.chat_bubble_outline,
-                color: _AppColors.textMuted,
-                size: 22,
-              ),
-              onPressed: () => _openChat(listener),
-              tooltip: 'Chat',
-            ),
-            // Video call — real, matches Figma's circular red CTA
-            isCalling
-                ? const SizedBox(width: 44, height: 44)
-                : InkWell(
-                    onTap: canAct
-                        ? () => _callListener(listener['id'], video: true)
-                        : null,
-                    borderRadius: BorderRadius.circular(24),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: canAct
-                            ? _AppColors.brandRed.withOpacity(0.85)
-                            : _AppColors.brandRed.withOpacity(0.3),
-                        shape: BoxShape.circle,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        listener['name'] ?? 'Listener',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      child: const Icon(
-                        Icons.videocam,
-                        color: Colors.white,
-                        size: 20,
+                      const SizedBox(height: 4),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          Text(
+                            isOnline ? 'Online now' : 'Offline',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isOnline
+                                  ? _AppColors.online
+                                  : _AppColors.textMuted,
+                            ),
+                          ),
+                          if (listener['avg_rating'] != null)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.star, color: Colors.amber, size: 14),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${listener['avg_rating']}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.amber,
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
                       ),
-                    ),
+                    ],
                   ),
-            const SizedBox(width: 8),
-            // Call — real, matches Figma's circular red CTA
-            isCalling
-                ? const SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _AppColors.brandRed,
-                      ),
-                    ),
-                  )
-                : InkWell(
-                    onTap: canAct ? () => _callListener(listener['id']) : null,
-                    borderRadius: BorderRadius.circular(24),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: canAct
-                            ? _AppColors.brandRed
-                            : _AppColors.brandRed.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.call,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  icon: const Icon(
+                    Icons.chat_bubble_outline,
+                    color: _AppColors.textMuted,
+                    size: 20,
                   ),
+                  onPressed: () => _openChat(listener),
+                  tooltip: 'Chat',
+                ),
+                isCalling
+                    ? const SizedBox(width: 40, height: 40)
+                    : InkWell(
+                        onTap: canAct
+                            ? () => _callListener(listener['id'], video: true)
+                            : null,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: canAct
+                                ? _AppColors.brandRed.withOpacity(0.85)
+                                : _AppColors.brandRed.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.videocam,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                const SizedBox(width: 6),
+                isCalling
+                    ? const SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _AppColors.brandRed,
+                          ),
+                        ),
+                      )
+                    : InkWell(
+                        onTap: canAct ? () => _callListener(listener['id']) : null,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: canAct
+                                ? _AppColors.brandRed
+                                : _AppColors.brandRed.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.call,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+              ],
+            ),
+            if (tags.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: tags
+                    .take(3)
+                    .map(
+                      (tag) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _AppColors.brandRed.withOpacity(0.16),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          tag,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
           ],
         ),
       ),

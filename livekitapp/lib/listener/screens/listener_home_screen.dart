@@ -40,7 +40,15 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
     await Permission.microphone.request();
     _token = await _localStorage.getToken();
     if (_token != null) {
-      _updateStatus(true);
+      try {
+        final me = await _repository.getMe(_token!);
+        final wantsOnline = me['is_online'] is bool
+            ? me['is_online'] as bool
+            : true;
+        _updateStatus(wantsOnline);
+      } catch (_) {
+        _updateStatus(true);
+      }
       _loadUsers();
       _loadProfile();
       _socketService.connect(_token!, 'listener');

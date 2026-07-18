@@ -6,7 +6,7 @@ import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
-import 'package:livekitapp/user/screens/chat_history_screen.dart';
+import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class _FilterChip extends StatelessWidget {

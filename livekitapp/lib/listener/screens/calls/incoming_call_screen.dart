@@ -4,7 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
-import 'package:livekitapp/listener/screens/listener_call_screen.dart';
+import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/listener/services/ringtone_manager.dart';
 
 class IncomingCallScreen extends StatefulWidget {
