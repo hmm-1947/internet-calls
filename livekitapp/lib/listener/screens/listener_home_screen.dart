@@ -425,21 +425,7 @@ Future<void> _loadProfile() async {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: pink),
-            onPressed: () {
-              Navigator.of(context).push(
-                fadeRoute(
-                  ListenerChatHistoryScreen(
-                    userId: user['id'],
-                    userName: user['name'] ?? 'User',
-                    userPhotoUrl: user['photo_url'],
-                  ),
-                  barrierColor: bg,
-                ),
-              );
-            },
-          ),
+        
         ],
       ),
     );

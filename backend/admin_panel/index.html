@@ -1195,6 +1195,22 @@
       <h2>Gifts</h2>
       <div id="giftsList"></div>
     </div>
+
+    <div class="card">
+      <h2>Gift Transactions</h2>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <label style="font-size:13px;color:var(--slate);font-weight:600;">Show</label>
+        <select id="giftTxnPageSizeSelect" onchange="changeGiftTxnPageSize()">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span style="font-size:13px;color:var(--slate);">per page</span>
+      </div>
+      <div id="giftTxnList"></div>
+      <div class="pagination" id="giftTxnPaginationWrap"></div>
+    </div>
   </div>
 
   <div id="page-specialoffers" style="display:none;">
@@ -1439,6 +1455,7 @@
       loadBillingAuditLog();
       loadBillingPurchases();
       loadGifts();
+      loadGiftTransactions();
       loadSpecialOffers();
       loadActiveCalls();
       loadStats();
@@ -2101,6 +2118,74 @@
         if (!res.ok) throw new Error(data.detail || 'Failed to delete gift');
         loadGifts();
       } catch (e) { setGiftMsg('✗ ' + e.message, false); }
+    }
+
+    let giftTxnCache = [];
+    let giftTxnPage = 1;
+    let giftTxnPageSize = 10;
+
+    async function loadGiftTransactions() {
+      const wrap = document.getElementById('giftTxnList');
+      try {
+        const res = await fetch(API_URL + '/gift/admin/transactions', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load gift transactions');
+        giftTxnCache = data;
+        giftTxnPage = 1;
+        document.getElementById('giftTxnPageSizeSelect').value = giftTxnPageSize;
+        renderGiftTransactions();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load gift transactions.</div>';
+      }
+    }
+
+    function changeGiftTxnPageSize() {
+      giftTxnPageSize = parseInt(document.getElementById('giftTxnPageSizeSelect').value);
+      giftTxnPage = 1;
+      renderGiftTransactions();
+    }
+
+    function changeGiftTxnPage(delta) {
+      giftTxnPage += delta;
+      renderGiftTransactions();
+    }
+
+    function renderGiftTransactions() {
+      const wrap = document.getElementById('giftTxnList');
+      const pagWrap = document.getElementById('giftTxnPaginationWrap');
+      if (!giftTxnCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No gift transactions yet.</div>';
+        pagWrap.innerHTML = '';
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(giftTxnCache.length / giftTxnPageSize));
+      giftTxnPage = Math.min(giftTxnPage, totalPages);
+      const start = (giftTxnPage - 1) * giftTxnPageSize;
+      const pageItems = giftTxnCache.slice(start, start + giftTxnPageSize);
+
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Sender</th><th>Receiver</th><th>Gift</th><th>Coins</th><th>Date &amp; Time</th></tr></thead>
+          <tbody>
+            ${pageItems.map(r => `
+              <tr>
+                <td>${r.user_name} (#${r.user_id})</td>
+                <td>${r.listener_name} (#${r.listener_id})</td>
+                <td>${r.gift_name}</td>
+                <td>${r.coins} coins</td>
+                <td>${r.created_at ? new Date(r.created_at).toLocaleString() : '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      pagWrap.innerHTML = `
+        <button class="btn btn-ghost" ${giftTxnPage <= 1 ? 'disabled' : ''} onclick="changeGiftTxnPage(-1)">&larr; Prev</button>
+        <span>Page ${giftTxnPage} of ${totalPages}</span>
+        <button class="btn btn-ghost" ${giftTxnPage >= totalPages ? 'disabled' : ''} onclick="changeGiftTxnPage(1)">Next &rarr;</button>
+      `;
     }
 
     let offersCache = [];

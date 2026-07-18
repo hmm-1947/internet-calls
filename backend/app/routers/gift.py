@@ -97,6 +97,34 @@ def admin_delete_gift(gift_id: int, db: Session = Depends(get_db), admin: AdminU
     return {"detail": "Gift deleted"}
 
 
+@router.get("/admin/transactions")
+def admin_gift_transactions(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    rows = (
+        db.query(GiftTransaction, User, Listener, Gift)
+        .join(User, User.id == GiftTransaction.user_id)
+        .join(Listener, Listener.id == GiftTransaction.listener_id)
+        .join(Gift, Gift.id == GiftTransaction.gift_id)
+        .order_by(GiftTransaction.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": txn.id,
+            "user_id": user.id,
+            "user_name": user.name,
+            "listener_id": listener.id,
+            "listener_name": listener.name,
+            "gift_id": gift.id,
+            "gift_name": gift.name,
+            "gift_icon": gift.icon,
+            "coins": txn.coins,
+            "call_id": txn.call_id,
+            "created_at": txn.created_at.isoformat() if txn.created_at else None,
+        }
+        for txn, user, listener, gift in rows
+    ]
+
+
 class GiftSend(BaseModel):
     listener_id: int
     gift_id: int

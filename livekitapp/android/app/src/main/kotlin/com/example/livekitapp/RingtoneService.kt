@@ -79,7 +79,7 @@ class RingtoneService : Service() {
         val dir = File(filesDir, "ringtones")
         if (!dir.exists()) return null
         val candidates = dir.listFiles { f -> f.name.startsWith("ringtone_current") }
-        return candidates?.firstOrNull()
+        return candidates?.maxByOrNull { it.lastModified() }
     }
 
     private fun startRinging() {

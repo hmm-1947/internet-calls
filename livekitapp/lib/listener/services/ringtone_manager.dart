@@ -12,6 +12,7 @@ class RingtoneManager {
   static const _ringtoneFileName = 'ringtone_current';
 
   int _cachedVersion = 0;
+  String? _cachedUrl;
   String? _cachedPath;
   bool _initialized = false;
 
@@ -33,6 +34,7 @@ class RingtoneManager {
       if (await metaFile.exists()) {
         final meta = jsonDecode(await metaFile.readAsString());
         _cachedVersion = meta['version'] ?? 0;
+        _cachedUrl = meta['url'] as String?;
         final path = meta['path'] as String?;
         if (path != null && await File(path).exists()) {
           _cachedPath = path;
@@ -54,13 +56,13 @@ class RingtoneManager {
       final url = data['ringtone_url'] as String?;
       final version = data['ringtone_version'] as int? ?? 0;
       if (url == null || url.isEmpty) return;
-      if (version <= _cachedVersion && _cachedPath != null) return;
+      if (url == _cachedUrl && version == _cachedVersion && _cachedPath != null) return;
       await downloadAndCache(url, version);
     } catch (_) {}
   }
 
   Future<void> handleRingtoneUpdated(String url, int version) async {
-    if (version <= _cachedVersion) return;
+    if (url == _cachedUrl && version == _cachedVersion && _cachedPath != null) return;
     await downloadAndCache(url, version);
   }
 
@@ -71,16 +73,26 @@ class RingtoneManager {
       if (response.statusCode != 200) return;
       final dir = await _dir();
       final ext = _extensionFromUrl(relativeOrAbsoluteUrl);
+      final existing = dir.listSync().whereType<File>().where(
+            (f) => f.uri.pathSegments.last.startsWith(_ringtoneFileName),
+          );
+      for (final f in existing) {
+        try {
+          await f.delete();
+        } catch (_) {}
+      }
       final file = File('${dir.path}/$_ringtoneFileName$ext');
       await file.writeAsBytes(response.bodyBytes);
 
       final metaFile = File('${dir.path}/$_metaFileName');
       await metaFile.writeAsString(jsonEncode({
         'version': version,
+        'url': relativeOrAbsoluteUrl,
         'path': file.path,
       }));
 
       _cachedVersion = version;
+      _cachedUrl = relativeOrAbsoluteUrl;
       _cachedPath = file.path;
     } catch (_) {}
   }
