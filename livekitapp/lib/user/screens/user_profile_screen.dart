@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_settings_screen.dart';
-import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);

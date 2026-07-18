@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:livekitapp/shared/widgets/auth_card.dart';
-import 'package:livekitapp/shared/widgets/password_rules_checklist.dart';
+import 'package:livekitapp/common/widgets/auth/auth_card.dart';
+import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
 
 /// Shared "Change Password" screen used from both the user and listener
 /// settings screens. The caller supplies [onSubmit], which should call the
@@ -87,10 +87,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+
+    const pink = Color(0xFFE53950);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Change Password'),
+        title: const Text('Change Password',style: TextStyle(color: pink, fontWeight: FontWeight.bold),),
         backgroundColor: Colors.black,
         foregroundColor: Colors.red,
         elevation: 0,

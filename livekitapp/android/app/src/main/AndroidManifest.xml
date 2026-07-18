@@ -61,6 +61,12 @@
             android:foregroundServiceType="mediaPlayback" />
 
         <service
+            android:name=".CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|phoneCall" />
+
+
+        <service
             android:name=".RingtoneNotificationListener"
             android:exported="false"
             android:label="Ringtone Notification Listener"

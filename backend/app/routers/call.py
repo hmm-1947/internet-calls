@@ -206,13 +206,17 @@ async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_cu
     call = db.query(Call).filter(Call.id == call_id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    await finalize_abandoned_call(db, call)
+    return {"status": "ended"}
 
-    claimed = db.query(Call).filter(Call.id == call_id, Call.status != "ended").update(
+
+async def finalize_abandoned_call(db: Session, call: Call):
+    claimed = db.query(Call).filter(Call.id == call.id, Call.status != "ended").update(
         {"status": "ended"}, synchronize_session=False
     )
     db.commit()
     if claimed == 0:
-        return {"status": "ended"}
+        return
     db.refresh(call)
 
     if call.connected_at:
@@ -226,12 +230,13 @@ async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_cu
             deducted = await deduct_coins(db, user, call.id, int(duration), call.call_type)
             call.coins_deducted = deducted
     db.commit()
-    recording = db.query(CallRecording).filter(CallRecording.call_id == call_id, CallRecording.status == "recording").first()
+    recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()
+
     if recording:
         try:
             await stop_recording(recording.egress_id)
         except Exception as e:
-            print(f"[EGRESS ERROR] Failed to stop recording for call {call_id}: {e}")
+            print(f"[EGRESS ERROR] Failed to stop recording for call {call.id}: {e}")
         recording.status = "ended"
         recording.ended_at = datetime.now(timezone.utc)
         db.commit()
@@ -240,7 +245,7 @@ async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_cu
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     if user and user.fcm_token:
         try:
-            send_call_ended(user.fcm_token, call_id)
+            send_call_ended(user.fcm_token, call.id)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user of call end: {e}")
             if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
@@ -250,14 +255,13 @@ async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_cu
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     if listener and listener.fcm_token:
         try:
-            send_call_ended(listener.fcm_token, call_id)
+            send_call_ended(listener.fcm_token, call.id)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener of call end: {e}")
             if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
                 listener.fcm_token = None
                 db.commit()
 
-    return {"status": "ended"}
 
 @router.get("/{call_id}/coin-status")
 def coin_status(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

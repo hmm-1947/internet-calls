@@ -17,7 +17,7 @@ import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:livekitapp/listener/services/ringtone_manager.dart';
-import 'package:livekitapp/shared/widgets/splash_screen.dart';
+import 'package:livekitapp/common/widgets/splash_screen.dart';
 
 /// Top-level function — runs in a separate isolate when the app is
 /// background or killed. Must be a top-level (not a class method).
@@ -401,10 +401,15 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _offlineTimer?.cancel();
-      _updateStatus(false);
-      ChatSocketService().disconnect();
+      _offlineTimer = Timer(const Duration(seconds: 15), () async {
+        final activeCall = await _localStorage.getActiveCall();
+        if (activeCall != null) return;
+        _updateStatus(false);
+        ChatSocketService().disconnect();
+      });
     }
   }
+
 
   Future<void> _checkSessionActive() async {
     final token = await _localStorage.getToken();

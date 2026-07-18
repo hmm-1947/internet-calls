@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/user/services/pip_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -318,6 +319,9 @@ Future<void> _requestMicAndStartCall() async {
       }
 
       await room.localParticipant?.setMicrophoneEnabled(_micEnabled);
+      await CallForegroundService.instance.start(
+        title: 'Call with ${widget.otherPartyName}',
+      );
       _startCoinTimer();
       if (room.remoteParticipants.isNotEmpty) {
         _startDurationTimer();
@@ -445,6 +449,7 @@ Future<void> _requestMicAndStartCall() async {
     _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
+    await CallForegroundService.instance.stop();
     await UserCallkitService.instance.endCall(widget.callId.toString());
     PipService.instance.setCallActive(false);
     if (mounted) {
@@ -466,8 +471,10 @@ Future<void> _requestMicAndStartCall() async {
     _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
+    CallForegroundService.instance.stop();
     UserCallkitService.instance.endCall(widget.callId.toString());
     PipService.instance.setCallActive(false);
+
     if (rejected) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -507,6 +514,7 @@ Future<void> _requestMicAndStartCall() async {
     _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
+    await CallForegroundService.instance.stop();
     await UserCallkitService.instance.endCall(widget.callId.toString());
     PipService.instance.setCallActive(false);
     if (!mounted) return;
@@ -514,6 +522,7 @@ Future<void> _requestMicAndStartCall() async {
       Navigator.of(context).pushReplacement(_summaryRoute());
     } else {
       Navigator.of(context).pop();
+
     }
   }
 
@@ -540,6 +549,7 @@ Future<void> _requestMicAndStartCall() async {
     _ringingPlayer?.dispose();
     _missedPlayer?.dispose();
     UserCallkitService.instance.endCall(widget.callId.toString());
+    CallForegroundService.instance.stop();
     PipService.instance.onPipModeChanged = null;
     PipService.instance.onUserLeaveHint = null;
     PipService.instance.setCallActive(false);

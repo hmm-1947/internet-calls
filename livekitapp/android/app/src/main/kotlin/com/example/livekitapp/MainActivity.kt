@@ -18,8 +18,10 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "livekitapp/lockscreen"
     private var pendingUnlockResult: MethodChannel.Result? = null
     private var unlockReceiver: BroadcastReceiver? = null
-private val PIP_CHANNEL = "livekitapp/pip"
+    private val PIP_CHANNEL = "livekitapp/pip"
     private val RINGTONE_CHANNEL = "livekitapp/ringtone"
+    private val CALL_FG_CHANNEL = "livekitapp/callforeground"
+
     private var isInPipMode = false
     private var isInCallState = false
 
@@ -133,7 +135,28 @@ private val PIP_CHANNEL = "livekitapp/pip"
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALL_FG_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> {
+                    val title = call.argument<String>("title") ?: "Ongoing call"
+                    val intent = Intent(this, CallForegroundService::class.java)
+                    intent.action = CallForegroundService.ACTION_START
+                    intent.putExtra(CallForegroundService.EXTRA_TITLE, title)
+                    startForegroundService(intent)
+                    result.success(null)
+                }
+                "stop" -> {
+                    val intent = Intent(this, CallForegroundService::class.java)
+                    intent.action = CallForegroundService.ACTION_STOP
+                    startService(intent)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
+
 
     private fun isNotificationListenerEnabled(): Boolean {
         val enabledListeners = android.provider.Settings.Secure.getString(

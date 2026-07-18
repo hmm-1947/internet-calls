@@ -9,11 +9,31 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
-from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift
+from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
 from app.core.ws_manager import manager
+
+ACTIVE_CALL_STATUSES = ("ringing", "accepted")
+
+async def _finalize_active_calls_for_user(user_id: int, db: Session):
+    from app.routers.call import finalize_abandoned_call
+    calls = db.query(Call).filter(
+        Call.caller_user_id == user_id,
+        Call.status.in_(ACTIVE_CALL_STATUSES),
+    ).all()
+    for call in calls:
+        await finalize_abandoned_call(db, call)
+
+async def _finalize_active_calls_for_listener(listener_id: int, db: Session):
+    from app.routers.call import finalize_abandoned_call
+    calls = db.query(Call).filter(
+        Call.callee_listener_id == listener_id,
+        Call.status.in_(ACTIVE_CALL_STATUSES),
+    ).all()
+    for call in calls:
+        await finalize_abandoned_call(db, call)
 
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -610,8 +630,10 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
             await _handle_user_ws_event(raw, user_id, db)
     except Exception:
         manager.disconnect_user(user_id, websocket)
+        await _finalize_active_calls_for_user(user_id, db)
         if manager.is_user_online(user_id):
             return
+
         await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": False})
         user = db.query(User).filter(User.id == user_id).first()
         if user:
@@ -672,8 +694,10 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
             await _handle_listener_ws_event(raw, listener_id, db)
     except Exception:
         manager.disconnect_listener(listener_id, websocket)
+        await _finalize_active_calls_for_listener(listener_id, db)
         if manager.is_listener_online(listener_id):
             return
+
         await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": False})
         listener = db.query(Listener).filter(Listener.id == listener_id).first()
         if listener:

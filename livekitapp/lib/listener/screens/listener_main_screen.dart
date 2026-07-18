@@ -4,8 +4,8 @@ import 'package:livekitapp/listener/screens/listener_home_screen.dart';
 import 'package:livekitapp/listener/screens/chats/listener_chats_list_screen.dart';
 import 'package:livekitapp/listener/screens/listener_settings_screen.dart';
 import 'package:livekitapp/main_listener.dart';
-import 'package:livekitapp/shared/widgets/crown_nav_bar.dart';
-import 'package:livekitapp/shared/widgets/faded_indexed_stack.dart';
+import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
+import 'package:livekitapp/common/widgets/faded_indexed_stack.dart';
 
 class ListenerMainScreen extends StatefulWidget {
   const ListenerMainScreen({super.key});

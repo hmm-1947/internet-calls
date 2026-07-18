@@ -132,7 +132,7 @@ if (event is CallEventActionCallAccept) {
     _stopCustomRingtone();
   }
 
-  Future<void> flushPendingNav() async {
+  Future<void> flushPendingNav({int retriesLeft = 6}) async {
     print(
       '[Callkit] flushPendingNav called. _pendingCallNav is ${_pendingCallNav != null ? "NOT null" : "null"}',
     );
@@ -156,12 +156,54 @@ if (event is CallEventActionCallAccept) {
         callerPhotoUrl: activeCall['callerPhotoUrl'],
       );
       _navigateToCallScreen(nav);
-    } else if (_acceptingCallId != null) {
+      return;
+    }
+
+    if (_acceptingCallId != null) {
       print(
         '[Callkit] flushPendingNav: accept in flight for callId=$_acceptingCallId, will retry shortly',
       );
       await Future.delayed(const Duration(milliseconds: 800));
       await flushPendingNav();
+      return;
+    }
+
+    if (retriesLeft <= 0) {
+      print('[Callkit] flushPendingNav: no pending nav found after retries, giving up');
+      return;
+    }
+
+    try {
+      final active = await FlutterCallkitIncoming.activeCalls();
+      if (active.isNotEmpty) {
+        final callData = active.first;
+        final extra = callData.extra;
+        final isAccepted = callData.isAccepted;
+        final callId = int.tryParse('${extra?['call_id'] ?? ''}');
+        if (isAccepted && callId != null) {
+          print(
+            '[Callkit] flushPendingNav: found accepted call in native activeCalls (cold-start, Dart event stream missed it) — driving accept directly for callId=$callId',
+          );
+          final isVideo = extra?['call_type'] == 'video';
+          final callerName = extra?['caller_name'] ?? 'User';
+          final callerPhotoUrl = extra?['caller_photo_url'] as String?;
+          await _acceptCallFromSystem(
+            callId,
+            isVideo,
+            callerName: callerName,
+            callerPhotoUrl: callerPhotoUrl,
+          );
+          return;
+        }
+        print(
+          '[Callkit] flushPendingNav: native activeCalls reports a call but Dart state is empty (cold-start race), retrying ($retriesLeft left)',
+        );
+        await Future.delayed(const Duration(milliseconds: 500));
+        await flushPendingNav(retriesLeft: retriesLeft - 1);
+        return;
+      }
+    } catch (e) {
+      print('[Callkit] flushPendingNav: activeCalls() check failed: $e');
     }
   }
 

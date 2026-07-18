@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart' as ls;
@@ -10,7 +11,6 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
 import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
-import 'package:livekitapp/shared/utils/fade_page_route.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';

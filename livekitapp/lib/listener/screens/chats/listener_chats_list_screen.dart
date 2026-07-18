@@ -7,7 +7,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.dart';
-import 'package:livekitapp/shared/utils/fade_page_route.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
 
 class ListenerChatsListScreen extends StatefulWidget {
   const ListenerChatsListScreen({super.key});

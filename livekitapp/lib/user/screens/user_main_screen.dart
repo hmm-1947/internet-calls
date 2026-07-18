@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
+import 'package:livekitapp/common/widgets/faded_indexed_stack.dart';
 import 'package:livekitapp/main_user.dart';
-import 'package:livekitapp/shared/widgets/crown_nav_bar.dart';
+import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
 import 'package:livekitapp/user/screens/user_home_screen.dart';
 import 'package:livekitapp/user/screens/chats_list_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 import 'package:livekitapp/user/screens/calls/call_history_screen.dart';
 import 'package:livekitapp/user/screens/upgrade_screen.dart';
-import 'package:livekitapp/shared/widgets/faded_indexed_stack.dart';
-import 'package:livekitapp/shared/utils/fade_page_route.dart';
 
 class UserMainScreen extends StatefulWidget {
   const UserMainScreen({super.key});

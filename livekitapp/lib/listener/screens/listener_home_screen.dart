@@ -7,7 +7,8 @@ import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
 import 'package:livekitapp/listener/screens/listener_reviews_screen.dart';
-import 'package:livekitapp/shared/utils/fade_page_route.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
+import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class ListenerHomeScreen extends StatefulWidget {
@@ -423,6 +424,21 @@ Future<void> _loadProfile() async {
                 ],
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline, color: pink),
+            onPressed: () {
+              Navigator.of(context).push(
+                fadeRoute(
+                  ListenerChatHistoryScreen(
+                    userId: user['id'],
+                    userName: user['name'] ?? 'User',
+                    userPhotoUrl: user['photo_url'],
+                  ),
+                  barrierColor: bg,
+                ),
+              );
+            },
           ),
         ],
       ),

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
-import 'package:livekitapp/common/widgets/voice_message_bubble.dart';
-import 'package:livekitapp/common/widgets/voice_record_button.dart';
-import 'package:livekitapp/common/widgets/voice_recording_indicator.dart';
+import 'package:livekitapp/common/widgets/voice_messages/voice_message_bubble.dart';
+import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
+import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicator.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';

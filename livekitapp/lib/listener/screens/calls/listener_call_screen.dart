@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
+import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -138,6 +139,10 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
       }
 
       await room.localParticipant?.setMicrophoneEnabled(true);
+      await CallForegroundService.instance.start(
+        title: 'Call with ${widget.otherPartyName}',
+      );
+
 
       VideoTrack? localVideoTrack;
       if (widget.isVideo) {
@@ -316,6 +321,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
 _room?.disconnect();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
+    await CallForegroundService.instance.stop();
     await _localStorage.clearActiveCall();
     if (widget.callId != null) {
       await CallkitService.instance.endCall(widget.callId.toString());
@@ -351,6 +357,7 @@ _fcmSubscription?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
+    CallForegroundService.instance.stop();
     super.dispose();
   }
 

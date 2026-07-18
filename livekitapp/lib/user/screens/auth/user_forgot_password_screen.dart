@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/auth/auth_card.dart';
+import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
+import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
-import 'package:livekitapp/shared/widgets/auth_card.dart';
-import 'package:livekitapp/shared/widgets/otp_countdown.dart';
-import 'package:livekitapp/shared/widgets/password_rules_checklist.dart';
 
 enum _ForgotPasswordStep { email, otp, reset }
 

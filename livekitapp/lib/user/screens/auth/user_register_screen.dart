@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
+import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_otp_verify_screen.dart';
-import 'package:livekitapp/shared/utils/fade_page_route.dart';
-import 'package:livekitapp/shared/widgets/password_rules_checklist.dart';
 
 class UserRegisterScreen extends StatefulWidget {
   const UserRegisterScreen({super.key});
