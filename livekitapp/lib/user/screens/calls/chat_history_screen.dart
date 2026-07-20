@@ -630,14 +630,24 @@ void _onScroll() {
     const bubbleIn = Color(0xFF1F2430);
     const bubbleOut = Color(0xFF7A1620);
     const pink = Color(0xFFE53950);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrow = screenWidth < 380;
+    final isVeryNarrow = screenWidth < 340;
+    final iconButtonStyle = IconButton.styleFrom(
+      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 4 : 8),
+      minimumSize: const Size(36, 36),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: bg,
         elevation: 0,
         titleSpacing: 0,
+        leadingWidth: 40,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          style: iconButtonStyle,
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: GestureDetector(
@@ -647,11 +657,11 @@ void _onScroll() {
             children: [
               AvatarImage(
                 photoUrl: widget.listenerPhotoUrl,
-                radius: 18,
-                iconSize: 18,
+                radius: isNarrow ? 15 : 18,
+                iconSize: isNarrow ? 15 : 18,
                 backgroundColor: const Color(0xFF2A3145),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Flexible(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,8 +669,9 @@ void _onScroll() {
                   children: [
                     Text(
                       widget.listenerName,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      style: TextStyle(color: Colors.white, fontSize: isNarrow ? 14 : 16),
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                     Text(
                       _listenerTyping
@@ -675,6 +686,7 @@ void _onScroll() {
                         fontSize: 12,
                       ),
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ],
                 ),
@@ -684,31 +696,38 @@ void _onScroll() {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.call, color: Colors.white),
+            style: iconButtonStyle,
+            icon: Icon(Icons.call, color: Colors.white, size: isNarrow ? 20 : 24),
             onPressed: _callingListener ? null : () => _callListener(),
           ),
-          IconButton(
-            icon: const Icon(Icons.videocam, color: Colors.white),
-            onPressed: _callingListener ? null : () => _callListener(video: true),
-          ),
-          IconButton(
-            icon: const Icon(Icons.card_giftcard, color: Colors.white),
-            onPressed: () => showGiftSheet(
-              context,
-              listenerId: widget.listenerId,
-              fromTop: true,
+          if (!isVeryNarrow)
+            IconButton(
+              style: iconButtonStyle,
+              icon: Icon(Icons.videocam, color: Colors.white, size: isNarrow ? 20 : 24),
+              onPressed: _callingListener ? null : () => _callListener(video: true),
             ),
-          ),
+          if (!isNarrow)
+            IconButton(
+              style: iconButtonStyle,
+              icon: const Icon(Icons.card_giftcard, color: Colors.white),
+              onPressed: () => showGiftSheet(
+                context,
+                listenerId: widget.listenerId,
+                fromTop: true,
+              ),
+            ),
           IconButton(
+            style: iconButtonStyle,
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
               color: _isFavorite ? const Color(0xFFE53950) : Colors.white,
+              size: isNarrow ? 20 : 24,
             ),
             onPressed: _toggleFavorite,
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            margin: const EdgeInsets.only(right: 12),
+            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 14, vertical: 6),
+            margin: EdgeInsets.only(right: isNarrow ? 6 : 12, left: 4),
             decoration: BoxDecoration(
               color: const Color(0x1AFFFFFF),
               borderRadius: BorderRadius.circular(20),

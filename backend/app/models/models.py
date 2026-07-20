@@ -92,6 +92,7 @@ class Call(Base):
     call_type = Column(String, default="audio")
     connected_at = Column(DateTime(timezone=True), nullable=True)
     coins_deducted = Column(Integer, default=0)
+    billed_minutes = Column(Integer, default=0)
     duration_seconds = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

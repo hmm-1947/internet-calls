@@ -503,53 +503,69 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
     const bubbleIn = Color(0xFF1F2430);
     const bubbleOut = Color(0xFF7A1620);
     const pink = Color(0xFFE53950);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrow = screenWidth < 380;
+    final iconButtonStyle = IconButton.styleFrom(
+      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 4 : 8),
+      minimumSize: const Size(36, 36),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: bg,
         elevation: 0,
         titleSpacing: 0,
+        leadingWidth: 40,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          style: iconButtonStyle,
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Row(
           children: [
          AvatarImage(
               photoUrl: widget.userPhotoUrl,
-              radius: 18,
-              iconSize: 18,
+              radius: isNarrow ? 15 : 18,
+              iconSize: isNarrow ? 15 : 18,
               backgroundColor: const Color(0xFF2A3145),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.userName,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                Text(
-                  _userTyping
-                      ? 'typing...'
-                      : (_isUserOnline ? 'Online' : 'Offline'),
-                  style: TextStyle(
-                    color: _userTyping
-                        ? const Color(0xFFE53950)
-                        : (_isUserOnline
-                              ? const Color(0xFF74D8BD)
-                              : Colors.white54),
-                    fontSize: 12,
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.userName,
+                    style: TextStyle(color: Colors.white, fontSize: isNarrow ? 14 : 16),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
-                ),
-              ],
+                  Text(
+                    _userTyping
+                        ? 'typing...'
+                        : (_isUserOnline ? 'Online' : 'Offline'),
+                    style: TextStyle(
+                      color: _userTyping
+                          ? const Color(0xFFE53950)
+                          : (_isUserOnline
+                                ? const Color(0xFF74D8BD)
+                                : Colors.white54),
+                      fontSize: 12,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.note_alt_outlined, color: Colors.white),
+            style: iconButtonStyle,
+            icon: Icon(Icons.note_alt_outlined, color: Colors.white, size: isNarrow ? 20 : 24),
             onPressed: () {
               Navigator.push(
                 context,
@@ -563,14 +579,17 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
             },
           ),
           IconButton(
+            style: iconButtonStyle,
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
               color: _isFavorite ? const Color(0xFFE53950) : Colors.white,
+              size: isNarrow ? 20 : 24,
             ),
             onPressed: _toggleFavorite,
           ),
           IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
+            style: iconButtonStyle,
+            icon: Icon(Icons.more_vert, color: Colors.white, size: isNarrow ? 20 : 24),
             onPressed: () {},
           ),
         ],

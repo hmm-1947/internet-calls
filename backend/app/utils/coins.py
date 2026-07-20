@@ -41,9 +41,31 @@ async def _credit_listener(db: Session, listener_id: int, amount: int, reason: s
     from app.core.ws_manager import manager
     await manager.send_to_listener(listener.id, {"type": "coins_updated", "coins": listener.coins})
 
+async def bill_call_minute(db: Session, call: Call) -> int | None:
+    """Bill exactly one minute for the given call's user, at current settings.
+    Returns the amount deducted, or None if the user doesn't have enough coins."""
+    user = db.query(User).filter(User.id == call.caller_user_id).first()
+    if not user:
+        return None
+    per_minute = coins_per_minute(db, call.call_type)
+    if per_minute <= 0:
+        call.billed_minutes += 1
+        db.commit()
+        return 0
+    if user.coins < per_minute:
+        return None
+    user.coins -= per_minute
+    call.billed_minutes += 1
+    call.coins_deducted = (call.coins_deducted or 0) + per_minute
+    db.add(CoinTransaction(user_id=user.id, amount=-per_minute, reason=f"{call.call_type}_call", call_id=call.id))
+    db.commit()
+    from app.core.ws_manager import manager
+    await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
+    return per_minute
+
 async def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: int, call_type: str) -> int:
     per_minute = coins_per_minute(db, call_type)
-    minutes_used = max(1, duration_seconds // 60)
+    minutes_used = max(1, -(-duration_seconds // 60))
     amount = minutes_used * per_minute
     amount = min(amount, user.coins)
     user.coins -= amount
@@ -53,6 +75,31 @@ async def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: 
     await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
 
     return amount
+
+async def reconcile_call_billing(db: Session, call: Call, duration_seconds: int) -> int:
+    """Called when a call ends. The live per-minute loop already bills each
+    minute as it starts (ceil-style billing). This only charges for any
+    final minute that started but wasn't billed yet by the loop, e.g. if the
+    call ends in the same tick the loop is about to run. Returns the total
+    coins deducted for the whole call (call.coins_deducted)."""
+    user = db.query(User).filter(User.id == call.caller_user_id).first()
+    if not user:
+        return call.coins_deducted or 0
+    per_minute = coins_per_minute(db, call.call_type)
+    total_minutes = max(1, -(-duration_seconds // 60)) if duration_seconds > 0 else 0
+    remaining_minutes = max(0, total_minutes - (call.billed_minutes or 0))
+    if remaining_minutes > 0 and per_minute > 0:
+        amount = min(remaining_minutes * per_minute, user.coins)
+        user.coins -= amount
+        call.billed_minutes = (call.billed_minutes or 0) + remaining_minutes
+        call.coins_deducted = (call.coins_deducted or 0) + amount
+        db.add(CoinTransaction(user_id=user.id, amount=-amount, reason=f"{call.call_type}_call", call_id=call.id))
+        db.commit()
+        from app.core.ws_manager import manager
+        await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
+    return call.coins_deducted or 0
+
+
 
 async def deduct_chat_coins(db: Session, user: User, listener_id: int, message_id: int) -> int:
     cost = chat_message_coin_cost(db)

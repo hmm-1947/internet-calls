@@ -2840,6 +2840,28 @@
             <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
           </div>`}
         </div>
+        <div class="profile-edit-box" style="margin:12px 0;padding:12px;border:1px solid #333;border-radius:8px">
+          <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+            <div>
+              <img src="${p.raw.photo_url ? API_URL + p.raw.photo_url : ''}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:#222;display:block;margin-bottom:6px">
+              <input type="file" id="photoInput-${p.id}" accept="image/*" onchange="uploadProfilePhoto('${p.type}', ${p.id})">
+            </div>
+            <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px">
+              ${p.type === 'user' ? `
+              <label>Bio</label>
+              <textarea id="bioInput-${p.id}" rows="2" style="width:100%">${(p.raw.bio || '').replace(/</g, '&lt;')}</textarea>
+              ` : `
+              <label>About</label>
+              <textarea id="aboutInput-${p.id}" rows="2" style="width:100%">${(p.raw.about || '').replace(/</g, '&lt;')}</textarea>
+              <label>Good to talk about (comma separated)</label>
+              <input type="text" id="tagsInput-${p.id}" style="width:100%" value="${(() => { try { return (JSON.parse(p.raw.tags || '[]')).join(', '); } catch (e) { return ''; } })()}">
+              <label>Languages (comma separated)</label>
+              <input type="text" id="languagesInput-${p.id}" style="width:100%" value="${(() => { try { return (JSON.parse(p.raw.languages || '[]')).join(', '); } catch (e) { return ''; } })()}">
+              `}
+              <button class="btn btn-leaf" style="align-self:flex-start" onclick="saveProfileEdits('${p.type}', ${p.id})">Save Profile</button>
+            </div>
+          </div>
+        </div>
         <div class="pair-arrow-row" id="pairArrowRow" style="display:none">
           <span class="pair-name pair-left"></span>
           <span class="pair-arrow">&#10230;</span>
@@ -3124,6 +3146,44 @@ ${logSection === 'chats' ? '' : `
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg(`✓ ${type === 'user' ? 'User' : 'Listener'} ${newActive ? 'activated' : 'deactivated'}`, true);
         if (selectedPerson) selectedPerson.raw.is_active = newActive;
+        loadPeople();
+        renderPersonContent();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    async function saveProfileEdits(type, id) {
+      try {
+        let endpoint, body;
+        if (type === 'user') {
+          endpoint = `/admin/users/${id}/profile`;
+          body = { bio: document.getElementById(`bioInput-${id}`).value };
+        } else {
+          endpoint = `/admin/listeners/${id}/profile`;
+          const tags = document.getElementById(`tagsInput-${id}`).value.split(',').map(s => s.trim()).filter(Boolean);
+          const languages = document.getElementById(`languagesInput-${id}`).value.split(',').map(s => s.trim()).filter(Boolean);
+          body = { about: document.getElementById(`aboutInput-${id}`).value, tags, languages };
+        }
+        const res = await fetch(API_URL + endpoint, { method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg('✓ Profile updated', true);
+        loadPeople();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
+    async function uploadProfilePhoto(type, id) {
+      const input = document.getElementById(`photoInput-${id}`);
+      const file = input.files[0];
+      if (!file) return;
+      try {
+        const endpoint = type === 'user' ? `/admin/users/${id}/photo` : `/admin/listeners/${id}/photo`;
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(API_URL + endpoint, { method: 'POST', headers: authHeaders(), body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg('✓ Photo updated', true);
+        if (selectedPerson) selectedPerson.raw.photo_url = data.photo_url;
         loadPeople();
         renderPersonContent();
       } catch (e) { setMsg('✗ ' + e.message, false); }

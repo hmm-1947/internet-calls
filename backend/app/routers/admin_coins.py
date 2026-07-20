@@ -27,7 +27,7 @@ class CoinSettingsUpdate(BaseModel):
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
     users = db.query(User).all()
-    result = [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins, "is_active": u.is_active, "is_online": manager.is_user_online(u.id)} for u in users]
+    result = [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins, "is_active": u.is_active, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url} for u in users]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -45,7 +45,7 @@ def adjust_coins(payload: CoinAdjust, db: Session = Depends(get_db), _=Depends(v
 @router.get("/listeners")
 def list_listeners(db: Session = Depends(get_db), _=Depends(verify_admin)):
     listeners = db.query(Listener).all()
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "coins": l.coins, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id)} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "coins": l.coins, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 

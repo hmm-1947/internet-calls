@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
+import json
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db
@@ -64,9 +67,37 @@ def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=De
 @router.get("/listeners")
 def list_listeners(db: Session = Depends(get_db), _=Depends(verify_admin)):
     listeners = db.query(Listener).all()
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id)} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
+
+@router.patch("/listeners/{listener_id}/profile")
+def update_listener_profile(listener_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    if "about" in payload:
+        listener.about = payload.get("about")
+    if "tags" in payload:
+        listener.tags = json.dumps(payload.get("tags") or [])
+    if "languages" in payload:
+        listener.languages = json.dumps(payload.get("languages") or [])
+    db.commit()
+    return {"id": listener.id, "about": listener.about, "tags": listener.tags, "languages": listener.languages}
+
+@router.post("/listeners/{listener_id}/photo")
+async def update_listener_photo(listener_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _=Depends(verify_admin)):
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    filename = f"listener_{listener.id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join("profile_photos", filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    listener.photo_url = f"/profile_photos/{filename}"
+    db.commit()
+    return {"id": listener.id, "photo_url": listener.photo_url}
 
 @router.patch("/listeners/{listener_id}/active")
 async def set_listener_active(listener_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
@@ -102,9 +133,33 @@ def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(v
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
     users = db.query(User).all()
-    result = [{"id": u.id, "name": u.name, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id)} for u in users]
+    result = [{"id": u.id, "name": u.name, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url} for u in users]
     result.sort(key=lambda x: not x["is_online"])
     return result
+
+@router.patch("/users/{user_id}/profile")
+def update_user_profile(user_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if "bio" in payload:
+        user.bio = payload.get("bio")
+    db.commit()
+    return {"id": user.id, "bio": user.bio}
+
+@router.post("/users/{user_id}/photo")
+async def update_user_photo(user_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _=Depends(verify_admin)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    filename = f"user_{user.id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join("profile_photos", filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    user.photo_url = f"/profile_photos/{filename}"
+    db.commit()
+    return {"id": user.id, "photo_url": user.photo_url}
 
 @router.patch("/users/{user_id}/active")
 async def set_user_active(user_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):

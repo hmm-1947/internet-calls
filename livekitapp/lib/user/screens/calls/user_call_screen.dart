@@ -186,8 +186,29 @@ Future<void> _requestMicAndStartCall() async {
       _onCallEnded(rejected: true);
     } else if (type == 'call_ended') {
       _onCallEnded();
+    } else if (type == 'call_coin_exceeded') {
+      _onCoinsExceededByServer();
     } else if (type == 'call_missed') {
       _onCallMissed();
+    }
+  }
+
+  Future<void> _onCoinsExceededByServer() async {
+    if (_isEnding) return;
+    _isEnding = true;
+    _roomListener?.dispose();
+    _roomListener = null;
+    _audioLevelTimer?.cancel();
+    _room?.disconnect();
+    _durationTimer?.cancel();
+    await CallForegroundService.instance.stop();
+    await UserCallkitService.instance.endCall(widget.callId.toString());
+    PipService.instance.setCallActive(false);
+    if (mounted) {
+      Navigator.of(context).pushReplacement(_summaryRoute());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not enough coins to continue the call')),
+      );
     }
   }
 

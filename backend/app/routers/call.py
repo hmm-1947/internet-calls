@@ -1,4 +1,5 @@
 #calls.py
+import asyncio
 import uuid
 from datetime import datetime, timezone, timedelta
 # pyrefly: ignore [missing-import]
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.models import CallRating
 from app.core.config import settings
 from fastapi import Request
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
 from app.models.models import Listener, Call, User
 from app.schemas.schemas import CallInitiate
@@ -20,14 +21,71 @@ from app.utils.livekit_egress import start_recording, stop_recording
 from app.utils.livekit_room import delete_room_background
 
 
-from app.utils.coins import max_call_seconds, deduct_coins, coins_per_minute
+from app.utils.coins import max_call_seconds, deduct_coins, reconcile_call_billing, bill_call_minute, coins_per_minute
 from app.schemas.schemas import CallInitiate
 from app.core.ws_manager import manager
 from app.schemas.schemas import CallRatingSubmit, CallSummaryOut, ListenerReviewOut
 
 RINGING_TIMEOUT = timedelta(seconds=60)
+BILLING_ACTIVE_STATUSES = ("accepted",)
 
 router = APIRouter(prefix="/call", tags=["call"])
+
+async def run_call_billing(call_id: int):
+    """Background task: bills one minute immediately, then every 60s while
+    the call is active. Ends the call if the user runs out of coins."""
+    db = SessionLocal()
+    try:
+        call = db.query(Call).filter(Call.id == call_id).first()
+        if not call or call.status not in BILLING_ACTIVE_STATUSES:
+            return
+        result = await bill_call_minute(db, call)
+        if result is None:
+            await _end_call_insufficient_coins(db, call_id)
+            return
+        while True:
+            await asyncio.sleep(60)
+            db.expire_all()
+            call = db.query(Call).filter(Call.id == call_id).first()
+            if not call or call.status not in BILLING_ACTIVE_STATUSES:
+                return
+            result = await bill_call_minute(db, call)
+            if result is None:
+                await _end_call_insufficient_coins(db, call_id)
+                return
+    finally:
+        db.close()
+
+async def _end_call_insufficient_coins(db: Session, call_id: int):
+    claimed = db.query(Call).filter(Call.id == call_id, Call.status != "ended").update(
+        {"status": "ended"}, synchronize_session=False
+    )
+    db.commit()
+    if claimed == 0:
+        return
+    call = db.query(Call).filter(Call.id == call_id).first()
+    if not call:
+        return
+    if call.connected_at:
+        connected_at = call.connected_at
+        if connected_at.tzinfo is None:
+            connected_at = connected_at.replace(tzinfo=timezone.utc)
+        call.duration_seconds = int((datetime.now(timezone.utc) - connected_at).total_seconds())
+        db.commit()
+    user = db.query(User).filter(User.id == call.caller_user_id).first()
+    if user and user.fcm_token:
+        try:
+            send_call_coin_exceeded(user.fcm_token, call_id)
+        except Exception as e:
+            print(f"[FCM ERROR] Failed to notify user {user.id} of coin exceeded: {e}")
+    listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
+    if listener and listener.fcm_token:
+        try:
+            send_call_coin_exceeded(listener.fcm_token, call_id)
+        except Exception:
+            pass
+
+
 
 @router.post("/initiate")
 def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -99,6 +157,7 @@ async def ready_call(call_id: int, db: Session = Depends(get_db), current_listen
         raise HTTPException(status_code=400, detail="Call is not in accepted state")
     call.connected_at = datetime.now(timezone.utc)
     db.commit()
+    asyncio.create_task(run_call_billing(call.id))
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     max_seconds = max_call_seconds(db, user, call.call_type) if user else 0
     if user:
@@ -227,8 +286,7 @@ async def finalize_abandoned_call(db: Session, call: Call):
         call.duration_seconds = int(duration)
         user = db.query(User).filter(User.id == call.caller_user_id).first()
         if user:
-            deducted = await deduct_coins(db, user, call.id, int(duration), call.call_type)
-            call.coins_deducted = deducted
+            await reconcile_call_billing(db, call, int(duration))
     db.commit()
     recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()
 
@@ -289,8 +347,7 @@ async def coin_exceeded(call_id: int, db: Session = Depends(get_db), current_use
             connected_at = connected_at.replace(tzinfo=timezone.utc)
         duration = (datetime.now(timezone.utc) - connected_at).total_seconds()
         call.duration_seconds = int(duration)
-        deducted = await deduct_coins(db, current_user, call.id, int(duration), call.call_type)
-        call.coins_deducted = deducted
+        await reconcile_call_billing(db, call, int(duration))
     db.commit()
 
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
@@ -332,7 +389,7 @@ async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
     call.duration_seconds = duration
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     if user:
-        call.coins_deducted = await deduct_coins(db, user, call.id, duration, call.call_type)
+        await reconcile_call_billing(db, call, duration)
     db.commit()
     return {"ok": True}
 
