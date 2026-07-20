@@ -12,6 +12,11 @@ class LocalChatMessage {
   final String messageType;
   final String? audioUrl;
   final int? audioDuration;
+  final int? giftId;
+  final String? giftName;
+  final String? giftIcon;
+  final int? giftCoins;
+  final int? callId;
   final String status;
   final bool isRead;
   final bool isDeleted;
@@ -27,6 +32,11 @@ class LocalChatMessage {
     this.messageType = 'text',
     this.audioUrl,
     this.audioDuration,
+    this.giftId,
+    this.giftName,
+    this.giftIcon,
+    this.giftCoins,
+    this.callId,
     required this.status,
     this.isRead = false,
     this.isDeleted = false,
@@ -44,6 +54,11 @@ class LocalChatMessage {
     'message_type': messageType,
     'audio_url': audioUrl,
     'audio_duration': audioDuration,
+    'gift_id': giftId,
+    'gift_name': giftName,
+    'gift_icon': giftIcon,
+    'gift_coins': giftCoins,
+    'call_id': callId,
     'status': status,
     'is_read': isRead,
     'is_deleted': isDeleted,
@@ -61,6 +76,11 @@ class LocalChatMessage {
         messageType: json['message_type'] ?? 'text',
         audioUrl: json['audio_url'],
         audioDuration: json['audio_duration'],
+        giftId: json['gift_id'],
+        giftName: json['gift_name'],
+        giftIcon: json['gift_icon'],
+        giftCoins: json['gift_coins'],
+        callId: json['call_id'],
         status: json['status'] ?? 'sent',
         isRead: json['is_read'] ?? false,
         isDeleted: json['is_deleted'] ?? false,
@@ -77,6 +97,11 @@ class LocalChatMessage {
     'message_type': messageType,
     'audio_url': audioUrl,
     'audio_duration': audioDuration,
+    'gift_id': giftId,
+    'gift_name': giftName,
+    'gift_icon': giftIcon,
+    'gift_coins': giftCoins,
+    'call_id': callId,
     'status': status,
     'is_read': isRead ? 1 : 0,
     'is_deleted': isDeleted ? 1 : 0,
@@ -93,6 +118,11 @@ class LocalChatMessage {
     messageType: row['message_type'] ?? 'text',
     audioUrl: row['audio_url'],
     audioDuration: row['audio_duration'],
+    giftId: row['gift_id'],
+    giftName: row['gift_name'],
+    giftIcon: row['gift_icon'],
+    giftCoins: row['gift_coins'],
+    callId: row['call_id'],
     status: row['status'] ?? 'sent',
     isRead: row['is_read'] == 1,
     isDeleted: row['is_deleted'] == 1,
@@ -141,7 +171,7 @@ class ChatStorage {
     final path = join(await getDatabasesPath(), 'chat_cache.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE messages (
@@ -154,6 +184,11 @@ class ChatStorage {
             message_type TEXT,
             audio_url TEXT,
             audio_duration INTEGER,
+            gift_id INTEGER,
+            gift_name TEXT,
+            gift_icon TEXT,
+            gift_coins INTEGER,
+            call_id INTEGER,
             status TEXT,
             is_read INTEGER,
             is_deleted INTEGER,
@@ -165,6 +200,15 @@ class ChatStorage {
         await db.execute(
           'CREATE INDEX idx_messages_other ON messages(other_id, server_id)',
         );
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE messages ADD COLUMN gift_id INTEGER');
+          await db.execute('ALTER TABLE messages ADD COLUMN gift_name TEXT');
+          await db.execute('ALTER TABLE messages ADD COLUMN gift_icon TEXT');
+          await db.execute('ALTER TABLE messages ADD COLUMN gift_coins INTEGER');
+          await db.execute('ALTER TABLE messages ADD COLUMN call_id INTEGER');
+        }
       },
     );
     return _db!;

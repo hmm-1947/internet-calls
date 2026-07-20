@@ -368,10 +368,8 @@ ChatHistoryScreen(
                 onRefresh: _load,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                  padding: const EdgeInsets.fromLTRB(5, 24, 5, 32),
                   children: [
-                    _buildSearchBar(),
-                    const SizedBox(height: 32),
                     _buildDummyOffersSection(),
                     const SizedBox(height: 32),
                     _buildFeaturedProfilesSection(),
@@ -571,33 +569,6 @@ ChatHistoryScreen(
   }
 
   // -------------------------------------------------------------------------
-  // Search bar — dummy, non-functional (no search endpoint yet)
-  // -------------------------------------------------------------------------
-  Widget _buildSearchBar() {
-    return Container(
-      height: 55,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: _AppColors.inputBg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: const [
-          Icon(Icons.search, color: _AppColors.textMuted, size: 18),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Search for experts or services...',
-              style: TextStyle(color: _AppColors.textMuted, fontSize: 16),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // -------------------------------------------------------------------------
   // Special Offers carousel — admin-uploaded images, falls back to dummy
   // placeholder cards when the admin hasn't uploaded any offers yet.
   // -------------------------------------------------------------------------
@@ -625,7 +596,7 @@ ChatHistoryScreen(
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 160,
+          height: 120,
           child: PageView(
             controller: _offersController,
             onPageChanged: (index) => setState(() => _offersCurrentPage = index),
@@ -742,7 +713,7 @@ ChatHistoryScreen(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _listeners.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 16),
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, index) =>
                 _buildProfileCard(_listeners[index]),
           ),

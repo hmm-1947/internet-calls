@@ -143,6 +143,20 @@ class BillingPlanAuditLogOut(BaseModel):
         from_attributes = True
 
 
+class GiftAuditLogOut(BaseModel):
+    id: int
+    action: str
+    gift_id: Optional[int] = None
+    gift_name: str
+    admin_id: Optional[int] = None
+    admin_username: Optional[str] = None
+    details: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class AdminPurchaseOut(BaseModel):
     id: int
     user_id: int
@@ -284,6 +298,11 @@ class ChatMessageOut(BaseModel):
     message_type: str
     audio_url: Optional[str] = None
     audio_duration: Optional[int] = None
+    gift_id: Optional[int] = None
+    gift_name: Optional[str] = None
+    gift_icon: Optional[str] = None
+    gift_coins: Optional[int] = None
+    call_id: Optional[int] = None
     status: str
     is_read: bool
     delivered_at: Optional[datetime] = None

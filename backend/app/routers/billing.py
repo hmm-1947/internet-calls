@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.models import AdminUser, BillingPlan, BillingPlanAuditLog, UserBillingPurchase, User
 from app.routers.admin import verify_admin
+from app.core.ws_manager import manager
 from app.schemas.schemas import (
     AdminPurchaseOut,
     BillingPlanAuditLogOut,
@@ -257,7 +258,7 @@ def purchase_plan(plan_id: int, db: Session = Depends(get_db), current_user: Use
 
 
 @router.post("/billing/verify-payment")
-def verify_payment(
+async def verify_payment(
     payload: RazorpayVerifyPayment,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -311,6 +312,8 @@ def verify_payment(
 
     db.commit()
     db.refresh(purchase)
+
+    await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
 
     return {
         "id": purchase.id,

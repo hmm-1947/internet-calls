@@ -128,6 +128,11 @@ class ChatMessage(Base):
     message_type = Column(String, default="text")
     audio_url = Column(String, nullable=True)
     audio_duration = Column(Integer, nullable=True)
+    gift_id = Column(Integer, nullable=True, index=True)  # kept even if the gift is later deleted/renamed
+    gift_name = Column(String, nullable=True)
+    gift_icon = Column(String, nullable=True)
+    gift_coins = Column(Integer, nullable=True)  # full gift cost paid by the sender
+    call_id = Column(Integer, nullable=True)  # set when the gift/message was sent during an active call
     status = Column(String, default="sent")
     is_read = Column(Boolean, default=False)
     delivered_at = Column(DateTime(timezone=True), nullable=True)
@@ -194,6 +199,19 @@ class Gift(Base):
     name = Column(String, nullable=False)
     coins = Column(Integer, nullable=False)
     icon = Column(String, nullable=True)
+
+
+class GiftAuditLog(Base):
+    __tablename__ = "gift_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String, nullable=False, index=True)  # created | updated | deleted
+    gift_id = Column(Integer, nullable=True, index=True)  # kept even if the gift is later deleted
+    gift_name = Column(String, nullable=False)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    admin_username = Column(String, nullable=True)  # snapshot in case the admin is later removed
+    details = Column(Text, nullable=True)  # human-readable summary of what changed
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class GiftTransaction(Base):
     __tablename__ = "gift_transactions"

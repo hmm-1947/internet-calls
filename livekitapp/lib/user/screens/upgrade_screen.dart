@@ -576,8 +576,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                 const SizedBox(width: 8),
                 Text(
                   '₹${plan['price']}',
-                  style: const TextStyle(
-                    color: _AppColors.brandRed,
+                  style: TextStyle(
+                    color: featured ? _AppColors.brandRed : Colors.white,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),

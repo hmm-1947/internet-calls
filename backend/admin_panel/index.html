@@ -644,6 +644,74 @@
       color: var(--slate);
     }
 
+    .wallet-balance-card {
+      background: linear-gradient(135deg, #4A0E0E, #1A0505);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+
+    .wallet-balance-label {
+      color: rgba(255,255,255,0.55);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .wallet-balance-value {
+      color: #fff;
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .wallet-balance-value span {
+      color: #E53950;
+      font-size: 15px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+
+    .wallet-breakdown-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .wallet-time-card {
+      flex: 1;
+      min-width: 220px;
+      background: #1A1A1A;
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .wallet-time-title {
+      color: #E53950;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    .wallet-stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 13px;
+      color: #ddd;
+    }
+
+    .wallet-stat-row span:first-child {
+      color: rgba(255,255,255,0.6);
+    }
+
+    .wallet-stat-row span:last-child {
+      color: #fff;
+      font-weight: 600;
+    }
+
     .page-size-row select {
       padding: 5px 8px;
       border: 1px solid var(--line);
@@ -1197,6 +1265,14 @@
     </div>
 
     <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Gift Audit Log</span>
+        <button class="btn btn-ghost" onclick="loadGiftAuditLog()">Refresh</button>
+      </h2>
+      <div id="giftAuditLogList"></div>
+    </div>
+
+    <div class="card">
       <h2>Gift Transactions</h2>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <label style="font-size:13px;color:var(--slate);font-weight:600;">Show</label>
@@ -1455,6 +1531,7 @@
       loadBillingAuditLog();
       loadBillingPurchases();
       loadGifts();
+      loadGiftAuditLog();
       loadGiftTransactions();
       loadSpecialOffers();
       loadActiveCalls();
@@ -2105,6 +2182,7 @@
         setGiftMsg('✓ Gift saved', true);
         resetGiftForm();
         loadGifts();
+        loadGiftAuditLog();
       } catch (e) { setGiftMsg('✗ ' + e.message, false); }
     }
 
@@ -2117,6 +2195,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to delete gift');
         loadGifts();
+        loadGiftAuditLog();
       } catch (e) { setGiftMsg('✗ ' + e.message, false); }
     }
 
@@ -2314,6 +2393,11 @@
     let billingAuditLogCache = [];
     let billingAuditLogPage = 1;
 
+    const GIFT_AUDIT_ACTION_LABELS = { created: 'Added', updated: 'Updated', deleted: 'Deleted' };
+    const GIFT_AUDIT_ACTION_BADGE = { created: 'badge-yes', updated: 'badge-pending', deleted: 'badge-no' };
+    let giftAuditLogCache = [];
+    let giftAuditLogPage = 1;
+
     const LOGIN_AUDIT_ACTION_LABELS = { login: 'Login', logout: 'Logout' };
     const LOGIN_AUDIT_ACTION_BADGE = { login: 'badge-yes', logout: 'badge-no' };
     let userAuditLogPage = 1;
@@ -2435,6 +2519,62 @@
         </div>
       `;
     }
+
+    async function loadGiftAuditLog() {
+      const wrap = document.getElementById('giftAuditLogList');
+      try {
+        const res = await fetch(API_URL + '/gift/admin/audit-log', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load audit log');
+        giftAuditLogCache = data;
+        giftAuditLogPage = 1;
+        renderGiftAuditLog();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load gift audit log.</div>';
+      }
+    }
+
+    function goToGiftAuditLogPage(delta) {
+      giftAuditLogPage += delta;
+      renderGiftAuditLog();
+    }
+
+    function renderGiftAuditLog() {
+      const wrap = document.getElementById('giftAuditLogList');
+      if (!giftAuditLogCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No gift changes yet.</div>';
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(giftAuditLogCache.length / AUDIT_LOG_PAGE_SIZE));
+      if (giftAuditLogPage > totalPages) giftAuditLogPage = totalPages;
+      if (giftAuditLogPage < 1) giftAuditLogPage = 1;
+      const start = (giftAuditLogPage - 1) * AUDIT_LOG_PAGE_SIZE;
+      const pageRows = giftAuditLogCache.slice(start, start + AUDIT_LOG_PAGE_SIZE);
+
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Time</th><th>Action</th><th>Gift</th><th>Details</th><th>Admin</th></tr></thead>
+          <tbody>
+            ${pageRows.map(l => `
+              <tr>
+                <td style="white-space:nowrap;">${formatPurchaseDate(l.created_at)}</td>
+                <td><span class="badge ${GIFT_AUDIT_ACTION_BADGE[l.action] || ''}">${GIFT_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
+                <td>${l.gift_name}</td>
+                <td style="color:var(--slate);font-size:13px;">${l.details || '—'}</td>
+                <td>${l.admin_username || '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;">
+          <button class="btn btn-ghost" onclick="goToGiftAuditLogPage(-1)" ${giftAuditLogPage <= 1 ? 'disabled' : ''}>← Prev</button>
+          <span style="font-size:13px;color:var(--slate);">Page ${giftAuditLogPage} of ${totalPages}</span>
+          <button class="btn btn-ghost" onclick="goToGiftAuditLogPage(1)" ${giftAuditLogPage >= totalPages ? 'disabled' : ''}>Next →</button>
+        </div>
+      `;
+    }
+
 
     const PURCHASE_STATUS_LABELS = { completed: 'Successful', pending: 'Pending', failed: 'Failed' };
     const PURCHASE_STATUS_BADGE = { completed: 'badge-yes', pending: 'badge-pending', failed: 'badge-no' };
@@ -2709,7 +2849,11 @@
           <div class="section-tab ${logSection === 'calls' ? 'active' : ''}" onclick="switchLogSection('calls')">Call Logs</div>
           <div class="section-tab ${logSection === 'recordings' ? 'active' : ''}" onclick="switchLogSection('recordings')">Recordings</div>
           <div class="section-tab ${logSection === 'chats' ? 'active' : ''}" onclick="switchLogSection('chats')">Chats</div>
+          ${p.type === 'listener' ? `<div class="section-tab ${logSection === 'wallet' ? 'active' : ''}" onclick="switchLogSection('wallet')">Wallet</div>` : ''}
         </div>
+${logSection === 'wallet' ? `
+        <div id="walletWrap"></div>
+      ` : `
 ${logSection === 'chats' ? '' : `
         <div class="page-size-row">
           Show
@@ -2723,8 +2867,9 @@ ${logSection === 'chats' ? '' : `
         </div>`}
         <div id="logTableWrap"></div>
         <div class="pagination" id="paginationWrap"></div>
+      `}
       `;
-      if (logSection !== 'chats') document.getElementById('pageSizeSelect').value = logPageSize;
+      if (logSection !== 'chats' && logSection !== 'wallet') document.getElementById('pageSizeSelect').value = logPageSize;
     }
 
     function switchLogSection(section) {
@@ -2744,6 +2889,10 @@ ${logSection === 'chats' ? '' : `
     let logsCacheAll = [];
 
     async function loadPersonLogs() {
+      if (logSection === 'wallet') {
+        await loadListenerWallet();
+        return;
+      }
       const wrap = document.getElementById('logTableWrap');
       wrap.innerHTML = '<div class="empty-state">Loading…</div>';
       try {
@@ -2758,6 +2907,56 @@ ${logSection === 'chats' ? '' : `
         wrap.innerHTML = '<div class="empty-state">Error: ' + e.message + '</div>';
       }
     }
+
+    async function loadListenerWallet() {
+      const wrap = document.getElementById('walletWrap');
+      if (!wrap) return;
+      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      try {
+        const res = await fetch(API_URL + '/admin/listener/' + selectedPerson.id + '/wallet', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load wallet');
+        renderListenerWallet(data);
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Error: ' + e.message + '</div>';
+      }
+    }
+
+    function walletTimeSection(title, data) {
+      return `
+        <div class="wallet-time-card">
+          <div class="wallet-time-title">${title}</div>
+          <div class="wallet-stat-row"><span>Audio Calls</span><span>${data.audio_call_minutes || 0} min</span></div>
+          <div class="wallet-stat-row"><span>Video Calls</span><span>${data.video_call_minutes || 0} min</span></div>
+          <div class="wallet-stat-row"><span>Chat Messages</span><span>${data.chat_messages || 0}</span></div>
+          <div class="wallet-stat-row"><span>Voice Chats</span><span>${data.voice_messages || 0}</span></div>
+          <div class="wallet-stat-row"><span>Gift Earnings</span><span>${data.gift_coins || 0}</span></div>
+        </div>`;
+    }
+
+    function renderListenerWallet(data) {
+      const wrap = document.getElementById('walletWrap');
+      wrap.innerHTML = `
+        <div class="wallet-balance-card">
+          <div class="wallet-balance-label">TOTAL BALANCE</div>
+          <div class="wallet-balance-value">${data.coins || 0} <span>COINS</span></div>
+        </div>
+        <div class="wallet-breakdown-row">
+          <div class="wallet-time-card">
+            <div class="wallet-time-title">EARNINGS BREAKDOWN</div>
+            <div class="wallet-stat-row"><span>Audio Call Coins</span><span>${data.audio_call_coins || 0}</span></div>
+            <div class="wallet-stat-row"><span>Video Call Coins</span><span>${data.video_call_coins || 0}</span></div>
+            <div class="wallet-stat-row"><span>Chat Coins</span><span>${data.chat_coins || 0}</span></div>
+            <div class="wallet-stat-row"><span>Gift Coins</span><span>${data.gift_coins || 0}</span></div>
+          </div>
+        </div>
+        <div class="wallet-breakdown-row">
+          ${walletTimeSection('DAY TIME', data.day || {})}
+          ${walletTimeSection('NIGHT TIME', data.night || {})}
+        </div>
+      `;
+    }
+
 
     function applyOtherPersonFilter() {
       const otherField = selectedPerson.type === 'user' ? 'listener_name' : 'caller_name';

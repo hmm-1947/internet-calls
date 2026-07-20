@@ -1,19 +1,36 @@
 import os
 import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.models import User, Listener, Gift, GiftTransaction, CoinTransaction, Call, ListenerCoinTransaction, AdminUser
+from app.models.models import User, Listener, Gift, GiftAuditLog, GiftTransaction, CoinTransaction, Call, ListenerCoinTransaction, AdminUser, ChatMessage
 from app.core.ws_manager import manager
 from app.routers.admin import verify_admin
+from app.routers.chat import _msg_dict
+from app.schemas.schemas import GiftAuditLogOut
 
 router = APIRouter(prefix="/gift", tags=["gift"])
 
 
 def _gift_to_dict(g: Gift) -> dict:
     return {"id": g.id, "name": g.name, "coins": g.coins, "icon": g.icon}
+
+
+def _log_gift_action(db: Session, admin: AdminUser, action: str, gift_id: int | None, gift_name: str, details: str) -> None:
+    db.add(
+        GiftAuditLog(
+            action=action,
+            gift_id=gift_id,
+            gift_name=gift_name,
+            admin_id=admin.id,
+            admin_username=admin.username,
+            details=details,
+        )
+    )
+
 
 
 @router.get("/admin/list")
@@ -47,6 +64,17 @@ async def admin_create_gift(
 
     gift = Gift(name=name, coins=coins, icon=icon_path)
     db.add(gift)
+    db.flush()  # assign gift.id before logging
+
+    _log_gift_action(
+        db,
+        admin,
+        action="created",
+        gift_id=gift.id,
+        gift_name=gift.name,
+        details=f"{gift.coins} coins, icon={'set' if gift.icon else 'none'}",
+    )
+
     db.commit()
     db.refresh(gift)
     return _gift_to_dict(gift)
@@ -71,6 +99,12 @@ async def admin_update_gift(
     if coins is None or coins <= 0:
         raise HTTPException(status_code=400, detail="Coins must be greater than 0")
 
+    changes = []
+    if gift.name != name:
+        changes.append(f"name: {gift.name} → {name}")
+    if gift.coins != coins:
+        changes.append(f"coins: {gift.coins} → {coins}")
+
     gift.name = name
     gift.coins = coins
 
@@ -81,6 +115,16 @@ async def admin_update_gift(
         with open(filepath, "wb") as f:
             f.write(await icon_file.read())
         gift.icon = f"/gift_icons/{filename}"
+        changes.append("icon: updated")
+
+    _log_gift_action(
+        db,
+        admin,
+        action="updated",
+        gift_id=gift.id,
+        gift_name=gift.name,
+        details="; ".join(changes) if changes else "No field changes",
+    )
 
     db.commit()
     db.refresh(gift)
@@ -92,9 +136,30 @@ def admin_delete_gift(gift_id: int, db: Session = Depends(get_db), admin: AdminU
     gift = db.query(Gift).filter(Gift.id == gift_id).first()
     if not gift:
         raise HTTPException(status_code=404, detail="Gift not found")
+
+    _log_gift_action(
+        db,
+        admin,
+        action="deleted",
+        gift_id=gift.id,
+        gift_name=gift.name,
+        details=f"Was: {gift.coins} coins, icon={'set' if gift.icon else 'none'}",
+    )
+
     db.delete(gift)
     db.commit()
     return {"detail": "Gift deleted"}
+
+
+@router.get("/admin/audit-log", response_model=list[GiftAuditLogOut])
+def admin_gift_audit_log(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    """Returns gift add/update/delete history, most recent first."""
+    return (
+        db.query(GiftAuditLog)
+        .order_by(GiftAuditLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
 
 
 @router.get("/admin/transactions")
@@ -172,9 +237,40 @@ async def send_gift(payload: GiftSend, db: Session = Depends(get_db), current_us
     is_online = manager.is_listener_online(listener.id)
     gift_txn.notified = is_online
 
+    # Show the gift inline in the chat thread, same as a text/voice message.
+    # sent_during_call marks whether it happened mid-call so the UI can show
+    # "Sent during call" instead of a plain chat timestamp context.
+    sent_during_call = call_id is not None
+    gift_message_text = (
+        f"Sent a gift during the call: {gift.name}" if sent_during_call else f"Sent a gift: {gift.name}"
+    )
+    gift_msg = ChatMessage(
+        user_id=current_user.id,
+        listener_id=listener.id,
+        sender_type="user",
+        message=gift_message_text,
+        message_type="gift",
+        gift_id=gift.id,
+        gift_name=gift.name,
+        gift_icon=gift.icon,
+        gift_coins=gift.coins,
+        call_id=call_id,
+        status="delivered" if is_online else "sent",
+        delivered_at=datetime.now(timezone.utc) if is_online else None,
+    )
+    db.add(gift_msg)
+
     db.commit()
+    db.refresh(gift_msg)
 
     await manager.send_to_user(current_user.id, {"type": "coins_updated", "coins": current_user.coins})
+    # Echo the gift message back to the sender too (listener already gets it
+    # above) so it shows up inline in the sender's own chat pane right away,
+    # the same way it does for the receiver — this is purely a UI push and
+    # does not touch coins or the normal chat-message billing path.
+    await manager.send_to_user(current_user.id, _msg_dict(gift_msg))
+    await manager.send_to_listener(listener.id, _msg_dict(gift_msg))
+    await manager.send_to_user(current_user.id, {"type": "message_status", "id": gift_msg.id, "client_id": gift_msg.client_id, "status": gift_msg.status})
 
     if is_online:
         await manager.send_to_listener(listener.id, {"type": "coins_updated", "coins": listener.coins})
@@ -185,6 +281,7 @@ async def send_gift(payload: GiftSend, db: Session = Depends(get_db), current_us
             "credited_coins": credit,
             "from_user_id": current_user.id,
             "from_user_name": current_user.name,
+            "sent_during_call": sent_during_call,
         })
 
     return {"coins": current_user.coins, "gift_coins": gift.coins, "gift_name": gift.name}

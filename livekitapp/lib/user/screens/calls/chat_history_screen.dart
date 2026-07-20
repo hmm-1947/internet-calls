@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/gift_message_bubble.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicator.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
@@ -778,6 +779,16 @@ body: Stack(
                                     color: Colors.white70,
                                     fontStyle: FontStyle.italic,
                                   ),
+                                )
+                              : msg['message_type'] == 'gift'
+                              ? GiftMessageBubble(
+                                  giftIcon: msg['gift_icon'],
+                                  giftName: msg['gift_name'] ?? '',
+                                  // User is the sender: show the full coin cost
+                                  // they paid, not the listener's halved credit.
+                                  coins: (msg['gift_coins'] ?? 0) as int,
+                                  isMe: isMe,
+                                  sentDuringCall: msg['call_id'] != null,
                                 )
                               : msg['message_type'] == 'audio'
                               ? VoiceMessageBubble(

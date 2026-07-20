@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/gift_message_bubble.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_message_bubble.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicator.dart';
@@ -618,6 +619,16 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
                                     color: Colors.white70,
                                     fontStyle: FontStyle.italic,
                                   ),
+                                )
+                              : msg['message_type'] == 'gift'
+                              ? GiftMessageBubble(
+                                  giftIcon: msg['gift_icon'],
+                                  giftName: msg['gift_name'] ?? '',
+                                  // Listener is the receiver: only half the gift's
+                                  // coins are credited to them, so show that half.
+                                  coins: ((msg['gift_coins'] ?? 0) as int) ~/ 2,
+                                  isMe: isMe,
+                                  sentDuringCall: msg['call_id'] != null,
                                 )
                               : msg['message_type'] == 'audio'
                               ? VoiceMessageBubble(
