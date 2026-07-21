@@ -88,6 +88,7 @@ flutter:
     - assets/audio/ringtone_default.mp3
     - assets/images/banner.png
     - assets/images/splash.png
+    - assets/images/rupee_icon.png
     - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see

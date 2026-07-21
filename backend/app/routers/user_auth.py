@@ -9,7 +9,7 @@ from app.schemas.schemas import ListenerStatusUpdate
 from app.models.models import CallRating
 from sqlalchemy import func as sqlfunc
 from datetime import datetime, timedelta, timezone
-from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate, UserForgotPasswordRequestOtp, UserForgotPasswordVerifyOtp, UserForgotPasswordReset, UserChangePassword
+from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate, UserForgotPasswordRequestOtp, UserForgotPasswordVerifyOtp, UserForgotPasswordReset, UserChangePassword, UserVideoCallSettingUpdate
 from app.core.database import get_db
 from app.models.models import User, Session as SessionModel, EmailOtp
 from app.utils.email_otp import generate_otp_code, send_otp_email
@@ -236,7 +236,21 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         "chat_message_coin_cost": chat_message_coin_cost(db),
         "bio": current_user.bio,
         "photo_url": current_user.photo_url,
+        "video_call_enabled": current_user.video_call_enabled,
+        "video_call_disabled_by_admin": current_user.video_call_disabled_by_admin,
     }
+
+@router.post("/video-call-setting")
+def update_video_call_setting(payload: UserVideoCallSettingUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Let the user turn their own video-calling feature on/off."""
+    current_user.video_call_enabled = payload.enabled
+    db.commit()
+    return {
+        "status": "updated",
+        "video_call_enabled": current_user.video_call_enabled,
+        "video_call_disabled_by_admin": current_user.video_call_disabled_by_admin,
+    }
+
 
 @router.post("/bio")
 def update_bio(payload: UserBioUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

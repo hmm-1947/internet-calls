@@ -93,6 +93,10 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
     if not listener or not listener.is_active:
         raise HTTPException(status_code=404, detail="Listener not found")
     call_type = payload.call_type if payload.call_type in ("audio", "video") else "audio"
+    if call_type == "video" and current_user.video_call_disabled_by_admin:
+        raise HTTPException(status_code=403, detail="Admin has disabled video calls for your account")
+    if call_type == "video" and not current_user.video_call_enabled:
+        raise HTTPException(status_code=403, detail="Video calls are disabled in your settings")
     per_minute = coins_per_minute(db, call_type)
     if current_user.coins < per_minute:
         raise HTTPException(status_code=402, detail="Not enough coins to start this call")

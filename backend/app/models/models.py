@@ -21,6 +21,8 @@ class User(Base):
     photo_url = Column(String, nullable=True)
     reset_otp_code = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    video_call_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
+    video_call_disabled_by_admin = Column(Boolean, default=False, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Listener(Base):

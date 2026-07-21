@@ -133,7 +133,7 @@ def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(v
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
     users = db.query(User).all()
-    result = [{"id": u.id, "name": u.name, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url} for u in users]
+    result = [{"id": u.id, "name": u.name, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url, "video_call_disabled_by_admin": u.video_call_disabled_by_admin} for u in users]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -171,6 +171,20 @@ async def set_user_active(user_id: int, payload: dict, db: Session = Depends(get
     if not user.is_active:
         await manager.send_to_user(user_id, {"type": "force_logout"})
     return {"id": user.id, "is_active": user.is_active}
+
+@router.patch("/users/{user_id}/video-call")
+async def set_user_video_call_disabled(user_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.video_call_disabled_by_admin = bool(payload.get("disabled"))
+    db.commit()
+    await manager.send_to_user(user_id, {
+        "type": "video_call_setting_changed",
+        "video_call_disabled_by_admin": user.video_call_disabled_by_admin,
+    })
+    return {"id": user.id, "video_call_disabled_by_admin": user.video_call_disabled_by_admin}
+
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(verify_admin)):

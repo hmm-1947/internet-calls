@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:livekit_client/livekit_client.dart';
@@ -24,9 +22,6 @@ class PulsingAvatarRing extends StatefulWidget {
 
 class _PulsingAvatarRingState extends State<PulsingAvatarRing>
     with SingleTickerProviderStateMixin {
-  static const int _barCount = 28;
-  final List<double> _bars = List.filled(_barCount, 0.05);
-  final _rand = Random();
   late final Ticker _ticker;
   double _displayLevel = 0.0;
 
@@ -36,35 +31,21 @@ class _PulsingAvatarRingState extends State<PulsingAvatarRing>
     _ticker = createTicker(_onTick)..start();
   }
 
-void _onTick(Duration elapsed) {
-  final raw = widget.audioLevel.clamp(0.0, 1.0);
+  void _onTick(Duration elapsed) {
+    final raw = widget.audioLevel.clamp(0.0, 1.0);
 
-  if (raw > _displayLevel) {
-    _displayLevel += (raw - _displayLevel) * 0.75;
-  } else {
-    _displayLevel += (raw - _displayLevel) * 0.18;
+    // Glow grows quickly when someone starts speaking and eases back down
+    // smoothly when they stop, so it "spreads and shrinks" with intensity.
+    if (raw > _displayLevel) {
+      _displayLevel += (raw - _displayLevel) * 0.75;
+    } else {
+      _displayLevel += (raw - _displayLevel) * 0.18;
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
   }
-
-  final t = elapsed.inMilliseconds / 1000.0;
-
-  for (int i = 0; i < _barCount; i++) {
-    final wave =
-        sin(t * 10 + i * 0.55) * 0.35 +
-        sin(t * 17 + i * 0.18) * 0.25;
-
-    final random = (_rand.nextDouble() - 0.5) * 0.22;
-
-    final modulation = (wave + random) * _displayLevel;
-
-    _bars[i] = (_displayLevel + modulation)
-        .clamp(0.04, 1.0);
-  }
-
-  if (mounted) {
-    setState(() {});
-  }
-}
-
 
   @override
   void dispose() {
@@ -75,37 +56,67 @@ void _onTick(Duration elapsed) {
   @override
   Widget build(BuildContext context) {
     const pink = Color(0xFFE53950);
-    final scale = 1.0 + pow(_displayLevel, 1.6) * 0.55;
-    return SizedBox(
-      width: 320,
-      height: 320,
+    // Reference sizes for a normal-width screen; both scale down together
+    // on narrow devices so the ring never overflows its parent.
+    const referenceBoxSize = 320.0;
+    const referencePhotoSize = 280.0;
+    final level = _displayLevel.clamp(0.0, 1.0);
+
+    // Halo strength scales with voice intensity: louder = bigger, brighter,
+    // softer glow radiating out from behind the photo; quiet = it shrinks
+    // back down to a subtle resting glow.
+    final innerSpread = 10.0 + level * 34.0;
+    final innerBlur = 30.0 + level * 50.0;
+    final outerSpread = 22.0 + level * 70.0;
+    final outerBlur = 55.0 + level * 110.0;
+    final glowOpacity = 0.45 + level * 0.4;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : referenceBoxSize;
+        final boxSize = referenceBoxSize < availableWidth
+            ? referenceBoxSize
+            : availableWidth;
+        final photoSize = referencePhotoSize * (boxSize / referenceBoxSize);
+
+        return SizedBox(
+      width: boxSize,
+      height: boxSize,
       child: Stack(
         alignment: Alignment.center,
+        clipBehavior: Clip.none,
         children: [
-          CustomPaint(
-            size: const Size(320, 320),
-            painter: _SpectrumPainter(bars: _bars, color: pink),
-          ),
+          // Soft radiant halo that spreads and shrinks with voice intensity.
           Container(
-            width: 260 * scale,
-            height: 260 * scale,
+            width: photoSize,
+            height: photoSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: pink.withOpacity(0.35 + _displayLevel * 0.3),
-                  blurRadius: 40,
-                  spreadRadius: 8,
+                  color: pink.withOpacity(glowOpacity),
+                  blurRadius: innerBlur,
+                  spreadRadius: innerSpread,
+                ),
+                BoxShadow(
+                  color: pink.withOpacity(glowOpacity * 0.55),
+                  blurRadius: outerBlur,
+                  spreadRadius: outerSpread,
                 ),
               ],
             ),
           ),
           Container(
-            width: 240,
-            height: 240,
+            width: photoSize,
+            height: photoSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: pink, width: 3),
+              border: Border.all(
+                color: pink.withOpacity(0.9),
+                width: 2.5,
+              ),
             ),
             child: ClipOval(
               child: widget.showVideo && widget.videoTrack != null
@@ -122,51 +133,17 @@ void _onTick(Duration elapsed) {
                       : Image.network(
                           ApiConstants.resolveMediaUrl(widget.photoUrl),
                           fit: BoxFit.cover,
-                          width: 240,
-                          height: 240,
+                          width: photoSize,
+                          height: photoSize,
                         )),
             ),
           ),
         ],
       ),
+        );
+      },
     );
   }
-}
-
-class _SpectrumPainter extends CustomPainter {
-  final List<double> bars;
-  final Color color;
-  _SpectrumPainter({required this.bars, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = 128.0;
-    final barWidth = 4.0;
-final maxBarHeight = 70.0;
-    final paint = Paint()
-      ..strokeWidth = barWidth
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < bars.length; i++) {
-      final angle = (2 * pi * i) / bars.length;
-      final level = bars[i];
-  final barHeight =
-    3.0 + pow(level, 2.2) * maxBarHeight;
-      final start = Offset(
-        center.dx + baseRadius * cos(angle),
-        center.dy + baseRadius * sin(angle),
-      );
-      final end = Offset(
-        center.dx + (baseRadius + barHeight) * cos(angle),
-        center.dy + (baseRadius + barHeight) * sin(angle),
-      );
-      paint.color = color.withOpacity(0.4 + level * 0.6);
-      canvas.drawLine(start, end, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SpectrumPainter oldDelegate) => true;
 }
 
 class CallActionButton extends StatelessWidget {

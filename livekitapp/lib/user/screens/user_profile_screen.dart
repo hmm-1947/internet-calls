@@ -1,9 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/screens/change_password_screen.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
-import 'package:livekitapp/user/screens/user_settings_screen.dart';
+import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
+import 'package:livekitapp/user/screens/user_personal_info_screen.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -63,6 +67,86 @@ class _MenuTile extends StatelessWidget {
   }
 }
 
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    this.trailing,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _AppColors.brandRed.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: _AppColors.brandRed, size: 18),
+      ),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      trailing:
+          trailing ??
+          (onTap != null
+              ? const Icon(Icons.chevron_right, color: Colors.white38)
+              : null),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  final List<Widget> children;
+  const _SettingsCard(this.children);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 0),
+      decoration: BoxDecoration(
+        color: _AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: children),
+      ),
+    );
+  }
+}
+
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
 
@@ -78,6 +162,11 @@ int _coins = 0;
   String _phone = '';
   String? _photoUrl;
   bool _loading = true;
+  bool _notificationsOn = true;
+  bool _videoCallEnabled = true;
+  bool _videoCallDisabledByAdmin = false;
+  bool _savingVideoCallSetting = false;
+  bool _loggingOut = false;
 
   @override
   void initState() {
@@ -94,12 +183,17 @@ Future<void> refresh() async {
       final newName = data['name'] ?? '';
       final newPhone = data['phone'] ?? '';
       final newPhotoUrl = data['photo_url'];
-      if (_coins != newCoins || _name != newName || _phone != newPhone || _photoUrl != newPhotoUrl) {
+      final newVideoCallEnabled = data['video_call_enabled'] ?? true;
+      final newVideoCallDisabledByAdmin = data['video_call_disabled_by_admin'] ?? false;
+      if (_coins != newCoins || _name != newName || _phone != newPhone || _photoUrl != newPhotoUrl ||
+          _videoCallEnabled != newVideoCallEnabled || _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin) {
         setState(() {
           _coins = newCoins;
           _name = newName;
           _phone = newPhone;
           _photoUrl = newPhotoUrl;
+          _videoCallEnabled = newVideoCallEnabled;
+          _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
           _loading = false;
         });
       } else if (_loading) {
@@ -107,6 +201,49 @@ Future<void> refresh() async {
       }
     } catch (_) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggleVideoCall(bool enabled) async {
+    if (_videoCallDisabledByAdmin || _savingVideoCallSetting) return;
+    final previous = _videoCallEnabled;
+    setState(() {
+      _videoCallEnabled = enabled;
+      _savingVideoCallSetting = true;
+    });
+    try {
+      final token = await _localStorage.getToken();
+      await _repository.updateVideoCallSetting(token!, enabled);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _videoCallEnabled = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update video call setting: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingVideoCallSetting = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    setState(() => _loggingOut = true);
+    try {
+      final token = await _localStorage.getToken();
+      if (token != null) {
+        await _repository.logout(token);
+      } else {
+        debugPrint('Logout: no token found in local storage, skipping API call');
+      }
+    } catch (e) {
+      debugPrint('Logout: API call failed: $e');
+    } finally {
+      await _localStorage.clear();
+      UserDataCache().clear();
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const UserLoginScreen()),
+        );
+      }
     }
   }
 
@@ -151,14 +288,6 @@ Future<void> refresh() async {
             fontWeight: FontWeight.bold,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-            onPressed: () {
-              Navigator.of(context).push(fadeRoute(const UserSettingsScreen()));
-            },
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: refresh,
@@ -220,10 +349,109 @@ Future<void> refresh() async {
                   ),
                   const SizedBox(height: 12),
                   _MenuTile(
-                    icon: Icons.person_outline,
+                    icon: Icons.headset_mic_outlined,
                     title: 'Enroll as a listener',
                     onTap: _openEnrollAsListener,
                   ),
+                  _SectionLabel('ACCOUNT'),
+                  _SettingsCard([
+                    _SettingsTile(
+                      icon: Icons.person_outline,
+                      title: 'Edit Profile',
+                      onTap: () {
+                        Navigator.of(
+                          context,
+                        ).push(fadeRoute(const UserPersonalInfoScreen()));
+                      },
+                    ),
+                    const Divider(height: 1, color: Colors.white12),
+                    _SettingsTile(
+                      icon: Icons.lock_reset,
+                      title: 'Change Password',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ChangePasswordScreen(
+                              onSubmit: (current, next) async {
+                                final token = await _localStorage.getToken();
+                                await _repository.changePassword(
+                                  token!,
+                                  current,
+                                  next,
+                                );
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ]),
+                  _SectionLabel('PREFERENCES'),
+                  _SettingsCard([
+                    _SettingsTile(
+                      icon: Icons.notifications_none,
+                      title: 'Notifications',
+                      trailing: Switch(
+                        value: _notificationsOn,
+                        activeColor: const Color(0xFFE53950),
+                        onChanged: (v) => setState(() => _notificationsOn = v),
+                      ),
+                    ),
+                    const Divider(height: 1, color: Colors.white12),
+                    _SettingsTile(
+                      icon: Icons.videocam_outlined,
+                      title: _videoCallDisabledByAdmin
+                          ? 'Video Calls (disabled by admin)'
+                          : 'Video Calls',
+                      trailing: Switch(
+                        value: _videoCallDisabledByAdmin ? false : _videoCallEnabled,
+                        activeColor: const Color(0xFFE53950),
+                        onChanged: _videoCallDisabledByAdmin
+                            ? null
+                            : (_savingVideoCallSetting ? null : _toggleVideoCall),
+                      ),
+                    ),
+                    const Divider(height: 1, color: Colors.white12),
+                    _SettingsTile(
+                      icon: Icons.shield_outlined,
+                      title: 'Privacy & Security',
+                      onTap: () {},
+                    ),
+                  ]),
+                  _SectionLabel('SUPPORT'),
+                  _SettingsCard([
+                    _SettingsTile(
+                      icon: Icons.help_outline,
+                      title: 'Help & Support',
+                      onTap: () {},
+                    ),
+                    const Divider(height: 1, color: Colors.white12),
+                    _SettingsTile(
+                      icon: Icons.description_outlined,
+                      title: 'Terms of Service',
+                      onTap: () {},
+                    ),
+                    const Divider(height: 1, color: Colors.white12),
+                    _SettingsTile(
+                      icon: Icons.privacy_tip_outlined,
+                      title: 'Privacy Policy',
+                      onTap: () {},
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  _SettingsCard([
+                    ListTile(
+                      onTap: _loggingOut ? null : _logout,
+                      leading: const Icon(Icons.logout, color: Colors.red),
+                      title: const Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ]),
                 ],
               ),
       ),

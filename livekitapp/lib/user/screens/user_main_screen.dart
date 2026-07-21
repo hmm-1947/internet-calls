@@ -19,9 +19,10 @@ class UserMainScreen extends StatefulWidget {
 class _UserMainScreenState extends State<UserMainScreen> {
   int _index = 0;
   final _profileKey = GlobalKey<UserProfileScreenState>();
+  final _homeKey = GlobalKey<UserHomeScreenState>();
 
   late final List<Widget> _screens = [
-    const UserHomeScreen(),
+    UserHomeScreen(key: _homeKey),
     const ChatsListScreen(),
     const CallHistoryScreen(),
     UserProfileScreen(key: _profileKey),
@@ -29,6 +30,9 @@ class _UserMainScreenState extends State<UserMainScreen> {
 
   void _onDestinationSelected(int i) {
     setState(() => _index = i);
+    if (i == 0) {
+      _homeKey.currentState?.refresh();
+    }
     if (i == 1) {
       userChatDotNotifier.value = false;
     }
@@ -46,6 +50,8 @@ class _UserMainScreenState extends State<UserMainScreen> {
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,
         onDestinationSelected: _onDestinationSelected,
+        crownImageAsset: 'assets/images/rupee_icon.png',
+        crownSize: 85,
         onCrownTap: () {
           Navigator.of(context).push(fadeRoute(const UpgradeScreen()));
         },

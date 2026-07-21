@@ -195,6 +195,9 @@ class UserLogin(BaseModel):
 class UserBioUpdate(BaseModel):
     bio: str
 
+class UserVideoCallSettingUpdate(BaseModel):
+    enabled: bool
+
 class UserForgotPasswordRequestOtp(BaseModel):
     email: str
 

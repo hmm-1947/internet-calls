@@ -27,7 +27,7 @@ class CoinSettingsUpdate(BaseModel):
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
     users = db.query(User).all()
-    result = [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins, "is_active": u.is_active, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url} for u in users]
+    result = [{"id": u.id, "name": u.name, "phone": u.phone, "coins": u.coins, "is_active": u.is_active, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url, "video_call_disabled_by_admin": u.video_call_disabled_by_admin} for u in users]
     result.sort(key=lambda x: not x["is_online"])
     return result
 

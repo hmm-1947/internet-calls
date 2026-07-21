@@ -81,6 +81,7 @@ static const String listenerProfile = '/listener/profile';
 
   static const String userMe = '/user/me';
 static const String userBio = '/user/bio';
+  static const String userVideoCallSetting = '/user/video-call-setting';
   static const String userPhoto = '/user/photo';
 
   static const String giftCatalog = '/gift/catalog';

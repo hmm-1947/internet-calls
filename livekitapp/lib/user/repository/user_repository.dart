@@ -495,4 +495,15 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     }
     UserDataCache().invalidateMe();
   }
+
+  Future<void> updateVideoCallSetting(String token, bool enabled) async {
+    final response = await _apiClient.post(ApiConstants.userVideoCallSetting, {
+      'enabled': enabled,
+    }, token: token);
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to update video call setting');
+    }
+    UserDataCache().invalidateMe();
+  }
 }

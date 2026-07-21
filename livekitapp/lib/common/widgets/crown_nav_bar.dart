@@ -8,6 +8,9 @@ class CrownNavBar extends StatefulWidget {
   final List<String> labels;
   final VoidCallback onCrownTap;
   final bool showCrown;
+  final IconData crownIcon;
+  final String? crownImageAsset;
+  final double crownSize;
 
   const CrownNavBar({
     super.key,
@@ -17,6 +20,9 @@ class CrownNavBar extends StatefulWidget {
     required this.labels,
     required this.onCrownTap,
     this.showCrown = true,
+    this.crownIcon = Icons.emoji_events,
+    this.crownImageAsset,
+    this.crownSize = 60,
   });
 
   @override
@@ -160,18 +166,23 @@ class _CrownNavBarState extends State<CrownNavBar> {
           ),
           if (widget.showCrown)
             Positioned(
-              top: -22,
+              // Keeps the same amount of the button poking above the bar
+              // regardless of size (60px button pokes ~38px above, so scale
+              // the offset off that reference instead of a fixed -22).
+              top: -(widget.crownSize - 42),
               left: 0,
               right: 0,
               child: Center(
                 child: GestureDetector(
                   onTap: widget.onCrownTap,
                   child: Container(
-                    width: 60,
-                    height: 60,
+                    width: widget.crownSize,
+                    height: widget.crownSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFFFFC1B4),
+                      color: widget.crownImageAsset == null
+                          ? const Color(0xFFFFC1B4)
+                          : null,
                       boxShadow: [
                         BoxShadow(
                           color: activeColor.withOpacity(0.5),
@@ -180,11 +191,20 @@ class _CrownNavBarState extends State<CrownNavBar> {
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.emoji_events,
-                      color: Color(0xFF2A0A0A),
-                      size: 28,
-                    ),
+                    child: widget.crownImageAsset != null
+                        ? ClipOval(
+                            child: Image.asset(
+                              widget.crownImageAsset!,
+                              width: widget.crownSize,
+                              height: widget.crownSize,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Icon(
+                            widget.crownIcon,
+                            color: const Color(0xFF2A0A0A),
+                            size: widget.crownSize * 28 / 60,
+                          ),
                   ),
                 ),
               ),

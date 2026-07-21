@@ -51,6 +51,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> with WidgetsBindi
   int _chatMessageCoinCost = 0;
   bool _coinsLoaded = false;
   bool _callingListener = false;
+  bool _videoCallEnabled = true;
+  bool _videoCallDisabledByAdmin = false;
 Timer? _typingStopTimer;
   Timer? _typingSendTimer;
   bool _isNearBottom = true;
@@ -71,6 +73,13 @@ Timer? _typingStopTimer;
     _lastBottomInset = bottomInset;
     if (keyboardOpened && _isNearBottom) {
       _scrollToBottom();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      refresh();
     }
   }
   Future<void> _init() async {
@@ -109,9 +118,35 @@ void _onScroll() {
         _profileCoins = me['coins'] ?? 0;
         _chatMessageCoinCost = me['chat_message_coin_cost'] ?? 0;
         _coinsLoaded = true;
+        _videoCallEnabled = me['video_call_enabled'] ?? true;
+        _videoCallDisabledByAdmin = me['video_call_disabled_by_admin'] ?? false;
       });
     }
   }
+
+  /// Re-checks the user's video-call setting (enabled/disabled, including
+  /// admin overrides) without reloading the whole chat. Mirrors
+  /// UserHomeScreenState.refresh() so the call icon in this screen's app
+  /// bar stays in sync if the setting was changed on the Profile screen.
+  Future<void> refresh() async {
+    if (_token == null) return;
+    try {
+      final me = await _repository.getMe(_token!);
+      if (!mounted) return;
+      final newVideoCallEnabled = me['video_call_enabled'] ?? true;
+      final newVideoCallDisabledByAdmin = me['video_call_disabled_by_admin'] ?? false;
+      if (_videoCallEnabled != newVideoCallEnabled ||
+          _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin) {
+        setState(() {
+          _videoCallEnabled = newVideoCallEnabled;
+          _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
+        });
+      }
+    } catch (_) {}
+  }
+
+  bool get _videoCallAvailable => _videoCallEnabled && !_videoCallDisabledByAdmin;
+
 
   Future<void> _loadFavoriteStatus() async {
     if (_token == null) return;
@@ -700,7 +735,7 @@ void _onScroll() {
             icon: Icon(Icons.call, color: Colors.white, size: isNarrow ? 20 : 24),
             onPressed: _callingListener ? null : () => _callListener(),
           ),
-          if (!isVeryNarrow)
+          if (!isVeryNarrow && _videoCallAvailable)
             IconButton(
               style: iconButtonStyle,
               icon: Icon(Icons.videocam, color: Colors.white, size: isNarrow ? 20 : 24),

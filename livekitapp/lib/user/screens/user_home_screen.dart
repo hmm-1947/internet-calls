@@ -138,10 +138,10 @@ class UserHomeScreen extends StatefulWidget {
   const UserHomeScreen({super.key});
 
   @override
-  State<UserHomeScreen> createState() => _UserHomeScreenState();
+  State<UserHomeScreen> createState() => UserHomeScreenState();
 }
 
-class _UserHomeScreenState extends State<UserHomeScreen> {
+class UserHomeScreenState extends State<UserHomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   String _profileName = '';
   String? _profilePhotoUrl;
@@ -154,6 +154,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   StreamSubscription? _socketSub;
   List<Map<String, dynamic>> _listeners = [];
   int? _callingListenerId; // tracks in-flight call to prevent double-tap
+  bool _videoCallEnabled = true;
+  bool _videoCallDisabledByAdmin = false;
 
   Timer? _pollTimer;
   final PageController _offersController = PageController(
@@ -248,6 +250,12 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     super.dispose();
   }
 
+  /// Silently reloads listeners and the user's own profile flags (including
+  /// the video-call enabled/admin-disabled state) without showing the full
+  /// loading spinner. Called by the bottom nav whenever the Home tab is
+  /// (re)selected, so toggling video calls in Settings reflects immediately.
+  Future<void> refresh() => _load(silent: true);
+
   Future<void> _load({bool silent = false}) async {
     final isFirstLoad = _listeners.isEmpty;
     if (!silent && isFirstLoad) {
@@ -266,10 +274,14 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       final newName = me['name'] ?? '';
       final newPhoto = me['photo_url'];
       final newCoins = me['coins'] ?? 0;
+      final newVideoCallEnabled = me['video_call_enabled'] ?? true;
+      final newVideoCallDisabledByAdmin = me['video_call_disabled_by_admin'] ?? false;
       final changed = dataChanged(_listeners, listeners) ||
           _profileName != newName ||
           _profilePhotoUrl != newPhoto ||
-          _profileCoins != newCoins;
+          _profileCoins != newCoins ||
+          _videoCallEnabled != newVideoCallEnabled ||
+          _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin;
       if (mounted) {
         if (changed) {
           setState(() {
@@ -277,6 +289,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             _profileName = newName;
             _profilePhotoUrl = newPhoto;
             _profileCoins = newCoins;
+            _videoCallEnabled = newVideoCallEnabled;
+            _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
             _loading = false;
           });
         } else if (_loading) {
@@ -728,9 +742,9 @@ ChatHistoryScreen(
     final tags = List<String>.from(listener['tags'] ?? const []);
 
     return GestureDetector(
-      onTap: () => _openListenerProfile(listener),
+      onTap: () => _openChat(listener),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: _AppColors.cardBg,
           borderRadius: BorderRadius.circular(16),
@@ -742,29 +756,32 @@ child: Column(
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    AvatarImage(photoUrl: listener['photo_url'], radius: 28, iconSize: 28),
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: isOnline
-                              ? _AppColors.online
-                              : Colors.grey.shade600,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF050E17),
-                            width: 2,
+                GestureDetector(
+                  onTap: () => _openListenerProfile(listener),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      AvatarImage(photoUrl: listener['photo_url'], radius: 40, iconSize: 40),
+                      Positioned(
+                        right: 2,
+                        bottom: 2,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: isOnline
+                                ? _AppColors.online
+                                : Colors.grey.shade600,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF050E17),
+                              width: 2,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -818,41 +835,46 @@ child: Column(
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  icon: const Icon(
-                    Icons.chat_bubble_outline,
-                    color: _AppColors.textMuted,
-                    size: 20,
-                  ),
-                  onPressed: () => _openChat(listener),
-                  tooltip: 'Chat',
-                ),
-                isCalling
-                    ? const SizedBox(width: 40, height: 40)
-                    : InkWell(
-                        onTap: canAct
-                            ? () => _callListener(listener['id'], video: true)
-                            : null,
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: canAct
-                                ? _AppColors.brandRed.withOpacity(0.85)
-                                : _AppColors.brandRed.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.videocam,
-                            color: Colors.white,
-                            size: 18,
+                if (_videoCallEnabled) ...[
+                  isCalling
+                      ? const SizedBox(width: 40, height: 40)
+                      : InkWell(
+                          onTap: !canAct
+                              ? null
+                              : _videoCallDisabledByAdmin
+                                  ? () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Admin has disabled video calls for your account',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  : () => _callListener(listener['id'], video: true),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: _videoCallDisabledByAdmin
+                                  ? _AppColors.brandRed.withOpacity(0.2)
+                                  : (canAct
+                                      ? _AppColors.brandRed.withOpacity(0.85)
+                                      : _AppColors.brandRed.withOpacity(0.3)),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.videocam,
+                              color: _videoCallDisabledByAdmin
+                                  ? Colors.white38
+                                  : Colors.white,
+                              size: 18,
+                            ),
                           ),
                         ),
-                      ),
-                const SizedBox(width: 6),
+                  const SizedBox(width: 6),
+                ],
                 isCalling
                     ? const SizedBox(
                         width: 40,
