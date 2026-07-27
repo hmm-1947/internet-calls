@@ -81,6 +81,8 @@ String _name = '';
   String _about = '';
   List<String> _tags = [];
   List<String> _languages = [];
+  int? _age;
+  String _occupation = '';
   double? _avgRating;
   int _ratingCount = 0;
   int _totalCalls = 0;
@@ -92,6 +94,8 @@ String _name = '';
   bool _saving = false;
 
   final _aboutController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _occupationController = TextEditingController();
   final _tagController = TextEditingController();
   final _languageController = TextEditingController();
   late List<String> _editTags;
@@ -106,7 +110,10 @@ String _name = '';
   @override
   void dispose() {
     _aboutController.dispose();
+    _ageController.dispose();
+    _occupationController.dispose();
     _tagController.dispose();
+
     _languageController.dispose();
     super.dispose();
   }
@@ -123,6 +130,8 @@ final newSnapshot = {
         'about': data['about'] ?? '',
         'tags': List<String>.from(data['tags'] ?? []),
         'languages': List<String>.from(data['languages'] ?? []),
+        'age': data['age'],
+        'occupation': data['occupation'] ?? '',
         'avg_rating': (data['avg_rating'] as num?)?.toDouble(),
         'rating_count': data['rating_count'] ?? 0,
         'total_calls': data['total_calls'] ?? 0,
@@ -135,6 +144,8 @@ final oldSnapshot = {
         'about': _about,
         'tags': _tags,
         'languages': _languages,
+        'age': _age,
+        'occupation': _occupation,
         'avg_rating': _avgRating,
         'rating_count': _ratingCount,
         'total_calls': _totalCalls,
@@ -148,6 +159,8 @@ final oldSnapshot = {
           _about = newSnapshot['about'] as String;
           _tags = newSnapshot['tags'] as List<String>;
           _languages = newSnapshot['languages'] as List<String>;
+          _age = newSnapshot['age'] as int?;
+          _occupation = newSnapshot['occupation'] as String;
           _avgRating = newSnapshot['avg_rating'] as double?;
           _ratingCount = newSnapshot['rating_count'] as int;
           _totalCalls = newSnapshot['total_calls'] as int;
@@ -166,6 +179,8 @@ final oldSnapshot = {
 
   void _startEditing() {
     _aboutController.text = _about;
+    _ageController.text = _age?.toString() ?? '';
+    _occupationController.text = _occupation;
     _editTags = List.from(_tags);
     _editLanguages = List.from(_languages);
     setState(() => _editing = true);
@@ -206,11 +221,15 @@ Future<void> _pickAndUploadPhoto() async {
         about: _aboutController.text.trim(),
         tags: _editTags,
         languages: _editLanguages,
+        age: int.tryParse(_ageController.text.trim()),
+        occupation: _occupationController.text.trim(),
       );
       setState(() {
         _about = _aboutController.text.trim();
         _tags = List.from(_editTags);
         _languages = List.from(_editLanguages);
+        _age = int.tryParse(_ageController.text.trim());
+        _occupation = _occupationController.text.trim();
         _editing = false;
         _saving = false;
       });
@@ -495,6 +514,72 @@ Future<void> _pickAndUploadPhoto() async {
                       ),
                     ],
                   ),
+
+                  const _SectionLabel('AGE & OCCUPATION'),
+                  _editing
+                      ? Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _ageController,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: 'Age',
+                                  hintStyle: const TextStyle(color: Colors.white38),
+                                  filled: true,
+                                  fillColor: _AppColors.cardBg,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: _occupationController,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: 'Occupation',
+                                  hintStyle: const TextStyle(color: Colors.white38),
+                                  filled: true,
+                                  fillColor: _AppColors.cardBg,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _AppColors.cardBg,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _AppColors.cardBorder),
+                          ),
+                          child: Text(
+                            '${_age?.toString() ?? '...'} · ${_occupation.isEmpty ? '...' : _occupation}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
 
                   const _SectionLabel('ABOUT'),
                   Container(

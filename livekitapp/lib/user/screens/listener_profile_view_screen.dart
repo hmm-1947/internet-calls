@@ -85,6 +85,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   String _about = '';
   List<String> _tags = [];
   List<String> _languages = [];
+  int? _age;
+  String _occupation = '';
   double? _avgRating;
   int _ratingCount = 0;
   String? _createdAt;
@@ -116,6 +118,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         'about': data['about'] ?? '',
         'tags': List<String>.from(data['tags'] ?? []),
         'languages': List<String>.from(data['languages'] ?? []),
+        'age': data['age'],
+        'occupation': data['occupation'] ?? '',
         'avg_rating': (data['avg_rating'] as num?)?.toDouble(),
         'rating_count': data['rating_count'] ?? 0,
         'created_at': data['created_at'],
@@ -127,6 +131,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         'about': _about,
         'tags': _tags,
         'languages': _languages,
+        'age': _age,
+        'occupation': _occupation,
         'avg_rating': _avgRating,
         'rating_count': _ratingCount,
         'created_at': _createdAt,
@@ -139,6 +145,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
           _about = newSnapshot['about'] as String;
           _tags = newSnapshot['tags'] as List<String>;
           _languages = newSnapshot['languages'] as List<String>;
+          _age = newSnapshot['age'] as int?;
+          _occupation = newSnapshot['occupation'] as String;
           _avgRating = newSnapshot['avg_rating'] as double?;
           _ratingCount = newSnapshot['rating_count'] as int;
           _createdAt = newSnapshot['created_at'] as String?;
@@ -275,6 +283,23 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  const _SectionLabel('AGE & OCCUPATION'),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _AppColors.cardBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _AppColors.cardBorder),
+                    ),
+                    child: Text(
+                      '${_age?.toString() ?? '...'} · ${_occupation.isEmpty ? '...' : _occupation}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                   const _SectionLabel('ABOUT'),

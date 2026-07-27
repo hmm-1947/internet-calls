@@ -646,21 +646,16 @@ Future<void> _requestMicAndStartCall() async {
             videoTrack: _remoteVideoTrack,
             photoUrl: widget.otherPartyPhotoUrl,
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (_phase == _CallPhase.connected &&
-                  _connectionQuality != ConnectionQuality.unknown)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ConnectionQualityBars(quality: _connectionQuality),
-                ),
-              Text(
-                _statusText(),
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
+          if (_phase != _CallPhase.connected)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
+              child: Text(
+                'Do not send money, gift or personal details with listener outside the app.\n'
+                'Inappropriate conversations will result in a permanent ban and may lead to legal action.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
               ),
-            ],
-          ),
+            ),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.only(bottom: 40),
@@ -804,19 +799,19 @@ Future<void> _requestMicAndStartCall() async {
           right: 0,
           bottom: 130,
           child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (_phase == _CallPhase.connected &&
-                    _connectionQuality != ConnectionQuality.unknown)
+                if (_phase != _CallPhase.connected)
                   Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ConnectionQualityBars(quality: _connectionQuality),
+                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
+                    child: Text(
+                      'Do not send money, gift or personal details with listener outside the app.\n'
+                      'Inappropriate conversations will result in a permanent ban and may lead to legal action.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    ),
                   ),
-                Text(
-                  _statusText(),
-                  style: const TextStyle(color: Colors.white38, fontSize: 12),
-                ),
               ],
             ),
           ),

@@ -39,6 +39,8 @@ class Listener(Base):
     about = Column(String, nullable=True)
     tags = Column(String, nullable=True)
     languages = Column(String, nullable=True)
+    age = Column(Integer, nullable=True)
+    occupation = Column(String, nullable=True)
     coins = Column(Integer, default=0, nullable=False)
     photo_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

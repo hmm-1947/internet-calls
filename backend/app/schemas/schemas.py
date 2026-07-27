@@ -261,6 +261,8 @@ class ListenerProfileUpdate(BaseModel):
     about: Optional[str] = None
     tags: Optional[list[str]] = None
     languages: Optional[list[str]] = None
+    age: Optional[int] = None
+    occupation: Optional[str] = None
 
     
 class LiveKitTokenResponse(BaseModel):
