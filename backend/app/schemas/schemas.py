@@ -375,6 +375,7 @@ class CallSummaryOut(BaseModel):
     call_id: int
     listener_id: int
     listener_name: str
+    listener_photo_url: Optional[str] = None
     duration_seconds: int
     coins_deducted: int
     existing_rating: Optional[int] = None
