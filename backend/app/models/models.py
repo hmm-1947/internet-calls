@@ -21,6 +21,7 @@ class User(Base):
     photo_url = Column(String, nullable=True)
     reset_otp_code = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    reset_otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     video_call_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
     video_call_disabled_by_admin = Column(Boolean, default=False, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -68,6 +69,7 @@ class AdminUser(Base):
     is_support = Column(Boolean, default=False)
     reset_otp_code = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    reset_otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -79,6 +81,7 @@ class AdminInvite(Base):
     email = Column(String, nullable=True)
     otp_code = Column(String, nullable=True)
     otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     email_verified = Column(Boolean, default=False)
     is_used = Column(Boolean, default=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -107,6 +110,8 @@ class Call(Base):
             unique=True,
             postgresql_where=Column('status').in_(['ringing', 'accepted']),
         ),
+        Index('ix_calls_caller_status', 'caller_user_id', 'status'),
+        Index('ix_calls_callee_status', 'callee_listener_id', 'status'),
     )
 
 class CallRecording(Base):
@@ -370,5 +375,6 @@ class EmailOtp(Base):
     phone = Column(String, nullable=False)
     password_hash = Column(String, nullable=False)
     is_verified = Column(Boolean, default=False)
+    attempts = Column(Integer, default=0, nullable=False, server_default="0")
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

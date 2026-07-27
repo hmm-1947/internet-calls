@@ -18,6 +18,9 @@ class ChatSocketService {
   bool _connected = false;
   bool _manuallyDisconnected = false;
   int _failedAttempts = 0;
+  DateTime? _lastSessionCheck;
+  static const _maxBackoffSeconds = 60;
+  static const _sessionCheckThrottleSeconds = 60;
 
   Stream<Map<String, dynamic>> get stream {
     _controller ??= StreamController<Map<String, dynamic>>.broadcast();
@@ -29,6 +32,7 @@ class ChatSocketService {
   void connect(String token, String role) {
     _manuallyDisconnected = false;
     _failedAttempts = 0;
+    _lastSessionCheck = null;
     if (_channel != null && _token == token && _role == role) return;
     _token = token;
     _role = role;
@@ -46,7 +50,8 @@ class ChatSocketService {
       await _channel!.ready;
     } catch (_) {
       _channel = null;
-      await _verifySessionThenReconnect();
+      _failedAttempts++;
+      await _verifySessionThenReconnect(_backoffSecondsFor(_failedAttempts));
       return;
     }
     _connected = true;
@@ -85,7 +90,10 @@ class ChatSocketService {
   void send(Map<String, dynamic> data) {
     try {
       _channel?.sink.add(jsonEncode(data));
-    } catch (_) {}
+    } catch (e) {
+      // ignore: avoid_print
+      print('ChatSocketService.send failed: $e');
+    }
   }
 
   void sendTyping({int? listenerId, int? userId, required bool isTyping}) {
@@ -107,38 +115,50 @@ class ChatSocketService {
     _reconnectTimer?.cancel();
     if (_manuallyDisconnected) return;
     _failedAttempts++;
+    final backoffSeconds = _backoffSecondsFor(_failedAttempts);
     if (_failedAttempts >= 2) {
-      _verifySessionThenReconnect();
+      _verifySessionThenReconnect(backoffSeconds);
       return;
     }
-    _reconnectTimer = Timer(const Duration(seconds: 3), () {
+    _reconnectTimer = Timer(Duration(seconds: backoffSeconds), () {
       if (_token != null) _open();
     });
   }
 
-  Future<void> _verifySessionThenReconnect() async {
+  int _backoffSecondsFor(int attempt) {
+    final seconds = 3 * (1 << (attempt - 1).clamp(0, 5));
+    return seconds.clamp(3, _maxBackoffSeconds);
+  }
+
+  Future<void> _verifySessionThenReconnect(int backoffSeconds) async {
     final token = _token;
     final role = _role;
     if (token == null || role == null) return;
-    try {
-      final path = role == 'user'
-          ? ApiConstants.userSessionCheck
-          : ApiConstants.listenerSessionCheck;
-      final response = await http
-          .get(
-            Uri.parse('${ApiConstants.baseUrl}$path'),
-            headers: {'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode == 401) {
-        _stopAndForceLogout();
-        return;
+    final now = DateTime.now();
+    final shouldCheckSession = _lastSessionCheck == null ||
+        now.difference(_lastSessionCheck!).inSeconds >=
+            _sessionCheckThrottleSeconds;
+    if (shouldCheckSession) {
+      _lastSessionCheck = now;
+      try {
+        final path = role == 'user'
+            ? ApiConstants.userSessionCheck
+            : ApiConstants.listenerSessionCheck;
+        final response = await http
+            .get(
+              Uri.parse('${ApiConstants.baseUrl}$path'),
+              headers: {'Authorization': 'Bearer $token'},
+            )
+            .timeout(const Duration(seconds: 8));
+        if (response.statusCode == 401) {
+          _stopAndForceLogout();
+          return;
+        }
+      } catch (_) {
+        // network error, keep retrying
       }
-    } catch (_) {
-      // network error, keep retrying
     }
-    _failedAttempts = 0;
-    _reconnectTimer = Timer(const Duration(seconds: 3), () {
+    _reconnectTimer = Timer(Duration(seconds: backoffSeconds), () {
       if (_token != null) _open();
     });
   }

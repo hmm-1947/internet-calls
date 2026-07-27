@@ -21,16 +21,44 @@ from app.utils.livekit_egress import start_recording, stop_recording
 from app.utils.livekit_room import delete_room_background
 
 
-from app.utils.coins import max_call_seconds, deduct_coins, reconcile_call_billing, bill_call_minute, coins_per_minute
+from app.utils.coins import max_call_seconds, reconcile_call_billing, bill_call_minute, coins_per_minute
 from app.routers.weekly_challenge import add_talktime_seconds
 from app.schemas.schemas import CallInitiate
 from app.core.ws_manager import manager
 from app.schemas.schemas import CallRatingSubmit, CallSummaryOut, ListenerReviewOut
+from livekit import api as livekit_api
 
 RINGING_TIMEOUT = timedelta(seconds=60)
 BILLING_ACTIVE_STATUSES = ("accepted",)
 
 router = APIRouter(prefix="/call", tags=["call"])
+
+
+def _clear_invalid_fcm_token(db: Session, entity, token_attr: str, error: Exception) -> None:
+    if "not found" in str(error).lower() or "registration-token-not-registered" in str(error).lower():
+        setattr(entity, token_attr, None)
+        db.commit()
+
+
+async def _finalize_call_billing(db: Session, call: Call, duration_seconds: int) -> None:
+    call.duration_seconds = duration_seconds
+    user = db.query(User).filter(User.id == call.caller_user_id).first()
+    if user:
+        await reconcile_call_billing(db, call, duration_seconds)
+    if call.callee_listener_id:
+        add_talktime_seconds(db, call.callee_listener_id, duration_seconds)
+    db.commit()
+
+
+def _compute_call_duration(call: Call, override_seconds: int | None = None) -> int:
+    if override_seconds is not None:
+        return int(override_seconds)
+    if call.connected_at:
+        connected_at = call.connected_at
+        if connected_at.tzinfo is None:
+            connected_at = connected_at.replace(tzinfo=timezone.utc)
+        return int((datetime.now(timezone.utc) - connected_at).total_seconds())
+    return 0
 
 async def run_call_billing(call_id: int):
     """Background task: bills one minute immediately, then every 60s while
@@ -68,10 +96,7 @@ async def _end_call_insufficient_coins(db: Session, call_id: int):
     if not call:
         return
     if call.connected_at:
-        connected_at = call.connected_at
-        if connected_at.tzinfo is None:
-            connected_at = connected_at.replace(tzinfo=timezone.utc)
-        call.duration_seconds = int((datetime.now(timezone.utc) - connected_at).total_seconds())
+        call.duration_seconds = _compute_call_duration(call)
         db.commit()
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     if user and user.fcm_token:
@@ -101,17 +126,11 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
     per_minute = coins_per_minute(db, call_type)
     if current_user.coins < per_minute:
         raise HTTPException(status_code=402, detail="Not enough coins to start this call")
-    # Auto-cancel any stale ringing calls from this user (leftover from crashes,
-    # disconnects, or previous sessions) before creating a fresh one.
-    stale_calls = db.query(Call).filter(
+    db.query(Call).filter(
         Call.caller_user_id == current_user.id,
         Call.status == "ringing",
-    ).all()
-    for stale in stale_calls:
-        stale.status = "cancelled"
-        print(f"[INITIATE] Auto-cancelled stale ringing call id={stale.id}")
-    if stale_calls:
-        db.commit()
+    ).update({"status": "cancelled"}, synchronize_session=False)
+    db.commit()
     room_name = f"call-{uuid.uuid4().hex[:12]}"
     call = Call(room_name=room_name, caller_user_id=current_user.id, callee_listener_id=listener.id, status="ringing", call_type=call_type)
     db.add(call)
@@ -129,10 +148,6 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
             print(f"[FCM ERROR] Failed to notify listener {listener.id}: {e}")
     return {"call_id": call.id}
 
-@router.post("/listener-initiate")
-def listener_initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
-    raise HTTPException(status_code=403, detail="Listener to user calls are disabled")
-
 @router.post("/{call_id}/accept")
 def accept_call(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     call = db.query(Call).filter(Call.id == call_id, Call.callee_listener_id == current_listener.id).first()
@@ -148,7 +163,6 @@ def accept_call(call_id: int, db: Session = Depends(get_db), current_listener: L
         db.commit()
         raise HTTPException(status_code=408, detail="Call timed out")
     call.status = "accepted"
-    pass
     db.commit()
     listener_token = generate_token(call.room_name, f"listener-{current_listener.id}", current_listener.name)
     return {"room_name": call.room_name, "token": listener_token, "livekit_url": settings.livekit_url, "call_type": call.call_type}
@@ -176,10 +190,16 @@ async def ready_call(call_id: int, db: Session = Depends(get_db), current_listen
 
 
 @router.post("/{call_id}/recording/start")
-async def start_call_recording(call_id: int, db: Session = Depends(get_db), _=Depends(get_current_participant)):
+async def start_call_recording(call_id: int, db: Session = Depends(get_db), current=Depends(get_current_participant)):
     call = db.query(Call).filter(Call.id == call_id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    is_participant = (
+        (isinstance(current, User) and call.caller_user_id == current.id) or
+        (isinstance(current, Listener) and call.callee_listener_id == current.id)
+    )
+    if not is_participant:
+        raise HTTPException(status_code=403, detail="Not a participant of this call")
     existing = db.query(CallRecording).filter(CallRecording.call_id == call_id, CallRecording.status == "recording").first()
     if existing:
         return {"egress_id": existing.egress_id}
@@ -213,9 +233,7 @@ async def reject_call(call_id: int, db: Session = Depends(get_db), current_liste
             send_call_rejected(user.fcm_token, call_id)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of rejection: {e}")
-            if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
-                user.fcm_token = None
-                db.commit()
+            _clear_invalid_fcm_token(db, user, "fcm_token", e)
     return {"status": "rejected"}
 
 @router.post("/{call_id}/cancel")
@@ -232,12 +250,9 @@ async def cancel_call(call_id: int, db: Session = Depends(get_db), current_user:
     if listener and listener.fcm_token:
         try:
             send_call_cancelled(listener.fcm_token, call_id)
-
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of cancellation: {e}")
-            if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
-                listener.fcm_token = None
-                db.commit()
+            _clear_invalid_fcm_token(db, listener, "fcm_token", e)
     return {"status": "cancelled"}
 
 @router.post("/{call_id}/timeout")
@@ -256,78 +271,78 @@ async def timeout_call(call_id: int, db: Session = Depends(get_db), current_user
     if listener and listener.fcm_token:
         try:
             send_call_missed(listener.fcm_token, call_id)
-
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of missed call: {e}")
-            if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
-                listener.fcm_token = None
-                db.commit()
+            _clear_invalid_fcm_token(db, listener, "fcm_token", e)
     return {"status": "missed"}
 
 
 @router.post("/{call_id}/end")
-async def end_call(call_id: int, db: Session = Depends(get_db), _=Depends(get_current_participant)):
+async def end_call(call_id: int, db: Session = Depends(get_db), current=Depends(get_current_participant)):
     call = db.query(Call).filter(Call.id == call_id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    is_participant = (
+        (isinstance(current, User) and call.caller_user_id == current.id) or
+        (isinstance(current, Listener) and call.callee_listener_id == current.id)
+    )
+    if not is_participant:
+        raise HTTPException(status_code=403, detail="Not a participant of this call")
     await finalize_abandoned_call(db, call)
     return {"status": "ended"}
 
 
-async def finalize_abandoned_call(db: Session, call: Call):
+async def finalize_abandoned_call(
+    db: Session,
+    call: Call,
+    override_seconds: int | None = None,
+    stop_egress: bool = True,
+    notify_user: bool = True,
+    notify_listener: bool = True,
+):
     claimed = db.query(Call).filter(Call.id == call.id, Call.status != "ended").update(
         {"status": "ended"}, synchronize_session=False
     )
     db.commit()
     if claimed == 0:
-        return
+        return False
     db.refresh(call)
 
     if call.connected_at:
-        connected_at = call.connected_at
-        if connected_at.tzinfo is None:
-            connected_at = connected_at.replace(tzinfo=timezone.utc)
-        duration = (datetime.now(timezone.utc) - connected_at).total_seconds()
-        call.duration_seconds = int(duration)
-        user = db.query(User).filter(User.id == call.caller_user_id).first()
-        if user:
-            await reconcile_call_billing(db, call, int(duration))
-        # Weekly challenge counts talktime from both audio and video calls,
-        # credited to the listener who took the call.
-        if call.callee_listener_id:
-            add_talktime_seconds(db, call.callee_listener_id, int(duration))
+        duration = _compute_call_duration(call, override_seconds=override_seconds)
+        await _finalize_call_billing(db, call, duration)
     db.commit()
-    recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()
 
-    if recording:
-        try:
-            await stop_recording(recording.egress_id)
-        except Exception as e:
-            print(f"[EGRESS ERROR] Failed to stop recording for call {call.id}: {e}")
-        recording.status = "ended"
-        recording.ended_at = datetime.now(timezone.utc)
-        db.commit()
+    if stop_egress:
+        recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()
+        if recording:
+            try:
+                await stop_recording(recording.egress_id)
+            except Exception as e:
+                print(f"[EGRESS ERROR] Failed to stop recording for call {call.id}: {e}")
+            recording.status = "ended"
+            recording.ended_at = datetime.now(timezone.utc)
+            db.commit()
 
+    if notify_user:
+        user = db.query(User).filter(User.id == call.caller_user_id).first()
+        if user and user.fcm_token:
+            try:
+                send_call_ended(user.fcm_token, call.id)
+            except Exception as e:
+                print(f"[FCM ERROR] Failed to notify user of call end: {e}")
+                _clear_invalid_fcm_token(db, user, "fcm_token", e)
 
-    user = db.query(User).filter(User.id == call.caller_user_id).first()
-    if user and user.fcm_token:
-        try:
-            send_call_ended(user.fcm_token, call.id)
-        except Exception as e:
-            print(f"[FCM ERROR] Failed to notify user of call end: {e}")
-            if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
-                user.fcm_token = None
-                db.commit()
+    if notify_listener:
+        listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
+        if listener and listener.fcm_token:
+            try:
+                send_call_ended(listener.fcm_token, call.id)
+            except Exception as e:
+                print(f"[FCM ERROR] Failed to notify listener of call end: {e}")
+                _clear_invalid_fcm_token(db, listener, "fcm_token", e)
 
-    listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
-    if listener and listener.fcm_token:
-        try:
-            send_call_ended(listener.fcm_token, call.id)
-        except Exception as e:
-            print(f"[FCM ERROR] Failed to notify listener of call end: {e}")
-            if "not found" in str(e).lower() or "registration-token-not-registered" in str(e).lower():
-                listener.fcm_token = None
-                db.commit()
+    return True
 
 
 @router.get("/{call_id}/coin-status")
@@ -343,26 +358,9 @@ async def coin_exceeded(call_id: int, db: Session = Depends(get_db), current_use
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    claimed = db.query(Call).filter(Call.id == call_id, Call.status != "ended").update(
-        {"status": "ended"}, synchronize_session=False
-    )
-    db.commit()
-    if claimed == 0:
-        return {"status": "ended"}
-    db.refresh(call)
-    if call.connected_at:
-        connected_at = call.connected_at
-        if connected_at.tzinfo is None:
-            connected_at = connected_at.replace(tzinfo=timezone.utc)
-        duration = (datetime.now(timezone.utc) - connected_at).total_seconds()
-        call.duration_seconds = int(duration)
-        await reconcile_call_billing(db, call, int(duration))
-        if call.callee_listener_id:
-            add_talktime_seconds(db, call.callee_listener_id, int(duration))
-    db.commit()
-
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
-    if listener and listener.fcm_token:
+    claimed = await finalize_abandoned_call(db, call, notify_user=False, notify_listener=False)
+    if claimed and listener and listener.fcm_token:
         try:
             send_call_coin_exceeded(listener.fcm_token, call_id)
         except Exception:
@@ -371,48 +369,34 @@ async def coin_exceeded(call_id: int, db: Session = Depends(get_db), current_use
 
 @router.post("/livekit/webhook")
 async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
-    body = await request.json()
-    event = body.get("event")
-    if event != "room_finished":
+    raw_body = await request.body()
+    auth_header = request.headers.get("Authorization", "")
+    try:
+        receiver = livekit_api.WebhookReceiver(settings.livekit_api_key, settings.livekit_api_secret)
+        event_data = receiver.receive(raw_body.decode("utf-8"), auth_header)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    if event_data.event != "room_finished":
         return {"ok": True}
-    room = body.get("room", {})
-    room_name = room.get("name")
-    livekit_duration = room.get("duration")
+    room = event_data.room
+    room_name = room.name if room else None
+    livekit_duration = getattr(room, "duration", None) if room else None
     call = db.query(Call).filter(Call.room_name == room_name).first()
     if not call:
         return {"ok": True}
-    claimed = db.query(Call).filter(Call.id == call.id, Call.status != "ended").update(
-        {"status": "ended"}, synchronize_session=False
-    )
-    db.commit()
-    if claimed == 0:
-        return {"ok": True}
-    db.refresh(call)
-    if livekit_duration is not None:
-        duration = int(livekit_duration)
-    elif call.connected_at:
-        connected_at = call.connected_at
-        if connected_at.tzinfo is None:
-            connected_at = connected_at.replace(tzinfo=timezone.utc)
-        duration = int((datetime.now(timezone.utc) - connected_at).total_seconds())
-    else:
-        duration = 0
-    call.duration_seconds = duration
-    user = db.query(User).filter(User.id == call.caller_user_id).first()
-    if user:
-        await reconcile_call_billing(db, call, duration)
-    if call.callee_listener_id:
-        add_talktime_seconds(db, call.callee_listener_id, duration)
-    db.commit()
+    await finalize_abandoned_call(db, call, override_seconds=livekit_duration, stop_egress=False)
     return {"ok": True}
 
 
 @router.get("/user/history", response_model=list[CallHistoryOut])
 def user_call_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     calls = db.query(Call).filter(Call.caller_user_id == current_user.id).order_by(Call.created_at.desc()).all()
+    listener_ids = {c.callee_listener_id for c in calls if c.callee_listener_id}
+    listeners_by_id = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids)).all()}
     result = []
     for c in calls:
-        listener = db.query(Listener).filter(Listener.id == c.callee_listener_id).first()
+        listener = listeners_by_id.get(c.callee_listener_id)
         result.append(CallHistoryOut(
             id=c.id, room_name=c.room_name, user_id=current_user.id, user_name=current_user.name,
             listener_id=c.callee_listener_id, listener_name=listener.name if listener else "Unknown",
@@ -425,9 +409,11 @@ def user_call_history(db: Session = Depends(get_db), current_user: User = Depend
 @router.get("/listener/history", response_model=list[CallHistoryOut])
 def listener_call_history(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     calls = db.query(Call).filter(Call.callee_listener_id == current_listener.id).order_by(Call.created_at.desc()).all()
+    user_ids = {c.caller_user_id for c in calls if c.caller_user_id}
+    users_by_id = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
     result = []
     for c in calls:
-        user = db.query(User).filter(User.id == c.caller_user_id).first()
+        user = users_by_id.get(c.caller_user_id)
         result.append(CallHistoryOut(
             id=c.id, room_name=c.room_name, user_id=c.caller_user_id, user_name=user.name if user else "Unknown",
             listener_id=current_listener.id, listener_name=current_listener.name,

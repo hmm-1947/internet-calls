@@ -2,6 +2,7 @@
 import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Form
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import os
 import uuid
@@ -16,6 +17,45 @@ from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_mes
 from app.core.ws_manager import manager
 
 ACTIVE_CALL_STATUSES = ("ringing", "accepted")
+
+VOICE_NOTES_DIR = "voice_notes"
+ALLOWED_VOICE_EXTENSIONS = {".m4a", ".aac", ".mp3", ".wav", ".ogg", ".opus", ".webm"}
+ALLOWED_VOICE_CONTENT_TYPES = {
+    "audio/mp4", "audio/m4a", "audio/aac", "audio/mpeg", "audio/mp3",
+    "audio/wav", "audio/x-wav", "audio/ogg", "audio/opus", "audio/webm",
+}
+MAX_VOICE_NOTE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def _validate_voice_upload(file: UploadFile) -> str:
+    """Validates a voice-note upload's extension/content-type and returns a
+    safe extension to use for the stored filename. Raises HTTPException on
+    anything that doesn't look like an audio file."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_VOICE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported voice note file type")
+    if file.content_type and file.content_type not in ALLOWED_VOICE_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported voice note content type")
+    return ext
+
+
+def _write_voice_file_sync(filepath: str, data: bytes) -> None:
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, "wb") as f:
+        f.write(data)
+
+
+async def _save_voice_upload(file: UploadFile) -> str:
+    """Validates, reads (with a size cap), and writes a voice-note upload off
+    the event loop. Returns the filename (not the full path) to store."""
+    ext = _validate_voice_upload(file)
+    data = await file.read(MAX_VOICE_NOTE_BYTES + 1)
+    if len(data) > MAX_VOICE_NOTE_BYTES:
+        raise HTTPException(status_code=413, detail="Voice note exceeds maximum allowed size")
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(VOICE_NOTES_DIR, filename)
+    await run_in_threadpool(_write_voice_file_sync, filepath, data)
+    return filename
 
 async def _finalize_active_calls_for_user(user_id: int, db: Session):
     from app.routers.call import finalize_abandoned_call
@@ -88,6 +128,21 @@ def _msg_dict(msg):
         "created_at": msg.created_at.isoformat(),
     }
 
+
+def _undelivered_summary_payload(db: Session, user_id: int, listener_id: int, sender_type: str):
+    """Fetch messages sent by `sender_type` between this user/listener pair
+    that are still 'sent' (i.e. not yet delivered), for an FCM chat summary."""
+    undelivered = db.query(ChatMessage).filter(
+        ChatMessage.user_id == user_id,
+        ChatMessage.listener_id == listener_id,
+        ChatMessage.sender_type == sender_type,
+        ChatMessage.status == "sent",
+    ).order_by(ChatMessage.id.asc()).all()
+    return [
+        {"id": m.id, "client_id": m.client_id, "message": m.message}
+        for m in undelivered
+    ]
+
 @router.post("/user/send", response_model=ChatMessageOut)
 async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if len(payload.message) > 100:
@@ -118,16 +173,7 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
             if listener_online:
                 send_chat_message(listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user", msg.id, msg.client_id)
             else:
-                undelivered = db.query(ChatMessage).filter(
-                    ChatMessage.user_id == current_user.id,
-                    ChatMessage.listener_id == listener.id,
-                    ChatMessage.sender_type == "user",
-                    ChatMessage.status == "sent",
-                ).order_by(ChatMessage.id.asc()).all()
-                payload_msgs = [
-                    {"id": m.id, "client_id": m.client_id, "message": m.message}
-                    for m in undelivered
-                ]
+                payload_msgs = _undelivered_summary_payload(db, current_user.id, listener.id, "user")
                 send_chat_summary(listener.fcm_token, current_user.name, payload_msgs, current_user.id, listener.id, "user")
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of chat message: {e}")
@@ -158,16 +204,7 @@ async def listener_send_message(payload: ListenerChatMessageSend, db: Session = 
             if user_online:
                 send_chat_message(user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener", msg.id, msg.client_id)
             else:
-                undelivered = db.query(ChatMessage).filter(
-                    ChatMessage.user_id == user.id,
-                    ChatMessage.listener_id == current_listener.id,
-                    ChatMessage.sender_type == "listener",
-                    ChatMessage.status == "sent",
-                ).order_by(ChatMessage.id.asc()).all()
-                payload_msgs = [
-                    {"id": m.id, "client_id": m.client_id, "message": m.message}
-                    for m in undelivered
-                ]
+                payload_msgs = _undelivered_summary_payload(db, user.id, current_listener.id, "listener")
                 send_chat_summary(user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener")
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of chat message: {e}")
@@ -186,11 +223,7 @@ async def user_send_voice(
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
     _require_voice_coins(db, current_user)
-    ext = os.path.splitext(file.filename)[1] or ".m4a"
-    filename = f"{uuid.uuid4().hex}{ext}"
-    filepath = os.path.join("voice_notes", filename)
-    with open(filepath, "wb") as f:
-        f.write(await file.read())
+    filename = await _save_voice_upload(file)
     listener_online = manager.is_listener_online(listener.id)
     msg = ChatMessage(
         client_id=client_id,
@@ -229,11 +262,7 @@ async def listener_send_voice(
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    ext = os.path.splitext(file.filename)[1] or ".m4a"
-    filename = f"{uuid.uuid4().hex}{ext}"
-    filepath = os.path.join("voice_notes", filename)
-    with open(filepath, "wb") as f:
-        f.write(await file.read())
+    filename = await _save_voice_upload(file)
     user_online = manager.is_user_online(user.id)
     msg = ChatMessage(
         client_id=client_id,
@@ -634,7 +663,7 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
                 continue
             await _handle_user_ws_event(raw, user_id, db)
     except Exception:
-        manager.disconnect_user(user_id, websocket)
+        await manager.disconnect_user(user_id, websocket)
         await _finalize_active_calls_for_user(user_id, db)
         if manager.is_user_online(user_id):
             return
@@ -698,7 +727,7 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
                 continue
             await _handle_listener_ws_event(raw, listener_id, db)
     except Exception:
-        manager.disconnect_listener(listener_id, websocket)
+        await manager.disconnect_listener(listener_id, websocket)
         await _finalize_active_calls_for_listener(listener_id, db)
         if manager.is_listener_online(listener_id):
             return

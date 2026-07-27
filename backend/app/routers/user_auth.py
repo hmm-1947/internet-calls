@@ -35,7 +35,7 @@ def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="Phone or email already registered")
 
     otp_code = generate_otp_code()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
 
     db.query(EmailOtp).filter(EmailOtp.email == payload.email).delete()
     db.add(EmailOtp(
@@ -52,15 +52,22 @@ def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_d
     return {"status": "otp_sent"}
 
 
+MAX_OTP_ATTEMPTS = 5
+
+
 @router.post("/register/verify-otp", response_model=AuthResponse)
 def register_verify_otp(payload: UserRegisterVerifyOtp, db: Session = Depends(get_db)):
     record = db.query(EmailOtp).filter(EmailOtp.email == payload.email).order_by(EmailOtp.id.desc()).first()
     if not record:
         raise HTTPException(status_code=400, detail="No OTP request found")
-    if record.otp_code != payload.otp_code:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
     if record.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
+    if record.attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
+    if record.otp_code != payload.otp_code:
+        record.attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
 
     existing_user = db.query(User).filter(
         (User.phone == record.phone) | (User.email == record.email)
@@ -109,6 +116,9 @@ def logout(authorization: str = Header(...), db: Session = Depends(get_db), curr
     return {"status": "logged_out"}
 
 
+MAX_OTP_ATTEMPTS = 5
+
+
 @router.post("/forgot-password/request-otp")
 def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
@@ -117,7 +127,8 @@ def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Sessi
 
     otp_code = generate_otp_code()
     user.reset_otp_code = otp_code
-    user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+    user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    user.reset_otp_attempts = 0
     db.commit()
 
     send_otp_email(payload.email, otp_code)
@@ -129,10 +140,14 @@ def forgot_password_verify_otp(payload: UserForgotPasswordVerifyOtp, db: Session
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:
         raise HTTPException(status_code=404, detail="enter a registered email id")
-    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
     if not user.reset_otp_expires_at or user.reset_otp_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
+    if user.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
+    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
+        user.reset_otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
 
     return {"status": "otp_verified"}
 
@@ -142,10 +157,14 @@ def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depend
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:
         raise HTTPException(status_code=404, detail="enter a registered email id")
-    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
     if not user.reset_otp_expires_at or user.reset_otp_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
+    if user.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
+    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
+        user.reset_otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
 
     if verify_password(payload.new_password, user.password_hash):
         raise HTTPException(status_code=400, detail="New password must be different from your current password")
@@ -153,6 +172,7 @@ def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depend
     user.password_hash = hash_password(payload.new_password)
     user.reset_otp_code = None
     user.reset_otp_expires_at = None
+    user.reset_otp_attempts = 0
     db.commit()
 
     return {"status": "password_reset"}

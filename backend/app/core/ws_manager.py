@@ -53,13 +53,15 @@ class ConnectionManager:
             except Exception as e:
                 logger.debug(f"connect_listener({listener_id}): failed closing stale socket: {e}")
 
-    def disconnect_user(self, user_id: int, websocket: WebSocket = None):
-        if websocket is None or self.user_connections.get(user_id) is websocket:
-            self.user_connections.pop(user_id, None)
+    async def disconnect_user(self, user_id: int, websocket: WebSocket = None):
+        async with self._lock:
+            if websocket is None or self.user_connections.get(user_id) is websocket:
+                self.user_connections.pop(user_id, None)
 
-    def disconnect_listener(self, listener_id: int, websocket: WebSocket = None):
-        if websocket is None or self.listener_connections.get(listener_id) is websocket:
-            self.listener_connections.pop(listener_id, None)
+    async def disconnect_listener(self, listener_id: int, websocket: WebSocket = None):
+        async with self._lock:
+            if websocket is None or self.listener_connections.get(listener_id) is websocket:
+                self.listener_connections.pop(listener_id, None)
 
 
     def is_user_online(self, user_id: int) -> bool:
@@ -75,6 +77,7 @@ class ConnectionManager:
                 await ws.send_json(data)
             except Exception as e:
                 logger.warning(f"send_to_user({user_id}) failed: {e}")
+                await self.disconnect_user(user_id, ws)
 
     async def send_to_listener(self, listener_id: int, data: dict):
         ws = self.listener_connections.get(listener_id)
@@ -83,6 +86,7 @@ class ConnectionManager:
                 await ws.send_json(data)
             except Exception as e:
                 logger.warning(f"send_to_listener({listener_id}) failed: {e}")
+                await self.disconnect_listener(listener_id, ws)
 
 
     def get_online_user_ids(self, user_ids: list) -> list:

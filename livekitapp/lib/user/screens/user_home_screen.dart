@@ -5,6 +5,7 @@ import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart' as ls;
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -27,6 +28,40 @@ class _AppColors {
   static const textSecondary = Color(0xFFD4E4FA);
   static const textMuted = Color(0xFFE5BDBE);
 }
+
+class _CoinBalanceChip extends StatelessWidget {
+  final int coins;
+  final bool showLabel;
+
+  const _CoinBalanceChip({required this.coins, this.showLabel = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0x1AFFFFFF),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            showLabel ? '$coins Coins' : '$coins',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _DummyOfferCard extends StatelessWidget {
   final String badge;
@@ -169,6 +204,7 @@ class UserHomeScreenState extends State<UserHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadFromCache();
     _load();
     _initSocket();
     _pollTimer = Timer.periodic(
@@ -179,10 +215,11 @@ class UserHomeScreenState extends State<UserHomeScreen> {
       },
     );
     _offersAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!_offersController.hasClients || _specialOffers.isEmpty) return;
-      _offersCurrentPage = (_offersCurrentPage + 1) % _specialOffers.length;
+      if (!_offersController.hasClients || _specialOffers.length <= 1) return;
+      final current = _offersController.page?.round() ?? _offersCurrentPage;
+      final next = (current + 1) % _specialOffers.length;
       _offersController.animateToPage(
-        _offersCurrentPage,
+        next,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
@@ -190,15 +227,44 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     _loadSpecialOffers();
   }
 
-  Future<void> _loadSpecialOffers() async {
+  Future<void> _loadFromCache() async {
+    final cachedListeners = await HomeCache().getJson('user_home_listeners');
+    final cachedProfile = await HomeCache().getJson('user_home_profile');
+    final cachedOffers = await HomeCache().getJson('user_home_offers');
+    if (!mounted) return;
+    setState(() {
+      if (cachedListeners is List) {
+        _listeners = cachedListeners.cast<Map<String, dynamic>>();
+      }
+      if (cachedProfile is Map) {
+        _profileName = cachedProfile['name'] ?? '';
+        _profilePhotoUrl = cachedProfile['photo_url'];
+        _profileCoins = cachedProfile['coins'] ?? 0;
+        _videoCallEnabled = cachedProfile['video_call_enabled'] ?? true;
+        _videoCallDisabledByAdmin = cachedProfile['video_call_disabled_by_admin'] ?? false;
+      }
+      if (cachedOffers is List) {
+        _specialOffers = cachedOffers.cast<Map<String, dynamic>>();
+      }
+      if (_listeners.isNotEmpty) _loading = false;
+    });
+  }
+
+  Future<void> _loadSpecialOffers({int attempt = 0}) async {
     try {
       final offers = await _billingRepository.getSpecialOffers();
       if (!mounted) return;
       setState(() => _specialOffers = offers);
+      HomeCache().setJson('user_home_offers', offers);
     } catch (_) {
-      // Silently ignore - offers are optional decoration.
+      if (!mounted || attempt >= 2) return;
+      final delay = Duration(seconds: 2 * (attempt + 1));
+      Future.delayed(delay, () {
+        if (mounted) _loadSpecialOffers(attempt: attempt + 1);
+      });
     }
   }
+
 
   Future<void> _initSocket() async {
     final token = await _localStorage.getToken();
@@ -256,7 +322,10 @@ class UserHomeScreenState extends State<UserHomeScreen> {
   /// (re)selected, so toggling video calls in Settings reflects immediately.
   Future<void> refresh() => _load(silent: true);
 
-  Future<void> _load({bool silent = false}) async {
+  int _loadRequestId = 0;
+
+  Future<void> _load({bool silent = false, bool forceRefresh = false}) async {
+    final requestId = ++_loadRequestId;
     final isFirstLoad = _listeners.isEmpty;
     if (!silent && isFirstLoad) {
       setState(() {
@@ -268,9 +337,10 @@ class UserHomeScreenState extends State<UserHomeScreen> {
       final token = await _localStorage.getToken();
       final listeners = await _repository.getListeners(
         token!,
-        forceRefresh: true,
+        forceRefresh: forceRefresh,
       );
       final me = await _repository.getMe(token);
+      if (requestId != _loadRequestId) return;
       final newName = me['name'] ?? '';
       final newPhoto = me['photo_url'];
       final newCoins = me['coins'] ?? 0;
@@ -293,14 +363,29 @@ class UserHomeScreenState extends State<UserHomeScreen> {
             _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
             _loading = false;
           });
+          HomeCache().setJson('user_home_listeners', listeners);
+          HomeCache().setJson('user_home_profile', {
+            'name': newName,
+            'photo_url': newPhoto,
+            'coins': newCoins,
+            'video_call_enabled': newVideoCallEnabled,
+            'video_call_disabled_by_admin': newVideoCallDisabledByAdmin,
+          });
         } else if (_loading) {
           setState(() => _loading = false);
         }
       }
-} catch (e) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (requestId != _loadRequestId) return;
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     }
   }
+
 
   Future<void> _callListener(int listenerId, {bool video = false}) async {
     if (_callingListenerId != null) return;
@@ -379,7 +464,7 @@ ChatHistoryScreen(
             _buildHeader(),
             Expanded(
               child: RefreshIndicator(
-                onRefresh: _load,
+                onRefresh: () => _load(forceRefresh: true),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(5, 24, 5, 32),
@@ -455,35 +540,9 @@ ChatHistoryScreen(
               ),
               const SizedBox(height: 10),
               Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0x1AFFFFFF),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.monetization_on,
-                        color: Colors.amber,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$_profileCoins Coins',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                child: _CoinBalanceChip(coins: _profileCoins, showLabel: true),
               ),
+
               const SizedBox(height: 28),
               ListTile(
                 leading: const Icon(
@@ -520,6 +579,7 @@ ChatHistoryScreen(
                 ),
                 onTap: () async {
                   Navigator.of(context).pop();
+                  ChatSocketService().disconnect();
                   await ls.LocalStorage().clear();
                   if (!mounted) return;
                   Navigator.of(context).pushReplacement(
@@ -551,32 +611,8 @@ ChatHistoryScreen(
             height: 32,
             fit: BoxFit.contain,
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0x1AFFFFFF),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.monetization_on,
-                  color: Colors.amber,
-                  size: 16,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '$_profileCoins',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _CoinBalanceChip(coins: _profileCoins, showLabel: false),
+
         ],
       ),
     );
@@ -591,23 +627,15 @@ ChatHistoryScreen(
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: const [
-            Text(
-              'Special Offers',
-              style: TextStyle(
-                fontSize: 16,
-                color: _AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              'See all',
-              style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
-            ),
-          ],
+        const Text(
+          'Special Offers',
+          style: TextStyle(
+            fontSize: 16,
+            color: _AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
+
         const SizedBox(height: 16),
         SizedBox(
           height: 120,
@@ -691,7 +719,7 @@ ChatHistoryScreen(
                 color: _AppColors.textMuted,
                 size: 20,
               ),
-              onPressed: _load,
+              onPressed: () => _load(forceRefresh: true),
               tooltip: 'Refresh',
             ),
           ],
@@ -723,13 +751,13 @@ ChatHistoryScreen(
             ),
           )
         else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _listeners.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) =>
-                _buildProfileCard(_listeners[index]),
+          Column(
+            children: [
+              for (int i = 0; i < _listeners.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                _buildProfileCard(_listeners[i]),
+              ],
+            ],
           ),
       ],
     );

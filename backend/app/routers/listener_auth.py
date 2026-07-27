@@ -216,7 +216,7 @@ async def logout(authorization: str = Header(...), db: Session = Depends(get_db)
     current_listener.last_seen = datetime.now(timezone.utc)
     record_audit_event(db, "listener", current_listener.id, current_listener.name, "logout")
     db.commit()
-    manager.disconnect_listener(current_listener.id)
+    await manager.disconnect_listener(current_listener.id)
     await manager.broadcast_to_all_users({
         "type": "listener_offline",
         "listener_id": current_listener.id,

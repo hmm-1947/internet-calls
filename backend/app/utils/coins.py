@@ -63,19 +63,6 @@ async def bill_call_minute(db: Session, call: Call) -> int | None:
     await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
     return per_minute
 
-async def deduct_coins(db: Session, user: User, call_id: int, duration_seconds: int, call_type: str) -> int:
-    per_minute = coins_per_minute(db, call_type)
-    minutes_used = max(1, -(-duration_seconds // 60))
-    amount = minutes_used * per_minute
-    amount = min(amount, user.coins)
-    user.coins -= amount
-    db.add(CoinTransaction(user_id=user.id, amount=-amount, reason=f"{call_type}_call", call_id=call_id))
-    db.commit()
-    from app.core.ws_manager import manager
-    await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
-
-    return amount
-
 async def reconcile_call_billing(db: Session, call: Call, duration_seconds: int) -> int:
     """Called when a call ends. The live per-minute loop already bills each
     minute as it starts (ceil-style billing). This only charges for any
@@ -105,13 +92,15 @@ async def deduct_chat_coins(db: Session, user: User, listener_id: int, message_i
     cost = chat_message_coin_cost(db)
     if cost < 0:
         raise ValueError("Chat message coin cost cannot be negative")
-    if user.coins < cost:
+    locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
+    if not locked_user or locked_user.coins < cost:
         raise ValueError("Not enough coins to send this message")
 
     # A message is always charged at its configured cost.  Do not use a
     # partial deduction here: that would allow messages when the balance is
     # below the required price (including a zero balance).
-    user.coins -= cost
+    locked_user.coins -= cost
+    user.coins = locked_user.coins
     db.add(CoinTransaction(user_id=user.id, amount=-cost, reason="chat_message", call_id=None))
     db.commit()
     from app.core.ws_manager import manager
@@ -123,10 +112,12 @@ async def deduct_voice_message_coins(db: Session, user: User, listener_id: int, 
     cost = voice_message_coin_cost(db)
     if cost < 0:
         raise ValueError("Voice message coin cost cannot be negative")
-    if user.coins < cost:
+    locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
+    if not locked_user or locked_user.coins < cost:
         raise ValueError("Not enough coins to send this voice message")
 
-    user.coins -= cost
+    locked_user.coins -= cost
+    user.coins = locked_user.coins
     db.add(CoinTransaction(user_id=user.id, amount=-cost, reason="voice_message", call_id=None))
     db.commit()
     from app.core.ws_manager import manager
