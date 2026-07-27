@@ -261,6 +261,8 @@ class ListenerProfileUpdate(BaseModel):
     about: Optional[str] = None
     tags: Optional[list[str]] = None
     languages: Optional[list[str]] = None
+    age: Optional[int] = None
+    occupation: Optional[str] = None
 
     
 class LiveKitTokenResponse(BaseModel):
@@ -373,6 +375,7 @@ class CallSummaryOut(BaseModel):
     call_id: int
     listener_id: int
     listener_name: str
+    listener_photo_url: Optional[str] = None
     duration_seconds: int
     coins_deducted: int
     existing_rating: Optional[int] = None

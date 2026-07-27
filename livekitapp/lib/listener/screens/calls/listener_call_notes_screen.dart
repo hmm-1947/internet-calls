@@ -164,7 +164,10 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
         backgroundColor: const Color(0xFF0B0F1A),
         appBar: AppBar(
           backgroundColor: const Color(0xFF0B0F1A),
-          title: Text('Notes about ${widget.otherPartyName}'),
+          title: Text('Notes about ${widget.otherPartyName}',     style: TextStyle(
+            color: Color.fromARGB(255, 255, 90, 90),
+            fontWeight: FontWeight.bold,
+          ),),
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())

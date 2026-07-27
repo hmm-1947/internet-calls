@@ -447,6 +447,7 @@ def call_summary(call_id: int, db: Session = Depends(get_db), current_user: User
     return CallSummaryOut(
         call_id=call.id, listener_id=call.callee_listener_id,
         listener_name=listener.name if listener else "Unknown",
+        listener_photo_url=listener.photo_url if listener else None,
         duration_seconds=call.duration_seconds, coins_deducted=call.coins_deducted,
         existing_rating=existing.rating if existing else None,
         existing_review=existing.review if existing else None,

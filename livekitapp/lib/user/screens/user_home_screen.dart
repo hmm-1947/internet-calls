@@ -761,7 +761,7 @@ child: Column(
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      AvatarImage(photoUrl: listener['photo_url'], radius: 40, iconSize: 40),
+                      AvatarImage(photoUrl: listener['photo_url'], radius: 50, iconSize: 40),
                       Positioned(
                         right: 2,
                         bottom: 2,
@@ -798,6 +798,15 @@ child: Column(
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${listener['age']?.toString() ?? '...'} · ${(listener['occupation'] as String?)?.isNotEmpty == true ? listener['occupation'] : '...'}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: _AppColors.textMuted,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: 4),
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
@@ -831,6 +840,35 @@ child: Column(
                             ),
                         ],
                       ),
+                      if (tags.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: tags
+                              .take(3)
+                              .map(
+                                (tag) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _AppColors.brandRed.withOpacity(0.16),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -908,35 +946,6 @@ child: Column(
                       ),
               ],
             ),
-            if (tags.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: tags
-                    .take(3)
-                    .map(
-                      (tag) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _AppColors.brandRed.withOpacity(0.16),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          tag,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
           ],
         ),
       ),

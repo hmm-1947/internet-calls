@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
 
 String _fmtDuration(int seconds) {
   final m = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -69,6 +71,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
   int _rating = 0;
   final _reviewController = TextEditingController();
   bool _submitting = false;
+  bool _callingAgain = false;
 
   @override
   void initState() {
@@ -115,6 +118,43 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
     }
   }
 
+  Future<void> _callAgain() async {
+    if (_callingAgain || _summary == null) return;
+    setState(() => _callingAgain = true);
+    try {
+      final token = await _localStorage.getToken();
+      final listenerId = _summary!['listener_id'] as int;
+      final result = await _repository.initiateCall(
+        token!,
+        listenerId,
+        callType: 'audio',
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => CallScreen(
+            callId: result['call_id'],
+            otherPartyName: _summary!['listener_name'] ?? 'Listener',
+            otherPartyPhotoUrl: _summary!['listener_photo_url'],
+            listenerId: listenerId,
+          ),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          opaque: true,
+          barrierColor: Colors.black,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _callingAgain = false);
+    }
+  }
+
   @override
   void dispose() {
     _reviewController.dispose();
@@ -155,6 +195,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                   Container(
                     width: 120,
                     height: 120,
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(color: pink, width: 3),
@@ -166,15 +207,10 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                         ),
                       ],
                     ),
-                    child: const ClipOval(
-                      child: ColoredBox(
-                        color: Color(0xFF2A2A2A),
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.white54,
-                          size: 56,
-                        ),
-                      ),
+                    child: AvatarImage(
+                      photoUrl: _summary!['listener_photo_url'],
+                      radius: 56,
+                      iconSize: 56,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -216,6 +252,34 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _callingAgain ? null : _callAgain,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        side: const BorderSide(color: dimText),
+                      ),
+                      icon: _callingAgain
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.call, color: Colors.white),
+                      label: const Text(
+                        'Call Again',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Container(
@@ -299,25 +363,6 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                                 fontSize: 15,
                               ),
                             ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
-                        ),
-                        side: const BorderSide(color: dimText),
-                      ),
-                      icon: const Icon(Icons.call, color: Colors.white),
-                      label: const Text(
-                        'Call Again',
-                        style: TextStyle(color: Colors.white),
-                      ),
                     ),
                   ),
                 ],

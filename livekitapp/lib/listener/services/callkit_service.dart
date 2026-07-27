@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
@@ -397,7 +398,7 @@ Route _callRoute(PendingCallNav nav) {
     _lastShownCallId = callId.toString();
     final callerName = data['caller_name'] ?? 'Unknown';
     final callType = data['call_type'] ?? 'audio';
-    final callerPhotoUrl = data['caller_photo_url'] ?? '';
+    final callerPhotoUrl = ApiConstants.resolveMediaUrl(data['caller_photo_url'] as String?);
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
@@ -411,6 +412,7 @@ Route _callRoute(PendingCallNav nav) {
       appName: 'Listener App',
       handle: callerName,
       type: 0,
+      avatar: callerPhotoUrl,
       extra: {
         'call_id': callId,
         'caller_name': callerName,

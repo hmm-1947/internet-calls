@@ -54,6 +54,8 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "rating_count": rating_count or 0,
         "created_at": current_listener.created_at.isoformat() if current_listener.created_at else None,
         "photo_url": current_listener.photo_url,
+        "age": current_listener.age,
+        "occupation": current_listener.occupation,
     }
 
 
@@ -160,6 +162,10 @@ def update_profile(payload: ListenerProfileUpdate, db: Session = Depends(get_db)
         current_listener.tags = json.dumps(payload.tags)
     if payload.languages is not None:
         current_listener.languages = json.dumps(payload.languages)
+    if payload.age is not None:
+        current_listener.age = payload.age
+    if payload.occupation is not None:
+        current_listener.occupation = payload.occupation
     db.commit()
     return {"status": "updated"}
 

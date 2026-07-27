@@ -84,11 +84,15 @@ class ListenerRepository {
     String? about,
     List<String>? tags,
     List<String>? languages,
+    int? age,
+    String? occupation,
   }) async {
     final response = await _apiClient.put(ApiConstants.listenerProfile, {
       if (about != null) 'about': about,
       if (tags != null) 'tags': tags,
       if (languages != null) 'languages': languages,
+      if (age != null) 'age': age,
+      if (occupation != null) 'occupation': occupation,
     }, token: token);
     if (response.statusCode != 200) {
       final data = jsonDecode(response.body);

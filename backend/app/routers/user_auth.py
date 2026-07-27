@@ -193,6 +193,8 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             "avg_rating": round(avg_rating, 1) if avg_rating else None,
             "rating_count": rating_count or 0,
             "photo_url": l.photo_url,
+            "age": l.age,
+            "occupation": l.occupation,
         })
     return result
 
@@ -222,6 +224,8 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
         "rating_count": rating_count or 0,
         "created_at": l.created_at.isoformat() if l.created_at else None,
         "photo_url": l.photo_url,
+        "age": l.age,
+        "occupation": l.occupation,
     }
 
     
