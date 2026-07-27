@@ -16,10 +16,12 @@ router = APIRouter(prefix="/weekly-challenge", tags=["weekly-challenge"])
 
 
 def _current_week_start(now: datetime | None = None) -> datetime:
-    """Monday 00:00 UTC of the current week."""
+    """Sunday 00:00 UTC of the current week. The week runs Sunday through
+    Saturday, so everything resets right after Saturday 11:59pm."""
     now = now or datetime.now(timezone.utc)
-    monday = now - timedelta(days=now.weekday())
-    return monday.replace(hour=0, minute=0, second=0, microsecond=0)
+    days_since_sunday = (now.weekday() + 1) % 7  # Mon=0..Sun=6 -> Sun=0..Sat=6
+    sunday = now - timedelta(days=days_since_sunday)
+    return sunday.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _get_settings(db: Session) -> WeeklyChallengeSettings:
@@ -35,7 +37,7 @@ def _get_settings(db: Session) -> WeeklyChallengeSettings:
 def _challenge_expiry(activated_at: datetime) -> datetime:
     """Saturday 23:59:59.999999 of the week the challenge was activated in."""
     week_start = _current_week_start(activated_at)
-    saturday = week_start + timedelta(days=5)
+    saturday = week_start + timedelta(days=6)
     return saturday.replace(hour=23, minute=59, second=59, microsecond=999999)
 
 
@@ -244,3 +246,50 @@ def get_completions(db: Session = Depends(get_db), _=Depends(get_current_admin))
             }
         )
     return result
+
+
+@router.get("/admin/history")
+def get_history(db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    """Admin-facing endpoint: weekly challenge results for every week before
+    the current one, grouped by week. The current (still-live) week is
+    intentionally excluded since it belongs to the leaderboard/completions
+    logs above and only settles once the week rolls over."""
+    settings = _get_settings(db)
+    week_start_now = _current_week_start()
+    rows = (
+        db.query(ListenerWeeklyChallengeProgress)
+        .filter(ListenerWeeklyChallengeProgress.week_start < week_start_now)
+        .filter(ListenerWeeklyChallengeProgress.talk_seconds > 0)
+        .order_by(
+            ListenerWeeklyChallengeProgress.week_start.desc(),
+            ListenerWeeklyChallengeProgress.talk_seconds.desc(),
+        )
+        .all()
+    )
+
+    weeks: dict[datetime, list] = {}
+    for progress in rows:
+        listener = db.query(Listener).filter(Listener.id == progress.listener_id).first()
+        weeks.setdefault(progress.week_start, []).append(
+            {
+                "listener_id": progress.listener_id,
+                "listener_name": listener.name if listener else "Unknown",
+                "talk_seconds": progress.talk_seconds,
+                "goals": _serialize_goals(settings, progress),
+            }
+        )
+
+    result = []
+    for week_start in sorted(weeks.keys(), reverse=True):
+        week_end = week_start + timedelta(days=6)
+        listeners = weeks[week_start]
+        result.append(
+            {
+                "week_start": week_start.isoformat(),
+                "week_end": week_end.isoformat(),
+                "listeners": listeners,
+                "top_listener_name": listeners[0]["listener_name"] if listeners else None,
+            }
+        )
+    return result
+

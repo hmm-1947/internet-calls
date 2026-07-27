@@ -1337,6 +1337,14 @@
       <h2>This Week's Completions</h2>
       <div id="wcCompletionsList"></div>
     </div>
+
+    <div class="card">
+      <h2>Previous Weeks</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Full history of every past weekly challenge, once its week has ended.
+      </p>
+      <div id="wcHistoryList"></div>
+    </div>
   </div>
 
       </div>
@@ -1566,6 +1574,7 @@
       loadSpecialOffers();
       loadWeeklyChallengeGoals();
       loadWeeklyChallengeLeaderboard();
+      loadWeeklyChallengeHistory();
       loadActiveCalls();
       loadStats();
       loadOverview();
@@ -1595,6 +1604,7 @@
         loadWeeklyChallengeGoals();
         loadWeeklyChallengeLeaderboard();
         loadWeeklyChallengeCompletions();
+        loadWeeklyChallengeHistory();
       }
       document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
       if (page === 'users') {
@@ -2556,6 +2566,49 @@
           </tbody>
         </table>
       `;
+    }
+
+    async function loadWeeklyChallengeHistory() {
+      const wrap = document.getElementById('wcHistoryList');
+      try {
+        const res = await fetch(API_URL + '/weekly-challenge/admin/history', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load history');
+        renderWeeklyChallengeHistory(data);
+      } catch (e) {
+        if (wrap) wrap.innerHTML = '<div class="empty-state">Failed to load previous weeks.</div>';
+      }
+    }
+
+    function renderWeeklyChallengeHistory(weeks) {
+      const wrap = document.getElementById('wcHistoryList');
+      if (!weeks.length) {
+        wrap.innerHTML = '<div class="empty-state">No completed weeks yet. Past challenges will show up here once their week ends.</div>';
+        return;
+      }
+      const medals = ['🥇', '🥈', '🥉'];
+      wrap.innerHTML = weeks.map(w => {
+        const start = new Date(w.week_start).toLocaleDateString();
+        const end = new Date(w.week_end).toLocaleDateString();
+        return `
+          <div style="margin-bottom:18px;">
+            <h3 style="font-size:14px;margin:0 0 8px;">${start} – ${end}${w.top_listener_name ? ` &middot; 🏆 ${w.top_listener_name}` : ''}</h3>
+            <table>
+              <thead><tr><th>#</th><th>Listener</th><th>Talktime</th><th>Goal 1</th><th>Goal 2</th><th>Goal 3</th></tr></thead>
+              <tbody>
+                ${w.listeners.map((r, i) => `
+                  <tr>
+                    <td>${medals[i] || i + 1}</td>
+                    <td>${r.listener_name}</td>
+                    <td>${formatDuration(r.talk_seconds)}</td>
+                    ${r.goals.map(g => `<td>${g.completed ? '&#9989; Done' : '&#8212;'}</td>`).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }).join('');
     }
 
     const BILLING_AUDIT_ACTION_LABELS = { created: 'Added', updated: 'Updated', deleted: 'Deleted' };
