@@ -606,10 +606,19 @@ _fcmSubscription?.cancel();
                 onTap: _room != null ? _toggleSpeaker : null,
               ),
               CallActionButton(
-                icon: Icons.more_horiz,
-                label: 'More',
+                icon: Icons.note_alt_outlined,
+                label: 'Notes',
                 background: Colors.black.withOpacity(0.35),
-                onTap: () {},
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ListenerCallNotesScreen(
+                        callId: widget.callId,
+                        otherPartyName: widget.otherPartyName,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),

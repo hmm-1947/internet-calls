@@ -859,10 +859,10 @@ Future<void> _requestMicAndStartCall() async {
                 onTap: _toggleSpeaker,
               ),
               CallActionButton(
-                icon: Icons.more_horiz,
-                label: 'More',
+                icon: Icons.card_giftcard,
+                label: 'Gift',
                 background: Colors.black.withOpacity(0.35),
-                onTap: () {},
+                onTap: _openGiftSheet,
               ),
             ],
           ),
