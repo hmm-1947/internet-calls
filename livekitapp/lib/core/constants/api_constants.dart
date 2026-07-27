@@ -100,6 +100,7 @@ static const String userBio = '/user/bio';
   static const String appRingtone = '/app-settings/ringtone';
   static const String appUpgradeBanner = '/app-settings/upgrade-banner';
   static const String specialOffers = '/special-offers';
+  static const String weeklyChallengeProgress = '/weekly-challenge/progress';
 
 
   static String resolveMediaUrl(String? path) {

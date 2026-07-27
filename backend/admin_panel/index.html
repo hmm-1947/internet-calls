@@ -1001,6 +1001,7 @@
       <div class="nav-item" id="navBilling" onclick="switchPage('billing')"><span class="nav-ic">&#128179;</span>Billing</div>
       <div class="nav-item" id="navGifts" onclick="switchPage('gifts')"><span class="nav-ic">&#127873;</span>Gifts</div>
       <div class="nav-item" id="navSpecialOffers" onclick="switchPage('specialoffers')"><span class="nav-ic">&#127942;</span>Special Offers</div>
+      <div class="nav-item" id="navWeeklyChallenges" onclick="switchPage('weeklychallenges')"><span class="nav-ic">&#128197;</span>Weekly Challenges</div>
     </div>
     <div class="main-col">
       <div class="top-bar">
@@ -1310,6 +1311,34 @@
     </div>
   </div>
 
+  <div id="page-weeklychallenges" style="display:none;">
+    <div class="card">
+      <h2>Talktime Goals</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Set the three weekly talktime goals (in minutes). Progress is tracked from both audio and video calls. Saving goals starts the challenge immediately; it automatically expires Saturday 11:59pm and disappears from the listener app until you set a new one.
+      </p>
+      <div id="wcStatusBanner" style="font-size:13px;font-weight:600;margin-bottom:10px;"></div>
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Goal 1 (minutes)</label>
+      <input id="wcGoal1" type="number" min="1" placeholder="30">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Goal 2 (minutes)</label>
+      <input id="wcGoal2" type="number" min="1" placeholder="60">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Goal 3 (minutes)</label>
+      <input id="wcGoal3" type="number" min="1" placeholder="120">
+      <button class="btn btn-leaf" onclick="saveWeeklyChallengeGoals()">Save Goals</button>
+      <div id="wcGoalsMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Top 3 Listeners This Week</h2>
+      <div id="wcLeaderboardList"></div>
+    </div>
+
+    <div class="card">
+      <h2>This Week's Completions</h2>
+      <div id="wcCompletionsList"></div>
+    </div>
+  </div>
+
       </div>
     </div>
   </div>
@@ -1535,6 +1564,8 @@
       loadGiftAuditLog();
       loadGiftTransactions();
       loadSpecialOffers();
+      loadWeeklyChallengeGoals();
+      loadWeeklyChallengeLeaderboard();
       loadActiveCalls();
       loadStats();
       loadOverview();
@@ -1550,6 +1581,7 @@
       document.getElementById('page-billing').style.display = page === 'billing' ? '' : 'none';
       document.getElementById('page-gifts').style.display = page === 'gifts' ? '' : 'none';
       document.getElementById('page-specialoffers').style.display = page === 'specialoffers' ? '' : 'none';
+      document.getElementById('page-weeklychallenges').style.display = page === 'weeklychallenges' ? '' : 'none';
       document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
       document.getElementById('navUsers').classList.toggle('active', page === 'users');
       document.getElementById('navListeners').classList.toggle('active', page === 'listeners');
@@ -1557,7 +1589,13 @@
       document.getElementById('navBilling').classList.toggle('active', page === 'billing');
       document.getElementById('navGifts').classList.toggle('active', page === 'gifts');
       document.getElementById('navSpecialOffers').classList.toggle('active', page === 'specialoffers');
-      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers' };
+      document.getElementById('navWeeklyChallenges').classList.toggle('active', page === 'weeklychallenges');
+      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges' };
+      if (page === 'weeklychallenges') {
+        loadWeeklyChallengeGoals();
+        loadWeeklyChallengeLeaderboard();
+        loadWeeklyChallengeCompletions();
+      }
       document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
       if (page === 'users') {
         loadUserAuditLog();
@@ -2394,6 +2432,130 @@
       const el = document.getElementById('offerMsg');
       el.textContent = text;
       el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    function setWcGoalsMsg(text, ok) {
+      const el = document.getElementById('wcGoalsMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function loadWeeklyChallengeGoals() {
+      try {
+        const res = await fetch(API_URL + '/weekly-challenge/admin/goals', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load goals');
+        document.getElementById('wcGoal1').value = data.goal1_minutes;
+        document.getElementById('wcGoal2').value = data.goal2_minutes;
+        document.getElementById('wcGoal3').value = data.goal3_minutes;
+        renderWcStatusBanner(data.active, data.expires_at);
+      } catch (e) { }
+    }
+
+    function renderWcStatusBanner(active, expiresAt) {
+      const el = document.getElementById('wcStatusBanner');
+      if (!el) return;
+      if (active) {
+        const exp = expiresAt ? new Date(expiresAt).toLocaleString() : '';
+        el.style.color = '#1a9e5c';
+        el.textContent = `● Challenge is live${exp ? ' — expires ' + exp : ''}`;
+      } else {
+        el.style.color = 'var(--slate)';
+        el.textContent = '○ No challenge is currently active. Save goals below to start one.';
+      }
+    }
+
+    async function saveWeeklyChallengeGoals() {
+      const goal1 = parseInt(document.getElementById('wcGoal1').value);
+      const goal2 = parseInt(document.getElementById('wcGoal2').value);
+      const goal3 = parseInt(document.getElementById('wcGoal3').value);
+      if (!goal1 || !goal2 || !goal3) {
+        setWcGoalsMsg('Please fill all three goals with valid minutes.', false);
+        return;
+      }
+      try {
+        const params = new URLSearchParams({ goal1_minutes: goal1, goal2_minutes: goal2, goal3_minutes: goal3 });
+        const res = await fetch(`${API_URL}/weekly-challenge/admin/goals?${params}`, {
+          method: 'PUT',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to save goals');
+        setWcGoalsMsg('✓ Challenge started — live until Saturday 11:59pm', true);
+        renderWcStatusBanner(data.active, data.expires_at);
+        loadWeeklyChallengeCompletions();
+        loadWeeklyChallengeLeaderboard();
+      } catch (e) { setWcGoalsMsg('✗ ' + e.message, false); }
+    }
+
+    async function loadWeeklyChallengeLeaderboard() {
+      const wrap = document.getElementById('wcLeaderboardList');
+      try {
+        const res = await fetch(API_URL + '/weekly-challenge/admin/leaderboard', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load leaderboard');
+        renderWeeklyChallengeLeaderboard(data);
+      } catch (e) {
+        if (wrap) wrap.innerHTML = '<div class="empty-state">Failed to load leaderboard.</div>';
+      }
+    }
+
+    function renderWeeklyChallengeLeaderboard(rows) {
+      const wrap = document.getElementById('wcLeaderboardList');
+      if (!rows.length) {
+        wrap.innerHTML = '<div class="empty-state">No talktime logged by any listener this week yet.</div>';
+        return;
+      }
+      const medals = ['🥇', '🥈', '🥉'];
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>#</th><th>Listener</th><th>Talktime</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${medals[r.rank - 1] || r.rank}</td>
+                <td>${r.listener_name}</td>
+                <td>${formatDuration(r.talk_seconds)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function loadWeeklyChallengeCompletions() {
+
+      const wrap = document.getElementById('wcCompletionsList');
+      try {
+        const res = await fetch(API_URL + '/weekly-challenge/admin/completions', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load completions');
+        renderWeeklyChallengeCompletions(data);
+      } catch (e) {
+        if (wrap) wrap.innerHTML = '<div class="empty-state">Failed to load weekly challenge data.</div>';
+      }
+    }
+
+    function renderWeeklyChallengeCompletions(rows) {
+      const wrap = document.getElementById('wcCompletionsList');
+      if (!rows.length) {
+        wrap.innerHTML = '<div class="empty-state">No talktime logged by any listener this week yet.</div>';
+        return;
+      }
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Listener</th><th>Talktime</th><th>Goal 1</th><th>Goal 2</th><th>Goal 3</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${r.listener_name}</td>
+                <td>${formatDuration(r.talk_seconds)}</td>
+                ${r.goals.map(g => `<td>${g.completed ? '&#9989; Done' : '&#8212;'}</td>`).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
     }
 
     const BILLING_AUDIT_ACTION_LABELS = { created: 'Added', updated: 'Updated', deleted: 'Deleted' };

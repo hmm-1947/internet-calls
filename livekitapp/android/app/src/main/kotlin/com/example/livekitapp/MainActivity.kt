@@ -13,6 +13,8 @@ import android.util.Rational
 import android.content.res.Configuration
 import io.flutter.plugin.common.MethodChannel
 import android.os.Build
+import android.os.Bundle
+import android.view.WindowManager
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "livekitapp/lockscreen"
@@ -25,7 +27,14 @@ class MainActivity : FlutterActivity() {
     private var isInPipMode = false
     private var isInCallState = false
 
-
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Blocks screenshots, screen recording, and app-switcher thumbnail preview.
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

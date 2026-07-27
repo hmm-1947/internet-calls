@@ -175,6 +175,39 @@ class AppSettings(Base):
 
 
 
+class WeeklyChallengeSettings(Base):
+    __tablename__ = "weekly_challenge_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    goal1_minutes = Column(Integer, default=30, nullable=False)
+    goal2_minutes = Column(Integer, default=60, nullable=False)
+    goal3_minutes = Column(Integer, default=120, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False, server_default="0")
+    activated_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ListenerWeeklyChallengeProgress(Base):
+    __tablename__ = "listener_weekly_challenge_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False, index=True)
+    week_start = Column(DateTime(timezone=True), nullable=False, index=True)
+    talk_seconds = Column(Integer, default=0, nullable=False)
+    goal1_completed_at = Column(DateTime(timezone=True), nullable=True)
+    goal2_completed_at = Column(DateTime(timezone=True), nullable=True)
+    goal3_completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index(
+            "ix_one_progress_row_per_listener_per_week",
+            "listener_id",
+            "week_start",
+            unique=True,
+        ),
+    )
+
+
 class CoinTransaction(Base):
     __tablename__ = "coin_transactions"
 

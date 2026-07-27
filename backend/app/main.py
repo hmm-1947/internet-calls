@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
-from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing, app_settings, special_offers
+from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing, app_settings, special_offers, weekly_challenge
 from fastapi.staticfiles import StaticFiles
 from app.core.database import SessionLocal
 from app.models.models import User, Listener
@@ -50,6 +50,7 @@ app.include_router(gift.router)
 app.include_router(billing.router)
 app.include_router(app_settings.router)
 app.include_router(special_offers.router)
+app.include_router(weekly_challenge.router)
 
 @app.get("/health")
 def health():

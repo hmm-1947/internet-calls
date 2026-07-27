@@ -22,6 +22,7 @@ from app.utils.livekit_room import delete_room_background
 
 
 from app.utils.coins import max_call_seconds, deduct_coins, reconcile_call_billing, bill_call_minute, coins_per_minute
+from app.routers.weekly_challenge import add_talktime_seconds
 from app.schemas.schemas import CallInitiate
 from app.core.ws_manager import manager
 from app.schemas.schemas import CallRatingSubmit, CallSummaryOut, ListenerReviewOut
@@ -291,6 +292,10 @@ async def finalize_abandoned_call(db: Session, call: Call):
         user = db.query(User).filter(User.id == call.caller_user_id).first()
         if user:
             await reconcile_call_billing(db, call, int(duration))
+        # Weekly challenge counts talktime from both audio and video calls,
+        # credited to the listener who took the call.
+        if call.callee_listener_id:
+            add_talktime_seconds(db, call.callee_listener_id, int(duration))
     db.commit()
     recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()
 
@@ -352,6 +357,8 @@ async def coin_exceeded(call_id: int, db: Session = Depends(get_db), current_use
         duration = (datetime.now(timezone.utc) - connected_at).total_seconds()
         call.duration_seconds = int(duration)
         await reconcile_call_billing(db, call, int(duration))
+        if call.callee_listener_id:
+            add_talktime_seconds(db, call.callee_listener_id, int(duration))
     db.commit()
 
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
@@ -394,6 +401,8 @@ async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     if user:
         await reconcile_call_billing(db, call, duration)
+    if call.callee_listener_id:
+        add_talktime_seconds(db, call.callee_listener_id, duration)
     db.commit()
     return {"ok": True}
 
