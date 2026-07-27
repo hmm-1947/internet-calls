@@ -4,12 +4,11 @@ import 'package:livekitapp/listener/repository/weekly_challenge_repository.dart'
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
-  static const cardBg = Color(0xCC1A1A1A);
+  static const cardBg = Color(0xFF1A1A1A);
   static const cardBorder = Color(0x0DFFFFFF);
-  static const brandRed = Color(0xFFE11D48);
-  static const textSecondary = Color(0xFFD4E4FA);
-  static const textMuted = Color(0xFF9C8484);
-  static const gold = Color(0xFFE8B93A);
+  static const brandRed = Color(0xFFE53950);
+  static const textSecondary = Colors.white54;
+  static const textMuted = Colors.white38;
   static const trackInactive = Color(0x1FFFFFFF);
 }
 
@@ -81,9 +80,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
         elevation: 0,
         title: const Text(
           'Weekly Challenge',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: TextStyle(color: _AppColors.brandRed, fontWeight: FontWeight.w700),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: _AppColors.brandRed),
       ),
       body: SafeArea(
         child: _loading
@@ -153,9 +152,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             height: 52,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [_AppColors.brandRed, _AppColors.gold],
-              ),
+              color: _AppColors.brandRed,
             ),
             child: const Icon(Icons.emoji_events, color: Colors.white, size: 26),
           ),
@@ -258,9 +255,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                       child: Container(
                         height: 6,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [_AppColors.brandRed, _AppColors.gold],
-                          ),
+                          color: _AppColors.brandRed,
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -309,20 +304,43 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
   }
 
   Widget _buildMilestoneDot(WeeklyChallengeGoal goal) {
+    if (goal.completed) {
+      return Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _AppColors.brandRed,
+          boxShadow: [
+            BoxShadow(
+              color: _AppColors.brandRed.withOpacity(0.6),
+              blurRadius: 12,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: const Icon(Icons.check, size: 14, color: Colors.white),
+      );
+    }
     return Container(
       width: 24,
       height: 24,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: goal.completed ? _AppColors.gold : _AppColors.bg,
-        border: Border.all(
-          color: goal.completed ? _AppColors.gold : _AppColors.textMuted,
-          width: 2,
+        color: _AppColors.bg,
+        border: Border.all(color: _AppColors.textMuted, width: 2),
+      ),
+      child: Center(
+        child: Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: _AppColors.textMuted,
+          ),
         ),
       ),
-      child: goal.completed
-          ? const Icon(Icons.check, size: 14, color: Colors.black)
-          : null,
     );
   }
 
@@ -331,11 +349,29 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(
-            goal.completed ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: goal.completed ? _AppColors.gold : _AppColors.textMuted,
-            size: 20,
-          ),
+          goal.completed
+              ? Container(
+                  width: 20,
+                  height: 20,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _AppColors.brandRed,
+                    boxShadow: [
+                      BoxShadow(
+                        color: _AppColors.brandRed.withOpacity(0.5),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.check, size: 12, color: Colors.white),
+                )
+              : Icon(
+                  Icons.radio_button_unchecked,
+                  color: _AppColors.textMuted,
+                  size: 20,
+                ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -350,7 +386,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
           if (goal.completed)
             const Text(
               'Completed',
-              style: TextStyle(color: _AppColors.gold, fontSize: 12, fontWeight: FontWeight.w700),
+              style: TextStyle(color: _AppColors.brandRed, fontSize: 12, fontWeight: FontWeight.w700),
             ),
         ],
       ),

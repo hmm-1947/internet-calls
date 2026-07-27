@@ -1,7 +1,7 @@
 """add is_active and activated_at to weekly_challenge_settings
 
 Revision ID: u2v3w4x5y6z7
-Revises: t1u2v3w4x5y6
+Revises: v3w4x5y6z7a8
 Create Date: 2026-07-27 13:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'u2v3w4x5y6z7'
-down_revision: Union[str, Sequence[str], None] = 't1u2v3w4x5y6'
+down_revision: Union[str, Sequence[str], None] = 'v3w4x5y6z7a8'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

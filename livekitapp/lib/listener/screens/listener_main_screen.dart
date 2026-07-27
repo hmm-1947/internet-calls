@@ -142,16 +142,12 @@ class _WeeklyChallengeFab extends StatelessWidget {
         height: 56,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: const LinearGradient(
-            colors: [Color(0xFFE11D48), Color(0xFFE8B93A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: const Color(0xFFE53950),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFE11D48).withOpacity(0.45),
-              blurRadius: 14,
-              spreadRadius: 1,
+              color: const Color(0xFFE53950).withOpacity(0.55),
+              blurRadius: 16,
+              spreadRadius: 2,
               offset: const Offset(0, 4),
             ),
           ],

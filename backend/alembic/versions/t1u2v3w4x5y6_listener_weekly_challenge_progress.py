@@ -1,7 +1,7 @@
 """rename user_weekly_challenge_progress to listener_weekly_challenge_progress
 
-Revision ID: t1u2v3w4x5y6
-Revises: 116bd823e0c0
+Revision ID: v3w4x5y6z7a8
+Revises: 116bd823e0c0, t1u2v3w4x5y6
 Create Date: 2026-07-27 12:00:00.000000
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 't1u2v3w4x5y6'
-down_revision: Union[str, Sequence[str], None] = '116bd823e0c0'
+revision: str = 'v3w4x5y6z7a8'
+down_revision: Union[str, Sequence[str], None] = ('116bd823e0c0', 't1u2v3w4x5y6')
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
