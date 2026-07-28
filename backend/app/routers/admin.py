@@ -1,32 +1,48 @@
 import json
 import os
 import uuid
+import asyncio
+from typing import Optional
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Query, UploadFile, File
-from sqlalchemy.orm import Session
+
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func
 from app.core.database import get_db
 from app.core.config import settings
 from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
     CoinTransaction, CallRating, Session as SessionModel, AdminUser, AuditLog,
+    GiftTransaction, ListenerCoinTransaction, ChatSettings,
 )
-from app.schemas.schemas import ListenerCreate
+from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate
 from app.utils.security import hash_password
+from app.utils.uploads import read_and_validate_image, write_file
+
 from app.core.ws_manager import manager
 #admin
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 def verify_admin(authorization: str = Header(...), db: Session = Depends(get_db)) -> AdminUser:
+    from datetime import datetime, timezone
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     token = authorization.removeprefix("Bearer ")
     session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id.isnot(None)).first()
     if not session:
         raise HTTPException(status_code=401, detail="Invalid session")
+    if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+        db.delete(session)
+        db.commit()
+        raise HTTPException(status_code=401, detail="Session expired")
     admin = db.query(AdminUser).filter(AdminUser.id == session.admin_id).first()
     if not admin or not admin.is_active:
         raise HTTPException(status_code=401, detail="Invalid session")
     return admin
+
+
+ADMIN_WS_REVALIDATE_SECONDS = 60
+
 
 @router.websocket("/ws")
 async def admin_ws(websocket: WebSocket, token: str = Query(...)):
@@ -40,6 +56,24 @@ async def admin_ws(websocket: WebSocket, token: str = Query(...)):
     finally:
         db.close()
     await manager.connect_admin(websocket)
+
+    async def _revalidate_loop():
+        while True:
+            await asyncio.sleep(ADMIN_WS_REVALIDATE_SECONDS)
+            check_db = next(get_db())
+            try:
+                check_session = check_db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id.isnot(None)).first()
+                if not check_session or (check_session.expires_at and check_session.expires_at < datetime.now(timezone.utc)):
+                    await websocket.close(code=4003)
+                    return
+                check_admin = check_db.query(AdminUser).filter(AdminUser.id == check_session.admin_id).first()
+                if not check_admin or not check_admin.is_active:
+                    await websocket.close(code=4003)
+                    return
+            finally:
+                check_db.close()
+
+    revalidate_task = asyncio.create_task(_revalidate_loop())
     try:
         while True:
             await websocket.receive_text()
@@ -47,6 +81,9 @@ async def admin_ws(websocket: WebSocket, token: str = Query(...)):
         manager.disconnect_admin(websocket)
     except Exception:
         manager.disconnect_admin(websocket)
+    finally:
+        revalidate_task.cancel()
+
 
 
 @router.post("/listeners")
@@ -65,23 +102,26 @@ def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=De
     return {"id": listener.id, "name": listener.name, "phone": listener.phone}
 
 @router.get("/listeners")
-def list_listeners(db: Session = Depends(get_db), _=Depends(verify_admin)):
-    listeners = db.query(Listener).all()
+def list_listeners(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None, ge=1, le=5000), db: Session = Depends(get_db), _=Depends(verify_admin)):
+    q = db.query(Listener).order_by(Listener.id).offset(skip)
+    if limit is not None:
+        q = q.limit(limit)
+    listeners = q.all()
     result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
 @router.patch("/listeners/{listener_id}/profile")
-def update_listener_profile(listener_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+def update_listener_profile(listener_id: int, payload: AdminListenerProfileUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
-    if "about" in payload:
-        listener.about = payload.get("about")
-    if "tags" in payload:
-        listener.tags = json.dumps(payload.get("tags") or [])
-    if "languages" in payload:
-        listener.languages = json.dumps(payload.get("languages") or [])
+    if payload.about is not None:
+        listener.about = payload.about
+    if payload.tags is not None:
+        listener.tags = json.dumps(payload.tags)
+    if payload.languages is not None:
+        listener.languages = json.dumps(payload.languages)
     db.commit()
     return {"id": listener.id, "about": listener.about, "tags": listener.tags, "languages": listener.languages}
 
@@ -90,21 +130,21 @@ async def update_listener_photo(listener_id: int, file: UploadFile = File(...), 
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
-    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    contents, ext = await read_and_validate_image(file)
     filename = f"listener_{listener.id}_{uuid.uuid4().hex}{ext}"
     filepath = os.path.join("profile_photos", filename)
-    with open(filepath, "wb") as f:
-        f.write(await file.read())
+    await write_file(filepath, contents)
     listener.photo_url = f"/profile_photos/{filename}"
     db.commit()
     return {"id": listener.id, "photo_url": listener.photo_url}
 
+
 @router.patch("/listeners/{listener_id}/active")
-async def set_listener_active(listener_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+async def set_listener_active(listener_id: int, payload: AdminActiveUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
-    listener.is_active = bool(payload.get("is_active"))
+    listener.is_active = payload.is_active
     db.commit()
     if not listener.is_active:
         await manager.send_to_listener(listener_id, {"type": "force_logout"})
@@ -118,32 +158,47 @@ def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(v
 
     call_ids = [c.id for c in db.query(Call.id).filter(Call.callee_listener_id == listener_id).all()]
 
-    db.query(CallRating).filter(CallRating.listener_id == listener_id).delete(synchronize_session=False)
-    db.query(ChatMessage).filter(ChatMessage.listener_id == listener_id).delete(synchronize_session=False)
-    db.query(SessionModel).filter(SessionModel.listener_id == listener_id).delete(synchronize_session=False)
-    if call_ids:
-        db.query(CallRecording).filter(CallRecording.call_id.in_(call_ids)).delete(synchronize_session=False)
-        db.query(CoinTransaction).filter(CoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
-    db.query(Call).filter(Call.callee_listener_id == listener_id).delete(synchronize_session=False)
+    try:
+        db.query(CallRating).filter(CallRating.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(ChatMessage).filter(ChatMessage.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(SessionModel).filter(SessionModel.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(ChatSettings).filter(
+            ((ChatSettings.owner_type == "listener") & (ChatSettings.owner_id == listener_id)) |
+            ((ChatSettings.owner_type == "user") & (ChatSettings.other_id == listener_id))
+        ).delete(synchronize_session=False)
+        if call_ids:
+            db.query(CallRecording).filter(CallRecording.call_id.in_(call_ids)).delete(synchronize_session=False)
+            db.query(CoinTransaction).filter(CoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+            db.query(GiftTransaction).filter(GiftTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+            db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+        db.query(Call).filter(Call.callee_listener_id == listener_id).delete(synchronize_session=False)
 
-    db.delete(listener)
-    db.commit()
+        db.delete(listener)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete listener due to related data")
     return {"detail": "Listener deleted"}
 
 @router.get("/users")
-def list_users(db: Session = Depends(get_db), _=Depends(verify_admin)):
-    users = db.query(User).all()
+def list_users(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None, ge=1, le=5000), db: Session = Depends(get_db), _=Depends(verify_admin)):
+    q = db.query(User).order_by(User.id).offset(skip)
+    if limit is not None:
+        q = q.limit(limit)
+    users = q.all()
     result = [{"id": u.id, "name": u.name, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url, "video_call_disabled_by_admin": u.video_call_disabled_by_admin} for u in users]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
 @router.patch("/users/{user_id}/profile")
-def update_user_profile(user_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+def update_user_profile(user_id: int, payload: AdminUserProfileUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if "bio" in payload:
-        user.bio = payload.get("bio")
+    if payload.bio is not None:
+        user.bio = payload.bio
     db.commit()
     return {"id": user.id, "bio": user.bio}
 
@@ -152,32 +207,32 @@ async def update_user_photo(user_id: int, file: UploadFile = File(...), db: Sess
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    contents, ext = await read_and_validate_image(file)
     filename = f"user_{user.id}_{uuid.uuid4().hex}{ext}"
     filepath = os.path.join("profile_photos", filename)
-    with open(filepath, "wb") as f:
-        f.write(await file.read())
+    await write_file(filepath, contents)
     user.photo_url = f"/profile_photos/{filename}"
     db.commit()
     return {"id": user.id, "photo_url": user.photo_url}
 
+
 @router.patch("/users/{user_id}/active")
-async def set_user_active(user_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+async def set_user_active(user_id: int, payload: AdminActiveUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.is_active = bool(payload.get("is_active"))
+    user.is_active = payload.is_active
     db.commit()
     if not user.is_active:
         await manager.send_to_user(user_id, {"type": "force_logout"})
     return {"id": user.id, "is_active": user.is_active}
 
 @router.patch("/users/{user_id}/video-call")
-async def set_user_video_call_disabled(user_id: int, payload: dict, db: Session = Depends(get_db), _=Depends(verify_admin)):
+async def set_user_video_call_disabled(user_id: int, payload: AdminVideoCallUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.video_call_disabled_by_admin = bool(payload.get("disabled"))
+    user.video_call_disabled_by_admin = payload.disabled
     db.commit()
     await manager.send_to_user(user_id, {
         "type": "video_call_setting_changed",
@@ -194,26 +249,42 @@ def delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(verify_ad
 
     call_ids = [c.id for c in db.query(Call.id).filter(Call.caller_user_id == user_id).all()]
 
-    db.query(CallRating).filter(CallRating.user_id == user_id).delete(synchronize_session=False)
-    db.query(ChatMessage).filter(ChatMessage.user_id == user_id).delete(synchronize_session=False)
-    db.query(SessionModel).filter(SessionModel.user_id == user_id).delete(synchronize_session=False)
-    db.query(CoinTransaction).filter(CoinTransaction.user_id == user_id).delete(synchronize_session=False)
-    if call_ids:
-        db.query(CallRecording).filter(CallRecording.call_id.in_(call_ids)).delete(synchronize_session=False)
-    db.query(Call).filter(Call.caller_user_id == user_id).delete(synchronize_session=False)
+    try:
+        db.query(CallRating).filter(CallRating.user_id == user_id).delete(synchronize_session=False)
+        db.query(ChatMessage).filter(ChatMessage.user_id == user_id).delete(synchronize_session=False)
+        db.query(SessionModel).filter(SessionModel.user_id == user_id).delete(synchronize_session=False)
+        db.query(CoinTransaction).filter(CoinTransaction.user_id == user_id).delete(synchronize_session=False)
+        db.query(GiftTransaction).filter(GiftTransaction.user_id == user_id).delete(synchronize_session=False)
+        db.query(ChatSettings).filter(
+            ((ChatSettings.owner_type == "user") & (ChatSettings.owner_id == user_id)) |
+            ((ChatSettings.owner_type == "listener") & (ChatSettings.other_id == user_id))
+        ).delete(synchronize_session=False)
+        if call_ids:
+            db.query(CallRecording).filter(CallRecording.call_id.in_(call_ids)).delete(synchronize_session=False)
+            db.query(GiftTransaction).filter(GiftTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+            db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+        db.query(Call).filter(Call.caller_user_id == user_id).delete(synchronize_session=False)
 
-    db.delete(user)
-    db.commit()
+        db.delete(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete user due to related data")
     return {"detail": "User deleted"}
 
 @router.get("/recordings")
+@router.get("/recordings")
 def list_recordings(db: Session = Depends(get_db), _=Depends(verify_admin)):
-    recordings = db.query(CallRecording).order_by(CallRecording.id.desc()).all()
+    rows = (
+        db.query(CallRecording, Call, User, Listener)
+        .outerjoin(Call, Call.id == CallRecording.call_id)
+        .outerjoin(User, User.id == Call.caller_user_id)
+        .outerjoin(Listener, Listener.id == Call.callee_listener_id)
+        .order_by(CallRecording.id.desc())
+        .all()
+    )
     result = []
-    for r in recordings:
-        call = db.query(Call).filter(Call.id == r.call_id).first()
-        caller = db.query(User).filter(User.id == call.caller_user_id).first() if call else None
-        listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first() if call else None
+    for r, call, caller, listener in rows:
         result.append({
             "id": r.id,
             "call_id": r.call_id,
@@ -229,11 +300,15 @@ def list_recordings(db: Session = Depends(get_db), _=Depends(verify_admin)):
 
 @router.get("/calls")
 def list_calls(db: Session = Depends(get_db), _=Depends(verify_admin)):
-    calls = db.query(Call).order_by(Call.id.desc()).all()
+    rows = (
+        db.query(Call, User, Listener)
+        .outerjoin(User, User.id == Call.caller_user_id)
+        .outerjoin(Listener, Listener.id == Call.callee_listener_id)
+        .order_by(Call.id.desc())
+        .all()
+    )
     result = []
-    for c in calls:
-        caller = db.query(User).filter(User.id == c.caller_user_id).first()
-        listener = db.query(Listener).filter(Listener.id == c.callee_listener_id).first()
+    for c, caller, listener in rows:
         result.append({
             "id": c.id,
             "caller_name": caller.name if caller else None,
@@ -244,12 +319,19 @@ def list_calls(db: Session = Depends(get_db), _=Depends(verify_admin)):
     return result
 
 @router.get("/chats")
-def list_chats(db: Session = Depends(get_db), _=Depends(verify_admin)):
-    messages = db.query(ChatMessage).order_by(ChatMessage.created_at.desc()).all()
+def list_chats(limit: int = Query(5000, le=20000), db: Session = Depends(get_db), _=Depends(verify_admin)):
+    UserAlias = aliased(User)
+    ListenerAlias = aliased(Listener)
+    rows = (
+        db.query(ChatMessage, UserAlias, ListenerAlias)
+        .outerjoin(UserAlias, UserAlias.id == ChatMessage.user_id)
+        .outerjoin(ListenerAlias, ListenerAlias.id == ChatMessage.listener_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     result = []
-    for m in messages:
-        user = db.query(User).filter(User.id == m.user_id).first()
-        listener = db.query(Listener).filter(Listener.id == m.listener_id).first()
+    for m, user, listener in rows:
         result.append({
             "id": m.id,
             "user_id": m.user_id,
@@ -363,11 +445,16 @@ def admin_listener_wallet(listener_id: int, db: Session = Depends(get_db), _=Dep
 
 @router.get("/calls/active")
 def list_active_calls(db: Session = Depends(get_db), _=Depends(verify_admin)):
-    calls = db.query(Call).filter(Call.status.in_(["ringing", "accepted"])).order_by(Call.id.desc()).all()
+    rows = (
+        db.query(Call, User, Listener)
+        .outerjoin(User, User.id == Call.caller_user_id)
+        .outerjoin(Listener, Listener.id == Call.callee_listener_id)
+        .filter(Call.status.in_(["ringing", "accepted"]))
+        .order_by(Call.id.desc())
+        .all()
+    )
     result = []
-    for c in calls:
-        caller = db.query(User).filter(User.id == c.caller_user_id).first()
-        listener = db.query(Listener).filter(Listener.id == c.callee_listener_id).first()
+    for c, caller, listener in rows:
         result.append({
             "id": c.id,
             "room_name": c.room_name,
@@ -406,25 +493,25 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
     }
     since, bucket = ranges.get(range, ranges["month"])
 
-    q = db.query(Call).filter(Call.status == "ended")
+    trunc_unit = {"hour": "hour", "day": "day", "week": "week", "month": "month"}[bucket]
+    bucket_col = func.date_trunc(trunc_unit, Call.created_at)
+
+    q = db.query(bucket_col.label("bucket"), func.count(Call.id)).filter(Call.status == "ended")
     if since is not None:
         q = q.filter(Call.created_at >= since)
-    calls = q.all()
+    rows = q.group_by("bucket").order_by("bucket").all()
 
-    buckets = {}
-    for c in calls:
-        ts = c.created_at
+    def format_label(ts, bucket):
         if bucket == "hour":
-            key = ts.strftime("%Y-%m-%d %H:00")
-        elif bucket == "day":
-            key = ts.strftime("%Y-%m-%d")
-        elif bucket == "week":
-            key = ts.strftime("%Y-W%W")
-        else:
-            key = ts.strftime("%Y-%m")
-        buckets[key] = buckets.get(key, 0) + 1
+            return ts.strftime("%Y-%m-%d %H:00")
+        if bucket == "day":
+            return ts.strftime("%Y-%m-%d")
+        if bucket == "week":
+            iso = ts.isocalendar()
+            return f"{iso[0]}-W{iso[1]:02d}"
+        return ts.strftime("%Y-%m")
 
-    series = [{"label": k, "count": v} for k, v in sorted(buckets.items())]
+    series = [{"label": format_label(ts, bucket), "count": count} for ts, count in rows]
 
     return {
         "total_users": total_users,

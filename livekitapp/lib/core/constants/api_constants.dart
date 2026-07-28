@@ -97,7 +97,6 @@ static const String userBio = '/user/bio';
   static const String billingPaymentFailed = '/billing/payment-failed';
   static const String billingMyPurchases = '/billing/my-purchases';
 
-  static const String appRingtone = '/app-settings/ringtone';
   static const String appUpgradeBanner = '/app-settings/upgrade-banner';
   static const String specialOffers = '/special-offers';
   static const String weeklyChallengeProgress = '/weekly-challenge/progress';

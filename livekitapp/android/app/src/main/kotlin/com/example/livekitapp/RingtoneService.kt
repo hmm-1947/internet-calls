@@ -11,7 +11,6 @@ import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import java.io.File
 
 class RingtoneService : Service() {
 
@@ -75,13 +74,6 @@ class RingtoneService : Service() {
             .build()
     }
 
-    private fun findCachedRingtoneFile(): File? {
-        val dir = File(filesDir, "ringtones")
-        if (!dir.exists()) return null
-        val candidates = dir.listFiles { f -> f.name.startsWith("ringtone_current") }
-        return candidates?.maxByOrNull { it.lastModified() }
-    }
-
     private fun startRinging() {
         if (mediaPlayer != null) {
             Log.d(TAG, "startRinging: already ringing, ignoring duplicate start")
@@ -89,18 +81,13 @@ class RingtoneService : Service() {
         }
         try {
             val player = MediaPlayer()
-            val file = findCachedRingtoneFile()
-            if (file != null && file.exists()) {
-                player.setDataSource(file.absolutePath)
+            val afd = resources.openRawResourceFd(R.raw.ringtone_default)
+            if (afd != null) {
+                player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
             } else {
-                val afd = resources.openRawResourceFd(R.raw.ringtone_default)
-                if (afd != null) {
-                    player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                    afd.close()
-                } else {
-                    Log.w(TAG, "No cached ringtone and no bundled default found")
-                    return
-                }
+                Log.w(TAG, "No bundled default ringtone found")
+                return
             }
             player.setAudioAttributes(
                 AudioAttributes.Builder()

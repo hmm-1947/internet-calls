@@ -67,8 +67,10 @@ def send_call_notification(fcm_token: str, room_name: str, caller_name: str, cal
     )
 
 def send_call_accepted(fcm_token: str, call_id: int, room_name: str, user_token: str, livekit_url: str):
-    """Notify the user that the listener accepted — includes their LiveKit token so they can join."""
-    _send_with_notification(
+    """Notify the user that the listener accepted — includes their LiveKit token so they can join.
+    Data-only: the user is actively on the call screen listening for this signal in real time;
+    a notification block risks the OS tray intercepting delivery instead of firing onMessage."""
+    _send_data_only(
         token=fcm_token,
         data={
             "type": "call_accepted",
@@ -77,9 +79,8 @@ def send_call_accepted(fcm_token: str, call_id: int, room_name: str, user_token:
             "token": user_token,
             "livekit_url": livekit_url,
         },
-        title="Call Accepted",
-        body="The listener accepted your call.",
     )
+
 
 def send_call_cancelled(fcm_token: str, call_id: int):
     """Notify the listener that the user cancelled before they answered."""
@@ -113,16 +114,6 @@ def send_call_missed(fcm_token: str, call_id: int):
         body="You missed a call.",
     )
 
-def send_ringtone_updated(fcm_token: str, ringtone_url: str, ringtone_version: int):
-    """Notify a listener that the admin changed the ringtone, so it can be re-downloaded and cached."""
-    _send_data_only(
-        token=fcm_token,
-        data={
-            "type": "ringtone_updated",
-            "ringtone_url": ringtone_url,
-            "ringtone_version": str(ringtone_version),
-        },
-    )
 
 def send_call_ended(fcm_token: str, call_id: int):
     """Notify a participant that the call has ended."""

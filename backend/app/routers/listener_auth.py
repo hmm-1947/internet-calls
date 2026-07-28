@@ -10,7 +10,7 @@ import json
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
 from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate, ListenerChangePassword
-from app.utils.security import verify_password, generate_session_token, hash_password
+from app.utils.security import verify_password, generate_session_token, hash_password, session_expiry
 from app.utils.audit import record_audit_event
 from app.core.deps import get_current_listener
 
@@ -188,7 +188,7 @@ def login(payload: ListenerLogin, db: Session = Depends(get_db)):
     if not listener.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = generate_session_token()
-    db.add(SessionModel(token=token, listener_id=listener.id))
+    db.add(SessionModel(token=token, listener_id=listener.id, expires_at=session_expiry()))
     listener.is_online = True
     record_audit_event(db, "listener", listener.id, listener.name, "login")
     db.commit()

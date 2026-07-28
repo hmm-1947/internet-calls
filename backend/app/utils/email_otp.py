@@ -2,6 +2,8 @@ import random
 import smtplib
 import logging
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
@@ -11,12 +13,17 @@ logger = logging.getLogger("email_otp")
 
 LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "logo.png")
 
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="otp-email")
+
+MAX_SEND_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 1.5
+
 
 def generate_otp_code() -> str:
     return str(random.randint(100000, 999999))
 
 
-def send_otp_email(to_email: str, otp_code: str):
+def _build_message(to_email: str, otp_code: str) -> MIMEMultipart:
     subject = "Your verification code"
 
     html_body = f"""
@@ -86,14 +93,32 @@ def send_otp_email(to_email: str, otp_code: str):
     else:
         logger.warning(f"Logo file not found at {LOGO_PATH}")
 
-    logger.info(f"Connecting to SMTP {settings.smtp_host}:{settings.smtp_port} as {settings.smtp_user}")
-    try:
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=10) as server:
-            server.set_debuglevel(1)
-            server.login(settings.smtp_user, settings.smtp_password)
-            refused = server.sendmail(settings.smtp_from_email, [to_email], msg.as_string())
-            logger.info(f"sendmail refused recipients: {refused}")
-        logger.info(f"OTP email sent to {to_email}")
-    except Exception as e:
-        logger.exception(f"Failed to send OTP email to {to_email}: {e}")
-        raise
+    return msg
+
+
+def _send_with_retry(to_email: str, otp_code: str, msg: MIMEMultipart):
+    last_error = None
+    for attempt in range(1, MAX_SEND_RETRIES + 1):
+        try:
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+                server.login(settings.smtp_user, settings.smtp_password)
+                refused = server.sendmail(settings.smtp_from_email, [to_email], msg.as_string())
+                if refused:
+                    logger.info(f"sendmail refused recipients: {refused}")
+            logger.info(f"OTP email sent to {to_email}")
+            return
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, smtplib.SMTPHeloError, TimeoutError, OSError) as e:
+            last_error = e
+            logger.warning(f"Transient SMTP error sending to {to_email} (attempt {attempt}/{MAX_SEND_RETRIES}): {e}")
+            if attempt < MAX_SEND_RETRIES:
+                time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+        except Exception as e:
+            logger.exception(f"Failed to send OTP email to {to_email}: {e}")
+            return
+    logger.error(f"Giving up sending OTP email to {to_email} after {MAX_SEND_RETRIES} attempts: {last_error}")
+
+
+def send_otp_email(to_email: str, otp_code: str):
+    msg = _build_message(to_email, otp_code)
+    _executor.submit(_send_with_retry, to_email, otp_code, msg)
+

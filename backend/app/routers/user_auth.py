@@ -13,7 +13,7 @@ from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, Use
 from app.core.database import get_db
 from app.models.models import User, Session as SessionModel, EmailOtp
 from app.utils.email_otp import generate_otp_code, send_otp_email
-from app.utils.security import hash_password, verify_password, generate_session_token
+from app.utils.security import hash_password, verify_password, generate_session_token, session_expiry
 from app.utils.audit import record_audit_event
 from app.models.models import Listener
 from app.core.deps import get_current_user
@@ -89,7 +89,7 @@ def register_verify_otp(payload: UserRegisterVerifyOtp, db: Session = Depends(ge
     db.commit()
 
     token = generate_session_token()
-    db.add(SessionModel(token=token, user_id=user.id))
+    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
     db.commit()
     return AuthResponse(token=token, id=user.id, name=user.name)
 
@@ -101,7 +101,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = generate_session_token()
-    db.add(SessionModel(token=token, user_id=user.id))
+    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
     record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
     return AuthResponse(token=token, id=user.id, name=user.name)
@@ -173,6 +173,7 @@ def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depend
     user.reset_otp_code = None
     user.reset_otp_expires_at = None
     user.reset_otp_attempts = 0
+    db.query(SessionModel).filter(SessionModel.user_id == user.id).delete()
     db.commit()
 
     return {"status": "password_reset"}

@@ -57,6 +57,7 @@ class Session(Base):
     listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=True)
     admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
 
 class AdminUser(Base):
     __tablename__ = "admin_users"
@@ -65,6 +66,8 @@ class AdminUser(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=True)
     password_hash = Column(String, nullable=False)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True)
     is_support = Column(Boolean, default=False)
     reset_otp_code = Column(String, nullable=True)

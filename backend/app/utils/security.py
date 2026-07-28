@@ -23,6 +23,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(_prehash(plain_password), hashed_password.encode("utf-8"))
 
 
+SESSION_LIFETIME_DAYS = 30
+
+
 def generate_session_token() -> str:
     return secrets.token_hex(32)
+
+
+def session_expiry():
+    from datetime import datetime, timedelta, timezone
+    return datetime.now(timezone.utc) + timedelta(days=SESSION_LIFETIME_DAYS)
+
 

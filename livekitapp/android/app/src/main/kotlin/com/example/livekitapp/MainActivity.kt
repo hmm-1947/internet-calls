@@ -130,17 +130,6 @@ class MainActivity : FlutterActivity() {
                     startService(intent)
                     result.success(null)
                 }
-                "isNotificationListenerEnabled" -> {
-                    result.success(isNotificationListenerEnabled())
-                }
-                "requestNotificationListenerAccess" -> {
-                    try {
-                        startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    } catch (e: Exception) {
-                        android.util.Log.w("Ringtone", "requestNotificationListenerAccess threw: $e")
-                    }
-                    result.success(null)
-                }
                 else -> result.notImplemented()
             }
         }
@@ -167,13 +156,6 @@ class MainActivity : FlutterActivity() {
     }
 
 
-    private fun isNotificationListenerEnabled(): Boolean {
-        val enabledListeners = android.provider.Settings.Secure.getString(
-            contentResolver,
-            "enabled_notification_listeners"
-        ) ?: return false
-        return enabledListeners.contains(packageName)
-    }
 
 
     override fun onUserLeaveHint() {

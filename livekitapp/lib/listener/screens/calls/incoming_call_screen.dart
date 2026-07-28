@@ -5,7 +5,6 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
-import 'package:livekitapp/listener/services/ringtone_manager.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
@@ -37,13 +36,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Future<void> _playRingtone() async {
     try {
       _ringtonePlayer = AudioPlayer();
-      final cachedPath = RingtoneManager.instance.currentRingtonePath;
       await _ringtonePlayer?.setLoopMode(LoopMode.one);
-      if (cachedPath != null) {
-        await _ringtonePlayer?.setFilePath(cachedPath);
-      } else {
-        await _ringtonePlayer?.setAsset('assets/audio/ringtone_default.mp3');
-      }
+      await _ringtonePlayer?.setAsset('assets/audio/ringtone_default.mp3');
       await _ringtonePlayer?.play();
     } catch (_) {}
   }

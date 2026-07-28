@@ -20,7 +20,7 @@ from app.schemas.schemas import (
 )
 
 from app.utils.email_otp import generate_otp_code, send_otp_email
-from app.utils.security import hash_password, verify_password, generate_session_token
+from app.utils.security import hash_password, verify_password, generate_session_token, session_expiry
 
 router = APIRouter(prefix="/admin/auth", tags=["admin-auth"])
 
@@ -124,7 +124,8 @@ def complete_invite(payload: AdminInviteComplete, db: Session = Depends(get_db))
     db.refresh(admin)
 
     token = generate_session_token()
-    db.add(SessionModel(token=token, admin_id=admin.id))
+    db.add(SessionModel(token=token, admin_id=admin.id, expires_at=session_expiry()))
+
     db.commit()
 
     return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)
@@ -185,9 +186,14 @@ def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depen
     admin.reset_otp_code = None
     admin.reset_otp_expires_at = None
     admin.reset_otp_attempts = 0
+    db.query(SessionModel).filter(SessionModel.admin_id == admin.id).delete()
     db.commit()
 
     return {"status": "password_reset"}
+
+
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_LOCKOUT_MINUTES = 15
 
 
 @router.post("/login", response_model=AdminAuthResponse)
@@ -195,15 +201,31 @@ def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
     admin = db.query(AdminUser).filter(
         (AdminUser.username == payload.identifier) | (AdminUser.email == payload.identifier)
     ).first()
+
+    if admin and admin.locked_until and admin.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(status_code=429, detail="Account temporarily locked due to too many failed attempts. Try again later.")
+
     if not admin or not verify_password(payload.password, admin.password_hash):
+        if admin:
+            admin.failed_login_attempts += 1
+            if admin.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
+                admin.locked_until = datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+                admin.failed_login_attempts = 0
+            db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
     if not admin.is_active:
         raise HTTPException(status_code=403, detail="Account disabled")
 
+    admin.failed_login_attempts = 0
+    admin.locked_until = None
+
     token = generate_session_token()
-    db.add(SessionModel(token=token, admin_id=admin.id))
+    db.add(SessionModel(token=token, admin_id=admin.id, expires_at=session_expiry()))
+
     db.commit()
 
     return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)
+
 
 

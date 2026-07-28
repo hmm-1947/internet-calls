@@ -25,6 +25,55 @@ def validate_password_strength(v: str) -> str:
 
 
 
+class AdminListenerProfileUpdate(BaseModel):
+    about: Optional[str] = None
+    tags: Optional[list[str]] = None
+    languages: Optional[list[str]] = None
+
+    @field_validator("about")
+    @classmethod
+    def about_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 2000:
+            raise ValueError("About must be under 2000 characters")
+        return v
+
+    @field_validator("tags", "languages")
+    @classmethod
+    def list_of_short_strings(cls, v: Optional[list]) -> Optional[list]:
+        if v is None:
+            return v
+        cleaned = []
+        for item in v:
+            if not isinstance(item, str):
+                raise ValueError("Each item must be a string")
+            item = item.strip()
+            if not item:
+                continue
+            if len(item) > 50:
+                raise ValueError("Each item must be under 50 characters")
+            cleaned.append(item)
+        return cleaned
+
+
+class AdminUserProfileUpdate(BaseModel):
+    bio: Optional[str] = None
+
+    @field_validator("bio")
+    @classmethod
+    def bio_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 2000:
+            raise ValueError("Bio must be under 2000 characters")
+        return v
+
+
+class AdminActiveUpdate(BaseModel):
+    is_active: bool
+
+
+class AdminVideoCallUpdate(BaseModel):
+    disabled: bool
+
+
 class BillingPlanBase(BaseModel):
     name: str
     price: int

@@ -640,6 +640,11 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
     if not session:
         await websocket.close(code=4001)
         return
+    if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+        db.delete(session)
+        db.commit()
+        await websocket.close(code=4001)
+        return
     user_id = session.user_id
     user_check = db.query(User).filter(User.id == user_id).first()
     if not user_check or not user_check.is_active:
@@ -687,6 +692,11 @@ async def _handle_user_ws_event(raw: dict, user_id: int, db: Session):
 async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
     session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.listener_id.isnot(None)).first()
     if not session:
+        await websocket.close(code=4001)
+        return
+    if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+        db.delete(session)
+        db.commit()
         await websocket.close(code=4001)
         return
     listener_id = session.listener_id

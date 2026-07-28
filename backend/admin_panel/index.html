@@ -1151,14 +1151,6 @@
       </h2>
       <div id="listenerAuditLogList"></div>
     </div>
-    <div class="card">
-      <h2>Listener Ringtone</h2>
-      <p style="font-size:13px;color:var(--slate);margin:0 0 10px;">Upload an audio file to use as the incoming-call ringtone shown on the in-app incoming call screen. All listener devices will download and cache it automatically.</p>
-      <input type="file" id="ringtoneFile" accept="audio/*">
-      <div id="ringtoneCurrent" style="font-size:13px;color:var(--slate);margin:8px 0;"></div>
-      <button class="btn btn-leaf" onclick="uploadRingtone()">Upload Ringtone</button>
-      <div id="ringtoneMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
-    </div>
   </div>
 
   <div id="page-coinsettings" style="display:none;">
@@ -1563,7 +1555,6 @@
       document.getElementById('panelRoot').style.display = '';
       loadPeople();
       loadCoinSettings();
-      loadRingtoneSettings();
       loadUpgradeBanner();
       loadBillingPlans();
       loadBillingAuditLog();
@@ -1876,18 +1867,6 @@
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
 
-    async function loadRingtoneSettings() {
-      try {
-        const res = await fetch(API_URL + '/app-settings/ringtone');
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
-        const el = document.getElementById('ringtoneCurrent');
-        el.textContent = data.ringtone_url
-          ? `Current ringtone: ${data.ringtone_url} (version ${data.ringtone_version})`
-          : 'No custom ringtone uploaded yet — using each device default.';
-      } catch (e) { }
-    }
-
     async function loadUpgradeBanner() {
       const wrap = document.getElementById('upgradeBannerPreviewWrap');
       const removeBtn = document.getElementById('upgradeBannerRemoveBtn');
@@ -1948,37 +1927,6 @@
         msgEl.textContent = '✓ Banner removed';
         msgEl.style.color = '#3ba55d';
         loadUpgradeBanner();
-      } catch (e) {
-        msgEl.textContent = '✗ ' + e.message;
-        msgEl.style.color = '#e5534b';
-      }
-    }
-
-    async function uploadRingtone() {
-      const fileInput = document.getElementById('ringtoneFile');
-      const file = fileInput.files[0];
-      const msgEl = document.getElementById('ringtoneMsg');
-      if (!file) {
-        msgEl.textContent = '✗ Please choose an audio file first';
-        msgEl.style.color = '#e5534b';
-        return;
-      }
-      msgEl.textContent = 'Uploading…';
-      msgEl.style.color = '';
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(API_URL + '/app-settings/admin/ringtone', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: formData
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to upload ringtone');
-        msgEl.textContent = '✓ Ringtone updated — pushing to all listener devices';
-        msgEl.style.color = '#3ba55d';
-        fileInput.value = '';
-        loadRingtoneSettings();
       } catch (e) {
         msgEl.textContent = '✗ ' + e.message;
         msgEl.style.color = '#e5534b';
