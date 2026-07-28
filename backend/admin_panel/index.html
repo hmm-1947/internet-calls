@@ -2706,6 +2706,9 @@
     }
 
     async function decideWithdrawal(requestId, action) {
+      const verb = action === 'approve' ? 'approve' : 'reject';
+      const confirmed = window.confirm('Are you sure you want to ' + verb + ' this withdrawal request?');
+      if (!confirmed) return;
       try {
         const res = await fetch(API_URL + '/admin/withdrawals/' + requestId + '/' + action, {
           method: 'POST',
