@@ -98,7 +98,7 @@ class _CallScreenState extends State<CallScreen> {
       _ringingPlayer = AudioPlayer();
       await _ringingPlayer?.setAsset('assets/audio/ringing_tone.mp3');
       await _ringingPlayer?.setLoopMode(LoopMode.one);
-      await _ringingPlayer?.setVolume(1.0);
+await _ringingPlayer?.setVolume(_speakerOn ? 1.0 : 0.12);
       await _ringingPlayer?.play();
     } catch (_) {}
   }
@@ -143,16 +143,18 @@ Future<void> _requestMicAndStartCall() async {
     });
   }
 
-  Future<void> _toggleSpeaker() async {
+Future<void> _toggleSpeaker() async {
     final newSpeakerOn = !_speakerOn;
     if (_room != null) {
-      await _room!.setSpeakerOn(newSpeakerOn);
+      try {
+        await _room!.setSpeakerOn(newSpeakerOn);
+      } catch (_) {}
     }
-    VolumeController.instance.showSystemUI = false;
-    VolumeController.instance.setVolume(newSpeakerOn ? 1.0 : 0.3);
+    try {
+await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
+    } catch (_) {}
     if (mounted) setState(() => _speakerOn = newSpeakerOn);
   }
-
   Future<void> _toggleMic() async {
     final newMicEnabled = !_micEnabled;
     if (_room != null) {
