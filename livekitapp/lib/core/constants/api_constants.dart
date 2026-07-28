@@ -36,6 +36,7 @@ class ApiConstants {
   static const String listenerCallHistory = '/call/listener/history';
   static const String listenerMe = '/listener/me';
   static const String listenerWallet = '/listener/wallet';
+  static const String listenerWithdrawals = '/listener/withdrawals';
 
 static const String listenerProfile = '/listener/profile';
   static const String listenerPhoto = '/listener/photo';

@@ -148,6 +148,26 @@ def send_force_logout(fcm_token: str):
     )
 
 
+def send_withdrawal_decision(fcm_token: str, request_id: int, status: str, coins: int):
+    """Notify a listener that their withdrawal request was approved or rejected."""
+    if status == "approved":
+        title = "Withdrawal Approved"
+        body = f"Your withdrawal request for {coins} coins was approved."
+    else:
+        title = "Withdrawal Rejected"
+        body = f"Your withdrawal request for {coins} coins was rejected."
+    _send_with_notification(
+        token=fcm_token,
+        data={
+            "type": "withdrawal_decision",
+            "request_id": str(request_id),
+            "status": status,
+        },
+        title=title,
+        body=body,
+    )
+
+
 def send_chat_message(fcm_token: str, sender_name: str, message: str, user_id: int, listener_id: int, sender_type: str, message_id: int, client_id: str | None = None):
     """Notify the other party of a new chat message.
     Includes full message content so the background isolate can cache it

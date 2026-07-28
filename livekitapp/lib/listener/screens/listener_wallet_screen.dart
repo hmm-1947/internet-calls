@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/listener/screens/listener_withdrawal_screen.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
 
 class ListenerWalletScreen extends StatefulWidget {
   const ListenerWalletScreen({super.key});
@@ -181,6 +183,32 @@ Widget _buildTimeSection(String title, Map<String, dynamic> data) {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            await Navigator.of(
+                              context,
+                            ).push(fadeRoute(const ListenerWithdrawalScreen()));
+                            _load();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFE53950),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Withdraw',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),

@@ -999,7 +999,7 @@
       <div class="nav-item" id="navListeners" onclick="switchPage('listeners')"><span class="nav-ic">&#127911;</span>Listeners</div>
       <div class="nav-item" id="navCoinSettings" onclick="switchPage('coinsettings')"><span class="nav-ic">&#9881;</span>Coin Settings</div>
       <div class="nav-item" id="navBilling" onclick="switchPage('billing')"><span class="nav-ic">&#128179;</span>Billing</div>
-      <div class="nav-item" id="navGifts" onclick="switchPage('gifts')"><span class="nav-ic">&#127873;</span>Gifts</div>
+        <div class="nav-item" id="navGifts" onclick="switchPage('gifts')"><span class="nav-ic">&#127873;</span>Gifts</div>
       <div class="nav-item" id="navSpecialOffers" onclick="switchPage('specialoffers')"><span class="nav-ic">&#127942;</span>Special Offers</div>
       <div class="nav-item" id="navWeeklyChallenges" onclick="switchPage('weeklychallenges')"><span class="nav-ic">&#128197;</span>Weekly Challenges</div>
     </div>
@@ -1150,6 +1150,26 @@
         <button class="btn btn-ghost" onclick="loadListenerAuditLog()">Refresh</button>
       </h2>
       <div id="listenerAuditLogList"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Pending Withdrawal Requests</span>
+        <button class="btn btn-ghost" onclick="loadPendingWithdrawals()">Refresh</button>
+      </h2>
+      <div id="pendingWithdrawalsList"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Withdrawal Decision Log</span>
+        <button class="btn btn-ghost" onclick="loadWithdrawalLog(1)">Refresh</button>
+      </h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Every approved/rejected withdrawal request. Showing the 10 latest per page.
+      </p>
+      <div id="withdrawalLogList"></div>
+      <div id="withdrawalLogPagination" style="display:flex;align-items:center;gap:10px;margin-top:12px;"></div>
     </div>
   </div>
 
@@ -1603,6 +1623,8 @@
       }
       if (page === 'listeners') {
         loadListenerAuditLog();
+        loadPendingWithdrawals();
+        loadWithdrawalLog();
       }
     }
 
@@ -2635,6 +2657,131 @@
           <button class="btn btn-ghost" onclick="${loaderFnName}(${data.page + 1})" ${data.page >= totalPages ? 'disabled' : ''}>Next →</button>
         </div>
       `;
+    }
+
+    const WITHDRAWAL_LOG_PAGE_SIZE = 10;
+    let withdrawalLogCache = [];
+    let withdrawalLogPage = 1;
+
+    async function loadPendingWithdrawals() {
+      const wrap = document.getElementById('pendingWithdrawalsList');
+      if (!wrap) return;
+      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      try {
+        const res = await fetch(
+          API_URL + '/admin/withdrawals?status=pending&skip=0&limit=100',
+          { headers: authHeaders() }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load withdrawal requests');
+        renderPendingWithdrawals(wrap, data);
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load pending withdrawal requests.</div>';
+      }
+    }
+
+    function renderPendingWithdrawals(wrap, items) {
+      if (!items.length) {
+        wrap.innerHTML = '<div class="empty-state">No pending withdrawal requests.</div>';
+        return;
+      }
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Listener</th><th>Coins</th><th>Requested</th><th>Action</th></tr></thead>
+          <tbody>
+            ${items.map(r => `
+              <tr>
+                <td>${r.listener_name || ('#' + r.listener_id)}</td>
+                <td>${r.coins}</td>
+                <td style="white-space:nowrap;">${formatPurchaseDate(r.created_at)}</td>
+                <td style="display:flex;gap:8px;">
+                  <button class="btn btn-leaf" onclick="decideWithdrawal(${r.id}, 'approve')">Approve</button>
+                  <button class="btn btn-ghost" onclick="decideWithdrawal(${r.id}, 'reject')">Reject</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function decideWithdrawal(requestId, action) {
+      try {
+        const res = await fetch(API_URL + '/admin/withdrawals/' + requestId + '/' + action, {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to update withdrawal request');
+        loadPendingWithdrawals();
+        loadWithdrawalLog(1);
+      } catch (e) {
+        alert(e.message || 'Failed to update withdrawal request');
+      }
+    }
+
+    async function loadWithdrawalLog(page) {
+      withdrawalLogPage = page || 1;
+      const wrap = document.getElementById('withdrawalLogList');
+      const pager = document.getElementById('withdrawalLogPagination');
+      if (!wrap) return;
+      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      if (pager) pager.innerHTML = '';
+      try {
+        const [approvedRes, rejectedRes] = await Promise.all([
+          fetch(API_URL + '/admin/withdrawals?status=approved&skip=0&limit=100', { headers: authHeaders() }),
+          fetch(API_URL + '/admin/withdrawals?status=rejected&skip=0&limit=100', { headers: authHeaders() }),
+        ]);
+        const approved = await approvedRes.json();
+        const rejected = await rejectedRes.json();
+        if (!approvedRes.ok) throw new Error(approved.detail || 'Failed to load withdrawal log');
+        if (!rejectedRes.ok) throw new Error(rejected.detail || 'Failed to load withdrawal log');
+        withdrawalLogCache = [...approved, ...rejected].sort(
+          (a, b) => new Date(b.decided_at || b.created_at) - new Date(a.decided_at || a.created_at)
+        );
+        renderWithdrawalLog();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load withdrawal decision log.</div>';
+      }
+    }
+
+    function renderWithdrawalLog() {
+      const wrap = document.getElementById('withdrawalLogList');
+      const pager = document.getElementById('withdrawalLogPagination');
+      if (!wrap) return;
+      if (!withdrawalLogCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No withdrawal decisions yet.</div>';
+        if (pager) pager.innerHTML = '';
+        return;
+      }
+      const totalPages = Math.max(1, Math.ceil(withdrawalLogCache.length / WITHDRAWAL_LOG_PAGE_SIZE));
+      if (withdrawalLogPage > totalPages) withdrawalLogPage = totalPages;
+      const start = (withdrawalLogPage - 1) * WITHDRAWAL_LOG_PAGE_SIZE;
+      const pageItems = withdrawalLogCache.slice(start, start + WITHDRAWAL_LOG_PAGE_SIZE);
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Listener</th><th>Coins</th><th>Status</th><th>Decided By</th><th>Decided At</th></tr></thead>
+          <tbody>
+            ${pageItems.map(r => `
+              <tr>
+                <td>${r.listener_name || ('#' + r.listener_id)}</td>
+                <td>${r.coins}</td>
+                <td><span class="badge ${r.status === 'approved' ? 'badge-yes' : 'badge-no'}">${r.status === 'approved' ? 'Approved' : 'Rejected'}</span></td>
+                <td>${r.admin_username || '—'}</td>
+                <td style="white-space:nowrap;">${formatPurchaseDate(r.decided_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      if (pager) {
+        pager.innerHTML = `
+          <button class="btn btn-ghost" onclick="withdrawalLogPage--; renderWithdrawalLog();" ${withdrawalLogPage <= 1 ? 'disabled' : ''}>← Prev</button>
+          <span style="font-size:13px;color:var(--slate);">Page ${withdrawalLogPage} of ${totalPages}</span>
+          <button class="btn btn-ghost" onclick="withdrawalLogPage++; renderWithdrawalLog();" ${withdrawalLogPage >= totalPages ? 'disabled' : ''}>Next →</button>
+        `;
+      }
     }
 
     async function loadBillingAuditLog() {

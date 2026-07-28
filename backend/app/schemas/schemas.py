@@ -455,6 +455,25 @@ class ListenerReviewOut(BaseModel):
     review: Optional[str] = None
     created_at: datetime
 
+class WithdrawalRequestCreate(BaseModel):
+    coins: int
+
+class WithdrawalRequestOut(BaseModel):
+    id: int
+    listener_id: int
+    coins: int
+    status: str
+    admin_username: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    created_at: datetime
+    listener_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class WithdrawalDecision(BaseModel):
+    reason: Optional[str] = None
+
 class AdminInviteCreate(BaseModel):
     expires_in_hours: Optional[int] = 72
 

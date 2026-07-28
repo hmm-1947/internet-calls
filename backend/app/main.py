@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
-from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing, app_settings, special_offers, weekly_challenge
+from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing, app_settings, special_offers, weekly_challenge, withdrawals
 from fastapi.staticfiles import StaticFiles
 from app.core.database import SessionLocal
 from app.models.models import User, Listener
@@ -46,6 +46,8 @@ app.include_router(admin_auth.router)
 app.include_router(call.router)
 app.include_router(chat.router)
 app.include_router(listener_notes.router)
+app.include_router(withdrawals.listener_router)
+app.include_router(withdrawals.admin_router)
 app.include_router(gift.router)
 app.include_router(billing.router)
 app.include_router(app_settings.router)

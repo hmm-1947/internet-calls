@@ -368,6 +368,23 @@ class AuditLog(Base):
     )
 
 
+class WithdrawalRequest(Base):
+    __tablename__ = "withdrawal_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id", ondelete="CASCADE"), nullable=False, index=True)
+    coins = Column(Integer, nullable=False)
+    status = Column(String, nullable=False, default="pending", server_default="pending", index=True)  # pending | approved | rejected
+    admin_id = Column(Integer, ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    admin_username = Column(String, nullable=True)  # snapshot in case the admin is later removed
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index('ix_withdrawal_requests_listener_created', 'listener_id', 'created_at'),
+    )
+
+
 class EmailOtp(Base):
     __tablename__ = "email_otps"
 

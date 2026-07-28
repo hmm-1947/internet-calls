@@ -67,6 +67,38 @@ class ListenerRepository {
     return data;
   }
 
+  Future<Map<String, dynamic>> createWithdrawalRequest(
+    String token,
+    int coins,
+  ) async {
+    final response = await _apiClient.post(
+      ApiConstants.listenerWithdrawals,
+      {'coins': coins},
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to submit withdrawal request');
+    }
+    return data;
+  }
+
+  Future<List<Map<String, dynamic>>> getWithdrawalRequests(
+    String token, {
+    int skip = 0,
+    int limit = 10,
+  }) async {
+    final response = await _apiClient.get(
+      '${ApiConstants.listenerWithdrawals}?skip=$skip&limit=$limit',
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to load withdrawal requests');
+    }
+    return List<Map<String, dynamic>>.from(data);
+  }
+
   Future<void> updateStatus(String token, bool isOnline) async {
 
     final response = await _apiClient.post(ApiConstants.listenerStatus, {
