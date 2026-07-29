@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
 
+    recaptcha_site_key: str = ""
+    recaptcha_secret_key: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"

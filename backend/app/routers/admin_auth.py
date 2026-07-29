@@ -1,9 +1,11 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import requests
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.models import AdminUser, AdminInvite, Session as SessionModel
 from app.routers.admin import verify_admin
@@ -196,8 +198,29 @@ MAX_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 15
 
 
+def _verify_recaptcha(token: str) -> bool:
+    if not settings.recaptcha_secret_key:
+        # Not configured — don't block login, but this should be set in production.
+        return True
+    if not token:
+        return False
+    try:
+        resp = requests.post(
+            "https://www.google.com/recaptcha/api/siteverify",
+            data={"secret": settings.recaptcha_secret_key, "response": token},
+            timeout=6,
+        )
+        result = resp.json()
+        return bool(result.get("success"))
+    except requests.RequestException:
+        return False
+
+
 @router.post("/login", response_model=AdminAuthResponse)
 def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
+    if not _verify_recaptcha(payload.captcha_token):
+        raise HTTPException(status_code=400, detail="Captcha verification failed. Please try again.")
+
     admin = db.query(AdminUser).filter(
         (AdminUser.username == payload.identifier) | (AdminUser.email == payload.identifier)
     ).first()

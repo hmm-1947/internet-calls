@@ -1004,6 +1004,7 @@
       <h2>Admin Login</h2>
       <input id="loginIdentifier" placeholder="Username or Email">
       <input id="loginPassword" placeholder="Password" type="password">
+      <div id="loginRecaptcha" style="margin:10px 0;"></div>
       <button class="btn btn-primary" onclick="doAdminLogin()">Login</button>
       <div style="margin-top:8px;text-align:right;">
         <a href="#" style="font-size:13px;font-weight:600;" onclick="showForgotScreen();return false;">Forgot password?</a>
@@ -1780,28 +1781,58 @@
       el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
     }
 
+    // ─── reCAPTCHA ("I'm not a robot") on admin login ─────────────────────────
+    let _loginRecaptchaWidgetId = null;
+
+    function onRecaptchaApiReady() {
+      if (!CONFIG.RECAPTCHA_SITE_KEY) return;
+      const el = document.getElementById('loginRecaptcha');
+      if (!el) return;
+      _loginRecaptchaWidgetId = grecaptcha.render(el, { sitekey: CONFIG.RECAPTCHA_SITE_KEY });
+    }
+
+    function getLoginCaptchaToken() {
+      if (_loginRecaptchaWidgetId === null || typeof grecaptcha === 'undefined') return '';
+      return grecaptcha.getResponse(_loginRecaptchaWidgetId);
+    }
+
+    function resetLoginCaptcha() {
+      if (_loginRecaptchaWidgetId !== null && typeof grecaptcha !== 'undefined') {
+        grecaptcha.reset(_loginRecaptchaWidgetId);
+      }
+    }
+
     async function doAdminLogin() {
       const identifier = document.getElementById('loginIdentifier').value.trim();
       const password = document.getElementById('loginPassword').value;
       if (!identifier || !password) { setLoginMsg('Please fill in all fields.', false); return; }
+      const captcha_token = getLoginCaptchaToken();
+      if (CONFIG.RECAPTCHA_SITE_KEY && !captcha_token) { setLoginMsg('Please verify you are not a robot.', false); return; }
       setLoginMsg('Signing in…', null);
       try {
         const res = await fetch(API_URL + '/admin/auth/login', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier, password })
+          body: JSON.stringify({ identifier, password, captcha_token })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Login failed');
         setAdminToken(data.token);
         localStorage.setItem('adminUsername', data.username || 'Admin');
         showPanel();
-      } catch (e) { setLoginMsg('✗ ' + e.message, false); }
+      } catch (e) {
+        setLoginMsg('✗ ' + e.message, false);
+        resetLoginCaptcha();
+      }
     }
 
     function doAdminLogout() {
       clearAdminToken();
       localStorage.removeItem('adminUsername');
       if (adminWs) adminWs.close();
+      document.getElementById('loginIdentifier').value = '';
+      document.getElementById('loginPassword').value = '';
+      setLoginMsg('', null);
+      resetLoginCaptcha();
       showLoginScreen();
     }
 
@@ -3879,6 +3910,7 @@ ${logSection === 'chats' ? '' : `
 
     }
   </script>
+  <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaApiReady&render=explicit" async defer></script>
 </body>
 
 </html>

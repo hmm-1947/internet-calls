@@ -499,6 +499,7 @@ class AdminInviteComplete(BaseModel):
 class AdminLogin(BaseModel):
     identifier: str
     password: str
+    captcha_token: str
 
 class AdminForgotPasswordRequestOtp(BaseModel):
     email: str
