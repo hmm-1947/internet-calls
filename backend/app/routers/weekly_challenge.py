@@ -57,7 +57,7 @@ def _is_challenge_active(db: Session, settings: WeeklyChallengeSettings) -> bool
 
 
 
-def _get_or_create_progress(db: Session, listener_id: int, week_start: datetime) -> ListenerWeeklyChallengeProgress:
+def _get_or_create_progress(db: Session, listener_id: int, week_start: datetime, settings: WeeklyChallengeSettings) -> ListenerWeeklyChallengeProgress:
     progress = (
         db.query(ListenerWeeklyChallengeProgress)
         .filter(
@@ -71,6 +71,9 @@ def _get_or_create_progress(db: Session, listener_id: int, week_start: datetime)
             listener_id=listener_id,
             week_start=week_start,
             talk_seconds=0,
+            goal1_minutes=settings.goal1_minutes,
+            goal2_minutes=settings.goal2_minutes,
+            goal3_minutes=settings.goal3_minutes,
         )
         db.add(progress)
         db.commit()
@@ -88,7 +91,7 @@ def add_talktime_seconds(db: Session, listener_id: int, seconds: int) -> Listene
 
     settings = _get_settings(db)
     week_start = _current_week_start()
-    progress = _get_or_create_progress(db, listener_id, week_start)
+    progress = _get_or_create_progress(db, listener_id, week_start, settings)
 
     progress.talk_seconds += int(seconds)
 
@@ -106,10 +109,16 @@ def add_talktime_seconds(db: Session, listener_id: int, seconds: int) -> Listene
 
 
 def _serialize_goals(settings: WeeklyChallengeSettings, progress: ListenerWeeklyChallengeProgress | None):
+    # Prefer the minutes snapshotted on the progress row itself (the goals
+    # that were actually live during that week). Older rows created before
+    # this snapshot existed fall back to the current settings.
+    goal1_minutes = (progress.goal1_minutes if progress and progress.goal1_minutes is not None else settings.goal1_minutes)
+    goal2_minutes = (progress.goal2_minutes if progress and progress.goal2_minutes is not None else settings.goal2_minutes)
+    goal3_minutes = (progress.goal3_minutes if progress and progress.goal3_minutes is not None else settings.goal3_minutes)
     goal_defs = [
-        (settings.goal1_minutes, progress.goal1_completed_at if progress else None),
-        (settings.goal2_minutes, progress.goal2_completed_at if progress else None),
-        (settings.goal3_minutes, progress.goal3_completed_at if progress else None),
+        (goal1_minutes, progress.goal1_completed_at if progress else None),
+        (goal2_minutes, progress.goal2_completed_at if progress else None),
+        (goal3_minutes, progress.goal3_completed_at if progress else None),
     ]
     return [
         {
@@ -292,4 +301,16 @@ def get_history(db: Session = Depends(get_db), _=Depends(get_current_admin)):
             }
         )
     return result
+
+
+@router.delete("/admin/challenge")
+def delete_challenge(db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    """Manually deactivate the current weekly challenge immediately.
+    Sets is_active=False so the listener app hides the weekly challenge icon
+    at their next /progress poll without waiting for the Saturday expiry."""
+    settings = _get_settings(db)
+    settings.is_active = False
+    db.commit()
+    db.refresh(settings)
+    return {"detail": "Weekly challenge deactivated successfully.", "active": False}
 

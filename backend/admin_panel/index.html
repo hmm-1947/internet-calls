@@ -925,10 +925,79 @@
       text-decoration: none;
       cursor: default;
     }
+
+    /* ── Custom Confirm Dialog ── */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,16,22,.55);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity .18s;
+    }
+    .confirm-overlay.show { opacity: 1; }
+    .confirm-box {
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px 28px 22px;
+      max-width: 380px;
+      width: 90%;
+      box-shadow: 0 16px 48px rgba(0,0,0,.18);
+      transform: scale(.92);
+      transition: transform .18s;
+    }
+    .confirm-overlay.show .confirm-box { transform: scale(1); }
+    .confirm-icon {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      margin: 0 auto 14px;
+    }
+    .confirm-icon.danger  { background: #fdeceb; color: var(--danger); }
+    .confirm-icon.warning { background: #fff4dd; color: #b3760a; }
+    .confirm-icon.info    { background: #e6f7ee; color: #1c9a5b; }
+    .confirm-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--ink);
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .confirm-body {
+      font-size: 13px;
+      color: var(--slate);
+      text-align: center;
+      line-height: 1.55;
+      margin-bottom: 20px;
+    }
+    .confirm-btns {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    .confirm-btns .btn { min-width: 110px; }
   </style>
 </head>
 
 <body>
+
+<!-- Custom confirmation modal -->
+<div class="confirm-overlay" id="confirmOverlay" style="display:none;">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirmIcon">⚠️</div>
+    <div class="confirm-title" id="confirmTitle">Are you sure?</div>
+    <div class="confirm-body" id="confirmBody"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" id="confirmCancelBtn" onclick="_confirmResolve(false)">Cancel</button>
+      <button class="btn btn-danger" id="confirmOkBtn" onclick="_confirmResolve(true)">Confirm</button>
+    </div>
+  </div>
+</div>
 
   <div id="loginScreen" style="max-width:380px;margin:80px auto;">
     <div class="card">
@@ -1014,7 +1083,7 @@
               <span class="ar">Admin</span>
             </div>
             <div class="admin-menu" id="adminMenu">
-              <div class="admin-menu-item" onclick="doAdminLogout()">Logout</div>
+              <div class="admin-menu-item" onclick="confirmLogout()">Logout</div>
             </div>
           </div>
         </div>
@@ -1195,7 +1264,7 @@
       <div id="upgradeBannerPreviewWrap" style="margin-bottom:10px;"></div>
       <input type="file" id="upgradeBannerFile" accept="image/*">
       <button class="btn btn-leaf" onclick="uploadUpgradeBanner()">Upload Banner</button>
-      <button class="btn btn-ghost" id="upgradeBannerRemoveBtn" style="display:none;" onclick="removeUpgradeBanner()">Remove Banner</button>
+      <button class="btn btn-ghost" id="upgradeBannerRemoveBtn" style="display:none;" onclick="confirmRemoveBanner()">Remove Banner</button>
       <div id="upgradeBannerMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
     </div>
 
@@ -1220,7 +1289,7 @@
       <label style="font-size:13px;color:var(--slate);font-weight:600;display:flex;align-items:center;gap:8px;">
         <input type="checkbox" id="billingActive" style="width:auto;margin:0;" checked> Display to users
       </label>
-      <button class="btn btn-leaf" onclick="saveBillingPlan()">Save Plan</button>
+      <button class="btn btn-leaf" onclick="confirmSaveBillingPlan()">Save Plan</button>
       <button class="btn btn-ghost" id="billingCancelEdit" style="display:none;" onclick="resetBillingForm()">Cancel edit</button>
       <div id="billingMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
     </div>
@@ -1337,6 +1406,7 @@
       <label style="font-size:13px;color:var(--slate);font-weight:600">Goal 3 (minutes)</label>
       <input id="wcGoal3" type="number" min="1" placeholder="120">
       <button class="btn btn-leaf" onclick="saveWeeklyChallengeGoals()">Save Goals</button>
+      <button class="btn btn-danger" id="wcDeleteBtn" onclick="confirmDeleteWeeklyChallenge()" style="margin-left:6px;">Delete Challenge</button>
       <div id="wcGoalsMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
     </div>
 
@@ -1735,6 +1805,52 @@
       showLoginScreen();
     }
 
+    // ─── Custom confirmation dialog ───────────────────────────────────────────
+    let _confirmResolve = null;
+
+    /**
+     * confirmDialog({ title, body, okLabel, okClass, icon, iconClass })
+     * Returns a Promise<boolean> — true if user clicks OK, false on cancel.
+     */
+    function confirmDialog({ title = 'Are you sure?', body = '', okLabel = 'Confirm', okClass = 'btn-danger', icon = '⚠️', iconClass = 'danger' } = {}) {
+      return new Promise(resolve => {
+        _confirmResolve = (val) => {
+          const overlay = document.getElementById('confirmOverlay');
+          overlay.classList.remove('show');
+          setTimeout(() => { overlay.style.display = 'none'; }, 180);
+          _confirmResolve = null;
+          resolve(val);
+        };
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmBody').textContent = body;
+        document.getElementById('confirmIcon').textContent = icon;
+        document.getElementById('confirmIcon').className = 'confirm-icon ' + iconClass;
+        const okBtn = document.getElementById('confirmOkBtn');
+        okBtn.textContent = okLabel;
+        okBtn.className = 'btn ' + okClass;
+        const overlay = document.getElementById('confirmOverlay');
+        overlay.style.display = 'flex';
+        requestAnimationFrame(() => overlay.classList.add('show'));
+      });
+    }
+
+    // Close on backdrop click
+    document.getElementById('confirmOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget && _confirmResolve) _confirmResolve(false);
+    });
+
+    async function confirmLogout() {
+      const ok = await confirmDialog({
+        title: 'Logout',
+        body: 'Are you sure you want to log out of the admin panel?',
+        okLabel: 'Logout',
+        okClass: 'btn-danger',
+        icon: '🔐',
+        iconClass: 'warning'
+      });
+      if (ok) doAdminLogout();
+    }
+
     let setupInviteToken = null;
 
     async function requestSetupOtp() {
@@ -1955,6 +2071,18 @@
       }
     }
 
+    async function confirmRemoveBanner() {
+      const ok = await confirmDialog({
+        title: 'Remove Banner',
+        body: 'Remove the upgrade screen banner? The default badge icon will be shown instead.',
+        okLabel: 'Remove',
+        okClass: 'btn-danger',
+        icon: '🖼️',
+        iconClass: 'danger'
+      });
+      if (ok) removeUpgradeBanner();
+    }
+
     const BILLING_ICON_LABELS = { coin: '🪙 Coin', diamond: '💎 Diamond', star: '⭐ Star' };
     let billingPlansCache = [];
 
@@ -2066,8 +2194,35 @@
       } catch (e) { setBillingMsg('✗ ' + e.message, false); }
     }
 
+    async function confirmSaveBillingPlan() {
+      const id = document.getElementById('billingPlanId').value;
+      const name = document.getElementById('billingName').value.trim();
+      const coins = document.getElementById('billingCoins').value;
+      const price = document.getElementById('billingPrice').value;
+      if (!name || !price || !coins) { saveBillingPlan(); return; } // let saveBillingPlan show the error
+      const ok = await confirmDialog({
+        title: id ? 'Update Coin Pack' : 'Add Coin Pack',
+        body: id
+          ? `Update "${name}" (${coins} coins for ₹${price})?`
+          : `Add a new coin pack "${name}" (${coins} coins for ₹${price})?`,
+        okLabel: id ? 'Update' : 'Add Pack',
+        okClass: 'btn-leaf',
+        icon: '🪙',
+        iconClass: 'info'
+      });
+      if (ok) saveBillingPlan();
+    }
+
     async function deleteBillingPlan(id, name) {
-      if (!confirm(`Delete coin pack "${name}"?`)) return;
+      const ok = await confirmDialog({
+        title: 'Delete Coin Pack',
+        body: `Permanently delete the coin pack "${name}"? This cannot be undone.`,
+        okLabel: 'Delete',
+        okClass: 'btn-danger',
+        icon: '🗑️',
+        iconClass: 'danger'
+      });
+      if (!ok) return;
       try {
         const res = await fetch(`${API_URL}/admin/billing/plans/${id}`, {
           method: 'DELETE', headers: authHeaders()
@@ -2191,6 +2346,19 @@
         return;
       }
 
+      const iconChanging = !!giftIconFileData;
+      const ok = await confirmDialog({
+        title: id ? 'Edit Gift' : 'Add Gift',
+        body: id
+          ? `Save changes to the gift "${name}" (${coins} coins${iconChanging ? ', icon updated' : ''})? This will update it for all users.`
+          : `Add a new gift "${name}" for ${coins} coins? It will become available to all users.`,
+        okLabel: id ? 'Save Changes' : 'Add Gift',
+        okClass: 'btn-leaf',
+        icon: id ? '✏️' : '🎁',
+        iconClass: 'info'
+      });
+      if (!ok) return;
+
       setGiftMsg('Saving…', null);
       try {
         const formData = new FormData();
@@ -2214,7 +2382,15 @@
     }
 
     async function deleteGift(id, name) {
-      if (!confirm(`Delete gift "${name}"?`)) return;
+      const ok = await confirmDialog({
+        title: 'Delete Gift',
+        body: `Permanently delete the gift "${name}"? This cannot be undone.`,
+        okLabel: 'Delete',
+        okClass: 'btn-danger',
+        icon: '🗑️',
+        iconClass: 'danger'
+      });
+      if (!ok) return;
       try {
         const res = await fetch(`${API_URL}/gift/admin/${id}`, {
           method: 'DELETE', headers: authHeaders()
@@ -2397,7 +2573,15 @@
     }
 
     async function deleteSpecialOffer(id) {
-      if (!confirm('Delete this special offer?')) return;
+      const ok = await confirmDialog({
+        title: 'Delete Special Offer',
+        body: 'Permanently delete this special offer image? This cannot be undone.',
+        okLabel: 'Delete',
+        okClass: 'btn-danger',
+        icon: '🗑️',
+        iconClass: 'danger'
+      });
+      if (!ok) return;
       try {
         const res = await fetch(`${API_URL}/special-offers/admin/${id}`, {
           method: 'DELETE', headers: authHeaders()
@@ -2429,6 +2613,7 @@
         document.getElementById('wcGoal2').value = data.goal2_minutes;
         document.getElementById('wcGoal3').value = data.goal3_minutes;
         renderWcStatusBanner(data.active, data.expires_at);
+        updateWcDeleteBtn(data.active);
       } catch (e) { }
     }
 
@@ -2453,6 +2638,15 @@
         setWcGoalsMsg('Please fill all three goals with valid minutes.', false);
         return;
       }
+      const ok = await confirmDialog({
+        title: 'Start Weekly Challenge',
+        body: `Set goals to ${goal1} / ${goal2} / ${goal3} minutes and start the challenge immediately? It will expire Saturday 11:59pm.`,
+        okLabel: 'Start Challenge',
+        okClass: 'btn-leaf',
+        icon: '📅',
+        iconClass: 'info'
+      });
+      if (!ok) return;
       try {
         const params = new URLSearchParams({ goal1_minutes: goal1, goal2_minutes: goal2, goal3_minutes: goal3 });
         const res = await fetch(`${API_URL}/weekly-challenge/admin/goals?${params}`, {
@@ -2463,8 +2657,37 @@
         if (!res.ok) throw new Error(data.detail || 'Failed to save goals');
         setWcGoalsMsg('✓ Challenge started — live until Saturday 11:59pm', true);
         renderWcStatusBanner(data.active, data.expires_at);
+        updateWcDeleteBtn(data.active);
         loadWeeklyChallengeCompletions();
         loadWeeklyChallengeLeaderboard();
+      } catch (e) { setWcGoalsMsg('✗ ' + e.message, false); }
+    }
+
+    function updateWcDeleteBtn(active) {
+      const btn = document.getElementById('wcDeleteBtn');
+      if (btn) btn.style.display = active ? '' : 'none';
+    }
+
+    async function confirmDeleteWeeklyChallenge() {
+      const ok = await confirmDialog({
+        title: 'Delete Weekly Challenge',
+        body: 'This will immediately deactivate the current challenge. The weekly challenge icon will disappear from the listener app right away. This cannot be undone.',
+        okLabel: 'Delete Challenge',
+        okClass: 'btn-danger',
+        icon: '🗑️',
+        iconClass: 'danger'
+      });
+      if (!ok) return;
+      try {
+        const res = await fetch(`${API_URL}/weekly-challenge/admin/challenge`, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to delete challenge');
+        setWcGoalsMsg('✓ Weekly challenge deleted — icon hidden from listener app', true);
+        renderWcStatusBanner(false, null);
+        updateWcDeleteBtn(false);
       } catch (e) { setWcGoalsMsg('✗ ' + e.message, false); }
     }
 
@@ -3459,6 +3682,13 @@ ${logSection === 'chats' ? '' : `
     }
     async function toggleActive(type, id, currentActive) {
       const newActive = !currentActive;
+      const roleLabel = type === 'user' ? 'User' : 'Listener';
+      const ok = await confirmDialog(
+        newActive
+          ? { title: `Activate ${roleLabel}`, body: `Activate this ${roleLabel.toLowerCase()}? They will regain access to the app.`, okLabel: 'Activate', okClass: 'btn-leaf', icon: '✅', iconClass: 'info' }
+          : { title: `Deactivate ${roleLabel}`, body: `Deactivate this ${roleLabel.toLowerCase()}? They will lose access to the app.`, okLabel: 'Deactivate', okClass: 'btn-danger', icon: '⛔', iconClass: 'danger' }
+      );
+      if (!ok) return;
       try {
         const endpoint = type === 'user' ? `/admin/users/${id}/active` : `/admin/listeners/${id}/active`;
         const res = await fetch(API_URL + endpoint, {
@@ -3467,7 +3697,7 @@ ${logSection === 'chats' ? '' : `
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
-        setMsg(`✓ ${type === 'user' ? 'User' : 'Listener'} ${newActive ? 'activated' : 'deactivated'}`, true);
+        setMsg(`✓ ${roleLabel} ${newActive ? 'activated' : 'deactivated'}`, true);
         if (selectedPerson) selectedPerson.raw.is_active = newActive;
         loadPeople();
         renderPersonContent();
@@ -3476,6 +3706,12 @@ ${logSection === 'chats' ? '' : `
 
     async function toggleVideoCall(id, currentlyDisabled) {
       const newDisabled = !currentlyDisabled;
+      const ok = await confirmDialog(
+        newDisabled
+          ? { title: 'Disable Video Call', body: 'Disable video calling for this user? They will only be able to make audio calls.', okLabel: 'Disable', okClass: 'btn-danger', icon: '📵', iconClass: 'danger' }
+          : { title: 'Enable Video Call', body: 'Re-enable video calling for this user?', okLabel: 'Enable', okClass: 'btn-leaf', icon: '📹', iconClass: 'info' }
+      );
+      if (!ok) return;
       try {
         const res = await fetch(API_URL + `/admin/users/${id}/video-call`, {
           method: 'PATCH', headers: authHeaders(true),
@@ -3529,13 +3765,22 @@ ${logSection === 'chats' ? '' : `
     }
 
     async function deletePerson(type, id, name) {
-      if (!confirm(`Delete ${type} "${name}"? This will permanently remove all their calls, chats, recordings, ratings, and sessions. This cannot be undone.`)) return;
+      const roleLabel = type === 'user' ? 'User' : 'Listener';
+      const ok = await confirmDialog({
+        title: `Delete ${roleLabel}`,
+        body: `Permanently delete ${roleLabel.toLowerCase()} "${name}"? This will remove all their calls, chats, recordings, ratings, and sessions. This cannot be undone.`,
+        okLabel: `Delete ${roleLabel}`,
+        okClass: 'btn-danger',
+        icon: '🗑️',
+        iconClass: 'danger'
+      });
+      if (!ok) return;
       try {
         const endpoint = type === 'user' ? `/admin/users/${id}` : `/admin/listeners/${id}`;
         const res = await fetch(API_URL + endpoint, { method: 'DELETE', headers: authHeaders() });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
-        setMsg(`✓ ${type === 'user' ? 'User' : 'Listener'} deleted`, true);
+        setMsg(`✓ ${roleLabel} deleted`, true);
         selectedPerson = null;
         document.getElementById(type === 'user' ? 'userContent' : 'listenerContent').innerHTML = '<div class="empty-state">Select a ' + type + ' from the list to view their call logs, recordings, chats and coins.</div>';
         loadPeople();
@@ -3545,6 +3790,16 @@ ${logSection === 'chats' ? '' : `
     async function adjustCoins(userId) {
       const amount = parseInt(document.getElementById('amount-' + userId).value);
       if (!amount) { setMsg('Enter a valid amount.', false); return; }
+      const action = amount > 0 ? 'add' : 'deduct';
+      const ok = await confirmDialog({
+        title: 'Adjust User Coins',
+        body: `${action === 'add' ? 'Add' : 'Deduct'} ${Math.abs(amount)} coins ${action === 'add' ? 'to' : 'from'} this user?`,
+        okLabel: action === 'add' ? 'Add Coins' : 'Deduct Coins',
+        okClass: action === 'add' ? 'btn-leaf' : 'btn-danger',
+        icon: '🪙',
+        iconClass: action === 'add' ? 'info' : 'danger'
+      });
+      if (!ok) return;
       try {
         const res = await fetch(API_URL + '/admin/coins/adjust', {
           method: 'POST', headers: authHeaders(true),
@@ -3560,6 +3815,16 @@ ${logSection === 'chats' ? '' : `
     async function adjustListenerCoins(listenerId) {
       const amount = parseInt(document.getElementById('amount-' + listenerId).value);
       if (!amount) { setMsg('Enter a valid amount.', false); return; }
+      const action = amount > 0 ? 'add' : 'deduct';
+      const ok = await confirmDialog({
+        title: 'Adjust Listener Coins',
+        body: `${action === 'add' ? 'Add' : 'Deduct'} ${Math.abs(amount)} coins ${action === 'add' ? 'to' : 'from'} this listener?`,
+        okLabel: action === 'add' ? 'Add Coins' : 'Deduct Coins',
+        okClass: action === 'add' ? 'btn-leaf' : 'btn-danger',
+        icon: '🪙',
+        iconClass: action === 'add' ? 'info' : 'danger'
+      });
+      if (!ok) return;
       try {
         const res = await fetch(API_URL + '/admin/coins/listener/adjust', {
           method: 'POST', headers: authHeaders(true),

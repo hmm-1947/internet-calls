@@ -26,7 +26,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   bool _weeklyChallengeActive = false;
 
   late final List<Widget> _screens = [
-    const ListenerHomeScreen(),
+    ListenerHomeScreen(onRefresh: _refreshWeeklyChallengeStatus),
     const ListenerChatsListScreen(),
     const ListenerCallHistoryScreen(),
     ListenerSettingsScreen(key: _settingsKey),

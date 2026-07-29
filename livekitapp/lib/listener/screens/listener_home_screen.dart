@@ -12,7 +12,9 @@ import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.d
 import 'package:permission_handler/permission_handler.dart';
 
 class ListenerHomeScreen extends StatefulWidget {
-  const ListenerHomeScreen({super.key});
+  final Future<void> Function()? onRefresh;
+
+  const ListenerHomeScreen({super.key, this.onRefresh});
 
   @override
   State<ListenerHomeScreen> createState() => _ListenerHomeScreenState();
@@ -116,6 +118,14 @@ Future<void> _loadProfile() async {
     }
   }
 
+  Future<void> _onRefresh() async {
+    await Future.wait([
+      _loadUsers(),
+      _loadProfile(),
+      if (widget.onRefresh != null) widget.onRefresh!(),
+    ]);
+  }
+
   Future<void> _updateStatus(bool online) async {
     if (_token == null) return;
     try {
@@ -160,44 +170,52 @@ Future<void> _loadProfile() async {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _buildSearchBar(),
-          const SizedBox(height: 20),
-          const Text(
-            'Users',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+      body: RefreshIndicator(
+        color: pink,
+        backgroundColor: bg,
+        onRefresh: _onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
           ),
-          const SizedBox(height: 12),
-          if (_loadingUsers)
-            const Padding(
-              padding: EdgeInsets.only(top: 20),
-              child: Center(child: CircularProgressIndicator(color: pink)),
-            )
-          else if (_visibleUsers.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 20),
-              child: Center(
-                child: Text('No users found', style: TextStyle(color: dimText)),
+          children: [
+            _buildSearchBar(),
+            const SizedBox(height: 20),
+            const Text(
+              'Users',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
               ),
-            )
-          else
-            Column(
-              children: _visibleUsers
-                  .map(
-                    (u) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildUserTile(u),
-                    ),
-                  )
-                  .toList(),
             ),
-        ],
+            const SizedBox(height: 12),
+            if (_loadingUsers)
+              const Padding(
+                padding: EdgeInsets.only(top: 20),
+                child: Center(child: CircularProgressIndicator(color: pink)),
+              )
+            else if (_visibleUsers.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 20),
+                child: Center(
+                  child: Text('No users found', style: TextStyle(color: dimText)),
+                ),
+              )
+            else
+              Column(
+                children: _visibleUsers
+                    .map(
+                      (u) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildUserTile(u),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
       ),
     );
   }
