@@ -57,6 +57,9 @@ app.include_router(weekly_challenge.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+app.mount("/", StaticFiles(directory="landing", html=True), name="landing")
+
     
 @app.on_event("startup")
 def reset_online_status():
