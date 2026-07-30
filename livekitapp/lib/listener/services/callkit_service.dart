@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
-import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -85,7 +85,9 @@ class CallkitService {
       if (event is CallEventActionCallEnded) {
         _lastShownCallId = null;
         _stopCustomRingtone();
-        if (_acceptingCallId != null || _pendingCallNav != null) {
+        if (_acceptingCallId != null ||
+            _pendingCallNav != null ||
+            ActiveCallManager.instance.hasActiveCall) {
           print(
             '[Callkit] CallEventActionCallEnded ignored — call already accepted/in progress',
           );
@@ -247,7 +249,26 @@ if (event is CallEventActionCallAccept) {
       '[Callkit] _navigateToCallScreen: proceeding with navigation for callId=${nav.callId}',
     );
     _pendingCallNav = null;
-    state.pushAndRemoveUntil(_callRoute(nav), (route) => false);
+    final manager = ActiveCallManager.instance;
+    if (manager.hasActiveCall) {
+      manager.expand();
+      return;
+    }
+    state.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ListenerMainScreen()),
+      (route) => false,
+    );
+    manager.start(
+      ActiveCallInfo(
+        role: ActiveCallRole.listener,
+        callId: nav.callId,
+        otherPartyName: nav.callerName,
+        otherPartyPhotoUrl: nav.callerPhotoUrl,
+        isVideo: nav.isVideo,
+        livekitUrl: nav.url,
+        livekitToken: nav.token,
+      ),
+    );
   }
 
   Future<void> _acceptCallFromSystem(
@@ -292,23 +313,6 @@ if (event is CallEventActionCallAccept) {
     }
   }
 
-Route _callRoute(PendingCallNav nav) {
-    return PageRouteBuilder(
-      pageBuilder: (_, __, ___) => ListenerCallScreen(
-        url: nav.url,
-        token: nav.token,
-        callId: nav.callId,
-        isVideo: nav.isVideo,
-        otherPartyName: nav.callerName,
-        otherPartyPhotoUrl: nav.callerPhotoUrl,
-      ),
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      opaque: true,
-      barrierColor: Colors.black,
-    );
-  }
-
   Future<void> _forceEndCall(String uuid) async {
     try {
       final active = await FlutterCallkitIncoming.activeCalls();
@@ -348,13 +352,23 @@ Route _callRoute(PendingCallNav nav) {
     final callId = data['call_id']?.toString() ?? '';
     final uuid = _callIdToUuid(callId);
     print('[Callkit] handleCallCancelled: callId=$callId uuid=$uuid');
+    final activeCall = ActiveCallManager.instance.activeCall;
+    if (activeCall != null && activeCall.callId.toString() != callId) {
+      print(
+        '[Callkit] handleCallCancelled: ignoring, call ${activeCall.callId} still running',
+      );
+      await _forceEndCall(uuid);
+      return;
+    }
     _lastShownCallId = null;
     _stopCustomRingtone();
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
     final state = navigatorKey.currentState;
-    if (state != null && state.mounted) {
+    if (!ActiveCallManager.instance.hasActiveCall &&
+        state != null &&
+        state.mounted) {
       print(
         '[Callkit] handleCallCancelled: navigatorState found, pushing home',
 
@@ -382,12 +396,23 @@ Route _callRoute(PendingCallNav nav) {
     }
   }
 
+  Future<void> _rejectBusyCall(int callId) async {
+    await _forceEndCall(_callIdToUuid(callId.toString()));
+    try {
+      final authToken = await LocalStorage().getToken();
+      if (authToken == null) return;
+      await ListenerRepository().rejectCall(authToken, callId);
+    } catch (_) {}
+  }
+
   Future<void> _rejectCallFromSystem(int callId) async {
     if (_rejectingCallId == callId) return;
     _rejectingCallId = callId;
     await _forceEndCall(_callIdToUuid(callId.toString()));
     final state = navigatorKey.currentState;
-    if (state != null && state.mounted) {
+    if (!ActiveCallManager.instance.hasActiveCall &&
+        state != null &&
+        state.mounted) {
       state.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const ListenerMainScreen()),
         (route) => false,
@@ -403,12 +428,26 @@ Route _callRoute(PendingCallNav nav) {
 
   Future<void> showIncomingCall(Map<String, dynamic> data) async {
     final callId = data['call_id'] ?? '';
+    final activeCall = ActiveCallManager.instance.activeCall;
+    if (activeCall != null) {
+      final incomingCallId = int.tryParse(callId.toString());
+      print(
+        '[Callkit] showIncomingCall: already on call ${activeCall.callId}, rejecting $callId',
+      );
+      if (incomingCallId != null && incomingCallId != activeCall.callId) {
+        await _rejectBusyCall(incomingCallId);
+      }
+      return;
+    }
     if (_lastShownCallId == callId.toString()) return;
     _lastShownCallId = callId.toString();
     final callerName = data['caller_name'] ?? 'Unknown';
     final callType = data['call_type'] ?? 'audio';
     final remoteCallerPhotoUrl = ApiConstants.resolveMediaUrl(data['caller_photo_url'] as String?);
-    final callerPhotoUrl = _syncLocalAvatarPath(remoteCallerPhotoUrl) ?? remoteCallerPhotoUrl;
+    // The native callkit UI needs a file it can read straight away, but the
+    // Flutter screens must get the remote url: a cached path can be evicted by
+    // the OS, and the widgets would then treat it as a server path.
+    final nativeAvatar = _syncLocalAvatarPath(remoteCallerPhotoUrl) ?? remoteCallerPhotoUrl;
     if (_syncLocalAvatarPath(remoteCallerPhotoUrl) == null) {
       // ignore: unawaited_futures
       _localAvatarPath(remoteCallerPhotoUrl);
@@ -426,12 +465,12 @@ Route _callRoute(PendingCallNav nav) {
       appName: 'Listener App',
       handle: callerName,
       type: 0,
-      avatar: callerPhotoUrl,
+      avatar: nativeAvatar,
       extra: {
         'call_id': callId,
         'caller_name': callerName,
         'call_type': callType,
-        'caller_photo_url': callerPhotoUrl,
+        'caller_photo_url': remoteCallerPhotoUrl,
       },
       android: const AndroidParams(
         isCustomNotification: true,
@@ -479,7 +518,9 @@ Route _callRoute(PendingCallNav nav) {
 
 
     final state = navigatorKey.currentState;
-    if (state != null && state.mounted) {
+    if (!ActiveCallManager.instance.hasActiveCall &&
+        state != null &&
+        state.mounted) {
       state.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const ListenerMainScreen()),
         (_) => false,

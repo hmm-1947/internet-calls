@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart';
+
+final ValueNotifier<int> userCoinsNotifier = ValueNotifier<int>(0);
+
 class UserDataCache {
   static final UserDataCache _instance = UserDataCache._internal();
   factory UserDataCache() => _instance;
@@ -38,6 +42,8 @@ class UserDataCache {
   void setMe(Map<String, dynamic> data) {
     _me = data;
     _meFetchedAt = DateTime.now();
+    final coins = data['coins'];
+    if (coins is int) userCoinsNotifier.value = coins;
   }
 
   void setListeners(List<Map<String, dynamic>> data) {

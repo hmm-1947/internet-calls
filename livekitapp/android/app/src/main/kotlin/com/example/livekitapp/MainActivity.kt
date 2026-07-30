@@ -9,6 +9,8 @@ import android.telecom.TelecomManager
 import android.content.IntentFilter
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.embedding.engine.dart.DartExecutor
 import android.app.PictureInPictureParams
 import android.util.Rational
 import android.content.res.Configuration
@@ -18,15 +20,33 @@ import android.os.Bundle
 import android.view.WindowManager
 
 class MainActivity : FlutterActivity() {
+    companion object {
+        const val ENGINE_ID = "livekitapp.main.engine"
+        const val EXTRA_OPEN_ACTIVE_CALL = "open_active_call"
+        const val CALL_FG_CHANNEL = "livekitapp/callforeground"
+    }
+
     private val CHANNEL = "livekitapp/lockscreen"
     private var pendingUnlockResult: MethodChannel.Result? = null
     private var unlockReceiver: BroadcastReceiver? = null
     private val PIP_CHANNEL = "livekitapp/pip"
     private val RINGTONE_CHANNEL = "livekitapp/ringtone"
-    private val CALL_FG_CHANNEL = "livekitapp/callforeground"
 
     private var isInPipMode = false
     private var isInCallState = false
+
+    override fun provideFlutterEngine(context: Context): FlutterEngine {
+        val cache = FlutterEngineCache.getInstance()
+        cache.get(ENGINE_ID)?.let { return it }
+        val engine = FlutterEngine(context.applicationContext)
+        engine.dartExecutor.executeDartEntrypoint(
+            DartExecutor.DartEntrypoint.createDefault()
+        )
+        cache.put(ENGINE_ID, engine)
+        return engine
+    }
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Blocks screenshots, screen recording, and app-switcher thumbnail preview.
@@ -36,6 +56,21 @@ class MainActivity : FlutterActivity() {
         )
         super.onCreate(savedInstanceState)
         resetStaleIncomingCallChannel()
+        handleOpenActiveCallIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleOpenActiveCallIntent(intent)
+    }
+
+    private fun handleOpenActiveCallIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_ACTIVE_CALL, false) != true) return
+        intent.removeExtra(EXTRA_OPEN_ACTIVE_CALL)
+        flutterEngine?.let {
+            MethodChannel(it.dartExecutor.binaryMessenger, CALL_FG_CHANNEL)
+                .invokeMethod("openActiveCall", null)
+        }
     }
 
     // Notification channels are immutable once created on-device — if the
@@ -142,15 +177,15 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, RINGTONE_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startNativeRingtone" -> {
-                    val intent = Intent(this, RingtoneService::class.java)
+                    val intent = Intent(applicationContext, RingtoneService::class.java)
                     intent.action = RingtoneService.ACTION_START_APP
-                    startForegroundService(intent)
+                    applicationContext.startForegroundService(intent)
                     result.success(null)
                 }
                 "stopNativeRingtone" -> {
-                    val intent = Intent(this, RingtoneService::class.java)
+                    val intent = Intent(applicationContext, RingtoneService::class.java)
                     intent.action = RingtoneService.ACTION_STOP
-                    startService(intent)
+                    applicationContext.startService(intent)
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -161,16 +196,18 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "start" -> {
                     val title = call.argument<String>("title") ?: "Ongoing call"
-                    val intent = Intent(this, CallForegroundService::class.java)
+                    val video = call.argument<Boolean>("video") ?: false
+                    val intent = Intent(applicationContext, CallForegroundService::class.java)
                     intent.action = CallForegroundService.ACTION_START
                     intent.putExtra(CallForegroundService.EXTRA_TITLE, title)
-                    startForegroundService(intent)
+                    intent.putExtra(CallForegroundService.EXTRA_VIDEO, video)
+                    applicationContext.startForegroundService(intent)
                     result.success(null)
                 }
                 "stop" -> {
-                    val intent = Intent(this, CallForegroundService::class.java)
+                    val intent = Intent(applicationContext, CallForegroundService::class.java)
                     intent.action = CallForegroundService.ACTION_STOP
-                    startService(intent)
+                    applicationContext.startService(intent)
                     result.success(null)
                 }
                 else -> result.notImplemented()

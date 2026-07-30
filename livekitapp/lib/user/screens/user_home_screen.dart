@@ -11,14 +11,14 @@ import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
-import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_profile_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
 class _AppColors {
-  static const bg = Color(0xFF0B0B0B);
+  static const bg = Color(0xFF0B0F1A);
   static const headerBg = Color(0xCC0B0B0B);
   static const cardBg = Color(0xCC1A1A1A);
   static const cardBorder = Color(0x0DFFFFFF);
@@ -389,6 +389,12 @@ class UserHomeScreenState extends State<UserHomeScreen> {
 
   Future<void> _callListener(int listenerId, {bool video = false}) async {
     if (_callingListenerId != null) return;
+    if (ActiveCallManager.instance.hasActiveCall) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You are already on a call')),
+      );
+      return;
+    }
     setState(() => _callingListenerId = listenerId);
     try {
       final token = await _localStorage.getToken();
@@ -402,13 +408,14 @@ class UserHomeScreenState extends State<UserHomeScreen> {
         (l) => l['id'] == listenerId,
         orElse: () => {'name': 'Listener'},
       );
-      Navigator.of(context).push(
-        _callRoute(
-          result['call_id'],
-          listener['name'],
-          listener['photo_url'],
-          video,
-          listenerId,
+      ActiveCallManager.instance.start(
+        ActiveCallInfo(
+          role: ActiveCallRole.user,
+          callId: result['call_id'],
+          otherPartyName: listener['name'] ?? 'Listener',
+          otherPartyPhotoUrl: listener['photo_url'],
+          isVideo: video,
+          listenerId: listenerId,
         ),
       );
     } catch (e) {
@@ -420,22 +427,6 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     } finally {
       if (mounted) setState(() => _callingListenerId = null);
     }
-  }
-
- Route _callRoute(int callId, String listenerName, String? listenerPhotoUrl, bool video, int listenerId) {
-    return PageRouteBuilder(
-      pageBuilder: (_, __, ___) => CallScreen(
-        callId: callId,
-        otherPartyName: listenerName,
-        otherPartyPhotoUrl: listenerPhotoUrl,
-        startWithVideo: video,
-        listenerId: listenerId,
-      ),
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      opaque: true,
-      barrierColor: Colors.black,
-    );
   }
 
   void _openChat(Map<String, dynamic> listener) {
@@ -457,25 +448,15 @@ ChatHistoryScreen(
       key: _scaffoldKey,
       backgroundColor: _AppColors.bg,
       endDrawer: _buildProfileDrawer(),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
+      body: RefreshIndicator(
+        onRefresh: () => _load(forceRefresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(5, 24, 5, 32 + MediaQuery.of(context).padding.bottom + 90),
           children: [
-            _buildHeader(),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => _load(forceRefresh: true),
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(5, 24, 5, 32 + MediaQuery.of(context).padding.bottom + 90),
-                  children: [
-                    _buildDummyOffersSection(),
-                    const SizedBox(height: 32),
-                    _buildFeaturedProfilesSection(),
-                  ],
-                ),
-              ),
-            ),
+            _buildDummyOffersSection(),
+            const SizedBox(height: 32),
+            _buildFeaturedProfilesSection(),
           ],
         ),
       ),
@@ -591,29 +572,6 @@ ChatHistoryScreen(
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: _AppColors.headerBg,
-        border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset(
-            'assets/images/banner.png',
-            height: 32,
-            fit: BoxFit.contain,
-          ),
-          _CoinBalanceChip(coins: _profileCoins, showLabel: false),
-
-        ],
       ),
     );
   }
@@ -751,16 +709,31 @@ ChatHistoryScreen(
             ),
           )
         else
-          Column(
-            children: [
-              for (int i = 0; i < _listeners.length; i++) ...[
-                if (i > 0) const SizedBox(height: 8),
-                _buildProfileCard(_listeners[i]),
-              ],
-            ],
+          Builder(
+            builder: (context) {
+              final listeners = _onlineFirst(_listeners);
+              return Column(
+                children: [
+                  for (int i = 0; i < listeners.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    _buildProfileCard(listeners[i]),
+                  ],
+                ],
+              );
+            },
           ),
       ],
     );
+  }
+
+  /// Online listeners first, offline after, keeping the server's order within
+  /// each group. Done at build time so socket online/offline events reorder the
+  /// list immediately without refetching.
+  List<Map<String, dynamic>> _onlineFirst(List<Map<String, dynamic>> listeners) {
+    return [
+      ...listeners.where((l) => l['is_online'] == true),
+      ...listeners.where((l) => l['is_online'] != true),
+    ];
   }
 
   Widget _buildProfileCard(Map<String, dynamic> listener) {

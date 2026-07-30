@@ -51,7 +51,45 @@ String _statusLabel(String status) {
   }
 }
 
+
+class _CallFilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color activeColor;
+
+  const _CallFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? activeColor : const Color(0xFF1A2032),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : Colors.white54,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class CallHistoryScreen extends StatefulWidget {
+
   const CallHistoryScreen({super.key});
 
   @override
@@ -66,6 +104,31 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
   bool _loading = true;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
+  String _search = '';
+  String _filter = 'all';
+
+  List<Map<String, dynamic>> get _filteredCalls {
+    var calls = _calls;
+    if (_filter == 'accepted') {
+      calls = calls.where((c) => c['status'] == 'ended').toList();
+    } else if (_filter == 'cancelled') {
+      calls = calls.where((c) => c['status'] == 'cancelled').toList();
+    } else if (_filter == 'rejected') {
+      calls = calls.where((c) => c['status'] == 'rejected').toList();
+    } else if (_filter == 'missed') {
+      calls = calls.where((c) => c['status'] == 'missed').toList();
+    }
+    if (_search.isEmpty) return calls;
+    return calls
+        .where(
+          (c) => (c['listener_name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .contains(_search.toLowerCase()),
+        )
+        .toList();
+  }
+
 
   @override
   void initState() {
@@ -118,138 +181,177 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: bg,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: const Text(
-          'Calls',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              color: const Color(0x1AFFFFFF),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.monetization_on,
-                  color: Colors.amber,
-                  size: 16,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: Container(
+              height: 55,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A2032),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextField(
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search calls...',
+                  hintStyle: TextStyle(color: dimText),
+                  prefixIcon: Icon(Icons.search, color: dimText),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 14),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  '$_profileCoins',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                onChanged: (v) => setState(() => _search = v),
+              ),
+            ),
+  ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 40,
+            child: ListView(
+              
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              
+              children: [
+                _CallFilterChip(
+                  label: 'All',
+                  selected: _filter == 'all',
+                  onTap: () => setState(() => _filter = 'all'),
+                  activeColor: pink,
+                ),
+                const SizedBox(width: 8),
+                _CallFilterChip(
+                  label: 'Accepted',
+                  selected: _filter == 'accepted',
+                  onTap: () => setState(() => _filter = 'accepted'),
+                  activeColor: pink,
+                ),
+                const SizedBox(width: 8),
+                _CallFilterChip(
+                  label: 'Cancelled',
+                  selected: _filter == 'cancelled',
+                  onTap: () => setState(() => _filter = 'cancelled'),
+                  activeColor: pink,
+                ),
+                const SizedBox(width: 8),
+                _CallFilterChip(
+                  label: 'Rejected',
+                  selected: _filter == 'rejected',
+                  onTap: () => setState(() => _filter = 'rejected'),
+                  activeColor: pink,
+                ),
+                const SizedBox(width: 8),
+                _CallFilterChip(
+                  label: 'Missed',
+                  selected: _filter == 'missed',
+                  onTap: () => setState(() => _filter = 'missed'),
+                  activeColor: pink,
                 ),
               ],
             ),
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _calls.isEmpty
-            ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.7,
-                    child: const Center(
-                      child: Text(
-                        'No calls yet',
-                        style: TextStyle(color: dimText),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _calls.length,
-                itemBuilder: (context, index) {
-                  final call = _calls[index];
-                  final status = call['status'] as String;
-                  final callType = call['call_type'] as String;
-                  final photoUrl = ApiConstants.resolveMediaUrl(
-                    call['other_party_photo_url'],
-                  );
-                  return ListTile(
-                    leading: Stack(
-                      clipBehavior: Clip.none,
+          const SizedBox(height: 8),
+
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredCalls.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: const Color(0xFF2A3145),
-                          backgroundImage: photoUrl.isNotEmpty
-                              ? NetworkImage(photoUrl)
-                              : null,
-                          child: photoUrl.isEmpty
-                              ? const Icon(Icons.person, color: Colors.white54)
-                              : null,
-                        ),
-                        Positioned(
-                          bottom: -2,
-                          right: -2,
-                          child: Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: bg,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              callType == 'video'
-                                  ? Icons.videocam
-                                  : Icons.call,
-                              size: 12,
-                              color: pink,
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.7,
+                          child: const Center(
+                            child: Text(
+                              'No calls yet',
+                              style: TextStyle(color: dimText),
                             ),
                           ),
                         ),
                       ],
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: _filteredCalls.length,
+                      itemBuilder: (context, index) {
+                        final call = _filteredCalls[index];
+                        final status = call['status'] as String;
+                        final callType = call['call_type'] as String;
+                        final photoUrl = ApiConstants.resolveMediaUrl(
+                          call['other_party_photo_url'],
+                        );
+                        return ListTile(
+                          leading: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              CircleAvatar(
+                                radius: 24,
+                                backgroundColor: const Color(0xFF2A3145),
+                                backgroundImage: photoUrl.isNotEmpty
+                                    ? NetworkImage(photoUrl)
+                                    : null,
+                                child: photoUrl.isEmpty
+                                    ? const Icon(Icons.person, color: Colors.white54)
+                                    : null,
+                              ),
+                              Positioned(
+                                bottom: -2,
+                                right: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: bg,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    callType == 'video'
+                                        ? Icons.videocam
+                                        : Icons.call,
+                                    size: 12,
+                                    color: pink,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          title: Text(
+                            call['listener_name'],
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Row(
+                            children: [
+                              Icon(
+                                _statusIcon(status, callType),
+                                size: 14,
+                                color: _statusColor(status, pink),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                status == 'ended'
+                                    ? _fmtDuration(call['duration_seconds'])
+                                    : _statusLabel(status),
+                                style: const TextStyle(color: dimText),
+                              ),
+                            ],
+                          ),
+                          trailing: Text(
+                            _fmtDateTime(call['created_at']),
+                            style: const TextStyle(color: dimText, fontSize: 12),
+                          ),
+                        );
+                      },
                     ),
-                    title: Text(
-                      call['listener_name'],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: Row(
-                      children: [
-                        Icon(
-                          _statusIcon(status, callType),
-                          size: 14,
-                          color: _statusColor(status, pink),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          status == 'ended'
-                              ? _fmtDuration(call['duration_seconds'])
-                              : _statusLabel(status),
-                          style: const TextStyle(color: dimText),
-                        ),
-                      ],
-                    ),
-                    trailing: Text(
-                      _fmtDateTime(call['created_at']),
-                      style: const TextStyle(color: dimText, fontSize: 12),
-                    ),
-                  );
-                },
-              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+

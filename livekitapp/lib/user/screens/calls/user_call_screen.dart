@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/main_user.dart';
 import 'package:livekitapp/user/services/pip_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
@@ -65,6 +67,10 @@ class _CallScreenState extends State<CallScreen> {
 
   bool _remoteVideoMuted = false;
   Timer? _ringingTimer;
+  Timer? _statusPollTimer;
+  // Set as soon as acceptance is handled, from whichever channel wins the race
+  // (FCM push or status poll), so the room is only ever joined once.
+  bool _acceptHandled = false;
   Timer? _coinTimer;
   final _coinRepository = CoinRepository();
   int? _maxSeconds;
@@ -75,6 +81,8 @@ class _CallScreenState extends State<CallScreen> {
   void initState() {
     super.initState();
     _cameraEnabled = widget.startWithVideo;
+    ActiveCallManager.instance.onHangUp = _hangUp;
+    _publishStatus();
     PipService.instance.init();
     PipService.instance.onPipModeChanged = (isInPip) {
       if (mounted) setState(() => _isInPip = isInPip);
@@ -86,8 +94,48 @@ class _CallScreenState extends State<CallScreen> {
     }
     _listenForSignals();
     _startRingingTimeout();
+    _startStatusPolling();
     _startRingingTone();
     _requestMicAndStartCall();
+  }
+
+  /// Fallback for a dropped `call_accepted` push: while ringing, ask the
+  /// backend for the call status and pick up the LiveKit token from there.
+  void _startStatusPolling() {
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!mounted || _isEnding || _acceptHandled) {
+        _statusPollTimer?.cancel();
+        return;
+      }
+      if (_phase != _CallPhase.ringing) return;
+      try {
+        final authToken = await _localStorage.getToken();
+        if (authToken == null) return;
+        final data = await _repository.getCallStatus(authToken, widget.callId);
+        if (!mounted || _isEnding || _acceptHandled) return;
+        switch (data['status']) {
+          case 'accepted':
+            final url = data['livekit_url'] as String?;
+            final token = data['token'] as String?;
+            // Only present once the listener is actually in the room.
+            if (url != null && token != null) {
+              _onCallAccepted(url, token);
+            }
+            break;
+          case 'rejected':
+            _onCallEnded(rejected: true);
+            break;
+          case 'missed':
+            _onCallMissed();
+            break;
+          case 'ended':
+            _onCallEnded();
+            break;
+        }
+      } catch (_) {
+        // Transient network error — keep polling until the ringing timeout.
+      }
+    });
   }
 
   Future<void> _startRingingTone() async {
@@ -131,7 +179,7 @@ Future<void> _requestMicAndStartCall() async {
           await Future.delayed(const Duration(seconds: 2));
         }
       } catch (_) {}
-      if (mounted) Navigator.of(context).pop();
+      _closeCall();
     });
   }
 
@@ -165,8 +213,33 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
 
   void _startDurationTimer() {
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _callDurationSeconds++);
+      if (!mounted) return;
+      setState(() => _callDurationSeconds++);
+      ActiveCallManager.instance.updateDuration(_callDurationSeconds);
     });
+  }
+
+  void _publishStatus() {
+    ActiveCallManager.instance.updateStatus(
+      _phase == _CallPhase.connected ? '' : _statusText(),
+    );
+  }
+
+  void _closeCall() {
+    ActiveCallManager.instance.clear();
+  }
+
+  void _showMessage(String message) {
+    final rootContext = userNavigatorKey.currentContext;
+    if (rootContext == null) return;
+    ScaffoldMessenger.of(
+      rootContext,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _openSummary() {
+    _closeCall();
+    userNavigatorKey.currentState?.push(_summaryRoute());
   }
 
   String _formatDuration(int seconds) {
@@ -206,12 +279,8 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     await CallForegroundService.instance.stop();
     await UserCallkitService.instance.endCall(widget.callId.toString());
     PipService.instance.setCallActive(false);
-    if (mounted) {
-      Navigator.of(context).pushReplacement(_summaryRoute());
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not enough coins to continue the call')),
-      );
-    }
+    _openSummary();
+    _showMessage('Not enough coins to continue the call');
   }
 
   void _startRingingTimeout() {
@@ -227,7 +296,7 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     _isEnding = true;
     _stopRingingTone();
     unawaited(_finishCallMissed());
-    if (mounted) Navigator.of(context).pop();
+    _closeCall();
   }
 
   Future<void> _finishCallMissed() async {
@@ -253,10 +322,15 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
 
   /// Listener accepted — now connect to the LiveKit room.
   Future<void> _onCallAccepted(String url, String token) async {
+    // The push and the status poll can both deliver acceptance; first one wins.
+    if (_acceptHandled) return;
+    _acceptHandled = true;
+    _statusPollTimer?.cancel();
     _ringingTimer?.cancel();
     _stopRingingTone();
     if (!mounted || _isEnding) return;
     setState(() => _phase = _CallPhase.connecting);
+    _publishStatus();
     try {
       await Permission.microphone.request();
       final room = Room();
@@ -344,6 +418,7 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
       await room.localParticipant?.setMicrophoneEnabled(_micEnabled);
       await CallForegroundService.instance.start(
         title: 'Call with ${widget.otherPartyName}',
+        video: widget.startWithVideo,
       );
       _startCoinTimer();
       if (room.remoteParticipants.isNotEmpty) {
@@ -386,6 +461,7 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
             _remoteVideoTrack = existingRemoteVideoTrack;
           }
         });
+        _publishStatus();
         if (widget.startWithVideo) {
           PipService.instance.setCallActive(true);
         }
@@ -396,9 +472,8 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     } catch (e) {
       if (mounted) {
         setState(() => _phase = _CallPhase.ringing);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Connection error: $e')));
+        _publishStatus();
+        _showMessage('Connection error: $e');
       }
     }
   }
@@ -475,12 +550,8 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     await CallForegroundService.instance.stop();
     await UserCallkitService.instance.endCall(widget.callId.toString());
     PipService.instance.setCallActive(false);
-    if (mounted) {
-      Navigator.of(context).pushReplacement(_summaryRoute());
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not enough coins to continue the call')),
-      );
-    }
+    _openSummary();
+    _showMessage('Not enough coins to continue the call');
   }
 
   void _onCallEnded({bool rejected = false}) {
@@ -499,14 +570,12 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     PipService.instance.setCallActive(false);
 
     if (rejected) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Call was declined by the listener.')),
-      );
+      _closeCall();
+      _showMessage('Call was declined by the listener.');
     } else if (wasConnected) {
-      Navigator.of(context).pushReplacement(_summaryRoute());
+      _openSummary();
     } else {
-      Navigator.of(context).pop();
+      _closeCall();
     }
   }
 
@@ -540,12 +609,10 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     await CallForegroundService.instance.stop();
     await UserCallkitService.instance.endCall(widget.callId.toString());
     PipService.instance.setCallActive(false);
-    if (!mounted) return;
     if (wasConnected) {
-      Navigator.of(context).pushReplacement(_summaryRoute());
+      _openSummary();
     } else {
-      Navigator.of(context).pop();
-
+      _closeCall();
     }
   }
 
@@ -561,7 +628,11 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
 
   @override
   void dispose() {
+    if (ActiveCallManager.instance.onHangUp == _hangUp) {
+      ActiveCallManager.instance.onHangUp = null;
+    }
     _ringingTimer?.cancel();
+    _statusPollTimer?.cancel();
     _coinTimer?.cancel();
     _fcmSubscription?.cancel();
     _roomListener?.dispose();
@@ -581,19 +652,12 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        _maybeEnterPip();
-      },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: widget.startWithVideo && _phase == _CallPhase.connected
-              ? _buildConnectedVideo()
-              : (_isInPip ? _buildPipVideoUi() : _buildAudioCallUi()),
-        ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: widget.startWithVideo && _phase == _CallPhase.connected
+            ? _buildConnectedVideo()
+            : (_isInPip ? _buildPipVideoUi() : _buildAudioCallUi()),
       ),
     );
   }
@@ -692,9 +756,9 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
                   onTap: _openGiftSheet,
                 ),
                 CallActionButton(
-                  icon: Icons.more_horiz,
-                  label: 'More',
-                  onTap: () {},
+                  icon: Icons.close_fullscreen,
+                  label: 'Minimize',
+                  onTap: ActiveCallManager.instance.minimize,
                 ),
               ],
             ),
@@ -758,26 +822,45 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
         ),
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.otherPartyName,
-                  style: const TextStyle(
+                IconButton(
+                  onPressed: ActiveCallManager.instance.minimize,
+                  icon: const Icon(
+                    Icons.close_fullscreen,
                     color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
+                  ),
+                  tooltip: 'Minimize call',
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.otherPartyName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatDuration(_callDurationSeconds),
+                        style: const TextStyle(
+                          color: Color(0xFFE5BDBE),
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatDuration(_callDurationSeconds),
-                  style: const TextStyle(
-                    color: Color(0xFFE5BDBE),
-                    fontSize: 15,
-                  ),
-                ),
+                const SizedBox(width: 48),
               ],
             ),
           ),

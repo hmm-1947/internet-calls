@@ -227,239 +227,231 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: bg,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Image.asset(
-          'assets/images/banner.png',
-          height: 32,
-          fit: BoxFit.contain,
-        ),
-        actions: const [
+      body: Column(
+        children: [
           Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: Icon(Icons.more_vert, color: Colors.white70),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: Container(
+              height: 55,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A2032),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextField(
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search chats...',
+                  hintStyle: TextStyle(color: dimText),
+                  prefixIcon: Icon(Icons.search, color: dimText),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                ),
+                onChanged: (v) => setState(() => _search = v),
+              ),
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(0, 10, 0, 4),
+                      children: [
+                        SizedBox(
+                          height: 40,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            children: [
+                              _filterChip('All', _chatFilter == 'all', () {
+                                setState(() => _chatFilter = 'all');
+                              }, pink),
+                              const SizedBox(width: 8),
+                              _filterChip('Unread', _chatFilter == 'unread', () {
+                                setState(() => _chatFilter = 'unread');
+                              }, pink),
+                              const SizedBox(width: 8),
+                              _filterChip(
+                                'Favorites',
+                                _chatFilter == 'favorites',
+                                () {
+                                  setState(() => _chatFilter = 'favorites');
+                                },
+                                pink,
+                              ),
+                              const SizedBox(width: 8),
+                              _filterChip('Archived', _chatFilter == 'archived', () {
+                                setState(() => _chatFilter = 'archived');
+                              }, pink),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_filteredThreads.isEmpty)
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.5,
+                            child: const Center(
+                              child: Text(
+                                'No chats yet',
+                                style: TextStyle(color: dimText),
+                              ),
+                            ),
+                          )
+                        else
+                          ...List.generate(_filteredThreads.length, (index) {
+                            final thread = _filteredThreads[index];
+                            final unread = thread['unread_count'] ?? 0;
+                            return Dismissible(
+                              key: ValueKey(thread['user_id']),
+                              background: Container(
+                                color: Colors.blueGrey,
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.only(left: 20),
+                                child: const Icon(Icons.archive, color: Colors.white),
+                              ),
+                              secondaryBackground: Container(
+                                color: Colors.blueGrey,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                child: const Icon(Icons.archive, color: Colors.white),
+                              ),
+                              confirmDismiss: (_) async {
+                                await _toggleArchive(thread);
+                                return false;
+                              },
+                              child: Material(
+                                color: cardColor,
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 6,
+                                  ),
+                                  leading: Stack(
+                                    children: [
+                                      AvatarImage(
+                                        photoUrl: thread['photo_url'],
+                                        radius: 26,
+                                        iconSize: 26,
+                                        backgroundColor: const Color(0xFF2A3145),
+                                      ),
+                                      if (thread['is_online'] == true)
+                                        Positioned(
+                                          right: 0,
+                                          bottom: 0,
+                                          child: Container(
+                                            width: 12,
+                                            height: 12,
+                                            decoration: BoxDecoration(
+                                              color: Colors.green,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: bg, width: 2),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  title: Row(
+                                    children: [
+                                      if (thread['is_pinned'] == true)
+                                        const Padding(
+                                          padding: EdgeInsets.only(right: 4),
+                                          child: Icon(
+                                            Icons.push_pin,
+                                            size: 14,
+                                            color: dimText,
+                                          ),
+                                        ),
+                                      Expanded(
+                                        child: Text(
+                                          thread['user_name'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                      if (thread['is_muted'] == true)
+                                        const Icon(
+                                          Icons.notifications_off,
+                                          size: 16,
+                                          color: dimText,
+                                        ),
+                                    ],
+                                  ),
+                                  subtitle: Text(
+                                    thread['last_message'] ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: dimText),
+                                  ),
+                                  trailing: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        _fmtTime(thread['last_message_at']),
+                                        style: const TextStyle(
+                                          color: dimText,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      if (unread > 0)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: const BoxDecoration(
+                                            color: pink,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 20,
+                                            minHeight: 20,
+                                          ),
+                                          child: Text(
+                                            '$unread',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      fadeRoute(
+                                        ListenerChatHistoryScreen(
+                                          userId: thread['user_id'],
+                                          userName: thread['user_name'],
+                                          userPhotoUrl: thread['photo_url'],
+                                        ),
+                                        barrierColor: bg,
+                                      ),
+                                    );
+                                    _refreshSilently();
+                                  },
+                                  onLongPress: () => _showThreadOptions(thread),
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
+            ),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(top: 4),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A2032),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: TextField(
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'Search or start a new chat',
-                          hintStyle: TextStyle(color: dimText),
-                          prefixIcon: Icon(Icons.search, color: dimText),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onChanged: (v) => setState(() => _search = v),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 40,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        _filterChip('All', _chatFilter == 'all', () {
-                          setState(() => _chatFilter = 'all');
-                        }, pink),
-                        const SizedBox(width: 8),
-                        _filterChip('Unread', _chatFilter == 'unread', () {
-                          setState(() => _chatFilter = 'unread');
-                        }, pink),
-                        const SizedBox(width: 8),
-                        _filterChip(
-                          'Favorites',
-                          _chatFilter == 'favorites',
-                          () {
-                            setState(() => _chatFilter = 'favorites');
-                          },
-                          pink,
-                        ),
-                        const SizedBox(width: 8),
-                        _filterChip('Archived', _chatFilter == 'archived', () {
-                          setState(() => _chatFilter = 'archived');
-                        }, pink),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (_filteredThreads.isEmpty)
-                    SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.5,
-                      child: const Center(
-                        child: Text(
-                          'No chats yet',
-                          style: TextStyle(color: dimText),
-                        ),
-                      ),
-                    )
-                  else
-                    ...List.generate(_filteredThreads.length, (index) {
-                      final thread = _filteredThreads[index];
-                      final unread = thread['unread_count'] ?? 0;
-                      return Dismissible(
-                        key: ValueKey(thread['user_id']),
-                        background: Container(
-                          color: Colors.blueGrey,
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: 20),
-                          child: const Icon(Icons.archive, color: Colors.white),
-                        ),
-                        secondaryBackground: Container(
-                          color: Colors.blueGrey,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          child: const Icon(Icons.archive, color: Colors.white),
-                        ),
-                        confirmDismiss: (_) async {
-                          await _toggleArchive(thread);
-                          return false;
-                        },
-                        child: Material(
-                          color: cardColor,
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 6,
-                            ),
-                            leading: Stack(
-                              children: [
-                          AvatarImage(
-                                  photoUrl: thread['photo_url'],
-                                  radius: 26,
-                                  iconSize: 26,
-                                  backgroundColor: const Color(0xFF2A3145),
-                                ),
-                                if (thread['is_online'] == true)
-                                  Positioned(
-                                    right: 0,
-                                    bottom: 0,
-                                    child: Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color: Colors.green,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: bg, width: 2),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            title: Row(
-                              children: [
-                                if (thread['is_pinned'] == true)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 4),
-                                    child: Icon(
-                                      Icons.push_pin,
-                                      size: 14,
-                                      color: dimText,
-                                    ),
-                                  ),
-                                Expanded(
-                                  child: Text(
-                                    thread['user_name'],
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ),
-                                if (thread['is_muted'] == true)
-                                  const Icon(
-                                    Icons.notifications_off,
-                                    size: 16,
-                                    color: dimText,
-                                  ),
-                              ],
-                            ),
-                            subtitle: Text(
-                              thread['last_message'] ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: dimText),
-                            ),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  _fmtTime(thread['last_message_at']),
-                                  style: const TextStyle(
-                                    color: dimText,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                if (unread > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: const BoxDecoration(
-                                      color: pink,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 20,
-                                      minHeight: 20,
-                                    ),
-                                    child: Text(
-                                      '$unread',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            onTap: () async {
-                              await Navigator.of(context).push(
-                                fadeRoute(
-                                  ListenerChatHistoryScreen(
-                                    userId: thread['user_id'],
-                                    userName: thread['user_name'],
-                                    userPhotoUrl: thread['photo_url'],
-                                  ),
-                                  barrierColor: bg,
-                                ),
-                              );
-                              _refreshSilently();
-                            },
-                            onLongPress: () => _showThreadOptions(thread),
-                          ),
-                        ),
-                      );
-                    }),
-                ],
-              ),
-      ),
     );
   }
+
 
   Widget _filterChip(
     String label,

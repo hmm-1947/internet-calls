@@ -16,6 +16,9 @@ import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
+import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
 
 /// Top-level function — runs in a separate isolate when the app is
@@ -118,6 +121,7 @@ void main() async {
   }
 
   FlavorConfig.set(AppFlavor.listener);
+  ActiveCallManager.instance.init();
   await Firebase.initializeApp();
 
   // Register the background handler BEFORE runApp
@@ -251,29 +255,61 @@ class _ListenerAppState extends State<ListenerApp> {
     super.dispose();
   }
 
+  /// Status bar / navigation bar styling used across the whole app.
+  /// Light icons so the clock, wifi and battery stay readable on the dark
+  /// background painted behind the status bar.
+  static const _overlayStyle = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.black,
+    systemNavigationBarIconBrightness: Brightness.light,
+  );
+
   @override
   Widget build(BuildContext context) {
-    return AppLifecycleReporter(
-      child: MaterialApp(
-        navigatorKey: CallkitService.instance.navigatorKey,
-        title: 'Listener App',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorSchemeSeed: Colors.deepPurple,
-          useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFF0B0F1A),
-        ),
-        home: FutureBuilder<String?>(
-          future: LocalStorage().getToken(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const SplashScreen();
-            }
-            if (snapshot.data != null) {
-              return _ListenerSessionGate(token: snapshot.data!);
-            }
-            return const ListenerLoginScreen();
-          },
+    // AnnotatedRegion keeps this style applied for every route. Without it, any
+    // screen with an AppBar overrides the status bar icon colour and can leave
+    // dark icons on the dark status bar (invisible).
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _overlayStyle,
+      child: AppLifecycleReporter(
+        child: MaterialApp(
+          navigatorKey: CallkitService.instance.navigatorKey,
+          title: 'Listener App',
+          debugShowCheckedModeBanner: false,
+          builder: (context, child) => ActiveCallHost(
+            callScreenBuilder: (callContext, info) => ListenerCallScreen(
+              key: ValueKey<int>(info.callId),
+              url: info.livekitUrl ?? '',
+              token: info.livekitToken ?? '',
+              callId: info.callId,
+              isVideo: info.isVideo,
+              otherPartyName: info.otherPartyName,
+              otherPartyPhotoUrl: info.otherPartyPhotoUrl,
+            ),
+            child: child ?? const SizedBox.shrink(),
+          ),
+          theme: ThemeData(
+            colorSchemeSeed: Colors.deepPurple,
+            useMaterial3: true,
+            scaffoldBackgroundColor: const Color(0xFF0B0F1A),
+            appBarTheme: const AppBarTheme(
+              systemOverlayStyle: _overlayStyle,
+            ),
+          ),
+          home: FutureBuilder<String?>(
+            future: LocalStorage().getToken(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SplashScreen();
+              }
+              if (snapshot.data != null) {
+                return _ListenerSessionGate(token: snapshot.data!);
+              }
+              return const ListenerLoginScreen();
+            },
+          ),
         ),
       ),
     );
@@ -354,6 +390,7 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
         state == AppLifecycleState.detached) {
       _offlineTimer?.cancel();
       _offlineTimer = Timer(const Duration(seconds: 15), () async {
+        if (ActiveCallManager.instance.hasActiveCall) return;
         final activeCall = await _localStorage.getActiveCall();
         if (activeCall != null) return;
         _updateStatus(false);

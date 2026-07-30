@@ -61,9 +61,13 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
           style: TextStyle(color: pink, fontWeight: FontWeight.bold),
         ),
         iconTheme: const IconThemeData(color: pink),
+               leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE53950)))
           : _reviews.isEmpty
           ? const Center(
               child: Text('No reviews yet', style: TextStyle(color: dimText)),

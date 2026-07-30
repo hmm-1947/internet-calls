@@ -10,6 +10,7 @@ import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
 import 'package:livekitapp/common/widgets/faded_indexed_stack.dart';
+import 'package:livekitapp/common/widgets/listener_home_header.dart';
 
 class ListenerMainScreen extends StatefulWidget {
   const ListenerMainScreen({super.key});
@@ -65,28 +66,47 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
     }
   }
 
+  static const _titles = ['Home', 'Chats', 'Calls', 'Settings'];
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final navBarHeight = 78 + bottomInset;
     return Scaffold(
+      backgroundColor: Colors.black,
       extendBody: true,
-      body: Stack(
+      body: Column(
         children: [
-          FadedIndexedStack(index: _index, children: _screens),
-          if (_index == 0 && _weeklyChallengeActive)
-            Positioned(
-              right: 16,
-              bottom: navBarHeight + 16,
-              child: _WeeklyChallengeFab(
-                onTap: () async {
-                  await Navigator.of(
-                    context,
-                  ).push(fadeRoute(const WeeklyChallengeScreen()));
-                  _refreshWeeklyChallengeStatus();
-                },
+          Container(
+            color: Colors.black,
+            child: SafeArea(
+              bottom: false,
+              child: ListenerHomeHeader(
+                title: _titles[_index],
+                isHome: _index == 0,
               ),
             ),
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                FadedIndexedStack(index: _index, children: _screens),
+                if (_index == 0 && _weeklyChallengeActive)
+                  Positioned(
+                    right: 16,
+                    bottom: navBarHeight + 16,
+                    child: _WeeklyChallengeFab(
+                      onTap: () async {
+                        await Navigator.of(
+                          context,
+                        ).push(fadeRoute(const WeeklyChallengeScreen()));
+                        _refreshWeeklyChallengeStatus();
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
 

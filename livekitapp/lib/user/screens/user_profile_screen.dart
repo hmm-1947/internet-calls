@@ -10,7 +10,7 @@ import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_personal_info_screen.dart';
 
 class _AppColors {
-  static const bg = Color(0xFF0B0B0B);
+  static const bg = Color(0xFF0B0F1A);
   static const cardBg = Color(0xFF141B26);
   static const cardBorder = Color(0x0DFFFFFF);
   static const brandRed = Color(0xFFE11D48);
@@ -277,17 +277,6 @@ Future<void> refresh() async {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: _AppColors.bg,
-        elevation: 0,
-        title: const Text(
-          'Profile',
-          style: TextStyle(
-            color: _AppColors.brandRed,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
       body: RefreshIndicator(
         onRefresh: refresh,
         child: _loading

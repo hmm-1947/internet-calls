@@ -45,6 +45,8 @@ static const String listenerProfile = '/listener/profile';
   static String userListenerProfile(int listenerId) => '/user/listener/$listenerId';
 
 
+  static String callStatus(int callId) => '/call/$callId/status';
+
   static String callAccept(int callId) => '/call/$callId/accept';
   static String callReady(int callId) => '/call/$callId/ready';
   static String callReject(int callId) => '/call/$callId/reject';

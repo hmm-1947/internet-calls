@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 class CrownNavBar extends StatefulWidget {
   final int selectedIndex;
@@ -84,12 +85,24 @@ class _CrownNavBarState extends State<CrownNavBar> {
     }
 
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    return SizedBox(
-      height: 78 + bottomInset,
+    final barHeight = 78 + bottomInset;
+    // How far the crown button pokes above the bar. Anything drawn above the
+    // bar's own box is not hit-testable by default, so this is handled by
+    // _OverflowHitTestBox below.
+    final overhang = widget.showCrown
+        ? (widget.crownSize - 42).clamp(0.0, double.infinity)
+        : 0.0;
+
+    final content = SizedBox(
+      height: barHeight + overhang,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: barHeight,
             child: Container(
               decoration: const BoxDecoration(
                 color: Color(0x400F1A2E),
@@ -166,15 +179,16 @@ class _CrownNavBarState extends State<CrownNavBar> {
           ),
           if (widget.showCrown)
             Positioned(
-              // Keeps the same amount of the button poking above the bar
-              // regardless of size (60px button pokes ~38px above, so scale
-              // the offset off that reference instead of a fixed -22).
-              top: -(widget.crownSize - 42),
+              // Sits at the top of this (taller) box, which places it the same
+              // distance above the bar as before: a 60px button pokes ~38px
+              // above, so the offset scales off that reference.
+              top: 0,
               left: 0,
               right: 0,
               child: Center(
                 child: GestureDetector(
                   onTap: widget.onCrownTap,
+                  behavior: HitTestBehavior.opaque,
                   child: Container(
                     width: widget.crownSize,
                     height: widget.crownSize,
@@ -211,6 +225,84 @@ class _CrownNavBarState extends State<CrownNavBar> {
             ),
         ],
       ),
+    );
+
+    if (overhang == 0) return content;
+
+    // Reports only `barHeight` to the Scaffold (so the body's bottom padding is
+    // unchanged) while painting and hit-testing the crown above it.
+    return _OverflowHitTestBox(overflow: overhang, child: content);
+  }
+}
+
+/// Renders [child] shifted `overflow` pixels above this box's own bounds and,
+/// unlike a normal [RenderBox], keeps that overflowing area tappable.
+///
+/// Needed because the crown button pokes above the nav bar: Flutter rejects any
+/// hit outside a box's size, so taps on the top of the button used to fall
+/// through to whatever was behind it on the page.
+class _OverflowHitTestBox extends SingleChildRenderObjectWidget {
+  final double overflow;
+
+  const _OverflowHitTestBox({required this.overflow, required Widget child})
+      : super(child: child);
+
+  @override
+  _RenderOverflowHitTestBox createRenderObject(BuildContext context) =>
+      _RenderOverflowHitTestBox(overflow);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderOverflowHitTestBox renderObject,
+  ) {
+    renderObject.overflow = overflow;
+  }
+}
+
+class _RenderOverflowHitTestBox extends RenderShiftedBox {
+  _RenderOverflowHitTestBox(this._overflow) : super(null);
+
+  double _overflow;
+  double get overflow => _overflow;
+  set overflow(double value) {
+    if (_overflow == value) return;
+    _overflow = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final child = this.child;
+    if (child == null) {
+      size = constraints.smallest;
+      return;
+    }
+    child.layout(
+      BoxConstraints(
+        minWidth: constraints.minWidth,
+        maxWidth: constraints.maxWidth,
+        maxHeight: double.infinity,
+      ),
+      parentUsesSize: true,
+    );
+    (child.parentData as BoxParentData).offset = Offset(0, -_overflow);
+    size = constraints.constrain(
+      Size(child.size.width, child.size.height - _overflow),
+    );
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final child = this.child;
+    if (child == null) return false;
+    // Intentionally skips the `size.contains(position)` guard in
+    // RenderBox.hitTest so hits above this box reach the child.
+    return result.addWithPaintOffset(
+      offset: Offset(0, -_overflow),
+      position: position,
+      hitTest: (BoxHitTestResult result, Offset transformed) =>
+          child.hitTest(result, position: transformed),
     );
   }
 }

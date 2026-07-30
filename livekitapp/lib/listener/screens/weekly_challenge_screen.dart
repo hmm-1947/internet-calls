@@ -202,9 +202,27 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
     }
 
     final maxGoalSeconds = goals.last.minutes * 60;
-    final progressFraction = maxGoalSeconds == 0
-        ? 0.0
-        : (talkSeconds / maxGoalSeconds).clamp(0.0, 1.0);
+    double progressFraction;
+    if (goals.length == 1) {
+      progressFraction = maxGoalSeconds == 0 ? 0.0 : (talkSeconds / maxGoalSeconds).clamp(0.0, 1.0);
+    } else {
+      progressFraction = 0.0;
+      for (var i = 0; i < goals.length - 1; i++) {
+        final segStart = goals[i].minutes * 60;
+        final segEnd = goals[i + 1].minutes * 60;
+        final segFractionOfTrack = 1 / (goals.length - 1);
+        if (talkSeconds >= segEnd) {
+          progressFraction = (i + 1) * segFractionOfTrack;
+        } else if (talkSeconds > segStart) {
+          final segProgress = segEnd == segStart ? 0.0 : (talkSeconds - segStart) / (segEnd - segStart);
+          progressFraction = (i + segProgress) * segFractionOfTrack;
+          break;
+        } else {
+          break;
+        }
+      }
+      progressFraction = progressFraction.clamp(0.0, 1.0);
+    }
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
@@ -262,7 +280,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                     ),
                     for (var i = 0; i < goals.length; i++)
                       Positioned(
-                        left: (trackWidth * (goals[i].minutes * 60 / maxGoalSeconds))
+                        left: (trackWidth * (goals.length == 1 ? 0.0 : i / (goals.length - 1)))
                                 .clamp(0.0, trackWidth) -
                             12,
                         top: 18,

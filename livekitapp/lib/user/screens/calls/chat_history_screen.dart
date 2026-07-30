@@ -13,7 +13,7 @@ import 'package:uuid/uuid.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_message_bubble.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
-import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 
 class ChatHistoryScreen extends StatefulWidget {
   final int listenerId;
@@ -644,6 +644,12 @@ void _onScroll() {
 
   Future<void> _callListener({bool video = false}) async {
     if (_callingListener || _token == null) return;
+    if (ActiveCallManager.instance.hasActiveCall) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You are already on a call')),
+      );
+      return;
+    }
     setState(() => _callingListener = true);
     try {
       final result = await _repository.initiateCall(
@@ -652,19 +658,14 @@ void _onScroll() {
         callType: video ? 'video' : 'audio',
       );
       if (!mounted) return;
-      Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => CallScreen(
-            callId: result['call_id'],
-            otherPartyName: widget.listenerName,
-            otherPartyPhotoUrl: widget.listenerPhotoUrl,
-            startWithVideo: video,
-            listenerId: widget.listenerId,
-          ),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          opaque: true,
-          barrierColor: Colors.black,
+      ActiveCallManager.instance.start(
+        ActiveCallInfo(
+          role: ActiveCallRole.user,
+          callId: result['call_id'],
+          otherPartyName: widget.listenerName,
+          otherPartyPhotoUrl: widget.listenerPhotoUrl,
+          isVideo: video,
+          listenerId: widget.listenerId,
         ),
       );
     } catch (e) {

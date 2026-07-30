@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
-import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 
 String _fmtDuration(int seconds) {
   final m = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -120,6 +120,12 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
 
   Future<void> _callAgain() async {
     if (_callingAgain || _summary == null) return;
+    if (ActiveCallManager.instance.hasActiveCall) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You are already on a call')),
+      );
+      return;
+    }
     setState(() => _callingAgain = true);
     try {
       final token = await _localStorage.getToken();
@@ -130,20 +136,16 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
         callType: 'audio',
       );
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => CallScreen(
-            callId: result['call_id'],
-            otherPartyName: _summary!['listener_name'] ?? 'Listener',
-            otherPartyPhotoUrl: _summary!['listener_photo_url'],
-            listenerId: listenerId,
-          ),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          opaque: true,
-          barrierColor: Colors.black,
+      ActiveCallManager.instance.start(
+        ActiveCallInfo(
+          role: ActiveCallRole.user,
+          callId: result['call_id'],
+          otherPartyName: _summary!['listener_name'] ?? 'Listener',
+          otherPartyPhotoUrl: _summary!['listener_photo_url'],
+          listenerId: listenerId,
         ),
       );
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

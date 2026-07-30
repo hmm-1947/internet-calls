@@ -170,6 +170,20 @@ class UserRepository {
     return data;
   }
 
+  /// Polling fallback while ringing: returns the call status and, once the
+  /// listener has joined, the caller's LiveKit token and url.
+  Future<Map<String, dynamic>> getCallStatus(String token, int callId) async {
+    final response = await _apiClient.get(
+      ApiConstants.callStatus(callId),
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to load call status');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
   Future<void> startRecording(String token, int callId) async {
     final response = await _apiClient.post(
       ApiConstants.callRecordingStart(callId),

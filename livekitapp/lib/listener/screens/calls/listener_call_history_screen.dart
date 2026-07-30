@@ -103,6 +103,8 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   bool _loading = true;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
+  String _search = '';
+
 
   @override
   void initState() {
@@ -140,13 +142,24 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   }
 
   List<Map<String, dynamic>> get _filteredCalls {
+    var calls = _calls;
     if (_filter == 'missed') {
-      return _calls
-          .where((c) => c['status'] == 'rejected' || c['status'] == 'cancelled')
-          .toList();
+      calls = calls.where((c) => c['status'] == 'missed').toList();
+    } else if (_filter == 'rejected') {
+      calls = calls.where((c) => c['status'] == 'rejected').toList();
     }
-    return _calls;
+
+    if (_search.isEmpty) return calls;
+    return calls
+        .where(
+          (c) => (c['user_name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .contains(_search.toLowerCase()),
+        )
+        .toList();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -156,18 +169,33 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: bg,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: const Text(
-          'Calls',
-          style: TextStyle(color: pink, fontWeight: FontWeight.bold),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: Container(
+              height: 55,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A2032),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextField(
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search calls...',
+                  hintStyle: TextStyle(color: dimText),
+                  prefixIcon: Icon(Icons.search, color: dimText),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                ),
+                onChanged: (v) => setState(() => _search = v),
+              ),
+            ),
+          ),
+          Padding(
+
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
               children: [
                 _CallFilterChip(
@@ -187,105 +215,118 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                   },
                   activeColor: pink,
                 ),
+                const SizedBox(width: 8),
+                _CallFilterChip(
+                  label: 'Rejected',
+                  selected: _filter == 'rejected',
+                  onTap: () {
+                    setState(() => _filter = 'rejected');
+                  },
+                  activeColor: pink,
+                ),
+
               ],
             ),
           ),
-        ),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _filteredCalls.isEmpty
-            ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.7,
-                    child: const Center(
-                      child: Text(
-                        'No calls yet',
-                        style: TextStyle(color: dimText),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _filteredCalls.length,
-                itemBuilder: (context, index) {
-                  final call = _filteredCalls[index];
-                  final status = call['status'] as String;
-                  final callType = call['call_type'] as String;
-                  final photoUrl = ApiConstants.resolveMediaUrl(
-                    call['other_party_photo_url'],
-                  );
-                  return ListTile(
-                    leading: Stack(
-                      clipBehavior: Clip.none,
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredCalls.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: const Color(0xFF2A3145),
-                          backgroundImage: photoUrl.isNotEmpty
-                              ? NetworkImage(photoUrl)
-                              : null,
-                          child: photoUrl.isEmpty
-                              ? const Icon(Icons.person, color: Colors.white54)
-                              : null,
-                        ),
-                        Positioned(
-                          bottom: -2,
-                          right: -2,
-                          child: Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: bg,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              callType == 'video'
-                                  ? Icons.videocam
-                                  : Icons.call,
-                              size: 12,
-                              color: pink,
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.7,
+                          child: const Center(
+                            child: Text(
+                              'No calls yet',
+                              style: TextStyle(color: dimText),
                             ),
                           ),
                         ),
                       ],
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: _filteredCalls.length,
+                      itemBuilder: (context, index) {
+                        final call = _filteredCalls[index];
+                        final status = call['status'] as String;
+                        final callType = call['call_type'] as String;
+                        final photoUrl = ApiConstants.resolveMediaUrl(
+                          call['other_party_photo_url'],
+                        );
+                        return ListTile(
+                          leading: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              CircleAvatar(
+                                radius: 24,
+                                backgroundColor: const Color(0xFF2A3145),
+                                backgroundImage: photoUrl.isNotEmpty
+                                    ? NetworkImage(photoUrl)
+                                    : null,
+                                child: photoUrl.isEmpty
+                                    ? const Icon(Icons.person, color: Colors.white54)
+                                    : null,
+                              ),
+                              Positioned(
+                                bottom: -2,
+                                right: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: bg,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    callType == 'video'
+                                        ? Icons.videocam
+                                        : Icons.call,
+                                    size: 12,
+                                    color: pink,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          title: Text(
+                            call['user_name'],
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Row(
+                            children: [
+                              Icon(
+                                _statusIcon(status, callType),
+                                size: 14,
+                                color: _statusColor(status, pink),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                status == 'ended'
+                                    ? _fmtDuration(call['duration_seconds'])
+                                    : _statusLabel(status),
+                                style: const TextStyle(color: dimText),
+                              ),
+                            ],
+                          ),
+                          trailing: Text(
+                            _fmtDateTime(call['created_at']),
+                            style: const TextStyle(color: dimText, fontSize: 12),
+                          ),
+                        );
+                      },
                     ),
-                    title: Text(
-                      call['user_name'],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: Row(
-                      children: [
-                        Icon(
-                          _statusIcon(status, callType),
-                          size: 14,
-                          color: _statusColor(status, pink),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          status == 'ended'
-                              ? _fmtDuration(call['duration_seconds'])
-                              : _statusLabel(status),
-                          style: const TextStyle(color: dimText),
-                        ),
-                      ],
-                    ),
-                    trailing: Text(
-                      _fmtDateTime(call['created_at']),
-                      style: const TextStyle(color: dimText, fontSize: 12),
-                    ),
-                  );
-                },
-              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+

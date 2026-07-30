@@ -277,59 +277,33 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Container(
-              height: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: const BoxDecoration(
-                color: bg,
-                border: Border(
-                  bottom: BorderSide(color: Color(0x1AFFFFFF), width: 1),
-                ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: Container(
+              height: 55,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A2032),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Image.asset(
-                    'assets/images/banner.png',
-                    height: 32,
-                    fit: BoxFit.contain,
+              child: TextField(
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search chats...',
+                  hintStyle: TextStyle(color: dimText),
+                  prefixIcon: Icon(Icons.search, color: dimText),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: 14,
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0x1AFFFFFF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.monetization_on,
-                          color: Colors.amber,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$_profileCoins',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
+                onChanged: (v) => setState(() => _search = v),
               ),
             ),
+          ),
+
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _load,
@@ -337,36 +311,15 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                     ? const Center(child: CircularProgressIndicator())
                     : ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
                         children: [
-                          Container(
-                            height: 55,
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1A2032),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: TextField(
-                              style: const TextStyle(color: Colors.white),
-                              decoration: const InputDecoration(
-                                hintText: 'Search or start a new chat',
-                                hintStyle: TextStyle(color: dimText),
-                                prefixIcon: Icon(Icons.search, color: dimText),
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                              ),
-                              onChanged: (v) => setState(() => _search = v),
-                            ),
-                          ),
-                          const SizedBox(height: 32),
                           SizedBox(
                             height: 40,
                             child: ListView(
                               scrollDirection: Axis.horizontal,
                               padding: EdgeInsets.zero,
                               children: [
+
                                 _FilterChip(
                                   label: 'All',
                                   selected: _chatFilter == 'all',
@@ -597,7 +550,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
             ),
           ],
         ),
-      ),
+
     );
   }
 }

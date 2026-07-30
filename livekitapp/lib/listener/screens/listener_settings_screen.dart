@@ -5,7 +5,8 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
-import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
+import 'package:livekitapp/listener/screens/listener_edit_profile_screen.dart';
+import 'package:livekitapp/listener/screens/listener_reviews_screen.dart';
 import 'package:livekitapp/listener/screens/listener_wallet_screen.dart';
 
 import 'package:livekitapp/common/screens/change_password_screen.dart';
@@ -102,6 +103,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
   String _name = '';
+  String _phone = '';
   String? _photoUrl;
   bool _statusOnline = true;
 
@@ -117,6 +119,7 @@ Future<void> refresh() async {
       final data = await _repository.getMe(token!, forceRefresh: true);
       setState(() {
         _name = data['name'] ?? '';
+        _phone = data['phone']?.toString() ?? '';
         _photoUrl = data['photo_url'];
         if (data['is_online'] is bool) {
           _statusOnline = data['is_online'] as bool;
@@ -172,16 +175,53 @@ Future<void> refresh() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0D0D0D),
-
-        title: const Text('Settings',style: TextStyle(color: Color(0xFFE53950), fontWeight: FontWeight.bold)),
-      ),
+      backgroundColor: const Color(0xFF0B0F1A),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 100),
         children: [
           const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                AvatarImage(
+                  photoUrl: _photoUrl,
+                  radius: 32,
+                  iconSize: 32,
+                  backgroundColor: const Color(0xFF2A3145),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (_phone.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _phone,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           _SectionLabel('ACCOUNT'),
 
           _SettingsCard([
@@ -211,8 +251,8 @@ Future<void> refresh() async {
               title: 'Change Password',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ChangePasswordScreen(
+                  fadeRoute(
+                    ChangePasswordScreen(
                       onSubmit: (current, next) async {
                         final token = await _localStorage.getToken();
                         await _repository.changePassword(
@@ -225,6 +265,16 @@ Future<void> refresh() async {
                   ),
                 );
               },
+            ),
+                     const Divider(height: 1, color: Colors.white12),
+            _SettingsTile(
+              icon: Icons.reviews,
+              title: 'Reviews & Ratings',
+             onTap: () {
+                  Navigator.of(
+                    context,
+                  ).push(fadeRoute(const ListenerReviewsScreen()));
+                },
             ),
           ]),
 

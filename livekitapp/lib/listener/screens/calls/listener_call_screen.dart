@@ -5,12 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
-import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_notes_screen.dart';
 import 'package:volume_controller/volume_controller.dart';
@@ -61,9 +61,19 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
   @override
   void initState() {
     super.initState();
+    ActiveCallManager.instance.onHangUp = _hangUp;
+    ActiveCallManager.instance.updateStatus(_status);
     _connect();
     _listenForSignals();
     _listenForGifts();
+  }
+
+  void _showMessage(String message) {
+    final rootContext = CallkitService.instance.navigatorKey.currentContext;
+    if (rootContext == null) return;
+    ScaffoldMessenger.of(
+      rootContext,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _listenForGifts() {
@@ -73,9 +83,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
       final giftName = data['gift_name'] ?? 'Gift';
       final credited = data['credited_coins'] ?? 0;
       final fromName = data['from_user_name'] ?? widget.otherPartyName;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$fromName sent you a $giftName · +$credited coins')),
-      );
+      _showMessage('$fromName sent you a $giftName · +$credited coins');
     });
   }
 
@@ -90,9 +98,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
         _hangUp(notifyBackend: false);
       } else if (type == 'call_coin_exceeded') {
         _hangUp(notifyBackend: false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('User coins exceeded')));
+        _showMessage('User coins exceeded');
       }
     });
   }
@@ -141,6 +147,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
       await room.localParticipant?.setMicrophoneEnabled(true);
       await CallForegroundService.instance.start(
         title: 'Call with ${widget.otherPartyName}',
+        video: widget.isVideo,
       );
 
 
@@ -236,6 +243,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
             _remoteVideoTrack = existingRemoteVideoTrack;
           }
         });
+        ActiveCallManager.instance.updateStatus(_status);
         if (room.remoteParticipants.isNotEmpty) {
           _startDurationTimer();
         } else {
@@ -303,7 +311,9 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
 
   void _startDurationTimer() {
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _callDurationSeconds++);
+      if (!mounted) return;
+      setState(() => _callDurationSeconds++);
+      ActiveCallManager.instance.updateDuration(_callDurationSeconds);
     });
   }
 
@@ -336,16 +346,14 @@ _room?.disconnect();
         }
       } catch (_) {}
     }
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const ListenerMainScreen()),
-        (route) => false,
-      );
-    }
+    ActiveCallManager.instance.clear();
   }
 
   @override
   void dispose() {
+    if (ActiveCallManager.instance.onHangUp == _hangUp) {
+      ActiveCallManager.instance.onHangUp = null;
+    }
     try {
       const MethodChannel(
         'livekitapp/lockscreen',
@@ -363,14 +371,11 @@ _fcmSubscription?.cancel();
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: widget.isVideo && _status.isEmpty
-            ? _buildConnectedVideo()
-            : _buildConnectedAudio(),
-      ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: widget.isVideo && _status.isEmpty
+          ? _buildConnectedVideo()
+          : _buildConnectedAudio(),
     );
   }
 
@@ -380,12 +385,18 @@ _fcmSubscription?.cancel();
       child: Column(
         children: [
           const SizedBox(height: 48),
-          Text(
-            widget.otherPartyName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              widget.otherPartyName,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -458,9 +469,9 @@ _fcmSubscription?.cancel();
                   },
                 ),
                 CallActionButton(
-                  icon: Icons.more_horiz,
-                  label: 'More',
-                  onTap: () {},
+                  icon: Icons.close_fullscreen,
+                  label: 'Minimize',
+                  onTap: ActiveCallManager.instance.minimize,
                 ),
               ],
             ),
@@ -508,26 +519,45 @@ _fcmSubscription?.cancel();
         ),
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.otherPartyName,
-                  style: const TextStyle(
+                IconButton(
+                  onPressed: ActiveCallManager.instance.minimize,
+                  icon: const Icon(
+                    Icons.close_fullscreen,
                     color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
+                  ),
+                  tooltip: 'Minimize call',
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.otherPartyName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatDuration(_callDurationSeconds),
+                        style: const TextStyle(
+                          color: Color(0xFFE5BDBE),
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatDuration(_callDurationSeconds),
-                  style: const TextStyle(
-                    color: Color(0xFFE5BDBE),
-                    fontSize: 15,
-                  ),
-                ),
+                const SizedBox(width: 48),
               ],
             ),
           ),

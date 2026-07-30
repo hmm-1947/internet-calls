@@ -7,7 +7,7 @@ import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
-import 'package:livekitapp/listener/screens/listener_profile_screen.dart';
+import 'package:livekitapp/listener/screens/listener_edit_profile_screen.dart';
 import 'package:livekitapp/listener/screens/listener_reviews_screen.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.dart';
@@ -158,23 +158,6 @@ Future<void> _loadProfile() async {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: bg,
-      endDrawer: _buildProfileDrawer(),
-      appBar: AppBar(
-        backgroundColor: bg,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Image.asset(
-          'assets/images/banner.png',
-          height: 32,
-          fit: BoxFit.contain,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         color: pink,
         backgroundColor: bg,
@@ -220,128 +203,6 @@ Future<void> _loadProfile() async {
                     .toList(),
               ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileDrawer() {
-    return Drawer(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF2A0A14), Color(0xFF0B0B0B)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                width: 96,
-                height: 96,
-                alignment: Alignment.center,
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: pink, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: pink.withOpacity(0.5),
-                      blurRadius: 16,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-          child: AvatarImage(photoUrl: _profilePhotoUrl, radius: 44, iconSize: 44),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _profileName.isEmpty ? 'Listener' : _profileName,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 28),
-              ListTile(
-                leading: const Icon(
-                  Icons.person_outline,
-                  color: Colors.white70,
-                ),
-                title: const Text(
-                  'Profile',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(
-                    context,
-                  ).push(fadeRoute(const ListenerProfileScreen()));
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.settings_outlined,
-                  color: Colors.white70,
-                ),
-                title: const Text(
-                  'Settings',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () => Navigator.of(context).pop(),
-              ),
-              ListTile(
-                leading: const Icon(Icons.star_border, color: Colors.white70),
-                title: const Text(
-                  'Reviews & Ratings',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(
-                    context,
-                  ).push(fadeRoute(const ListenerReviewsScreen()));
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.white70),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await _localStorage.clear();
-                  if (!mounted) return;
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const ListenerLoginScreen(),
-                    ),
-                  );
-                },
-              ),
-              const Spacer(),
-            ],
-          ),
         ),
       ),
     );

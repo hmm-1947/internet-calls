@@ -6,9 +6,9 @@ class CallForegroundService {
 
   static const _channel = MethodChannel('livekitapp/callforeground');
 
-  Future<void> start({String title = 'Ongoing call'}) async {
+  Future<void> start({String title = 'Ongoing call', bool video = false}) async {
     try {
-      await _channel.invokeMethod('start', {'title': title});
+      await _channel.invokeMethod('start', {'title': title, 'video': video});
     } catch (_) {}
   }
 

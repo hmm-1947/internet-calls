@@ -347,6 +347,27 @@ async def finalize_abandoned_call(
     return True
 
 
+@router.get("/{call_id}/status")
+def call_status(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Caller-side polling fallback for the `call_accepted` push.
+
+    The caller's LiveKit token is otherwise only delivered through a single
+    data-only FCM message, so a dropped or throttled push leaves the caller
+    stuck on the ringing screen. Returns the same token, but only to the
+    authenticated caller of this call, and only once the listener has joined
+    the room (`connected_at`), which is the exact moment the push is sent.
+    """
+    call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    response = {"status": call.status, "call_type": call.call_type}
+    if call.status == "accepted" and call.connected_at:
+        response["room_name"] = call.room_name
+        response["token"] = generate_token(call.room_name, f"user-{current_user.id}", current_user.name)
+        response["livekit_url"] = settings.livekit_url
+    return response
+
+
 @router.get("/{call_id}/coin-status")
 def coin_status(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()

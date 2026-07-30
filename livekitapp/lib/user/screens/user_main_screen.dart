@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/faded_indexed_stack.dart';
+import 'package:livekitapp/common/widgets/home_header.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/main_user.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
 import 'package:livekitapp/user/screens/user_home_screen.dart';
@@ -28,6 +30,8 @@ class _UserMainScreenState extends State<UserMainScreen> {
     UserProfileScreen(key: _profileKey),
   ];
 
+  static const _titles = ['', 'Chats', 'Calls', 'Settings'];
+
   void _onDestinationSelected(int i) {
     setState(() => _index = i);
     if (i == 0) {
@@ -46,7 +50,27 @@ class _UserMainScreenState extends State<UserMainScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F1A2E),
       extendBody: true,
-      body: FadedIndexedStack(index: _index, children: _screens),
+      body: Column(
+        children: [
+          Container(
+            color: Colors.black,
+            child: SafeArea(
+              bottom: false,
+              child: ValueListenableBuilder<int>(
+                valueListenable: userCoinsNotifier,
+                builder: (context, coins, _) => HomeHeader(
+                  coins: coins,
+                  title: _titles[_index],
+                  isHome: _index == 0,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: FadedIndexedStack(index: _index, children: _screens),
+          ),
+        ],
+      ),
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,
         onDestinationSelected: _onDestinationSelected,
@@ -81,7 +105,7 @@ class _UserMainScreenState extends State<UserMainScreen> {
             ),
           ),
           const Icon(Icons.call_outlined),
-          const Icon(Icons.person_outline),
+          const Icon(Icons.settings_outlined),
         ],
       ),
     );

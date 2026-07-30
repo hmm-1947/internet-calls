@@ -4,13 +4,17 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
+import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
@@ -115,6 +119,7 @@ void main() async {
 
   await dotenv.load(fileName: ".env");
   FlavorConfig.set(AppFlavor.user);
+  ActiveCallManager.instance.init();
   await Firebase.initializeApp();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
@@ -198,29 +203,61 @@ class _UserAppState extends State<UserApp> {
     super.dispose();
   }
 
+  /// Status bar / navigation bar styling used across the whole app.
+  /// Light icons so the clock, wifi and battery stay readable on the dark
+  /// background painted behind the status bar.
+  static const _overlayStyle = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.black,
+    systemNavigationBarIconBrightness: Brightness.light,
+  );
+
   @override
   Widget build(BuildContext context) {
-    return AppLifecycleReporter(
-      child: MaterialApp(
-        navigatorKey: userNavigatorKey,
-        title: 'Calling App',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorSchemeSeed: Colors.blue,
-          useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFF0B0B0B),
-        ),
-        home: FutureBuilder<String?>(
-          future: LocalStorage().getToken(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const SplashScreen();
-            }
-            if (snapshot.data != null) {
-              return _UserSessionGate(token: snapshot.data!);
-            }
-            return const UserLoginScreen();
-          },
+    // AnnotatedRegion keeps this style applied for every route. Without it, any
+    // screen with an AppBar overrides the status bar icon colour and can leave
+    // dark icons on the dark status bar (invisible).
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _overlayStyle,
+      child: AppLifecycleReporter(
+        child: MaterialApp(
+          navigatorKey: userNavigatorKey,
+          title: 'Calling App',
+          debugShowCheckedModeBanner: false,
+          builder: (context, child) => ActiveCallHost(
+            callScreenBuilder: (callContext, info) => CallScreen(
+              key: ValueKey<int>(info.callId),
+              callId: info.callId,
+              otherPartyName: info.otherPartyName,
+              otherPartyPhotoUrl: info.otherPartyPhotoUrl,
+              startWithVideo: info.isVideo,
+              busy: info.busy,
+              listenerId: info.listenerId,
+            ),
+            child: child ?? const SizedBox.shrink(),
+          ),
+          theme: ThemeData(
+            colorSchemeSeed: Colors.blue,
+            useMaterial3: true,
+            scaffoldBackgroundColor: const Color(0xFF0B0B0B),
+            appBarTheme: const AppBarTheme(
+              systemOverlayStyle: _overlayStyle,
+            ),
+          ),
+          home: FutureBuilder<String?>(
+            future: LocalStorage().getToken(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SplashScreen();
+              }
+              if (snapshot.data != null) {
+                return _UserSessionGate(token: snapshot.data!);
+              }
+              return const UserLoginScreen();
+            },
+          ),
         ),
       ),
     );
@@ -301,6 +338,7 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
         state == AppLifecycleState.detached) {
       _offlineTimer?.cancel();
       _offlineTimer = Timer(const Duration(seconds: 15), () {
+        if (ActiveCallManager.instance.hasActiveCall) return;
         _updateStatus(false);
         ChatSocketService().disconnect();
       });
