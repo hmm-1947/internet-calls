@@ -14,14 +14,23 @@ from app.models.models import (
 
 router = APIRouter(prefix="/weekly-challenge", tags=["weekly-challenge"])
 
+# This app only follows Indian time for the weekly challenge: the week
+# boundary (and the Saturday 11:59pm cutoff) is always computed in IST,
+# regardless of what timezone the server itself runs in.
+IST = timezone(timedelta(hours=5, minutes=30))
+
 
 def _current_week_start(now: datetime | None = None) -> datetime:
-    """Sunday 00:00 UTC of the current week. The week runs Sunday through
-    Saturday, so everything resets right after Saturday 11:59pm."""
+    """Sunday 00:00 IST of the current week, returned as a UTC instant so it
+    stays comparable with the rest of the (UTC-stored) timestamps. The week
+    runs Sunday through Saturday IST, so everything resets right after
+    Saturday 11:59pm IST."""
     now = now or datetime.now(timezone.utc)
-    days_since_sunday = (now.weekday() + 1) % 7  # Mon=0..Sun=6 -> Sun=0..Sat=6
-    sunday = now - timedelta(days=days_since_sunday)
-    return sunday.replace(hour=0, minute=0, second=0, microsecond=0)
+    now_ist = now.astimezone(IST)
+    days_since_sunday = (now_ist.weekday() + 1) % 7  # Mon=0..Sun=6 -> Sun=0..Sat=6
+    sunday_ist = now_ist - timedelta(days=days_since_sunday)
+    sunday_ist = sunday_ist.replace(hour=0, minute=0, second=0, microsecond=0)
+    return sunday_ist.astimezone(timezone.utc)
 
 
 def _get_settings(db: Session) -> WeeklyChallengeSettings:
@@ -35,10 +44,12 @@ def _get_settings(db: Session) -> WeeklyChallengeSettings:
 
 
 def _challenge_expiry(activated_at: datetime) -> datetime:
-    """Saturday 23:59:59.999999 of the week the challenge was activated in."""
-    week_start = _current_week_start(activated_at)
-    saturday = week_start + timedelta(days=6)
-    return saturday.replace(hour=23, minute=59, second=59, microsecond=999999)
+    """Saturday 23:59:59.999999 IST of the week the challenge was activated
+    in, returned as a UTC instant."""
+    week_start = _current_week_start(activated_at)  # UTC instant of Sunday 00:00 IST
+    saturday_ist = week_start.astimezone(IST) + timedelta(days=6)
+    saturday_ist = saturday_ist.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return saturday_ist.astimezone(timezone.utc)
 
 
 def _is_challenge_active(db: Session, settings: WeeklyChallengeSettings) -> bool:
@@ -191,6 +202,38 @@ def update_goals(
     settings.activated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(settings)
+
+    # Re-sync any progress rows already recorded for the current week so the
+    # goals/ticks shown to listeners reflect the *new* targets, not whatever
+    # was snapshotted when their row was first created. Without this, a
+    # listener who already crossed the old (smaller) goals keeps showing all
+    # 3 ticks as completed even though they haven't reached the new targets,
+    # while the progress bar (which reads live talk_seconds against the new
+    # max goal) correctly shows them short of it.
+    week_start = _current_week_start()
+    current_week_progress = (
+        db.query(ListenerWeeklyChallengeProgress)
+        .filter(ListenerWeeklyChallengeProgress.week_start == week_start)
+        .all()
+    )
+    resync_now = datetime.now(timezone.utc)
+    for progress in current_week_progress:
+        progress.goal1_minutes = goal1_minutes
+        progress.goal2_minutes = goal2_minutes
+        progress.goal3_minutes = goal3_minutes
+        for new_minutes, attr in (
+            (goal1_minutes, "goal1_completed_at"),
+            (goal2_minutes, "goal2_completed_at"),
+            (goal3_minutes, "goal3_completed_at"),
+        ):
+            reached = progress.talk_seconds >= new_minutes * 60
+            already_completed = getattr(progress, attr) is not None
+            if reached and not already_completed:
+                setattr(progress, attr, resync_now)
+            elif not reached:
+                setattr(progress, attr, None)
+    db.commit()
+
     return {
         "goal1_minutes": settings.goal1_minutes,
         "goal2_minutes": settings.goal2_minutes,
