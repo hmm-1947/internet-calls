@@ -21,10 +21,10 @@ class RingtoneService : Service() {
         const val ACTION_START = "com.example.livekitapp.action.RINGTONE_START"
         const val ACTION_START_APP = "com.example.livekitapp.action.RINGTONE_START_APP"
         const val ACTION_STOP = "com.example.livekitapp.action.RINGTONE_STOP"
-        private var explicitlyStopped: Boolean = false
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var explicitlyStopped: Boolean = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {

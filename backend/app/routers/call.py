@@ -86,25 +86,23 @@ async def run_call_billing(call_id: int):
         db.close()
 
 async def _end_call_insufficient_coins(db: Session, call_id: int):
-    claimed = db.query(Call).filter(Call.id == call_id, Call.status != "ended").update(
-        {"status": "ended"}, synchronize_session=False
-    )
-    db.commit()
-    if claimed == 0:
-        return
     call = db.query(Call).filter(Call.id == call_id).first()
     if not call:
         return
-    if call.connected_at:
-        call.duration_seconds = _compute_call_duration(call)
-        db.commit()
+    listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
+    # Delegate to finalize_abandoned_call so this path gets the exact same
+    # billing reconciliation, weekly-challenge talktime credit, and egress
+    # stop as every other way a call can end. Skip its generic "call ended"
+    # push so we can send the more specific "coin exceeded" one below instead.
+    claimed = await finalize_abandoned_call(db, call, notify_user=False, notify_listener=False)
+    if not claimed:
+        return
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     if user and user.fcm_token:
         try:
             send_call_coin_exceeded(user.fcm_token, call_id)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of coin exceeded: {e}")
-    listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     if listener and listener.fcm_token:
         try:
             send_call_coin_exceeded(listener.fcm_token, call_id)

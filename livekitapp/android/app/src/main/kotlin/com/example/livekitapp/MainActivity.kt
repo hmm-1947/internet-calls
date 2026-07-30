@@ -1,6 +1,7 @@
 package com.example.livekitapp
 
 import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -34,6 +35,28 @@ class MainActivity : FlutterActivity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
         super.onCreate(savedInstanceState)
+        resetStaleIncomingCallChannel()
+    }
+
+    // Notification channels are immutable once created on-device — if the
+    // "Incoming Call" channel was ever created before ringtonePath was set
+    // to the silent asset, Android keeps playing whatever sound (often the
+    // phone's default ringtone) it was originally created with, no matter
+    // what CallKitParams says now. Deleting it here forces flutter_callkit_incoming
+    // to recreate it fresh — with the current (silent) config — the next
+    // time an incoming call notification is shown, so only our custom
+    // RingtoneService audio plays instead of two overlapping ringtones.
+    private fun resetStaleIncomingCallChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notificationChannels
+                    .filter { it.name == "Incoming Call" }
+                    .forEach { manager.deleteNotificationChannel(it.id) }
+            } catch (e: Exception) {
+                android.util.Log.d("Callkit", "resetStaleIncomingCallChannel threw: $e")
+            }
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
