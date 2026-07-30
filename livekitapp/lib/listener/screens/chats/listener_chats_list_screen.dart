@@ -5,6 +5,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
@@ -20,8 +21,8 @@ class ListenerChatsListScreen extends StatefulWidget {
 class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
-  List<Map<String, dynamic>> _threads = [];
-  bool _loading = true;
+  List<Map<String, dynamic>> _threads = ListenerDataCache().cachedThreads ?? [];
+  bool _loading = ListenerDataCache().cachedThreads == null;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
   String _chatFilter = 'all';
@@ -37,10 +38,14 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
 
   Future<void> _init() async {
     _token = await _localStorage.getToken();
-    await _load();
     if (_token != null) {
       ChatSocketService().connect(_token!, 'listener');
       _socketSub = ChatSocketService().stream.listen(_onSocketEvent);
+    }
+    if (_threads.isNotEmpty) {
+      _refreshSilently();
+    } else {
+      await _load();
     }
   }
 
@@ -87,7 +92,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
       final token = await _localStorage.getToken();
       final threads = await _repository.getChatThreads(
         token!,
-        forceRefresh: true,
+        forceRefresh: !isFirstLoad,
       );
       if (dataChanged(_threads, threads)) {
         setState(() {
@@ -98,7 +103,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
         setState(() => _loading = false);
       }
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     } finally {
       _refreshInFlight = false;
     }

@@ -104,7 +104,6 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   String _name = '';
   String? _photoUrl;
   bool _statusOnline = true;
-  bool _notificationsOn = true;
 
   @override
   void initState() {
@@ -242,15 +241,6 @@ Future<void> refresh() async {
               ),
             ),
             const Divider(height: 1, color: Colors.white12),
-            _SettingsTile(
-              icon: Icons.notifications_none,
-              title: 'Notifications',
-              trailing: Switch(
-                value: _notificationsOn,
-                activeColor: const Color(0xFFE53950),
-                onChanged: (v) => setState(() => _notificationsOn = v),
-              ),
-            ),
             const Divider(height: 1, color: Colors.white12),
             _SettingsTile(
               icon: Icons.shield_outlined,

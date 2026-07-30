@@ -467,7 +467,7 @@ ChatHistoryScreen(
                 onRefresh: () => _load(forceRefresh: true),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(5, 24, 5, 32),
+                  padding: EdgeInsets.fromLTRB(5, 24, 5, 32 + MediaQuery.of(context).padding.bottom + 90),
                   children: [
                     _buildDummyOffersSection(),
                     const SizedBox(height: 32),

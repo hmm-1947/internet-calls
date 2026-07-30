@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
@@ -19,6 +20,16 @@ class AvatarImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (photoUrl != null && photoUrl!.isNotEmpty && !photoUrl!.startsWith('http')) {
+      final file = File(photoUrl!);
+      if (file.existsSync()) {
+        return CircleAvatar(
+          radius: radius,
+          backgroundColor: backgroundColor,
+          backgroundImage: FileImage(file),
+        );
+      }
+    }
     final resolved = ApiConstants.resolveMediaUrl(photoUrl);
     if (resolved.isEmpty) {
       return CircleAvatar(

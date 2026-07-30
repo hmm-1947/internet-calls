@@ -162,7 +162,6 @@ int _coins = 0;
   String _phone = '';
   String? _photoUrl;
   bool _loading = true;
-  bool _notificationsOn = true;
   bool _videoCallEnabled = true;
   bool _videoCallDisabledByAdmin = false;
   bool _savingVideoCallSetting = false;
@@ -303,7 +302,7 @@ Future<void> refresh() async {
               )
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).padding.bottom + 90),
                 children: [
                   Center(
                     child: Container(
@@ -388,15 +387,7 @@ Future<void> refresh() async {
                   ]),
                   _SectionLabel('PREFERENCES'),
                   _SettingsCard([
-                    _SettingsTile(
-                      icon: Icons.notifications_none,
-                      title: 'Notifications',
-                      trailing: Switch(
-                        value: _notificationsOn,
-                        activeColor: const Color(0xFFE53950),
-                        onChanged: (v) => setState(() => _notificationsOn = v),
-                      ),
-                    ),
+          
                     const Divider(height: 1, color: Colors.white12),
                     _SettingsTile(
                       icon: Icons.videocam_outlined,

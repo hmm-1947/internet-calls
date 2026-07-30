@@ -6,6 +6,7 @@ import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicat
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/widgets/gift_sheet.dart';
 import 'package:uuid/uuid.dart';
@@ -30,6 +31,26 @@ class ChatHistoryScreen extends StatefulWidget {
   State<ChatHistoryScreen> createState() => _ChatHistoryScreenState();
 }
 
+bool _cachedIsOnline(int listenerId) {
+  final threads = UserDataCache().cachedThreads;
+  if (threads == null) return false;
+  final t = threads.firstWhere(
+    (t) => t['listener_id'] == listenerId,
+    orElse: () => {},
+  );
+  return t['is_online'] == true;
+}
+
+bool _cachedIsFavorite(int listenerId) {
+  final threads = UserDataCache().cachedThreads;
+  if (threads == null) return false;
+  final t = threads.firstWhere(
+    (t) => t['listener_id'] == listenerId,
+    orElse: () => {},
+  );
+  return t['is_pinned'] ?? false;
+}
+
 class _ChatHistoryScreenState extends State<ChatHistoryScreen> with WidgetsBindingObserver {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
@@ -47,9 +68,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> with WidgetsBindi
   bool _listenerTyping = false;
   bool _isListenerOnline = false;
   bool _isFavorite = false;
-  int _profileCoins = 0;
-  int _chatMessageCoinCost = 0;
-  bool _coinsLoaded = false;
+  int _profileCoins = UserDataCache().cachedMe?['coins'] ?? 0;
+  int _chatMessageCoinCost = UserDataCache().cachedMe?['chat_message_coin_cost'] ?? 0;
+  bool _coinsLoaded = UserDataCache().cachedMe != null;
   bool _callingListener = false;
   bool _videoCallEnabled = true;
   bool _videoCallDisabledByAdmin = false;
@@ -58,20 +79,23 @@ Timer? _typingStopTimer;
   bool _isNearBottom = true;
   bool _showScrollToBottom = false;
   double _lastBottomInset = 0;
+  Timer? _scrollToBottomTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _isListenerOnline = _cachedIsOnline(widget.listenerId);
+    _isFavorite = _cachedIsFavorite(widget.listenerId);
     _init();
   }
 
   @override
   void didChangeMetrics() {
     final bottomInset = WidgetsBinding.instance.platformDispatcher.views.first.viewInsets.bottom;
-    final keyboardOpened = bottomInset > _lastBottomInset;
+    final delta = bottomInset - _lastBottomInset;
     _lastBottomInset = bottomInset;
-    if (keyboardOpened && _isNearBottom) {
+    if (delta > 50 && _isNearBottom) {
       _scrollToBottom();
     }
   }
@@ -88,6 +112,9 @@ Timer? _typingStopTimer;
     _loadFavoriteStatus();
     _loadCoins();
     _loadOnlineStatus();
+    if (_token != null) {
+      _repository.markMessagesRead(_token!, widget.listenerId);
+    }
     ChatSocketService().connect(_token!, 'user');
     _socketSub = ChatSocketService().stream.listen(_onSocketMessage);
     _controller.addListener(_onTyping);
@@ -112,15 +139,25 @@ void _onScroll() {
 
   Future<void> _loadCoins() async {
     if (_token == null) return;
-    final me = await _repository.getMe(_token!);
+    final me = await _repository.getMe(_token!, forceRefresh: true);
     if (mounted) {
-      setState(() {
-        _profileCoins = me['coins'] ?? 0;
-        _chatMessageCoinCost = me['chat_message_coin_cost'] ?? 0;
-        _coinsLoaded = true;
-        _videoCallEnabled = me['video_call_enabled'] ?? true;
-        _videoCallDisabledByAdmin = me['video_call_disabled_by_admin'] ?? false;
-      });
+      final newCoins = me['coins'] ?? 0;
+      final newCost = me['chat_message_coin_cost'] ?? 0;
+      final newVideoCallEnabled = me['video_call_enabled'] ?? true;
+      final newVideoCallDisabledByAdmin = me['video_call_disabled_by_admin'] ?? false;
+      if (newCoins != _profileCoins ||
+          newCost != _chatMessageCoinCost ||
+          !_coinsLoaded ||
+          newVideoCallEnabled != _videoCallEnabled ||
+          newVideoCallDisabledByAdmin != _videoCallDisabledByAdmin) {
+        setState(() {
+          _profileCoins = newCoins;
+          _chatMessageCoinCost = newCost;
+          _coinsLoaded = true;
+          _videoCallEnabled = newVideoCallEnabled;
+          _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
+        });
+      }
     }
   }
 
@@ -150,13 +187,14 @@ void _onScroll() {
 
   Future<void> _loadFavoriteStatus() async {
     if (_token == null) return;
-    final threads = await _repository.getChatThreads(_token!);
+    final threads = await _repository.getChatThreads(_token!, forceRefresh: true);
     final thread = threads.firstWhere(
       (t) => t['listener_id'] == widget.listenerId,
       orElse: () => {},
     );
-    if (mounted) {
-      setState(() => _isFavorite = thread['is_pinned'] ?? false);
+    final newFavorite = thread['is_pinned'] ?? false;
+    if (mounted && newFavorite != _isFavorite) {
+      setState(() => _isFavorite = newFavorite);
     }
   }
 
@@ -167,8 +205,9 @@ void _onScroll() {
         _token!,
         widget.listenerId,
       );
-      if (mounted) {
-        setState(() => _isListenerOnline = data['is_online'] == true);
+      final newOnline = data['is_online'] == true;
+      if (mounted && newOnline != _isListenerOnline) {
+        setState(() => _isListenerOnline = newOnline);
       }
     } catch (_) {}
   }
@@ -319,6 +358,25 @@ void _onScroll() {
   }
 
   void _scrollToBottom() {
+    _scrollToBottomTimer?.cancel();
+    _scrollToBottomTimer = Timer(const Duration(milliseconds: 80), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.position.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (_scrollController.hasClients && _isNearBottom) {
+          _scrollController.position.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
+    });
+  }
+
+  void _jumpToBottomNow() {
+    _scrollToBottomTimer?.cancel();
+    if (!_scrollController.hasClients) return;
+    _scrollController.position.hold(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -331,14 +389,11 @@ void _onScroll() {
 
   Future<void> _load() async {
     if (_token == null) return;
+    final isInitialLoad = _messages.isEmpty;
     final cached = await _chatStorage.getMessages(widget.listenerId);
     if (cached.isNotEmpty && mounted) {
       setState(() => _messages = cached.map((m) => m.toJson()).toList());
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
-      });
+      _scrollToBottom();
     }
     try {
       final messages = await _repository.getChatMessages(
@@ -351,15 +406,20 @@ void _onScroll() {
             .map((m) => LocalChatMessage.fromJson(m, widget.listenerId))
             .toList(),
       );
-      if (mounted) {
+      final unchanged = _messages.length == messages.length &&
+          _messages.isNotEmpty &&
+          _messages.last['id'] == messages.last['id'] &&
+          _messages.last['status'] == messages.last['status'];
+      if (mounted && !unchanged) {
+        final wasAtBottom = isInitialLoad ||
+            !_scrollController.hasClients ||
+            _scrollController.position.maxScrollExtent -
+                    _scrollController.position.pixels <
+                150;
         setState(() => _messages = messages);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.jumpTo(
-              _scrollController.position.maxScrollExtent,
-            );
-          }
-        });
+        if (wasAtBottom) {
+          _scrollToBottom();
+        }
       }
       await _ackDelivered(messages);
     } catch (_) {}
@@ -652,6 +712,7 @@ void _onScroll() {
     _socketSub?.cancel();
     _typingStopTimer?.cancel();
     _typingSendTimer?.cancel();
+    _scrollToBottomTimer?.cancel();
     _controller.removeListener(_onTyping);
     _scrollController.removeListener(_onScroll);
     _controller.dispose();
@@ -1030,7 +1091,7 @@ body: Stack(
                 mini: true,
                 backgroundColor: const Color(0xFF1F2430),
                 onPressed: () {
-                  _scrollToBottom();
+                  _jumpToBottomNow();
                   setState(() {
                     _isNearBottom = true;
                     _showScrollToBottom = false;

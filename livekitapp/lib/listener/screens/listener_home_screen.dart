@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -113,6 +115,9 @@ Future<void> _loadProfile() async {
           _loadingUsers = false;
         });
       }
+      AvatarCache.instance.precacheAll(
+        users.map((u) => ApiConstants.resolveMediaUrl(u['photo_url'] as String?)),
+      );
     } catch (e) {
       if (mounted) setState(() => _loadingUsers = false);
     }

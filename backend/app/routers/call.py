@@ -298,11 +298,12 @@ async def finalize_abandoned_call(
     notify_user: bool = True,
     notify_listener: bool = True,
 ):
+    already_ended = call.status == "ended"
     claimed = db.query(Call).filter(Call.id == call.id, Call.status != "ended").update(
         {"status": "ended"}, synchronize_session=False
     )
     db.commit()
-    if claimed == 0:
+    if claimed == 0 and not (already_ended and override_seconds is not None):
         return False
     db.refresh(call)
 
@@ -310,6 +311,9 @@ async def finalize_abandoned_call(
         duration = _compute_call_duration(call, override_seconds=override_seconds)
         await _finalize_call_billing(db, call, duration)
     db.commit()
+
+    if claimed == 0:
+        return False
 
     if stop_egress:
         recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()

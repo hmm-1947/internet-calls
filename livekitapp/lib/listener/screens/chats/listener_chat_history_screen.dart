@@ -50,6 +50,8 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
   bool _isNearBottom = true;
   bool _showScrollToBottom = false;
   double _lastBottomInset = 0;
+  Timer? _scrollToBottomTimer;
+  final Set<int> _pendingReadIds = {};
 
   @override
   void initState() {
@@ -61,9 +63,9 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
   @override
   void didChangeMetrics() {
     final bottomInset = WidgetsBinding.instance.platformDispatcher.views.first.viewInsets.bottom;
-    final keyboardOpened = bottomInset > _lastBottomInset;
+    final delta = bottomInset - _lastBottomInset;
     _lastBottomInset = bottomInset;
-    if (keyboardOpened && _isNearBottom) {
+    if (delta > 50 && _isNearBottom) {
       _scrollToBottom();
     }
   }
@@ -72,6 +74,9 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
     _token = await _localStorage.getToken();
     await _load();
     _loadFavoriteStatus();
+    if (_token != null) {
+      _repository.markMessagesRead(_token!, widget.userId);
+    }
     ChatSocketService().connect(_token!, 'listener');
     _socketSub = ChatSocketService().stream.listen(_onSocketMessage);
     _controller.addListener(_onTyping);
@@ -101,10 +106,12 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
       (t) => t['user_id'] == widget.userId,
       orElse: () => {},
     );
-    if (mounted) {
+    final newFavorite = thread['is_pinned'] ?? false;
+    final newOnline = thread['is_online'] == true;
+    if (mounted && (newFavorite != _isFavorite || newOnline != _isUserOnline)) {
       setState(() {
-        _isFavorite = thread['is_pinned'] ?? false;
-        _isUserOnline = thread['is_online'] == true;
+        _isFavorite = newFavorite;
+        _isUserOnline = newOnline;
       });
     }
   }
@@ -191,8 +198,8 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
       });
       _chatStorage.updateStatusByServerIds(ids, data['status']);
     } else if (type == 'read_receipt' && data['user_id'] == widget.userId) {
+      final ids = List<int>.from(data['message_ids'] ?? []);
       setState(() {
-        final ids = List<int>.from(data['message_ids'] ?? []);
         for (final m in _messages) {
           if (ids.contains(m['id'])) {
             m['status'] = 'read';
@@ -200,9 +207,10 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
           }
         }
       });
+      _pendingReadIds.addAll(ids);
       _chatStorage.markReadUpTo(
         widget.userId,
-        List<int>.from(data['message_ids'] ?? []),
+        ids,
       );
     } else if (type == 'message_edited') {
       setState(() {
@@ -221,10 +229,18 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
   }
 
   void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
+    _scrollToBottomTimer?.cancel();
+    _scrollToBottomTimer = Timer(const Duration(milliseconds: 80), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (_scrollController.hasClients && _isNearBottom) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
     });
   }
 
@@ -233,14 +249,11 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
 
   Future<void> _load() async {
     if (_token == null) return;
+    final isInitialLoad = _messages.isEmpty;
     final cached = await _chatStorage.getMessages(widget.userId);
     if (cached.isNotEmpty && mounted) {
       setState(() => _messages = cached.map((m) => m.toJson()).toList());
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
-      });
+      _scrollToBottom();
     }
     try {
       final messages = await _repository.getChatMessages(
@@ -251,15 +264,20 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
         widget.userId,
         messages.map((m) => LocalChatMessage.fromJson(m, widget.userId)).toList(),
       );
-      if (mounted) {
+      final unchanged = _messages.length == messages.length &&
+          _messages.isNotEmpty &&
+          _messages.last['id'] == messages.last['id'] &&
+          _messages.last['status'] == messages.last['status'];
+      if (mounted && !unchanged) {
+        final wasAtBottom = isInitialLoad ||
+            !_scrollController.hasClients ||
+            _scrollController.position.maxScrollExtent -
+                    _scrollController.position.pixels <
+                150;
         setState(() => _messages = messages);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.jumpTo(
-              _scrollController.position.maxScrollExtent,
-            );
-          }
-        });
+        if (wasAtBottom) {
+          _scrollToBottom();
+        }
       }
       await _ackDelivered(messages);
     } catch (_) {}
@@ -431,7 +449,14 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
       if (mounted) {
         setState(() {
           final idx = _messages.indexWhere((m) => m['client_id'] == clientId);
-          if (idx != -1) _messages[idx] = sent;
+          if (idx != -1) {
+            final merged = Map<String, dynamic>.from(sent);
+            if (merged['id'] != null && _pendingReadIds.contains(merged['id'])) {
+              merged['status'] = 'read';
+              merged['is_read'] = true;
+            }
+            _messages[idx] = merged;
+          }
         });
       }
       await _chatStorage.upsertMessage(
@@ -490,6 +515,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
     WidgetsBinding.instance.removeObserver(this);
     _socketSub?.cancel();
     _typingSendTimer?.cancel();
+    _scrollToBottomTimer?.cancel();
     _controller.removeListener(_onTyping);
     _scrollController.removeListener(_onScroll);
     _controller.dispose();

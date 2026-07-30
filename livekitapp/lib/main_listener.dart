@@ -200,6 +200,7 @@ class _ListenerAppState extends State<ListenerApp> {
   void initState() {
     super.initState();
     CallkitService.instance.init();
+    CallkitService.instance.warmup();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallkitService.instance.flushPendingNav();
     });

@@ -5,6 +5,7 @@ import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
@@ -55,9 +56,9 @@ class ChatsListScreen extends StatefulWidget {
 class _ChatsListScreenState extends State<ChatsListScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
-  List<Map<String, dynamic>> _threads = [];
-  int _profileCoins = 0;
-  bool _loading = true;
+  List<Map<String, dynamic>> _threads = UserDataCache().cachedThreads ?? [];
+  int _profileCoins = UserDataCache().cachedMe?['coins'] ?? 0;
+  bool _loading = UserDataCache().cachedThreads == null;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
   String _chatFilter = 'all';
@@ -74,18 +75,24 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
   Future<void> _init() async {
     _token = await _localStorage.getToken();
-    await _load();
-    await _loadCoins();
     if (_token != null) {
       ChatSocketService().connect(_token!, 'user');
       _socketSub = ChatSocketService().stream.listen(_onSocketEvent);
     }
+    if (_threads.isNotEmpty) {
+      _refreshSilently();
+    } else {
+      await _load();
+    }
+    _loadCoins();
   }
 
   Future<void> _loadCoins() async {
     if (_token == null) return;
-    final me = await _repository.getMe(_token!);
-    if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
+    try {
+      final me = await _repository.getMe(_token!, forceRefresh: true);
+      if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
+    } catch (_) {}
   }
 
   void _onSocketEvent(Map<String, dynamic> data) {
@@ -135,7 +142,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       final token = await _localStorage.getToken();
       final threads = await _repository.getChatThreads(
         token!,
-        forceRefresh: true,
+        forceRefresh: !isFirstLoad,
       );
       if (dataChanged(_threads, threads)) {
         setState(() {
@@ -146,7 +153,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         setState(() => _loading = false);
       }
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     } finally {
       _refreshInFlight = false;
     }

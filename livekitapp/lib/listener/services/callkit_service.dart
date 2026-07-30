@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -39,6 +40,14 @@ class CallkitService {
   String? _lastShownCallId;
   PendingCallNav? _pendingCallNav;
   StreamSubscription? _eventSub;
+
+  Future<void> warmup() async {
+    await AvatarCache.instance.init();
+  }
+
+  String? _syncLocalAvatarPath(String? url) => AvatarCache.instance.localPathSync(url);
+
+  Future<String?> _localAvatarPath(String? url) => AvatarCache.instance.ensureCached(url);
 
 
   Future<void> _playCustomRingtone() async {
@@ -398,7 +407,12 @@ Route _callRoute(PendingCallNav nav) {
     _lastShownCallId = callId.toString();
     final callerName = data['caller_name'] ?? 'Unknown';
     final callType = data['call_type'] ?? 'audio';
-    final callerPhotoUrl = ApiConstants.resolveMediaUrl(data['caller_photo_url'] as String?);
+    final remoteCallerPhotoUrl = ApiConstants.resolveMediaUrl(data['caller_photo_url'] as String?);
+    final callerPhotoUrl = _syncLocalAvatarPath(remoteCallerPhotoUrl) ?? remoteCallerPhotoUrl;
+    if (_syncLocalAvatarPath(remoteCallerPhotoUrl) == null) {
+      // ignore: unawaited_futures
+      _localAvatarPath(remoteCallerPhotoUrl);
+    }
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
