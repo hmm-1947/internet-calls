@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/gift_message_bubble.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_message_bubble.dart';
 
@@ -64,6 +65,13 @@ class ChatMessageBubble extends StatelessWidget {
 
   final double minWidth;
 
+  /// Name of the person on the other side of this chat. Shown in the minimized
+  /// voice-note bar so the user knows whose message is playing.
+  final String otherPartyName;
+
+  /// Identifies this conversation, forwarded to voice notes.
+  final String chatKey;
+
   static const _bubbleIn = Color(0xFF1F2430);
   static const _bubbleOut = Color(0xFF7A1620);
 
@@ -74,6 +82,8 @@ class ChatMessageBubble extends StatelessWidget {
     required this.giftCoins,
     this.dateLabel,
     this.minWidth = 70,
+    this.otherPartyName = '',
+    this.chatKey = '',
   });
 
   Widget _statusIcon() {
@@ -121,10 +131,13 @@ class ChatMessageBubble extends StatelessWidget {
         );
       case 'audio':
         return VoiceMessageBubble(
+          messageKey: chatMessageKey(message),
           audioUrl: message['audio_url'] ?? '',
           durationSeconds: message['audio_duration'] ?? 0,
           isMe: isMe,
           createdAt: chatMessageTime(message['created_at']),
+          otherPartyName: otherPartyName,
+          chatKey: chatKey,
         );
       default:
         return Text(

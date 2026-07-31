@@ -13,6 +13,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
 import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
@@ -226,6 +227,9 @@ class _UserAppState extends State<UserApp> {
       child: AppLifecycleReporter(
         child: MaterialApp(
           navigatorKey: userNavigatorKey,
+          // Lets chat screens report whether they are the visible route, which
+          // is what keeps the minimized voice-note bar hidden while a chat is open.
+          navigatorObservers: [voiceChatRouteObserver],
           title: 'Calling App',
           debugShowCheckedModeBanner: false,
           builder: (context, child) => ActiveCallHost(

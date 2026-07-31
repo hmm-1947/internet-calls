@@ -1,41 +1,114 @@
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/common/services/voice_message_player.dart';
 
-class _ActiveVoicePlayer {
-  static _VoiceMessageBubbleState? current;
-}
-
-class VoiceMessageBubble extends StatefulWidget {
+/// A voice note inside a chat bubble.
+///
+/// Holds no player of its own: it renders whatever the shared
+/// [VoiceMessagePlayer] reports for this message, which is what lets playback
+/// carry on after the chat screen is popped and be driven from the minimized
+/// playback bar.
+class VoiceMessageBubble extends StatelessWidget {
+  /// Stable identity of the message (`chatMessageKey`), used to tell whether
+  /// this bubble owns the current playback.
+  final String messageKey;
   final String audioUrl;
   final int durationSeconds;
   final bool isMe;
   final DateTime createdAt;
 
+  /// Name of the other party, shown in the minimized bar for incoming notes.
+  final String otherPartyName;
+
+  /// Conversation this note belongs to, used to keep the minimized bar hidden
+  /// while this chat is on screen.
+  final String chatKey;
+
   const VoiceMessageBubble({
     super.key,
+    required this.messageKey,
     required this.audioUrl,
     required this.durationSeconds,
     required this.isMe,
     required this.createdAt,
+    this.otherPartyName = '',
+    this.chatKey = '',
+  });
+
+  /// Chat bubbles are dark on both sides, so the transport controls are white
+  /// for the sender and the receiver alike.
+  static const _controlColor = Colors.white;
+
+  String get _senderLabel => isMe
+      ? 'You'
+      : (otherPartyName.isEmpty ? 'Voice message' : otherPartyName);
+
+  VoiceTrack get _track => VoiceTrack(
+    messageKey: messageKey,
+    audioUrl: audioUrl,
+    senderLabel: _senderLabel,
+    chatKey: chatKey,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final player = VoiceMessagePlayer.instance;
+    final idle = VoicePlaybackStatus(total: Duration(seconds: durationSeconds));
+    return ValueListenableBuilder<VoiceTrack?>(
+      valueListenable: player.activeTrack,
+      builder: (context, active, _) {
+        // Only the bubble that owns playback subscribes to the position ticks;
+        // every other bubble in the list stays put.
+        if (active?.messageKey != messageKey) {
+          return _VoiceMessageBubbleView(
+            status: idle,
+            controlColor: _controlColor,
+            onToggle: () => player.toggle(_track, fallbackTotal: idle.total),
+            onSeek: null,
+          );
+        }
+        return ValueListenableBuilder<VoicePlaybackStatus>(
+          valueListenable: player.status,
+          builder: (context, status, _) {
+            return _VoiceMessageBubbleView(
+              status: status.total > Duration.zero
+                  ? status
+                  : status.copyWith(total: idle.total),
+              controlColor: _controlColor,
+              onToggle: () => player.toggle(_track, fallbackTotal: idle.total),
+              onSeek: player.seek,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _VoiceMessageBubbleView extends StatefulWidget {
+  final VoicePlaybackStatus status;
+  final Color controlColor;
+  final VoidCallback onToggle;
+
+  /// Null while this bubble is not the active one, so the slider only scrubs a
+  /// note that is actually loaded.
+  final ValueChanged<Duration>? onSeek;
+
+  const _VoiceMessageBubbleView({
+    required this.status,
+    required this.controlColor,
+    required this.onToggle,
+    required this.onSeek,
   });
 
   @override
-  State<VoiceMessageBubble> createState() => _VoiceMessageBubbleState();
+  State<_VoiceMessageBubbleView> createState() =>
+      _VoiceMessageBubbleViewState();
 }
 
-class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
-  final _player = AudioPlayer();
-  bool _playing = false;
-  bool _loaded = false;
-  Duration _position = Duration.zero;
-  Duration _total = Duration.zero;
-
-  @override
-  void initState() {
-    super.initState();
-    _total = Duration(seconds: widget.durationSeconds);
-  }
+class _VoiceMessageBubbleViewState extends State<_VoiceMessageBubbleView> {
+  /// Position held while the thumb is being dragged, so the incoming position
+  /// ticks do not fight the finger.
+  double? _dragValue;
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(1, '0');
@@ -43,83 +116,70 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     return '$m:$s';
   }
 
-  Future<void> _toggle() async {
-    if (!_loaded) {
-      final url = widget.audioUrl.startsWith('http')
-          ? widget.audioUrl
-          : '${ApiConstants.baseUrl}${widget.audioUrl}';
-      final d = await _player.setUrl(url);
-      if (d != null) setState(() => _total = d);
-      _loaded = true;
-      _player.durationStream.listen((d) {
-        if (d != null && mounted) setState(() => _total = d);
-      });
-      _player.positionStream.listen((p) {
-        if (mounted) setState(() => _position = p);
-      });
-      _player.playerStateStream.listen((state) {
-        if (state.processingState == ProcessingState.completed) {
-          if (mounted) {
-            setState(() {
-              _playing = false;
-              _position = Duration.zero;
-            });
-          }
-          _player.seek(Duration.zero);
-          _player.pause();
-          if (_ActiveVoicePlayer.current == this) {
-            _ActiveVoicePlayer.current = null;
-          }
-        } else if (mounted) {
-          setState(() => _playing = state.playing);
-        }
-      });
-    }
-    if (_player.playing) {
-      await _player.pause();
-      if (_ActiveVoicePlayer.current == this) {
-        _ActiveVoicePlayer.current = null;
-      }
+  /// Play/pause button, ringed by a progress indicator while the note is being
+  /// downloaded. Tapping it during the download cancels and resets it.
+  Widget _playControl() {
+    final status = widget.status;
+    final IconData icon;
+    if (status.preparing) {
+      icon = Icons.close;
+    } else if (status.failed) {
+      icon = Icons.refresh;
     } else {
-      if (_ActiveVoicePlayer.current != null &&
-          _ActiveVoicePlayer.current != this) {
-        await _ActiveVoicePlayer.current!._player.pause();
-      }
-      _ActiveVoicePlayer.current = this;
-      await _player.play();
+      icon = status.playing ? Icons.pause_circle : Icons.play_circle;
     }
-  }
-
-  @override
-  void dispose() {
-    if (_ActiveVoicePlayer.current == this) {
-      _ActiveVoicePlayer.current = null;
-    }
-    _player.dispose();
-    super.dispose();
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (status.preparing)
+            SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                value: status.downloadProgress,
+                strokeWidth: 2,
+                color: widget.controlColor,
+                backgroundColor: widget.controlColor.withValues(alpha: 0.25),
+              ),
+            ),
+          IconButton(
+            padding: EdgeInsets.zero,
+            iconSize: status.preparing ? 16 : 24,
+            icon: Icon(icon, color: widget.controlColor),
+            tooltip: status.preparing ? 'Downloading, tap to cancel' : null,
+            onPressed: widget.onToggle,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isMe ? Colors.white : Colors.black87;
-    final sliderMax = _total.inMilliseconds > 0
-        ? _total.inMilliseconds.toDouble()
+    final status = widget.status;
+    final color = widget.controlColor;
+    final sliderMax = status.total.inMilliseconds > 0
+        ? status.total.inMilliseconds.toDouble()
         : 1.0;
-    final sliderValue = _position.inMilliseconds
-        .clamp(0, sliderMax.toInt())
-        .toDouble();
+    final sliderValue =
+        (_dragValue ?? status.position.inMilliseconds.toDouble()).clamp(
+          0.0,
+          sliderMax,
+        );
+    final label = status.preparing
+        ? 'Downloading…'
+        : (status.failed
+              ? 'Tap to retry'
+              : _fmt(status.playing ? status.position : status.total));
     return SizedBox(
       width: 220,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: Icon(
-              _playing ? Icons.pause_circle : Icons.play_circle,
-              color: color,
-            ),
-            onPressed: _toggle,
-          ),
+          _playControl(),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,27 +193,26 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                     ),
                     overlayShape: SliderComponentShape.noOverlay,
                     activeTrackColor: color,
-                    inactiveTrackColor: color.withOpacity(0.3),
+                    inactiveTrackColor: color.withValues(alpha: 0.3),
                     thumbColor: color,
+                    disabledActiveTrackColor: color,
+                    disabledInactiveTrackColor: color.withValues(alpha: 0.3),
+                    disabledThumbColor: color,
                   ),
                   child: Slider(
                     min: 0,
                     max: sliderMax,
                     value: sliderValue,
-                    onChanged: (v) {
-                      setState(
-                        () => _position = Duration(milliseconds: v.toInt()),
-                      );
-                    },
+                    onChanged: widget.onSeek == null
+                        ? null
+                        : (v) => setState(() => _dragValue = v),
                     onChangeEnd: (v) {
-                      _player.seek(Duration(milliseconds: v.toInt()));
+                      setState(() => _dragValue = null);
+                      widget.onSeek?.call(Duration(milliseconds: v.toInt()));
                     },
                   ),
                 ),
-                Text(
-                  _playing ? _fmt(_position) : _fmt(_total),
-                  style: TextStyle(color: color, fontSize: 12),
-                ),
+                Text(label, style: TextStyle(color: color, fontSize: 12)),
               ],
             ),
           ),

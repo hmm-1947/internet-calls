@@ -723,8 +723,29 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     super.dispose();
   }
 
+  /// Keeps the floating window shown while the call is minimized pointed at the
+  /// feed the user would expect: the other side's camera, or our own while they
+  /// have none.
+  ///
+  /// Driven from [build] because this screen stays mounted (offstage) while
+  /// minimized, so every track or mute change lands here. The notifier is
+  /// written after the frame: mutating it during build would rebuild its
+  /// listeners mid-build.
+  void _syncMinimizedVideoTrack() {
+    final track = (!_remoteVideoMuted && _remoteVideoTrack != null)
+        ? _remoteVideoTrack
+        : (_cameraEnabled ? _localVideoTrack : null);
+    final manager = ActiveCallManager.instance;
+    if (manager.minimizedVideoTrack.value == track) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      manager.updateMinimizedVideoTrack(track);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    _syncMinimizedVideoTrack();
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicator.dart';
 
@@ -61,13 +62,30 @@ class _ChatComposerState extends State<ChatComposer> {
   void initState() {
     super.initState();
     _controller.addListener(_onChanged);
+    ActiveCallManager.instance.current.addListener(_onActiveCallChanged);
   }
 
   @override
   void dispose() {
+    ActiveCallManager.instance.current.removeListener(_onActiveCallChanged);
     _controller.removeListener(_onChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  /// The microphone belongs to the call, so a call starting mid-recording
+  /// throws the recording away rather than uploading a silent note.
+  void _onActiveCallChanged() {
+    if (!ActiveCallManager.instance.hasActiveCall) return;
+    if (_isRecording) VoiceRecordButton.currentState?.triggerCancel();
+  }
+
+  void _warnRecordingBlocked() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("You can't record a voice message during a call"),
+      ),
+    );
   }
 
   void _onChanged() {
@@ -95,7 +113,11 @@ class _ChatComposerState extends State<ChatComposer> {
     widget.onSendText(text);
   }
 
-  void _onVoiceStateChanged(bool recording, Duration elapsed, double amplitude) {
+  void _onVoiceStateChanged(
+    bool recording,
+    Duration elapsed,
+    double amplitude,
+  ) {
     setState(() {
       _isRecording = recording;
       _recordElapsed = elapsed;
@@ -174,12 +196,29 @@ class _ChatComposerState extends State<ChatComposer> {
                         ),
                       )
                     : Center(
-                        child: VoiceRecordButton(
-                          onRecorded: widget.onSendVoice,
-                          onStateChanged: _onVoiceStateChanged,
-                          onLockChanged: (locked) =>
-                              setState(() => _isLocked = locked),
-                          idleColor: widget.accentColor,
+                        // The mic is unavailable to both sides while a call is
+                        // up: it is already captured by the call.
+                        child: ValueListenableBuilder<ActiveCallInfo?>(
+                          valueListenable: ActiveCallManager.instance.current,
+                          builder: (context, activeCall, _) {
+                            if (activeCall != null) {
+                              return IconButton(
+                                tooltip: 'Not available during a call',
+                                onPressed: _warnRecordingBlocked,
+                                icon: Icon(
+                                  Icons.mic_off,
+                                  color: Colors.white.withValues(alpha: 0.35),
+                                ),
+                              );
+                            }
+                            return VoiceRecordButton(
+                              onRecorded: widget.onSendVoice,
+                              onStateChanged: _onVoiceStateChanged,
+                              onLockChanged: (locked) =>
+                                  setState(() => _isLocked = locked),
+                              idleColor: widget.accentColor,
+                            );
+                          },
                         ),
                       ),
               ),

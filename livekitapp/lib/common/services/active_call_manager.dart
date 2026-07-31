@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
 
 enum ActiveCallRole { user, listener }
@@ -37,11 +38,18 @@ class ActiveCallManager {
 
   final GlobalKey<NavigatorState> callNavigatorKey =
       GlobalKey<NavigatorState>();
-  final ValueNotifier<ActiveCallInfo?> current =
-      ValueNotifier<ActiveCallInfo?>(null);
+  final ValueNotifier<ActiveCallInfo?> current = ValueNotifier<ActiveCallInfo?>(
+    null,
+  );
   final ValueNotifier<bool> expanded = ValueNotifier<bool>(false);
   final ValueNotifier<int> durationSeconds = ValueNotifier<int>(0);
   final ValueNotifier<String> statusText = ValueNotifier<String>('');
+
+  /// Track to show in the floating window while a video call is minimized. The
+  /// call screen publishes the remote feed, or the local camera while the other
+  /// side has no video.
+  final ValueNotifier<VideoTrack?> minimizedVideoTrack =
+      ValueNotifier<VideoTrack?>(null);
 
   Future<void> Function()? onHangUp;
   WidgetsBindingObserver? _backObserver;
@@ -103,12 +111,22 @@ class ActiveCallManager {
     if (hasActiveCall) statusText.value = text;
   }
 
+  void updateMinimizedVideoTrack(VideoTrack? track) {
+    if (!hasActiveCall) {
+      minimizedVideoTrack.value = null;
+      return;
+    }
+    if (minimizedVideoTrack.value == track) return;
+    minimizedVideoTrack.value = track;
+  }
+
   void clear() {
     onHangUp = null;
     expanded.value = false;
     current.value = null;
     durationSeconds.value = 0;
     statusText.value = '';
+    minimizedVideoTrack.value = null;
   }
 
   Future<void> hangUp() async {

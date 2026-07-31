@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/voice_message_player.dart';
+import 'package:livekitapp/common/widgets/minimized_call_video.dart';
+import 'package:livekitapp/common/widgets/voice_messages/voice_message_bar.dart';
 
 typedef ActiveCallScreenBuilder =
     Widget Function(BuildContext context, ActiveCallInfo info);
@@ -20,55 +23,77 @@ class ActiveCallHost extends StatelessWidget {
     required this.callScreenBuilder,
   });
 
+  /// Height reserved for the stacked bars, so the floating video window opens
+  /// below them rather than behind them.
+  static const _callBarHeight = 56.0;
+  static const _voiceBarHeight = 52.0;
+
   @override
   Widget build(BuildContext context) {
     final manager = ActiveCallManager.instance;
-    return ValueListenableBuilder<ActiveCallInfo?>(
-      valueListenable: manager.current,
-      builder: (context, info, _) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: manager.expanded,
-          builder: (context, expanded, __) {
-            final showBar = info != null && !expanded;
-            return Stack(
-              fit: StackFit.expand,
+    final player = VoiceMessagePlayer.instance;
+    // One builder over every source that can show or hide a bar, instead of a
+    // stack of nested ValueListenableBuilders.
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        manager.current,
+        manager.expanded,
+        player.activeTrack,
+        player.visibleChatKey,
+      ]),
+      builder: (context, _) {
+        final info = manager.current.value;
+        final expanded = manager.expanded.value;
+        final voiceTrack = player.activeTrack.value;
+        final showCallBar = info != null && !expanded;
+        // A note playing in the chat that is on screen already has its bubble,
+        // so the bar is only for playback the user has navigated away from.
+        final showVoiceBar = voiceTrack != null && player.shouldShowBar;
+        final bars = <Widget>[
+          if (showCallBar) ActiveCallBar(info: info),
+          if (showVoiceBar)
+            VoiceMessageBar(track: voiceTrack, applyTopPadding: !showCallBar),
+        ];
+        final barsHeight =
+            (showCallBar ? _callBarHeight : 0) +
+            (showVoiceBar ? _voiceBarHeight : 0) +
+            MediaQuery.of(context).padding.top;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Column(
               children: [
-                Column(
-                  children: [
-                    if (showBar)
-                      ActiveCallBar(info: info)
-                    else
-                      const SizedBox.shrink(),
-                    Expanded(
-                      child: MediaQuery.removePadding(
-                        context: context,
-                        removeTop: showBar,
-                        child: child,
-                      ),
-                    ),
-                  ],
+                ...bars,
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: bars.isNotEmpty,
+                    child: child,
+                  ),
                 ),
-                if (info != null)
-                  Positioned.fill(
-                    child: Offstage(
-                      offstage: !expanded,
-                      child: HeroControllerScope.none(
-                        child: Navigator(
-                          key: manager.callNavigatorKey,
-                          onGenerateRoute: (settings) => PageRouteBuilder(
-                            settings: settings,
-                            pageBuilder: (routeContext, __, ___) =>
-                                callScreenBuilder(routeContext, info),
-                            transitionDuration: Duration.zero,
-                            reverseTransitionDuration: Duration.zero,
-                          ),
-                        ),
+              ],
+            ),
+            if (info != null)
+              Positioned.fill(
+                child: Offstage(
+                  offstage: !expanded,
+                  child: HeroControllerScope.none(
+                    child: Navigator(
+                      key: manager.callNavigatorKey,
+                      onGenerateRoute: (settings) => PageRouteBuilder(
+                        settings: settings,
+                        pageBuilder: (routeContext, _, _) =>
+                            callScreenBuilder(routeContext, info),
+                        transitionDuration: Duration.zero,
+                        reverseTransitionDuration: Duration.zero,
                       ),
                     ),
                   ),
-              ],
-            );
-          },
+                ),
+              ),
+            if (showCallBar && info.isVideo)
+              Positioned.fill(child: MinimizedCallVideo(topInset: barsHeight)),
+          ],
         );
       },
     );
@@ -131,9 +156,7 @@ class ActiveCallBar extends StatelessWidget {
                                   color: Colors.white,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
-                                  fontFeatures: [
-                                    FontFeature.tabularFigures(),
-                                  ],
+                                  fontFeatures: [FontFeature.tabularFigures()],
                                 ),
                               ),
                             ],

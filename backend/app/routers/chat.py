@@ -21,8 +21,15 @@ ACTIVE_CALL_STATUSES = ("ringing", "accepted")
 VOICE_NOTES_DIR = "voice_notes"
 ALLOWED_VOICE_EXTENSIONS = {".m4a", ".aac", ".mp3", ".wav", ".ogg", ".opus", ".webm"}
 ALLOWED_VOICE_CONTENT_TYPES = {
-    "audio/mp4", "audio/m4a", "audio/aac", "audio/mpeg", "audio/mp3",
-    "audio/wav", "audio/x-wav", "audio/ogg", "audio/opus", "audio/webm",
+    "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/aac", "audio/mpeg", "audio/mp3",
+    "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave",
+    "audio/ogg", "audio/opus", "audio/webm", "audio/3gpp", "audio/amr",
+}
+# Multipart clients frequently omit a real media type and fall back to a
+# generic binary type (package:http's MultipartFile does exactly this), so
+# these must not be treated as "not an audio file".
+GENERIC_UPLOAD_CONTENT_TYPES = {
+    "application/octet-stream", "binary/octet-stream", "application/binary",
 }
 MAX_VOICE_NOTE_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -30,11 +37,22 @@ MAX_VOICE_NOTE_BYTES = 10 * 1024 * 1024  # 10 MB
 def _validate_voice_upload(file: UploadFile) -> str:
     """Validates a voice-note upload's extension/content-type and returns a
     safe extension to use for the stored filename. Raises HTTPException on
-    anything that doesn't look like an audio file."""
+    anything that doesn't look like an audio file.
+
+    The extension is the authoritative check. The content type is only
+    rejected when the client explicitly claims a non-audio, non-generic type
+    (for example "text/html"), because many clients send a generic binary
+    content type for file uploads.
+    """
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_VOICE_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Unsupported voice note file type")
-    if file.content_type and file.content_type not in ALLOWED_VOICE_CONTENT_TYPES:
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if (
+        content_type
+        and content_type not in ALLOWED_VOICE_CONTENT_TYPES
+        and content_type not in GENERIC_UPLOAD_CONTENT_TYPES
+    ):
         raise HTTPException(status_code=400, detail="Unsupported voice note content type")
     return ext
 
@@ -50,6 +68,8 @@ async def _save_voice_upload(file: UploadFile) -> str:
     the event loop. Returns the filename (not the full path) to store."""
     ext = _validate_voice_upload(file)
     data = await file.read(MAX_VOICE_NOTE_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty voice note")
     if len(data) > MAX_VOICE_NOTE_BYTES:
         raise HTTPException(status_code=413, detail="Voice note exceeds maximum allowed size")
     filename = f"{uuid.uuid4().hex}{ext}"

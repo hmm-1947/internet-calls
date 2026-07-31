@@ -12,6 +12,8 @@ import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/presence_cache.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
+import 'package:livekitapp/common/services/voice_message_player.dart';
+import 'package:livekitapp/core/network/voice_note_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
 import 'package:livekitapp/user/widgets/gift_sheet.dart';
@@ -34,7 +36,7 @@ class ChatHistoryScreen extends StatefulWidget {
 }
 
 class _ChatHistoryScreenState extends State<ChatHistoryScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RouteAware {
   static const _bg = Color(0xFF0B0F1A);
   static const _pink = Color(0xFFE53950);
   static const _green = Color(0xFF74D8BD);
@@ -71,6 +73,31 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   int _chatMessageCoinCost =
       UserDataCache().lastMe?['chat_message_coin_cost'] ?? 0;
 
+  /// Identifies this conversation for the shared voice-note player.
+  String get _chatKey => 'user:${widget.listenerId}';
+
+  // Route callbacks decide whether the minimized voice-note bar is needed: it
+  // is redundant while this chat is the visible route, and wanted as soon as
+  // the user navigates away (back button included).
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) voiceChatRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPush() => VoiceMessagePlayer.instance.setVisibleChat(_chatKey);
+
+  @override
+  void didPopNext() => VoiceMessagePlayer.instance.setVisibleChat(_chatKey);
+
+  @override
+  void didPushNext() => VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
+
+  @override
+  void didPop() => VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +118,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
 
   @override
   void dispose() {
+    voiceChatRouteObserver.unsubscribe(this);
+    VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
     WidgetsBinding.instance.removeObserver(this);
     _socketSub?.cancel();
     _typingSendTimer?.cancel();
@@ -403,8 +432,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
         );
         if (ids.isEmpty && clientIds.isEmpty) return;
         _patchStatus(
-          (m) =>
-              ids.contains(m['id']) || clientIds.contains(m['client_id']),
+          (m) => ids.contains(m['id']) || clientIds.contains(m['client_id']),
           data['status'],
         );
         _chatStorage.updateStatusByServerIds(ids, data['status']);
@@ -508,6 +536,12 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
         filePath,
         duration,
         clientId: clientId,
+      );
+      // Keep the recording we just uploaded as this device's cached copy so
+      // playing back our own note never hits the network.
+      await VoiceNoteCache.instance.store(
+        '${sent['audio_url'] ?? ''}',
+        filePath,
       );
       if (!mounted) return;
       _merge([sent]);
@@ -821,6 +855,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                   controller: _scrollController,
                   isMine: (message) => message['sender_type'] == 'user',
                   giftCoins: (message) => (message['gift_coins'] ?? 0) as int,
+                  otherPartyName: widget.listenerName,
+                  chatKey: _chatKey,
                 ),
                 Positioned(
                   right: 16,

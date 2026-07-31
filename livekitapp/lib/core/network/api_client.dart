@@ -2,7 +2,34 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:path/path.dart' as p;
 import 'package:livekitapp/core/constants/api_constants.dart';
+
+/// package:http defaults every multipart file to `application/octet-stream`,
+/// which servers that validate the part's content type reject. Map the common
+/// extensions we upload (voice notes and images) to their real media type.
+const Map<String, String> _multipartMimeTypes = {
+  '.m4a': 'audio/mp4',
+  '.mp4': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/opus',
+  '.webm': 'audio/webm',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+};
+
+MediaType? _mediaTypeForPath(String filePath) {
+  final mime = _multipartMimeTypes[p.extension(filePath).toLowerCase()];
+  if (mime == null) return null;
+  final parts = mime.split('/');
+  return MediaType(parts.first, parts.last);
+}
 
 /// Thrown for any low-level network failure (server unreachable, timed out,
 /// DNS failure, etc). Screens already catch generic Exception and display
@@ -90,7 +117,12 @@ class ApiClient {
       if (token != null) request.headers['Authorization'] = 'Bearer $token';
       request.fields.addAll(fields);
       request.files.add(
-        await http.MultipartFile.fromPath(fileField, filePath),
+        await http.MultipartFile.fromPath(
+          fileField,
+          filePath,
+          filename: p.basename(filePath),
+          contentType: _mediaTypeForPath(filePath),
+        ),
       );
       final streamed = await request.send().timeout(
         const Duration(seconds: 20),
@@ -106,10 +138,7 @@ class ApiClient {
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
       final response = await http
-          .get(
-            Uri.parse('${ApiConstants.baseUrl}$path'),
-            headers: headers,
-          )
+          .get(Uri.parse('${ApiConstants.baseUrl}$path'), headers: headers)
           .timeout(const Duration(seconds: 10));
       _checkAuthStatus(response);
       return response;
@@ -141,10 +170,7 @@ class ApiClient {
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
       final response = await http
-          .delete(
-            Uri.parse('${ApiConstants.baseUrl}$path'),
-            headers: headers,
-          )
+          .delete(Uri.parse('${ApiConstants.baseUrl}$path'), headers: headers)
           .timeout(const Duration(seconds: 10));
       _checkAuthStatus(response);
       return response;

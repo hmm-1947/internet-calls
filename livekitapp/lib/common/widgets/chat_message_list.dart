@@ -10,6 +10,14 @@ class ChatMessageList extends StatelessWidget {
   final int Function(Map<String, dynamic> message) giftCoins;
   final double bubbleMinWidth;
 
+  /// Name of the other party in this chat, forwarded to voice notes for the
+  /// minimized player bar.
+  final String otherPartyName;
+
+  /// Identifies this conversation, so a voice note knows which chat it belongs
+  /// to and the minimized bar can stay hidden while that chat is on screen.
+  final String chatKey;
+
   const ChatMessageList({
     super.key,
     required this.messages,
@@ -17,6 +25,8 @@ class ChatMessageList extends StatelessWidget {
     required this.isMine,
     required this.giftCoins,
     this.bubbleMinWidth = 70,
+    this.otherPartyName = '',
+    this.chatKey = '',
   });
 
   @override
@@ -46,6 +56,8 @@ class ChatMessageList extends StatelessWidget {
               giftCoins: giftCoins(message),
               dateLabel: showLabel ? label : null,
               minWidth: bubbleMinWidth,
+              otherPartyName: otherPartyName,
+              chatKey: chatKey,
             );
           },
         );
