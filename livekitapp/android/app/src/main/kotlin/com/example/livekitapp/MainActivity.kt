@@ -24,6 +24,8 @@ class MainActivity : FlutterActivity() {
         const val ENGINE_ID = "livekitapp.main.engine"
         const val EXTRA_OPEN_ACTIVE_CALL = "open_active_call"
         const val CALL_FG_CHANNEL = "livekitapp/callforeground"
+
+        private var isInCallState = false
     }
 
     private val CHANNEL = "livekitapp/lockscreen"
@@ -33,7 +35,6 @@ class MainActivity : FlutterActivity() {
     private val RINGTONE_CHANNEL = "livekitapp/ringtone"
 
     private var isInPipMode = false
-    private var isInCallState = false
 
     override fun provideFlutterEngine(context: Context): FlutterEngine {
         val cache = FlutterEngineCache.getInstance()
@@ -56,6 +57,7 @@ class MainActivity : FlutterActivity() {
         )
         super.onCreate(savedInstanceState)
         resetStaleIncomingCallChannel()
+        applyPipParams()
         handleOpenActiveCallIntent(intent)
     }
 
@@ -168,6 +170,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "setCallActive" -> {
                     isInCallState = call.arguments as? Boolean ?: false
+                    applyPipParams()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -237,18 +240,34 @@ class MainActivity : FlutterActivity() {
         android.util.Log.d("Callkit", "forceClearTelecomCalls: endCall() threw $e")
     }
 }
-private fun enterPipMode(): Boolean {
+private fun pipParams(autoEnter: Boolean): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 14))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(autoEnter)
+        }
+        return builder.build()
+    }
+
+    private fun applyPipParams() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        try {
+            setPictureInPictureParams(pipParams(isInCallState))
+        } catch (e: Exception) {
+            android.util.Log.d("PiP", "applyPipParams threw: $e")
+        }
+    }
+
+    private fun enterPipMode(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
-        val params = PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(9, 14))
-            .build()
+        if (isInPipMode) return true
         return try {
-            enterPictureInPictureMode(params)
+            enterPictureInPictureMode(pipParams(isInCallState))
         } catch (e: Exception) {
             android.util.Log.d("PiP", "enterPipMode threw: $e")
             false
         }
     }
+
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)

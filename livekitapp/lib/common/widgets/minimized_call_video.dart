@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/widgets/call_ui.dart';
 
 /// Floating picture-in-picture window for a minimized video call.
 ///
@@ -29,18 +32,14 @@ class _MinimizedCallVideoState extends State<MinimizedCallVideo> {
   Offset? _offset;
 
   Offset _clamp(Offset offset, Size bounds) {
-    final maxX = (bounds.width - _width - _margin).clamp(
-      _margin,
-      double.infinity,
-    );
-    final maxY = (bounds.height - _height - _margin).clamp(
-      _margin,
-      double.infinity,
-    );
-    return Offset(
-      offset.dx.clamp(_margin, maxX),
-      offset.dy.clamp(widget.topInset + _margin, maxY),
-    );
+    const minX = _margin;
+    final minY = widget.topInset + _margin;
+    // The window can be taller or wider than the space left over (a shrunken
+    // window, or tall bars above it), so the upper limits are pinned to the
+    // lower ones: num.clamp throws when its bounds are inverted.
+    final maxX = math.max(minX, bounds.width - _width - _margin);
+    final maxY = math.max(minY, bounds.height - _height - _margin);
+    return Offset(offset.dx.clamp(minX, maxX), offset.dy.clamp(minY, maxY));
   }
 
   @override
@@ -52,6 +51,12 @@ class _MinimizedCallVideoState extends State<MinimizedCallVideo> {
         return LayoutBuilder(
           builder: (context, constraints) {
             final bounds = Size(constraints.maxWidth, constraints.maxHeight);
+            // Nothing to float over once the window itself is thumbnail sized
+            // (Android PiP): the call video already fills it.
+            if (isCompactCallWindow(bounds) ||
+                bounds.height < widget.topInset + _height + _margin * 2) {
+              return const SizedBox.shrink();
+            }
             final position = _clamp(
               _offset ??
                   Offset(

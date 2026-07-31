@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
+import 'package:livekitapp/common/widgets/call_ui.dart';
 import 'package:livekitapp/common/widgets/minimized_call_video.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_message_bar.dart';
+import 'package:livekitapp/user/services/pip_service.dart';
 
 typedef ActiveCallScreenBuilder =
     Widget Function(BuildContext context, ActiveCallInfo info);
@@ -40,15 +42,25 @@ class ActiveCallHost extends StatelessWidget {
         manager.expanded,
         player.activeTrack,
         player.visibleChatKey,
+        PipService.instance.isInPip,
       ]),
       builder: (context, _) {
         final info = manager.current.value;
-        final expanded = manager.expanded.value;
+        // In picture-in-picture the window is a thumbnail: the call video has
+        // to take it over, and the screen underneath plus the bars must stop
+        // laying out there, since neither fits.
+        final pip =
+            info != null &&
+            (PipService.instance.isInPip.value ||
+                isCompactCallWindow(MediaQuery.sizeOf(context)));
+        // Forced open while in PiP, so a minimized call still renders its video
+        // into the thumbnail instead of leaving it blank.
+        final expanded = manager.expanded.value || pip;
         final voiceTrack = player.activeTrack.value;
         final showCallBar = info != null && !expanded;
         // A note playing in the chat that is on screen already has its bubble,
         // so the bar is only for playback the user has navigated away from.
-        final showVoiceBar = voiceTrack != null && player.shouldShowBar;
+        final showVoiceBar = !pip && voiceTrack != null && player.shouldShowBar;
         final bars = <Widget>[
           if (showCallBar) ActiveCallBar(info: info),
           if (showVoiceBar)
@@ -61,17 +73,23 @@ class ActiveCallHost extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            Column(
-              children: [
-                ...bars,
-                Expanded(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeTop: bars.isNotEmpty,
-                    child: child,
+            // Offstage rather than dropped from the tree: it skips layout and
+            // paint (so nothing overflows in a thumbnail window) while keeping
+            // the state of whatever screen the user was on.
+            Offstage(
+              offstage: pip,
+              child: Column(
+                children: [
+                  ...bars,
+                  Expanded(
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeTop: bars.isNotEmpty,
+                      child: child,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             if (info != null)
               Positioned.fill(

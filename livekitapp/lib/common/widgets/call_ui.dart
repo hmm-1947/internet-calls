@@ -3,6 +3,16 @@ import 'package:flutter/scheduler.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
+/// True when the window is too small to lay out a normal call UI.
+///
+/// Android picture-in-picture shrinks the whole Flutter window to a thumbnail,
+/// so the call controls, the screen underneath and the floating video window
+/// all overflow at that size. This is deliberately driven by the measured size
+/// rather than by the PiP callback alone: the platform notification and the
+/// window resize do not arrive on the same frame, so the frames in between
+/// would still be laid out with the wrong layout.
+bool isCompactCallWindow(Size size) => size.width < 300 || size.height < 300;
+
 class PulsingAvatarRing extends StatefulWidget {
   final double audioLevel;
   final bool showVideo;
@@ -82,64 +92,61 @@ class _PulsingAvatarRingState extends State<PulsingAvatarRing>
         final photoSize = referencePhotoSize * (boxSize / referenceBoxSize);
 
         return SizedBox(
-      width: boxSize,
-      height: boxSize,
-      child: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          // Soft radiant halo that spreads and shrinks with voice intensity.
-          Container(
-            width: photoSize,
-            height: photoSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: pink.withOpacity(glowOpacity),
-                  blurRadius: innerBlur,
-                  spreadRadius: innerSpread,
+          width: boxSize,
+          height: boxSize,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              // Soft radiant halo that spreads and shrinks with voice intensity.
+              Container(
+                width: photoSize,
+                height: photoSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: pink.withOpacity(glowOpacity),
+                      blurRadius: innerBlur,
+                      spreadRadius: innerSpread,
+                    ),
+                    BoxShadow(
+                      color: pink.withOpacity(glowOpacity * 0.55),
+                      blurRadius: outerBlur,
+                      spreadRadius: outerSpread,
+                    ),
+                  ],
                 ),
-                BoxShadow(
-                  color: pink.withOpacity(glowOpacity * 0.55),
-                  blurRadius: outerBlur,
-                  spreadRadius: outerSpread,
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: photoSize,
-            height: photoSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: pink.withOpacity(0.9),
-                width: 2.5,
               ),
-            ),
-            child: ClipOval(
-              child: widget.showVideo && widget.videoTrack != null
-                  ? VideoTrackRenderer(widget.videoTrack!)
-                  : (ApiConstants.resolveMediaUrl(widget.photoUrl).isEmpty
-                      ? Container(
-                          color: const Color(0xFF2A2A2A),
-                          child: const Icon(
-                            Icons.person,
-                            color: Colors.white54,
-                            size: 100,
-                          ),
-                        )
-                      : Image.network(
-                          ApiConstants.resolveMediaUrl(widget.photoUrl),
-                          fit: BoxFit.cover,
-                          width: photoSize,
-                          height: photoSize,
-                        )),
-            ),
+              Container(
+                width: photoSize,
+                height: photoSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: pink.withOpacity(0.9), width: 2.5),
+                ),
+                child: ClipOval(
+                  child: widget.showVideo && widget.videoTrack != null
+                      ? VideoTrackRenderer(widget.videoTrack!)
+                      : (ApiConstants.resolveMediaUrl(widget.photoUrl).isEmpty
+                            ? Container(
+                                color: const Color(0xFF2A2A2A),
+                                child: const Icon(
+                                  Icons.person,
+                                  color: Colors.white54,
+                                  size: 100,
+                                ),
+                              )
+                            : Image.network(
+                                ApiConstants.resolveMediaUrl(widget.photoUrl),
+                                fit: BoxFit.cover,
+                                width: photoSize,
+                                height: photoSize,
+                              )),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
         );
       },
     );

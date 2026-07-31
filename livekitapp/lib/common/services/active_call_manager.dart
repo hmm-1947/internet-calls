@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
+import 'package:livekitapp/user/services/pip_service.dart';
 
 enum ActiveCallRole { user, listener }
 
@@ -38,6 +39,8 @@ class ActiveCallManager {
 
   final GlobalKey<NavigatorState> callNavigatorKey =
       GlobalKey<NavigatorState>();
+
+  GlobalKey<NavigatorState>? rootNavigatorKey;
   final ValueNotifier<ActiveCallInfo?> current = ValueNotifier<ActiveCallInfo?>(
     null,
   );
@@ -143,13 +146,20 @@ class _ActiveCallBackObserver extends WidgetsBindingObserver {
   @override
   Future<bool> didPopRoute() async {
     final manager = ActiveCallManager.instance;
-    if (!manager.hasActiveCall || !manager.expanded.value) return false;
-    final navigator = manager.callNavigatorKey.currentState;
-    if (navigator != null && navigator.canPop()) {
-      navigator.pop();
+    final info = manager.activeCall;
+    if (info == null) return false;
+    if (manager.expanded.value) {
+      final navigator = manager.callNavigatorKey.currentState;
+      if (navigator != null && navigator.canPop()) {
+        navigator.pop();
+        return true;
+      }
+      manager.minimize();
       return true;
     }
-    manager.minimize();
-    return true;
+    final rootNavigator = manager.rootNavigatorKey?.currentState;
+    if (rootNavigator != null && rootNavigator.canPop()) return false;
+    if (!info.isVideo) return false;
+    return PipService.instance.enterPip();
   }
 }

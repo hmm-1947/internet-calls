@@ -51,7 +51,6 @@ String _statusLabel(String status) {
   }
 }
 
-
 class _CallFilterChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -89,7 +88,6 @@ class _CallFilterChip extends StatelessWidget {
 }
 
 class CallHistoryScreen extends StatefulWidget {
-
   const CallHistoryScreen({super.key});
 
   @override
@@ -121,14 +119,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     if (_search.isEmpty) return calls;
     return calls
         .where(
-          (c) => (c['listener_name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .contains(_search.toLowerCase()),
+          (c) => (c['listener_name'] ?? '').toString().toLowerCase().contains(
+            _search.toLowerCase(),
+          ),
         )
         .toList();
   }
-
 
   @override
   void initState() {
@@ -204,15 +200,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 onChanged: (v) => setState(() => _search = v),
               ),
             ),
-  ),
+          ),
           const SizedBox(height: 10),
           SizedBox(
             height: 40,
             child: ListView(
-              
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              
+
               children: [
                 _CallFilterChip(
                   label: 'All',
@@ -283,67 +278,84 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                         final photoUrl = ApiConstants.resolveMediaUrl(
                           call['other_party_photo_url'],
                         );
-                        return ListTile(
-                          leading: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundColor: const Color(0xFF2A3145),
-                                backgroundImage: photoUrl.isNotEmpty
-                                    ? NetworkImage(photoUrl)
-                                    : null,
-                                child: photoUrl.isEmpty
-                                    ? const Icon(Icons.person, color: Colors.white54)
-                                    : null,
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            // ListTile asserts when the trailing widget takes up
+                            // the whole tile, which a very narrow row does (split
+                            // screen, or a frame while the window is resizing), so
+                            // the timestamp is dropped rather than crashing.
+                            final showTimestamp = constraints.maxWidth >= 220;
+                            return ListTile(
+                              leading: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: const Color(0xFF2A3145),
+                                    backgroundImage: photoUrl.isNotEmpty
+                                        ? NetworkImage(photoUrl)
+                                        : null,
+                                    child: photoUrl.isEmpty
+                                        ? const Icon(
+                                            Icons.person,
+                                            color: Colors.white54,
+                                          )
+                                        : null,
+                                  ),
+                                  Positioned(
+                                    bottom: -2,
+                                    right: -2,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: BoxDecoration(
+                                        color: bg,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        callType == 'video'
+                                            ? Icons.videocam
+                                            : Icons.call,
+                                        size: 12,
+                                        color: pink,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Positioned(
-                                bottom: -2,
-                                right: -2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    color: bg,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    callType == 'video'
-                                        ? Icons.videocam
-                                        : Icons.call,
-                                    size: 12,
-                                    color: pink,
-                                  ),
+                              title: Text(
+                                call['listener_name'],
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ],
-                          ),
-                          title: Text(
-                            call['listener_name'],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Row(
-                            children: [
-                              Icon(
-                                _statusIcon(status, callType),
-                                size: 14,
-                                color: _statusColor(status, pink),
+                              subtitle: Row(
+                                children: [
+                                  Icon(
+                                    _statusIcon(status, callType),
+                                    size: 14,
+                                    color: _statusColor(status, pink),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    status == 'ended'
+                                        ? _fmtDuration(call['duration_seconds'])
+                                        : _statusLabel(status),
+                                    style: const TextStyle(color: dimText),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                status == 'ended'
-                                    ? _fmtDuration(call['duration_seconds'])
-                                    : _statusLabel(status),
-                                style: const TextStyle(color: dimText),
-                              ),
-                            ],
-                          ),
-                          trailing: Text(
-                            _fmtDateTime(call['created_at']),
-                            style: const TextStyle(color: dimText, fontSize: 12),
-                          ),
+                              trailing: showTimestamp
+                                  ? Text(
+                                      _fmtDateTime(call['created_at']),
+                                      style: const TextStyle(
+                                        color: dimText,
+                                        fontSize: 12,
+                                      ),
+                                    )
+                                  : null,
+                            );
+                          },
                         );
                       },
                     ),
@@ -354,4 +366,3 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     );
   }
 }
-

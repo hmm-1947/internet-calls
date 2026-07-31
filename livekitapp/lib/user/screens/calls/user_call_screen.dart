@@ -21,7 +21,6 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/widgets/gift_sheet.dart';
 import 'package:volume_controller/volume_controller.dart';
 
-
 class CallScreen extends StatefulWidget {
   final int callId;
   final bool startWithVideo;
@@ -149,11 +148,10 @@ class _CallScreenState extends State<CallScreen> {
       _ringingPlayer = AudioPlayer();
       await _ringingPlayer?.setAsset('assets/audio/ringing_tone.mp3');
       await _ringingPlayer?.setLoopMode(LoopMode.one);
-await _ringingPlayer?.setVolume(_speakerOn ? 1.0 : 0.12);
+      await _ringingPlayer?.setVolume(_speakerOn ? 1.0 : 0.12);
       await _ringingPlayer?.play();
     } catch (_) {}
   }
-
 
   Future<void> _stopRingingTone() async {
     try {
@@ -163,7 +161,7 @@ await _ringingPlayer?.setVolume(_speakerOn ? 1.0 : 0.12);
     _ringingPlayer = null;
   }
 
-Future<void> _requestMicAndStartCall() async {
+  Future<void> _requestMicAndStartCall() async {
     UserCallkitService.instance.startOutgoingCall(
       widget.callId.toString(),
       widget.otherPartyName,
@@ -215,7 +213,7 @@ Future<void> _requestMicAndStartCall() async {
     }
   }
 
-Future<void> _toggleSpeaker() async {
+  Future<void> _toggleSpeaker() async {
     final newSpeakerOn = !_speakerOn;
     if (_room != null) {
       try {
@@ -223,10 +221,11 @@ Future<void> _toggleSpeaker() async {
       } catch (_) {}
     }
     try {
-await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
+      await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     } catch (_) {}
     if (mounted) setState(() => _speakerOn = newSpeakerOn);
   }
+
   Future<void> _toggleMic() async {
     final newMicEnabled = !_micEnabled;
     if (_room != null) {
@@ -576,8 +575,6 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
   }
 
   Future<void> _startCoinTimer() async {
-
-
     try {
       final token = await _localStorage.getToken();
       if (token == null) return;
@@ -746,22 +743,42 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
   @override
   Widget build(BuildContext context) {
     _syncMinimizedVideoTrack();
+    // Measured size, not just the PiP flag: the platform callback and the
+    // window resize land on different frames, so the full layout would overflow
+    // in between on the way in and on the way out.
+    final compact = _isInPip || isCompactCallWindow(MediaQuery.sizeOf(context));
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: widget.startWithVideo && _phase == _CallPhase.connected
-            ? _buildConnectedVideo()
-            : (_isInPip ? _buildPipVideoUi() : _buildAudioCallUi()),
-      ),
+      body: compact
+          ? _buildPipVideoUi()
+          : Center(
+              child: widget.startWithVideo && _phase == _CallPhase.connected
+                  ? _buildConnectedVideo()
+                  : _buildAudioCallUi(),
+            ),
     );
   }
 
+  /// Video only, no controls: everything else overflows a thumbnail window.
   Widget _buildPipVideoUi() {
-    final bool showRemoteVideo =
-        !_remoteVideoMuted && _remoteVideoTrack != null;
-    return showRemoteVideo
-        ? VideoTrackRenderer(_remoteVideoTrack!)
-        : Container(color: const Color(0xFF0B0B0B));
+    final track = (!_remoteVideoMuted && _remoteVideoTrack != null)
+        ? _remoteVideoTrack
+        : (_cameraEnabled ? _localVideoTrack : null);
+    if (track == null) {
+      return Container(
+        color: const Color(0xFF0B0B0B),
+        child: Center(
+          child: AvatarImage(
+            photoUrl: widget.otherPartyPhotoUrl,
+            radius: 28,
+            iconSize: 28,
+          ),
+        ),
+      );
+    }
+    return SizedBox.expand(
+      child: VideoTrackRenderer(track, fit: VideoViewFit.cover),
+    );
   }
 
   Widget _buildAudioCallUi() {
@@ -800,7 +817,7 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
             style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
           ),
           const Spacer(),
-    PulsingAvatarRing(
+          PulsingAvatarRing(
             audioLevel: _remoteAudioLevel,
             showVideo: false,
             videoTrack: _remoteVideoTrack,
@@ -876,11 +893,6 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
   Widget _buildConnectedVideo() {
     final bool showRemoteVideo =
         !_remoteVideoMuted && _remoteVideoTrack != null;
-    if (_isInPip) {
-      return showRemoteVideo
-          ? VideoTrackRenderer(_remoteVideoTrack!)
-          : Container(color: const Color(0xFF0B0B0B));
-    }
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -922,10 +934,7 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
               children: [
                 IconButton(
                   onPressed: ActiveCallManager.instance.minimize,
-                  icon: const Icon(
-                    Icons.close_fullscreen,
-                    color: Colors.white,
-                  ),
+                  icon: const Icon(Icons.close_fullscreen, color: Colors.white),
                   tooltip: 'Minimize call',
                 ),
                 Expanded(
@@ -983,12 +992,18 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
               children: [
                 if (_phase != _CallPhase.connected)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 48,
+                      vertical: 8,
+                    ),
                     child: Text(
                       'Do not send money, gift or personal details with listener outside the app.\n'
                       'Inappropriate conversations will result in a permanent ban and may lead to legal action.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
               ],
@@ -999,46 +1014,55 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
           left: 0,
           right: 0,
           bottom: 32,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              CallActionButton(
-                icon: _micEnabled ? Icons.mic : Icons.mic_off,
-                label: 'Mute',
-                background: _micEnabled
-                    ? Colors.black.withOpacity(0.35)
-                    : Colors.redAccent.withOpacity(0.3),
-                onTap: _toggleMic,
-              ),
-              CallActionButton(
-                icon: _cameraEnabled ? Icons.videocam : Icons.videocam_off,
-                label: 'Camera',
-                background: _cameraEnabled
-                    ? Colors.black.withOpacity(0.35)
-                    : Colors.redAccent.withOpacity(0.3),
-                onTap: _phase == _CallPhase.connected ? _toggleCamera : null,
-              ),
-              CallActionButton(
-                icon: Icons.call_end,
-                label: '',
-                background: const Color(0xFFE53950),
-                onTap: _hangUp,
-              ),
-              CallActionButton(
-                icon: _speakerOn ? Icons.volume_up : Icons.volume_off,
-                label: 'Speaker',
-                background: _speakerOn
-                    ? Colors.black.withOpacity(0.35)
-                    : Colors.redAccent.withOpacity(0.3),
-                onTap: _toggleSpeaker,
-              ),
-              CallActionButton(
-                icon: Icons.card_giftcard,
-                label: 'Gift',
-                background: Colors.black.withOpacity(0.35),
-                onTap: _openGiftSheet,
-              ),
-            ],
+          // Scaled down instead of overflowing when the window is narrower than
+          // the five buttons need (split screen, or a frame mid PiP resize).
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CallActionButton(
+                  icon: _micEnabled ? Icons.mic : Icons.mic_off,
+                  label: 'Mute',
+                  background: _micEnabled
+                      ? Colors.black.withOpacity(0.35)
+                      : Colors.redAccent.withOpacity(0.3),
+                  onTap: _toggleMic,
+                ),
+                const SizedBox(width: 12),
+                CallActionButton(
+                  icon: _cameraEnabled ? Icons.videocam : Icons.videocam_off,
+                  label: 'Camera',
+                  background: _cameraEnabled
+                      ? Colors.black.withOpacity(0.35)
+                      : Colors.redAccent.withOpacity(0.3),
+                  onTap: _phase == _CallPhase.connected ? _toggleCamera : null,
+                ),
+                const SizedBox(width: 12),
+                CallActionButton(
+                  icon: Icons.call_end,
+                  label: '',
+                  background: const Color(0xFFE53950),
+                  onTap: _hangUp,
+                ),
+                const SizedBox(width: 12),
+                CallActionButton(
+                  icon: _speakerOn ? Icons.volume_up : Icons.volume_off,
+                  label: 'Speaker',
+                  background: _speakerOn
+                      ? Colors.black.withOpacity(0.35)
+                      : Colors.redAccent.withOpacity(0.3),
+                  onTap: _toggleSpeaker,
+                ),
+                const SizedBox(width: 12),
+                CallActionButton(
+                  icon: Icons.card_giftcard,
+                  label: 'Gift',
+                  background: Colors.black.withOpacity(0.35),
+                  onTap: _openGiftSheet,
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -1047,4 +1071,3 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
 }
 
 enum _CallPhase { ringing, connecting, connected }
-

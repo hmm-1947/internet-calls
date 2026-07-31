@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class PipService {
@@ -6,6 +7,10 @@ class PipService {
 
   static const _channel = MethodChannel('livekitapp/pip');
   void Function(bool isInPip)? onPipModeChanged;
+
+  /// Mirrors the platform PiP state for widgets outside the call screen, which
+  /// have to collapse to the thumbnail layout too.
+  final ValueNotifier<bool> isInPip = ValueNotifier<bool>(false);
 
   bool _initialized = false;
 
@@ -16,7 +21,9 @@ class PipService {
     _initialized = true;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onPipModeChanged') {
-        onPipModeChanged?.call(call.arguments as bool);
+        final inPip = call.arguments as bool;
+        isInPip.value = inPip;
+        onPipModeChanged?.call(inPip);
       } else if (call.method == 'onUserLeaveHint') {
         onUserLeaveHint?.call();
       }
@@ -33,6 +40,9 @@ class PipService {
   }
 
   Future<void> setCallActive(bool active) async {
+    // The platform stops reporting mode changes once the call is gone, so the
+    // flag is cleared here instead of being left stale.
+    if (!active) isInPip.value = false;
     try {
       await _channel.invokeMethod('setCallActive', active);
     } catch (_) {}

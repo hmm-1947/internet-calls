@@ -47,7 +47,9 @@ Future<void> _cacheAndAckChatSummary(RemoteMessage message) async {
   final List<dynamic> items = jsonDecode(message.data['messages'] ?? '[]');
   final ids = <int>[];
   for (final item in items) {
-    final messageId = item['id'] is int ? item['id'] as int : int.tryParse('${item['id']}');
+    final messageId = item['id'] is int
+        ? item['id'] as int
+        : int.tryParse('${item['id']}');
     await ChatStorage().upsertMessage(
       userId,
       LocalChatMessage(
@@ -124,6 +126,8 @@ void main() async {
 
   FlavorConfig.set(AppFlavor.listener);
   ActiveCallManager.instance.init();
+  ActiveCallManager.instance.rootNavigatorKey =
+      CallkitService.instance.navigatorKey;
   await Firebase.initializeApp();
 
   // Register the background handler BEFORE runApp
@@ -226,13 +230,16 @@ class _ListenerAppState extends State<ListenerApp> {
   }
 
   void _showGiftToast(Map<String, dynamic> data) {
-    final ctx = CallkitService.instance.navigatorKey.currentState?.overlay?.context;
+    final ctx =
+        CallkitService.instance.navigatorKey.currentState?.overlay?.context;
     if (ctx == null) return;
     final giftName = data['gift_name'] ?? 'Gift';
     final credited = data['credited_coins'] ?? 0;
     final fromName = data['from_user_name'] ?? 'Someone';
     ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(content: Text('$fromName sent you a $giftName · +$credited coins')),
+      SnackBar(
+        content: Text('$fromName sent you a $giftName · +$credited coins'),
+      ),
     );
   }
 
@@ -300,9 +307,7 @@ class _ListenerAppState extends State<ListenerApp> {
             colorSchemeSeed: Colors.deepPurple,
             useMaterial3: true,
             scaffoldBackgroundColor: const Color(0xFF0B0F1A),
-            appBarTheme: const AppBarTheme(
-              systemOverlayStyle: _overlayStyle,
-            ),
+            appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),
           ),
           home: FutureBuilder<String?>(
             future: LocalStorage().getToken(),
@@ -407,7 +412,6 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
       });
     }
   }
-
 
   Future<void> _checkSessionActive() async {
     final token = await _localStorage.getToken();

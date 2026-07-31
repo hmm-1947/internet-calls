@@ -44,7 +44,9 @@ Future<void> _cacheAndAckChatSummary(RemoteMessage message) async {
   final List<dynamic> items = jsonDecode(message.data['messages'] ?? '[]');
   final ids = <int>[];
   for (final item in items) {
-    final messageId = item['id'] is int ? item['id'] as int : int.tryParse('${item['id']}');
+    final messageId = item['id'] is int
+        ? item['id'] as int
+        : int.tryParse('${item['id']}');
     await ChatStorage().upsertMessage(
       listenerId,
       LocalChatMessage(
@@ -122,6 +124,7 @@ void main() async {
   await dotenv.load(fileName: ".env");
   FlavorConfig.set(AppFlavor.user);
   ActiveCallManager.instance.init();
+  ActiveCallManager.instance.rootNavigatorKey = userNavigatorKey;
   await Firebase.initializeApp();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
@@ -248,9 +251,7 @@ class _UserAppState extends State<UserApp> {
             colorSchemeSeed: Colors.blue,
             useMaterial3: true,
             scaffoldBackgroundColor: const Color(0xFF0B0B0B),
-            appBarTheme: const AppBarTheme(
-              systemOverlayStyle: _overlayStyle,
-            ),
+            appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),
           ),
           home: FutureBuilder<String?>(
             future: LocalStorage().getToken(),
