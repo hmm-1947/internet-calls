@@ -16,6 +16,7 @@ class ChatSocketService {
   String? _token;
   String? _role;
   bool _connected = false;
+  bool _opening = false;
   bool _manuallyDisconnected = false;
   int _failedAttempts = 0;
   DateTime? _lastSessionCheck;
@@ -37,10 +38,25 @@ class ChatSocketService {
     _token = token;
     _role = role;
     _controller ??= StreamController<Map<String, dynamic>>.broadcast();
+    _reconnectTimer?.cancel();
+    _open();
+  }
+
+  /// Reconnects immediately instead of waiting out the current backoff delay.
+  /// Called from pull-to-refresh so the app recovers as soon as the server is
+  /// reachable again rather than up to a minute later.
+  void ensureConnected() {
+    if (_connected || _opening || _manuallyDisconnected) return;
+    if (_token == null || _role == null) return;
+    _reconnectTimer?.cancel();
+    _failedAttempts = 0;
+    _lastSessionCheck = null;
     _open();
   }
 
   void _open() async {
+    if (_opening) return;
+    _opening = true;
     final wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws');
     final path = _role == 'user' ? '/chat/ws/user' : '/chat/ws/listener';
     try {
@@ -50,10 +66,12 @@ class ChatSocketService {
       await _channel!.ready;
     } catch (_) {
       _channel = null;
+      _opening = false;
       _failedAttempts++;
       await _verifySessionThenReconnect(_backoffSecondsFor(_failedAttempts));
       return;
     }
+    _opening = false;
     _connected = true;
     _controller?.add({'type': 'socket_connected'});
     _channel!.stream.listen(
@@ -81,6 +99,7 @@ class ChatSocketService {
   void _stopAndForceLogout() {
     _manuallyDisconnected = true;
     _connected = false;
+    _opening = false;
     _channel = null;
     _pingTimer?.cancel();
     _reconnectTimer?.cancel();
@@ -110,6 +129,7 @@ class ChatSocketService {
 
   void _scheduleReconnect() {
     _connected = false;
+    _opening = false;
     _channel = null;
     _pingTimer?.cancel();
     _reconnectTimer?.cancel();
@@ -171,5 +191,6 @@ class ChatSocketService {
     _channel?.sink.close();
     _channel = null;
     _connected = false;
+    _opening = false;
   }
 }

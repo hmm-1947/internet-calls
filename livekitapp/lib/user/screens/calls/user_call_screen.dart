@@ -8,6 +8,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/main_user.dart';
 import 'package:livekitapp/user/services/pip_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -55,6 +56,8 @@ class _CallScreenState extends State<CallScreen> {
   // Tracks the current phase shown to the user
   _CallPhase _phase = _CallPhase.ringing;
   StreamSubscription? _fcmSubscription;
+  StreamSubscription? _socketSubscription;
+  Timer? _remoteJoinTimer;
   bool _isEnding = false;
   late bool _cameraEnabled;
   bool _micEnabled = true;
@@ -99,10 +102,10 @@ class _CallScreenState extends State<CallScreen> {
     _requestMicAndStartCall();
   }
 
-  /// Fallback for a dropped `call_accepted` push: while ringing, ask the
+  /// Second fallback, behind the websocket and the push: while ringing, ask the
   /// backend for the call status and pick up the LiveKit token from there.
   void _startStatusPolling() {
-    _statusPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!mounted || _isEnding || _acceptHandled) {
         _statusPollTimer?.cancel();
         return;
@@ -184,11 +187,32 @@ Future<void> _requestMicAndStartCall() async {
   }
 
   void _listenForSignals() {
+    // The websocket is already open and delivers acceptance in milliseconds,
+    // where the push costs a round trip through FCM. Whichever arrives first
+    // wins; `_onCallAccepted` ignores the rest.
+    _socketSubscription = ChatSocketService().stream.listen(_handleSocketEvent);
     _fcmSubscription = FirebaseMessaging.onMessage.listen(_handleMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       if (message != null) _handleMessage(message);
     });
+  }
+
+  void _handleSocketEvent(Map<String, dynamic> data) {
+    if (data['call_id'] != widget.callId) return;
+    switch (data['type']) {
+      case 'call_accepted':
+        final url = data['livekit_url'] as String?;
+        final token = data['token'] as String?;
+        if (url == null || token == null) return;
+        _onCallAccepted(url, token);
+        return;
+      // The call clock starts server side, at the same instant for both sides.
+      case 'call_connected':
+        final elapsed = data['elapsed_seconds'];
+        _startDurationTimer(seedSeconds: elapsed is int ? elapsed : 0);
+        return;
+    }
   }
 
 Future<void> _toggleSpeaker() async {
@@ -211,7 +235,11 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     if (mounted) setState(() => _micEnabled = newMicEnabled);
   }
 
-  void _startDurationTimer() {
+  void _startDurationTimer({int seedSeconds = 0}) {
+    if (_durationTimer != null || _isEnding) return;
+    _callDurationSeconds = seedSeconds;
+    if (mounted) setState(() {});
+    ActiveCallManager.instance.updateDuration(_callDurationSeconds);
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _callDurationSeconds++);
@@ -322,7 +350,8 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
 
   /// Listener accepted — now connect to the LiveKit room.
   Future<void> _onCallAccepted(String url, String token) async {
-    // The push and the status poll can both deliver acceptance; first one wins.
+    // The socket event, the push and the status poll all deliver acceptance;
+    // whichever arrives first wins and the rest are ignored.
     if (_acceptHandled) return;
     _acceptHandled = true;
     _statusPollTimer?.cancel();
@@ -337,83 +366,23 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
 
       if (_isEnding || !mounted) return;
 
+      // Bound before connecting so no track event can slip through the gap
+      // between the handshake completing and the handlers being attached.
+      final roomListener = _bindRoomEvents(room);
+
       await room.connect(url, token);
 
-      if (_isEnding || !mounted) {
-        room.disconnect();
-        return;
-      }
-
-      final roomListener = room.createListener();
-      roomListener.on<SpeakingChangedEvent>((event) {
-        if (event.participant is RemoteParticipant && mounted) {
-          setState(() => _remoteAudioLevel = event.participant.audioLevel);
-        }
-      });
-      _audioLevelTimer?.cancel();
-      _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-        if (!mounted || room.remoteParticipants.isEmpty) return;
-        final level = room.remoteParticipants.values.first.audioLevel;
-        setState(() => _remoteAudioLevel = level);
-      });
-      roomListener.on<ParticipantConnectionQualityUpdatedEvent>((event) {
-        if (event.participant is LocalParticipant && mounted) {
-          setState(() => _connectionQuality = event.connectionQuality);
-        }
-      });
-      roomListener.on<ParticipantDisconnectedEvent>((event) {
-        _hangUp();
-      });
-      roomListener.on<RoomDisconnectedEvent>((event) {
-        _hangUp();
-      });
-      roomListener.on<TrackSubscribedEvent>((event) {
-        if (event.track is VideoTrack) {
-          if (mounted) {
-            setState(() => _remoteVideoTrack = event.track as VideoTrack);
-          }
-        }
-      });
-      roomListener.on<TrackUnsubscribedEvent>((event) {
-        if (event.track is VideoTrack) {
-          if (mounted) {
-            setState(() => _remoteVideoTrack = null);
-          }
-        }
-      });
-      roomListener.on<TrackMutedEvent>((event) {
-        if (event.publication.kind == TrackType.VIDEO &&
-            event.participant is RemoteParticipant) {
-          if (mounted) setState(() => _remoteVideoMuted = true);
-        }
-      });
-      roomListener.on<TrackUnmutedEvent>((event) {
-        if (event.publication.kind == TrackType.VIDEO &&
-            event.participant is RemoteParticipant) {
-          if (mounted) setState(() => _remoteVideoMuted = false);
-        }
-      });
-
-      VideoTrack? existingRemoteVideoTrack;
-      for (final p in room.remoteParticipants.values) {
-        for (final pub in p.videoTrackPublications) {
-          if (pub.subscribed && pub.track is VideoTrack) {
-            existingRemoteVideoTrack = pub.track as VideoTrack;
-          }
-        }
-      }
-
-      try {
-        final storedToken = await _localStorage.getToken();
-        if (storedToken != null) {
-          await _repository.startRecording(storedToken, widget.callId);
-        }
-      } catch (_) {}
       if (_isEnding || !mounted) {
         roomListener.dispose();
         room.disconnect();
         return;
       }
+
+      _adoptExistingRemoteVideo(room);
+
+      // Recording is server side and nothing here depends on it, so it must not
+      // sit between joining the room and showing the call as connected.
+      unawaited(_startRecording());
 
       await room.localParticipant?.setMicrophoneEnabled(_micEnabled);
       await CallForegroundService.instance.start(
@@ -422,12 +391,20 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
       );
       _startCoinTimer();
       if (room.remoteParticipants.isNotEmpty) {
-        _startDurationTimer();
+        _armDurationFallback(room);
       } else {
         roomListener.on<ParticipantConnectedEvent>((event) {
-          if (mounted && _durationTimer == null) {
-            _startDurationTimer();
-          }
+          _remoteJoinTimer?.cancel();
+          _armDurationFallback(room);
+        });
+        // The caller can now be in the room before the listener finishes
+        // joining. If the listener never makes it, nothing else would take the
+        // caller off a silent call, so bail out instead of hanging there.
+        _remoteJoinTimer = Timer(const Duration(seconds: 25), () {
+          if (!mounted || _isEnding) return;
+          if (_room?.remoteParticipants.isNotEmpty ?? false) return;
+          _showMessage('Could not connect to the listener.');
+          _hangUp();
         });
       }
 
@@ -457,11 +434,9 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
           _roomListener = roomListener;
           _phase = _CallPhase.connected;
           _localVideoTrack = localVideoTrack;
-          if (existingRemoteVideoTrack != null) {
-            _remoteVideoTrack = existingRemoteVideoTrack;
-          }
         });
         _publishStatus();
+        _adoptExistingRemoteVideo(room);
         if (widget.startWithVideo) {
           PipService.instance.setCallActive(true);
         }
@@ -476,6 +451,102 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
         _showMessage('Connection error: $e');
       }
     }
+  }
+
+  EventsListener<RoomEvent> _bindRoomEvents(Room room) {
+    final roomListener = room.createListener();
+    roomListener.on<SpeakingChangedEvent>((event) {
+      if (event.participant is RemoteParticipant && mounted) {
+        setState(() => _remoteAudioLevel = event.participant.audioLevel);
+      }
+    });
+    _audioLevelTimer?.cancel();
+    _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted || room.remoteParticipants.isEmpty) return;
+      final level = room.remoteParticipants.values.first.audioLevel;
+      setState(() => _remoteAudioLevel = level);
+    });
+    roomListener.on<ParticipantConnectionQualityUpdatedEvent>((event) {
+      if (event.participant is LocalParticipant && mounted) {
+        setState(() => _connectionQuality = event.connectionQuality);
+      }
+    });
+    roomListener.on<ParticipantDisconnectedEvent>((event) {
+      _hangUp();
+    });
+    roomListener.on<RoomDisconnectedEvent>((event) {
+      _hangUp();
+    });
+    roomListener.on<TrackSubscribedEvent>((event) {
+      if (event.track is VideoTrack) {
+        if (mounted) {
+          setState(() => _remoteVideoTrack = event.track as VideoTrack);
+        }
+      }
+    });
+    roomListener.on<TrackPublishedEvent>((event) {
+      _adoptExistingRemoteVideo(room);
+    });
+    roomListener.on<TrackUnsubscribedEvent>((event) {
+      if (event.track is VideoTrack) {
+        if (mounted) {
+          setState(() => _remoteVideoTrack = null);
+        }
+      }
+    });
+    roomListener.on<TrackMutedEvent>((event) {
+      if (event.publication.kind == TrackType.VIDEO &&
+          event.participant is RemoteParticipant) {
+        if (mounted) setState(() => _remoteVideoMuted = true);
+      }
+    });
+    roomListener.on<TrackUnmutedEvent>((event) {
+      if (event.publication.kind == TrackType.VIDEO &&
+          event.participant is RemoteParticipant) {
+        if (mounted) setState(() => _remoteVideoMuted = false);
+      }
+    });
+    return roomListener;
+  }
+
+  /// Picks up a remote video track that was already published before we bound
+  /// our handlers. `subscribed` can still be false while the track object is
+  /// live, so the track itself is what decides.
+  void _adoptExistingRemoteVideo(Room room) {
+    if (!mounted) return;
+    for (final participant in room.remoteParticipants.values) {
+      for (final pub in participant.videoTrackPublications) {
+        final track = pub.track;
+        if (track is VideoTrack) {
+          if (_remoteVideoTrack != track) {
+            setState(() {
+              _remoteVideoTrack = track;
+              _remoteVideoMuted = pub.muted;
+            });
+          }
+          return;
+        }
+      }
+    }
+  }
+
+  /// The `call_connected` event decides when the clock starts so both screens
+  /// agree. This only covers the case where that event is lost.
+  void _armDurationFallback(Room room) {
+    if (_durationTimer != null) return;
+    Timer(const Duration(seconds: 3), () {
+      if (!mounted || _isEnding || _durationTimer != null) return;
+      if (room.remoteParticipants.isEmpty) return;
+      _startDurationTimer();
+    });
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      final storedToken = await _localStorage.getToken();
+      if (storedToken == null) return;
+      await _repository.startRecording(storedToken, widget.callId);
+    } catch (_) {}
   }
 
   Future<void> _toggleCamera() async {
@@ -633,8 +704,10 @@ await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     }
     _ringingTimer?.cancel();
     _statusPollTimer?.cancel();
+    _remoteJoinTimer?.cancel();
     _coinTimer?.cancel();
     _fcmSubscription?.cancel();
+    _socketSubscription?.cancel();
     _roomListener?.dispose();
     _audioLevelTimer?.cancel();
     _room?.disconnect();

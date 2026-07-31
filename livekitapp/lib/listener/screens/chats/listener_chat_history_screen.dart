@@ -1,13 +1,16 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
-import 'package:livekitapp/common/widgets/gift_message_bubble.dart';
-import 'package:livekitapp/common/widgets/voice_messages/voice_message_bubble.dart';
-import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
-import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicator.dart';
+import 'package:livekitapp/common/widgets/chat_composer.dart';
+import 'package:livekitapp/common/widgets/chat_message_list.dart';
+import 'package:livekitapp/core/network/chat_message_cache.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/presence_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_notes_screen.dart';
 import 'package:uuid/uuid.dart';
@@ -29,301 +32,249 @@ class ListenerChatHistoryScreen extends StatefulWidget {
       _ListenerChatHistoryScreenState();
 }
 
-class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> with WidgetsBindingObserver {
+class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
+    with WidgetsBindingObserver {
+  static const _bg = Color(0xFF0B0F1A);
+  static const _pink = Color(0xFFE53950);
+  static const _green = Color(0xFF74D8BD);
+
+  static const _statusRank = <String, int>{
+    'failed': 0,
+    'sending': 0,
+    'queued': 0,
+    'sent': 1,
+    'delivered': 2,
+    'read': 3,
+  };
+
+  final _pendingReadIds = <int>{};
+  final _pendingReadClientIds = <String>{};
+
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
   final _chatStorage = ChatStorage();
-  final _controller = TextEditingController();
-  bool _hasText = false;
   final _scrollController = ScrollController();
-  bool _isRecordingVoice = false;
-  bool _isLocked = false;
-  Duration _recordElapsed = Duration.zero;
-  double _recordAmplitude = 0;
-  List<Map<String, dynamic>> _messages = [];
+
+  late final ValueNotifier<List<Map<String, dynamic>>> _messages;
+  late final ValueNotifier<bool> _favorite;
+  final _typing = ValueNotifier<bool>(false);
+  final _atBottom = ValueNotifier<bool>(true);
+
   String? _token;
   StreamSubscription? _socketSub;
-  bool _userTyping = false;
-  bool _isUserOnline = false;
   Timer? _typingSendTimer;
-  bool _isFavorite = false;
-  bool _isNearBottom = true;
-  bool _showScrollToBottom = false;
-  double _lastBottomInset = 0;
-  Timer? _scrollToBottomTimer;
-  final Set<int> _pendingReadIds = {};
+  bool _hasMoreOlder = true;
+  bool _loadingOlder = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _messages = ValueNotifier<List<Map<String, dynamic>>>(
+      ChatMessageCache().messages(widget.userId),
+    );
+    final thread = ListenerDataCache().thread(widget.userId);
+    _favorite = ValueNotifier<bool>(thread['is_pinned'] == true);
+    _scrollController.addListener(_onScroll);
     _init();
   }
 
   @override
-  void didChangeMetrics() {
-    final bottomInset = WidgetsBinding.instance.platformDispatcher.views.first.viewInsets.bottom;
-    final delta = bottomInset - _lastBottomInset;
-    _lastBottomInset = bottomInset;
-    if (delta > 50 && _isNearBottom) {
-      _scrollToBottom();
-    }
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _socketSub?.cancel();
+    _typingSendTimer?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _messages.dispose();
+    _favorite.dispose();
+    _typing.dispose();
+    _atBottom.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    _refreshMessages();
+    _refreshThread();
   }
 
   Future<void> _init() async {
     _token = await _localStorage.getToken();
-    await _load();
-    _loadFavoriteStatus();
-    if (_token != null) {
-      _repository.markMessagesRead(_token!, widget.userId);
+    final token = _token;
+    if (token == null) return;
+    if (_messages.value.isEmpty) {
+      final cached = await _chatStorage.getMessages(widget.userId);
+      if (!mounted) return;
+      if (cached.isNotEmpty) _merge(cached.map((m) => m.toJson()).toList());
     }
-    ChatSocketService().connect(_token!, 'listener');
+    ChatSocketService().connect(token, 'listener');
     _socketSub = ChatSocketService().stream.listen(_onSocketMessage);
-    _controller.addListener(_onTyping);
-    _scrollController.addListener(_onScroll);
-    await _flushPending();
+    _markRead();
+    await _refreshMessages();
+    _refreshThread();
+    _flushPending();
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels <= 100) {
-      _loadOlder();
-    }
     if (!_scrollController.hasClients) return;
-    final distanceFromBottom = _scrollController.position.maxScrollExtent - _scrollController.position.pixels;
-    final nearBottom = distanceFromBottom < 150;
-    if (nearBottom != _isNearBottom || (!nearBottom) != _showScrollToBottom) {
-      setState(() {
-        _isNearBottom = nearBottom;
-        _showScrollToBottom = !nearBottom;
-      });
-    }
+    final position = _scrollController.position;
+    final atBottom = position.pixels <= 80;
+    if (_atBottom.value != atBottom) _atBottom.value = atBottom;
+    if (position.pixels >= position.maxScrollExtent - 200) _loadOlder();
   }
 
-  Future<void> _loadFavoriteStatus() async {
-    if (_token == null) return;
-    final threads = await _repository.getChatThreads(_token!);
-    final thread = threads.firstWhere(
-      (t) => t['user_id'] == widget.userId,
-      orElse: () => {},
-    );
-    final newFavorite = thread['is_pinned'] ?? false;
-    final newOnline = thread['is_online'] == true;
-    if (mounted && (newFavorite != _isFavorite || newOnline != _isUserOnline)) {
-      setState(() {
-        _isFavorite = newFavorite;
-        _isUserOnline = newOnline;
-      });
-    }
+  void _setMessages(List<Map<String, dynamic>> next) {
+    ChatMessageCache().save(widget.userId, next);
+    _messages.value = next;
   }
 
-  Future<void> _toggleFavorite() async {
-    if (_token == null) return;
-    setState(() => _isFavorite = !_isFavorite);
-    await _repository.updateChatSettings(
-      _token!,
-      widget.userId,
-      isPinned: _isFavorite,
-    );
+  void _merge(List<Map<String, dynamic>> incoming) {
+    if (incoming.isEmpty) return;
+    _setMessages(mergeChatMessages(_messages.value, incoming));
+    _applyReadMarkers();
   }
 
-  void _onTyping() {
-    final hasText = _controller.text.trim().isNotEmpty;
-    if (hasText != _hasText) setState(() => _hasText = hasText);
-    ChatSocketService().sendTyping(userId: widget.userId, isTyping: true);
-    _typingSendTimer?.cancel();
-    _typingSendTimer = Timer(const Duration(seconds: 2), () {
-      ChatSocketService().sendTyping(userId: widget.userId, isTyping: false);
-    });
-  }
-
-  void _onVoiceStateChanged(
-    bool recording,
-    Duration elapsed,
-    double amplitude,
+  void _patch(
+    bool Function(Map<String, dynamic> message) test,
+    void Function(Map<String, dynamic> message) apply,
   ) {
-    setState(() {
-      _isRecordingVoice = recording;
-      _recordElapsed = elapsed;
-      _recordAmplitude = amplitude;
+    final list = _messages.value;
+    var changed = false;
+    for (final message in list) {
+      if (!test(message)) continue;
+      apply(message);
+      changed = true;
+    }
+    if (!changed) return;
+    _setMessages(List<Map<String, dynamic>>.from(list));
+  }
+
+  void _patchStatus(
+    bool Function(Map<String, dynamic> message) test,
+    Object? status,
+  ) {
+    if (status is! String) return;
+    final rank = _statusRank[status] ?? 0;
+    _patch((m) => test(m) && rank > (_statusRank['${m['status']}'] ?? 0), (m) {
+      m['status'] = status;
+      if (status == 'read') m['is_read'] = true;
     });
   }
 
-  void _onLockChanged(bool locked) {
-    setState(() => _isLocked = locked);
-  }
-
-  Future<void> _flushPending() async {
-    final pending = await _chatStorage.getPending();
-    for (final p in pending.where((p) => p.otherId == widget.userId)) {
-      await _retrySend(p.clientId, p.message);
+  void _rememberRead(List<int> ids, List<String> clientIds) {
+    _pendingReadIds.addAll(ids);
+    _pendingReadClientIds.addAll(clientIds.where((id) => id.isNotEmpty));
+    while (_pendingReadIds.length > 300) {
+      _pendingReadIds.remove(_pendingReadIds.first);
+    }
+    while (_pendingReadClientIds.length > 300) {
+      _pendingReadClientIds.remove(_pendingReadClientIds.first);
     }
   }
 
-  void _onSocketMessage(Map<String, dynamic> data) {
-    final type = data['type'];
-    if (type == 'chat_message' && data['user_id'] == widget.userId) {
-      setState(() => _messages.add(data));
-      _scrollToBottom();
-      _chatStorage.upsertMessage(
-        widget.userId,
-        LocalChatMessage.fromJson(data, widget.userId),
-      );
-      if (data['sender_type'] == 'user' && _token != null) {
-        _repository.markMessagesRead(_token!, widget.userId);
-        if (data['id'] != null) {
-          _repository.markMessagesDelivered(_token!, [data['id'] as int]);
-        }
-      }
-    } else if (type == 'typing' && data['user_id'] == widget.userId) {
-      setState(() => _userTyping = data['is_typing'] == true);
-    } else if ((type == 'user_online' || type == 'user_offline') &&
-        data['user_id'] == widget.userId) {
-      setState(() => _isUserOnline = type == 'user_online');
-    } else if (type == 'message_status') {
-      setState(() {
-        final idx = _messages.indexWhere(
-          (m) => m['client_id'] == data['client_id'],
-        );
-        if (idx != -1) _messages[idx]['status'] = data['status'];
-      });
-      if (data['client_id'] != null) {
-        _chatStorage.updateStatus(data['client_id'], data['status']);
-      }
-    } else if (type == 'message_status_bulk') {
-      final ids = List<int>.from(data['ids'] ?? []);
-      setState(() {
-        for (final m in _messages) {
-          if (ids.contains(m['id'])) m['status'] = data['status'];
-        }
-      });
-      _chatStorage.updateStatusByServerIds(ids, data['status']);
-    } else if (type == 'read_receipt' && data['user_id'] == widget.userId) {
-      final ids = List<int>.from(data['message_ids'] ?? []);
-      setState(() {
-        for (final m in _messages) {
-          if (ids.contains(m['id'])) {
-            m['status'] = 'read';
-            m['is_read'] = true;
-          }
-        }
-      });
-      _pendingReadIds.addAll(ids);
-      _chatStorage.markReadUpTo(
-        widget.userId,
-        ids,
-      );
-    } else if (type == 'message_edited') {
-      setState(() {
-        final idx = _messages.indexWhere((m) => m['id'] == data['id']);
-        if (idx != -1) _messages[idx] = data;
-      });
-    } else if (type == 'message_deleted') {
-      setState(() {
-        final idx = _messages.indexWhere((m) => m['id'] == data['id']);
-        if (idx != -1) {
-          _messages[idx]['is_deleted'] = true;
-          _messages[idx]['message'] = '';
-        }
-      });
-    }
+  void _applyReadMarkers() {
+    if (_pendingReadIds.isEmpty && _pendingReadClientIds.isEmpty) return;
+    _patchStatus(
+      (m) =>
+          _pendingReadIds.contains(m['id']) ||
+          _pendingReadClientIds.contains(m['client_id']),
+      'read',
+    );
   }
 
-  void _scrollToBottom() {
-    _scrollToBottomTimer?.cancel();
-    _scrollToBottomTimer = Timer(const Duration(milliseconds: 80), () {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
-      });
-      Future.delayed(const Duration(milliseconds: 200), () {
-        if (_scrollController.hasClients && _isNearBottom) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
-      });
-    });
+  void _jumpToLatest() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels == 0) return;
+    _scrollController.jumpTo(0);
   }
 
-  bool _hasMoreOlder = true;
-  bool _loadingOlder = false;
-
-  Future<void> _load() async {
-    if (_token == null) return;
-    final isInitialLoad = _messages.isEmpty;
-    final cached = await _chatStorage.getMessages(widget.userId);
-    if (cached.isNotEmpty && mounted) {
-      setState(() => _messages = cached.map((m) => m.toJson()).toList());
-      _scrollToBottom();
-    }
+  Future<void> _refreshMessages() async {
+    final token = _token;
+    if (token == null) return;
     try {
-      final messages = await _repository.getChatMessages(
-        _token!,
-        widget.userId,
-      );
+      final fetched = await _repository.getChatMessages(token, widget.userId);
+      if (!mounted) return;
+      _merge(fetched);
       await _chatStorage.saveMessages(
         widget.userId,
-        messages.map((m) => LocalChatMessage.fromJson(m, widget.userId)).toList(),
+        fetched
+            .map((m) => LocalChatMessage.fromJson(m, widget.userId))
+            .toList(),
       );
-      final unchanged = _messages.length == messages.length &&
-          _messages.isNotEmpty &&
-          _messages.last['id'] == messages.last['id'] &&
-          _messages.last['status'] == messages.last['status'];
-      if (mounted && !unchanged) {
-        final wasAtBottom = isInitialLoad ||
-            !_scrollController.hasClients ||
-            _scrollController.position.maxScrollExtent -
-                    _scrollController.position.pixels <
-                150;
-        setState(() => _messages = messages);
-        if (wasAtBottom) {
-          _scrollToBottom();
-        }
-      }
-      await _ackDelivered(messages);
+      await _ackDelivered(fetched);
     } catch (_) {}
   }
 
+  Future<void> _refreshThread() async {
+    final token = _token;
+    if (token == null) return;
+    try {
+      final threads = await _repository.getChatThreads(
+        token,
+        forceRefresh: true,
+      );
+      if (!mounted) return;
+      final thread = threads.firstWhere(
+        (t) => t['user_id'] == widget.userId,
+        orElse: () => const {},
+      );
+      if (thread.isEmpty) return;
+      _favorite.value = thread['is_pinned'] == true;
+    } catch (_) {}
+  }
+
+  Future<void> _markRead({int attempt = 0}) async {
+    final token = _token;
+    if (token == null) return;
+    try {
+      await _repository.markMessagesRead(token, widget.userId);
+    } catch (_) {
+      if (!mounted || attempt >= 3) return;
+      Future.delayed(Duration(seconds: 2 * (attempt + 1)), () {
+        if (mounted) _markRead(attempt: attempt + 1);
+      });
+    }
+  }
+
   Future<void> _ackDelivered(List<Map<String, dynamic>> messages) async {
-    if (_token == null) return;
+    final token = _token;
+    if (token == null) return;
     final ids = messages
-        .where((m) => m['sender_type'] == 'user' && m['status'] == 'sent' && m['id'] != null)
+        .where(
+          (m) =>
+              m['sender_type'] == 'user' &&
+              m['status'] == 'sent' &&
+              m['id'] != null,
+        )
         .map<int>((m) => m['id'] as int)
         .toList();
     if (ids.isEmpty) return;
     try {
-      await _repository.markMessagesDelivered(_token!, ids);
+      await _repository.markMessagesDelivered(token, ids);
       await _chatStorage.updateStatusByServerIds(ids, 'delivered');
     } catch (_) {}
   }
 
   Future<void> _loadOlder() async {
-    if (_loadingOlder || !_hasMoreOlder || _token == null) return;
-    final oldestId = _messages
+    final token = _token;
+    if (_loadingOlder || !_hasMoreOlder || token == null) return;
+    final oldestId = _messages.value
         .map((m) => m['id'])
         .whereType<int>()
         .fold<int?>(null, (min, id) => min == null || id < min ? id : min);
     if (oldestId == null) return;
     _loadingOlder = true;
     try {
-      final cachedOlder = await _chatStorage.getBeforePage(
-        widget.userId,
-        oldestId,
-      );
-      if (cachedOlder.isNotEmpty && mounted) {
-        final prevExtent = _scrollController.position.maxScrollExtent;
-        setState(() {
-          _messages = [...cachedOlder.map((m) => m.toJson()), ..._messages];
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            final newExtent = _scrollController.position.maxScrollExtent;
-            _scrollController.jumpTo(newExtent - prevExtent);
-          }
-        });
+      final cached = await _chatStorage.getBeforePage(widget.userId, oldestId);
+      if (cached.isNotEmpty) {
+        if (!mounted) return;
+        _merge(cached.map((m) => m.toJson()).toList());
         return;
       }
       final older = await _repository.getChatMessages(
-        _token!,
+        token,
         widget.userId,
         beforeId: oldestId,
       );
@@ -335,78 +286,129 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
         widget.userId,
         older.map((m) => LocalChatMessage.fromJson(m, widget.userId)).toList(),
       );
-      if (mounted) {
-        final prevExtent = _scrollController.position.maxScrollExtent;
-        setState(() => _messages = [...older, ..._messages]);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            final newExtent = _scrollController.position.maxScrollExtent;
-            _scrollController.jumpTo(newExtent - prevExtent);
-          }
-        });
-      }
+      if (!mounted) return;
+      _merge(older);
     } catch (_) {
     } finally {
       _loadingOlder = false;
     }
   }
 
-  Future<void> _send() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _token == null) return;
-    _controller.clear();
+  Future<void> _flushPending() async {
+    final pending = await _chatStorage.getPending();
+    for (final message in pending.where((p) => p.otherId == widget.userId)) {
+      await _retrySend(message.clientId, message.message);
+    }
+  }
+
+  void _onSocketMessage(Map<String, dynamic> data) {
+    final type = data['type'];
+    switch (type) {
+      case 'chat_message':
+        if (data['user_id'] != widget.userId) return;
+        _merge([data]);
+        _chatStorage.upsertMessage(
+          widget.userId,
+          LocalChatMessage.fromJson(data, widget.userId),
+        );
+        final token = _token;
+        if (data['sender_type'] == 'user' && token != null) {
+          _markRead();
+          final id = data['id'];
+          if (id is int) {
+            _repository.markMessagesDelivered(token, [id]).catchError((_) {});
+          }
+        }
+        return;
+      case 'typing':
+        if (data['user_id'] != widget.userId) return;
+        _typing.value = data['is_typing'] == true;
+        return;
+      case 'user_online':
+      case 'user_offline':
+        if (data['user_id'] != widget.userId) return;
+        PresenceCache().setUserOnline(widget.userId, type == 'user_online');
+        return;
+      case 'message_status':
+        final clientId = data['client_id'];
+        if (clientId == null) return;
+        _patchStatus((m) => m['client_id'] == clientId, data['status']);
+        _chatStorage.updateStatus(clientId, data['status']);
+        return;
+      case 'message_status_bulk':
+        final ids = List<int>.from(data['ids'] ?? const []);
+        final clientIds = List<String>.from(
+          (data['client_ids'] as List? ?? const []).whereType<String>(),
+        );
+        if (ids.isEmpty && clientIds.isEmpty) return;
+        _patchStatus(
+          (m) =>
+              ids.contains(m['id']) || clientIds.contains(m['client_id']),
+          data['status'],
+        );
+        _chatStorage.updateStatusByServerIds(ids, data['status']);
+        return;
+      case 'read_receipt':
+        if (data['user_id'] != widget.userId) return;
+        final ids = List<int>.from(data['message_ids'] ?? const []);
+        final clientIds = List<String>.from(
+          (data['client_ids'] as List? ?? const []).whereType<String>(),
+        );
+        if (ids.isEmpty && clientIds.isEmpty) return;
+        _rememberRead(ids, clientIds);
+        _applyReadMarkers();
+        _chatStorage.markReadUpTo(widget.userId, ids);
+        _chatStorage.markReadByClientIds(widget.userId, clientIds);
+        return;
+      case 'socket_connected':
+        _refreshMessages();
+        return;
+      case 'message_edited':
+        _merge([data]);
+        return;
+      case 'message_deleted':
+        _patch((m) => m['id'] == data['id'], (m) {
+          m['is_deleted'] = true;
+          m['message'] = '';
+        });
+        return;
+    }
+  }
+
+  void _emitTyping() {
+    ChatSocketService().sendTyping(userId: widget.userId, isTyping: true);
+    _typingSendTimer?.cancel();
+    _typingSendTimer = Timer(const Duration(seconds: 2), () {
+      ChatSocketService().sendTyping(userId: widget.userId, isTyping: false);
+    });
+  }
+
+  Future<void> _sendText(String text) async {
+    final token = _token;
+    if (token == null) return;
     final clientId = const Uuid().v4();
-    setState(() {
-      _messages.add({
+    _merge([
+      {
         'client_id': clientId,
         'user_id': widget.userId,
         'sender_type': 'listener',
         'message': text,
+        'message_type': 'text',
         'status': 'sending',
         'is_deleted': false,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    });
-    _scrollToBottom();
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      },
+    ]);
+    _jumpToLatest();
     await _retrySend(clientId, text);
   }
 
-  String _fmtDateLabel(String iso) {
-    final d = DateTime.parse(iso).toLocal();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final date = DateTime(d.year, d.month, d.day);
-    final diff = today.difference(date).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    if (diff < 7) {
-      const days = [
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-        'Sunday',
-      ];
-      return days[d.weekday - 1];
-    }
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-  }
-
-  String _fmtMsgTime(String iso) {
-    final local = DateTime.parse(iso).toLocal();
-    final h = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final m = local.minute.toString().padLeft(2, '0');
-    final ampm = local.hour >= 12 ? 'PM' : 'AM';
-    return '$h:$m $ampm';
-  }
-
   Future<void> _sendVoice(String filePath, int duration) async {
-    if (_token == null) return;
+    final token = _token;
+    if (token == null) return;
     final clientId = const Uuid().v4();
-    setState(() {
-      _messages.add({
+    _merge([
+      {
         'client_id': clientId,
         'user_id': widget.userId,
         'sender_type': 'listener',
@@ -416,58 +418,48 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
         'audio_duration': duration,
         'status': 'sending',
         'is_deleted': false,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    });
-    _scrollToBottom();
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      },
+    ]);
+    _jumpToLatest();
     try {
-      await _repository.sendVoiceMessage(
-        _token!,
+      final sent = await _repository.sendVoiceMessage(
+        token,
         widget.userId,
         filePath,
         duration,
         clientId: clientId,
       );
-      await _load();
-    } catch (_) {
-      setState(() {
-        final idx = _messages.indexWhere((m) => m['client_id'] == clientId);
-        if (idx != -1) _messages[idx]['status'] = 'failed';
-      });
-    }
-  }
-
-  Future<void> _retrySend(String clientId, String text) async {
-    try {
-      final sent = await _repository.sendChatMessage(
-        _token!,
-        widget.userId,
-        text,
-        clientId: clientId,
-      );
-      await _chatStorage.removePending(clientId);
-      if (mounted) {
-        setState(() {
-          final idx = _messages.indexWhere((m) => m['client_id'] == clientId);
-          if (idx != -1) {
-            final merged = Map<String, dynamic>.from(sent);
-            if (merged['id'] != null && _pendingReadIds.contains(merged['id'])) {
-              merged['status'] = 'read';
-              merged['is_read'] = true;
-            }
-            _messages[idx] = merged;
-          }
-        });
-      }
+      if (!mounted) return;
+      _merge([sent]);
       await _chatStorage.upsertMessage(
         widget.userId,
         LocalChatMessage.fromJson(sent, widget.userId),
       );
     } catch (_) {
-      setState(() {
-        final idx = _messages.indexWhere((m) => m['client_id'] == clientId);
-        if (idx != -1) _messages[idx]['status'] = 'failed';
-      });
+      if (!mounted) return;
+      _patch((m) => m['client_id'] == clientId, (m) => m['status'] = 'failed');
+    }
+  }
+
+  Future<void> _retrySend(String clientId, String text) async {
+    final token = _token;
+    if (token == null) return;
+    try {
+      final sent = await _repository.sendChatMessage(
+        token,
+        widget.userId,
+        text,
+        clientId: clientId,
+      );
+      await _chatStorage.removePending(clientId);
+      await _chatStorage.upsertMessage(
+        widget.userId,
+        LocalChatMessage.fromJson(sent, widget.userId),
+      );
+      if (!mounted) return;
+      _merge([sent]);
+    } catch (_) {
       await _chatStorage.addPending(
         PendingMessage(
           clientId: clientId,
@@ -475,60 +467,63 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
           message: text,
         ),
       );
-      Future.delayed(
-        const Duration(seconds: 5),
-        () => _retrySend(clientId, text),
+      if (!mounted) return;
+      _patch((m) => m['client_id'] == clientId, (m) => m['status'] = 'failed');
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) _retrySend(clientId, text);
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final token = _token;
+    if (token == null) return;
+    final next = !_favorite.value;
+    _favorite.value = next;
+    try {
+      await _repository.updateChatSettings(
+        token,
+        widget.userId,
+        isPinned: next,
       );
+    } catch (_) {
+      if (mounted) _favorite.value = !next;
     }
   }
 
-  Widget _statusIcon(String? status) {
-    IconData icon;
-    Color color = Colors.white70;
-    switch (status) {
-      case 'sending':
-      case 'queued':
-        icon = Icons.access_time;
-        break;
-      case 'sent':
-        icon = Icons.check;
-        break;
-      case 'delivered':
-        icon = Icons.done_all;
-        break;
-      case 'read':
-        icon = Icons.done_all;
-        color = Colors.lightBlueAccent;
-        break;
-      case 'failed':
-        icon = Icons.error_outline;
-        color = Colors.redAccent;
-        break;
-      default:
-        icon = Icons.check;
-    }
-    return Icon(icon, size: 14, color: color);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _socketSub?.cancel();
-    _typingSendTimer?.cancel();
-    _scrollToBottomTimer?.cancel();
-    _controller.removeListener(_onTyping);
-    _scrollController.removeListener(_onScroll);
-    _controller.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  Widget _subtitle() {
+    return SizedBox(
+      height: 16,
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _typing,
+        builder: (context, typing, _) {
+          return ValueListenableBuilder<bool?>(
+            valueListenable: PresenceCache().user(widget.userId),
+            builder: (context, online, _) {
+              if (!typing && online == null) return const SizedBox.shrink();
+              final label = typing
+                  ? 'typing...'
+                  : (online == true ? 'Online' : 'Offline');
+              return Text(
+                label,
+                style: TextStyle(
+                  color: typing
+                      ? _pink
+                      : (online == true ? _green : Colors.white54),
+                  fontSize: 12,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFF0B0F1A);
-    const bubbleIn = Color(0xFF1F2430);
-    const bubbleOut = Color(0xFF7A1620);
-    const pink = Color(0xFFE53950);
     final screenWidth = MediaQuery.of(context).size.width;
     final isNarrow = screenWidth < 380;
     final iconButtonStyle = IconButton.styleFrom(
@@ -537,20 +532,25 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: _bg,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        backgroundColor: bg,
+        backgroundColor: _bg,
         elevation: 0,
         titleSpacing: 0,
         leadingWidth: 40,
         leading: IconButton(
           style: iconButtonStyle,
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Row(
           children: [
-         AvatarImage(
+            AvatarImage(
               photoUrl: widget.userPhotoUrl,
               radius: isNarrow ? 15 : 18,
               iconSize: isNarrow ? 15 : 18,
@@ -564,25 +564,14 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
                 children: [
                   Text(
                     widget.userName,
-                    style: TextStyle(color: Colors.white, fontSize: isNarrow ? 14 : 16),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  Text(
-                    _userTyping
-                        ? 'typing...'
-                        : (_isUserOnline ? 'Online' : 'Offline'),
                     style: TextStyle(
-                      color: _userTyping
-                          ? const Color(0xFFE53950)
-                          : (_isUserOnline
-                                ? const Color(0xFF74D8BD)
-                                : Colors.white54),
-                      fontSize: 12,
+                      color: Colors.white,
+                      fontSize: isNarrow ? 14 : 16,
                     ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
+                  _subtitle(),
                 ],
               ),
             ),
@@ -591,7 +580,11 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
         actions: [
           IconButton(
             style: iconButtonStyle,
-            icon: Icon(Icons.note_alt_outlined, color: Colors.white, size: isNarrow ? 20 : 24),
+            icon: Icon(
+              Icons.note_alt_outlined,
+              color: Colors.white,
+              size: isNarrow ? 20 : 24,
+            ),
             onPressed: () {
               Navigator.push(
                 context,
@@ -604,265 +597,70 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen> w
               );
             },
           ),
-          IconButton(
-            style: iconButtonStyle,
-            icon: Icon(
-              _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: _isFavorite ? const Color(0xFFE53950) : Colors.white,
-              size: isNarrow ? 20 : 24,
+          ValueListenableBuilder<bool>(
+            valueListenable: _favorite,
+            builder: (context, favorite, _) => IconButton(
+              style: iconButtonStyle,
+              icon: Icon(
+                favorite ? Icons.favorite : Icons.favorite_border,
+                color: favorite ? _pink : Colors.white,
+                size: isNarrow ? 20 : 24,
+              ),
+              onPressed: _toggleFavorite,
             ),
-            onPressed: _toggleFavorite,
           ),
           IconButton(
             style: iconButtonStyle,
-            icon: Icon(Icons.more_vert, color: Colors.white, size: isNarrow ? 20 : 24),
+            icon: Icon(
+              Icons.more_vert,
+              color: Colors.white,
+              size: isNarrow ? 20 : 24,
+            ),
             onPressed: () {},
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Column(
+      body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(12),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isMe = msg['sender_type'] == 'listener';
-                final showDateHeader =
-                    index == 0 ||
-                    _fmtDateLabel(_messages[index]['created_at']) !=
-                        _fmtDateLabel(_messages[index - 1]['created_at']);
-                final bubble = Align(
-                  alignment: isMe
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 56),
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.only(
-                      left: 12,
-                      right: 2,
-                      top: 8,
-                      bottom: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isMe ? bubbleOut : bubbleIn,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Stack(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 52, bottom: 14),
-                          child: msg['is_deleted'] == true
-                              ? Text(
-                                  'Message deleted',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                )
-                              : msg['message_type'] == 'gift'
-                              ? GiftMessageBubble(
-                                  giftIcon: msg['gift_icon'],
-                                  giftName: msg['gift_name'] ?? '',
-                                  // Listener is the receiver: only half the gift's
-                                  // coins are credited to them, so show that half.
-                                  coins: ((msg['gift_coins'] ?? 0) as int) ~/ 2,
-                                  isMe: isMe,
-                                  sentDuringCall: msg['call_id'] != null,
-                                )
-                              : msg['message_type'] == 'audio'
-                              ? VoiceMessageBubble(
-                                  audioUrl: msg['audio_url'] ?? '',
-                                  durationSeconds: msg['audio_duration'] ?? 0,
-                                  isMe: isMe,
-                                  createdAt: DateTime.parse(msg['created_at']),
-                                )
-                              : Text(
-                                  msg['message'],
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                        ),
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _fmtMsgTime(msg['created_at']),
-                                style: TextStyle(
-                                  color: isMe ? Colors.white70 : Colors.black54,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              if (isMe) const SizedBox(width: 4),
-                              if (isMe) _statusIcon(msg['status']),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-                if (!showDateHeader) return bubble;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1F2430),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        _fmtDateLabel(msg['created_at']),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white54,
-                        ),
-                      ),
-                    ),
-                    bubble,
-                  ],
-                );
-              },
-            ),
-          ),
-          if (_userTyping)
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'typing...',
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                ),
-              ),
-            ),
-          Container(
-            color: bg,
-            padding: EdgeInsets.fromLTRB(
-              8,
-              8,
-              8,
-              8 + MediaQuery.of(context).padding.bottom,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Stack(
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A2032),
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: _isRecordingVoice
-                            ? VoiceRecordingIndicator(
-                                elapsed: _recordElapsed,
-                                amplitude: _recordAmplitude,
-                              )
-                            : TextField(
-                                controller: _controller,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: const InputDecoration(
-                                  hintText: 'Type a message',
-                                  hintStyle: TextStyle(color: Colors.white54),
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                ),
-                                onSubmitted: (_) => _send(),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    if (_hasText)
-                      Container(
-                        decoration: const BoxDecoration(
-                          color: pink,
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white),
-                          onPressed: _send,
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: VoiceRecordButton(
-                          onRecorded: _sendVoice,
-                          onStateChanged: _onVoiceStateChanged,
-                          onLockChanged: _onLockChanged,
-                          idleColor: pink,
-                        ),
-                      ),
-                  ],
+                ChatMessageList(
+                  messages: _messages,
+                  controller: _scrollController,
+                  isMine: (message) => message['sender_type'] == 'listener',
+                  giftCoins: (message) =>
+                      ((message['gift_coins'] ?? 0) as int) ~/ 2,
+                  bubbleMinWidth: 56,
                 ),
-                if (_isLocked)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _atBottom,
+                    builder: (context, atBottom, _) => atBottom
+                        ? const SizedBox.shrink()
+                        : FloatingActionButton(
+                            mini: true,
+                            backgroundColor: const Color(0xFF1F2430),
+                            onPressed: () => _scrollController.jumpTo(0),
+                            child: const Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.white,
+                            ),
                           ),
-                          onPressed: () =>
-                              VoiceRecordButton.currentState?.triggerCancel(),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.pause, color: Colors.blue),
-                          onPressed: () =>
-                              VoiceRecordButton.currentState?.triggerPause(),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.send, color: Colors.blue),
-                          onPressed: () =>
-                              VoiceRecordButton.currentState?.triggerSend(),
-                        ),
-                      ],
-                    ),
                   ),
+                ),
               ],
             ),
           ),
-        ],
+          ChatComposer(
+            onSendText: _sendText,
+            onSendVoice: _sendVoice,
+            onTextChanged: _emitTyping,
+            accentColor: _pink,
+            backgroundColor: _bg,
           ),
-          if (_showScrollToBottom)
-            Positioned(
-              right: 16,
-              bottom: 90 + MediaQuery.of(context).padding.bottom,
-              child: FloatingActionButton(
-                mini: true,
-                backgroundColor: const Color(0xFF1F2430),
-                onPressed: () {
-                  _scrollToBottom();
-                  setState(() {
-                    _isNearBottom = true;
-                    _showScrollToBottom = false;
-                  });
-                },
-                child: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-              ),
-            ),
         ],
       ),
     );

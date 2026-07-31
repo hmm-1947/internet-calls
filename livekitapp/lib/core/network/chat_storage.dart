@@ -166,6 +166,22 @@ class ChatStorage {
   static Database? _db;
   static const _pageSize = 25;
 
+  static const _statusRank = <String, int>{
+    'failed': 0,
+    'sending': 0,
+    'queued': 0,
+    'sent': 1,
+    'delivered': 2,
+    'read': 3,
+  };
+
+  static int _rank(Object? status) => _statusRank['$status'] ?? 0;
+
+  static List<String> _lowerRankStatuses(String status) => _statusRank.entries
+      .where((entry) => entry.value < _rank(status))
+      .map((entry) => entry.key)
+      .toList();
+
   Future<Database> _openDb() async {
     if (_db != null) return _db!;
     final path = join(await getDatabasesPath(), 'chat_cache.db');
@@ -214,22 +230,70 @@ class ChatStorage {
     return _db!;
   }
 
+  Future<Map<String, dynamic>?> _existingRow(
+    Database db,
+    int otherId,
+    LocalChatMessage msg,
+  ) async {
+    if (msg.clientId.isNotEmpty) {
+      final rows = await db.query(
+        'messages',
+        columns: ['status', 'is_read', 'server_id'],
+        where: 'other_id = ? AND client_id = ?',
+        whereArgs: [otherId, msg.clientId],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) return rows.first;
+    }
+    if (msg.id != null) {
+      final rows = await db.query(
+        'messages',
+        columns: ['status', 'is_read', 'server_id'],
+        where: 'other_id = ? AND server_id = ?',
+        whereArgs: [otherId, msg.id],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) return rows.first;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _preserveProgress(
+    Map<String, dynamic> data,
+    Map<String, dynamic>? existing,
+  ) {
+    if (existing == null) return data;
+    if (_rank(existing['status']) > _rank(data['status'])) {
+      data['status'] = existing['status'];
+    }
+    if (existing['is_read'] == 1) data['is_read'] = 1;
+    data['server_id'] ??= existing['server_id'];
+    return data;
+  }
+
   Future<void> upsertMessage(int otherId, LocalChatMessage msg) async {
     final db = await _openDb();
+    final existing = await _existingRow(db, otherId, msg);
     await db.insert(
       'messages',
-      msg._toDb(),
+      _preserveProgress(msg._toDb(), existing),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
   Future<void> upsertMessages(int otherId, List<LocalChatMessage> msgs) async {
+    if (msgs.isEmpty) return;
     final db = await _openDb();
-    final batch = db.batch();
+    final rows = <Map<String, dynamic>>[];
     for (final m in msgs) {
+      final existing = await _existingRow(db, otherId, m);
+      rows.add(_preserveProgress(m._toDb(), existing));
+    }
+    final batch = db.batch();
+    for (final row in rows) {
       batch.insert(
         'messages',
-        m._toDb(),
+        row,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
@@ -238,22 +302,28 @@ class ChatStorage {
 
   Future<void> updateStatus(String clientId, String status) async {
     final db = await _openDb();
+    final lower = _lowerRankStatuses(status);
+    if (lower.isEmpty) return;
     await db.update(
       'messages',
       {'status': status},
-      where: 'client_id = ?',
-      whereArgs: [clientId],
+      where:
+          'client_id = ? AND (status IS NULL OR status IN (${lower.map((_) => '?').join(',')}))',
+      whereArgs: [clientId, ...lower],
     );
   }
 
   Future<void> updateStatusByServerIds(List<int> ids, String status) async {
     if (ids.isEmpty) return;
     final db = await _openDb();
+    final lower = _lowerRankStatuses(status);
+    if (lower.isEmpty) return;
     await db.update(
       'messages',
       {'status': status},
-      where: 'server_id IN (${ids.map((_) => '?').join(',')})',
-      whereArgs: ids,
+      where:
+          'server_id IN (${ids.map((_) => '?').join(',')}) AND (status IS NULL OR status IN (${lower.map((_) => '?').join(',')}))',
+      whereArgs: [...ids, ...lower],
     );
   }
 
@@ -264,6 +334,18 @@ class ChatStorage {
       'messages',
       {'status': 'read', 'is_read': 1},
       where: 'other_id = ? AND server_id IN (${ids.map((_) => '?').join(',')})',
+      whereArgs: [otherId, ...ids],
+    );
+  }
+
+  Future<void> markReadByClientIds(int otherId, List<String> clientIds) async {
+    final ids = clientIds.where((id) => id.isNotEmpty).toList();
+    if (ids.isEmpty) return;
+    final db = await _openDb();
+    await db.update(
+      'messages',
+      {'status': 'read', 'is_read': 1},
+      where: 'other_id = ? AND client_id IN (${ids.map((_) => '?').join(',')})',
       whereArgs: [otherId, ...ids],
     );
   }

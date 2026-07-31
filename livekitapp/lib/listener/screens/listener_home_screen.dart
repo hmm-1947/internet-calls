@@ -27,7 +27,6 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   final _localStorage = LocalStorage();
   final _socketService = ChatSocketService();
   StreamSubscription<Map<String, dynamic>>? _socketSub;
-  bool _isOnline = false;
   String? _token;
   List<Map<String, dynamic>> _users = [];
   bool _loadingUsers = true;
@@ -44,21 +43,16 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   Future<void> _initStatus() async {
     await Permission.microphone.request();
     _token = await _localStorage.getToken();
-    if (_token != null) {
-      try {
-        final me = await _repository.getMe(_token!);
-        final wantsOnline = me['is_online'] is bool
-            ? me['is_online'] as bool
-            : true;
-        _updateStatus(wantsOnline);
-      } catch (_) {
-        _updateStatus(true);
-      }
-      _loadUsers();
-      _loadProfile();
-      _socketService.connect(_token!, 'listener');
-      _socketSub = _socketService.stream.listen(_handleSocketEvent);
-    }
+    if (_token == null) return;
+    // Connect first: the socket handshake is what publishes presence, and the
+    // server already announces the listener as online when their stored
+    // availability switch is on. Echoing /me back through POST /status made the
+    // app overwrite that switch with whatever transient value it just read.
+    _socketService.connect(_token!, 'listener');
+    _socketService.ensureConnected();
+    _socketSub = _socketService.stream.listen(_handleSocketEvent);
+    _loadUsers();
+    _loadProfile();
   }
 
   void _handleSocketEvent(Map<String, dynamic> data) {
@@ -124,23 +118,12 @@ Future<void> _loadProfile() async {
   }
 
   Future<void> _onRefresh() async {
+    _socketService.ensureConnected();
     await Future.wait([
       _loadUsers(),
       _loadProfile(),
       if (widget.onRefresh != null) widget.onRefresh!(),
     ]);
-  }
-
-  Future<void> _updateStatus(bool online) async {
-    if (_token == null) return;
-    try {
-      await _repository.updateStatus(_token!, online);
-      setState(() {
-        _isOnline = online;
-      });
-    } catch (e) {
-      debugPrint('Failed to update status: $e');
-    }
   }
 
   @override

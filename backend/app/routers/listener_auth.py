@@ -46,7 +46,10 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "phone": current_listener.phone,
         "total_talk_time_seconds": int(total_seconds),
         "total_calls": total_calls or 0,
-        "is_online": bool(current_listener.is_online) and manager.is_listener_online(current_listener.id),
+        # The listener's own availability switch, not their socket state, so the
+        # settings toggle keeps its position across restarts and reconnects.
+        "is_online": bool(current_listener.is_online),
+        "is_connected": manager.is_listener_online(current_listener.id),
         "about": current_listener.about,
         "tags": _parse_list(current_listener.tags),
         "languages": _parse_list(current_listener.languages),

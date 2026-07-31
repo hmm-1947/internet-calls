@@ -15,7 +15,7 @@ from app.core.deps import get_current_user, get_current_listener, get_current_pa
 from app.models.models import Listener, Call, User
 from app.schemas.schemas import CallInitiate
 from app.utils.livekit_token import generate_token
-from app.utils.fcm import send_call_notification, send_call_cancelled, send_call_rejected, send_call_accepted, send_call_ended, send_call_coin_exceeded, send_call_missed
+from app.utils.fcm import send_call_notification, send_call_cancelled, send_call_rejected, send_call_accepted, send_call_ended, send_call_coin_exceeded, send_call_missed, send_async
 from app.models.models import CallRecording
 from app.utils.livekit_egress import start_recording, stop_recording
 from app.utils.livekit_room import delete_room_background
@@ -48,6 +48,17 @@ async def _finalize_call_billing(db: Session, call: Call, duration_seconds: int)
     if call.callee_listener_id:
         add_talktime_seconds(db, call.callee_listener_id, duration_seconds)
     db.commit()
+
+
+def _elapsed_since_connected(call: Call) -> int:
+    """Seconds since the call clock started, computed server side so both apps
+    agree regardless of their own clocks."""
+    if not call.connected_at:
+        return 0
+    connected_at = call.connected_at
+    if connected_at.tzinfo is None:
+        connected_at = connected_at.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - connected_at).total_seconds()))
 
 
 def _compute_call_duration(call: Call, override_seconds: int | None = None) -> int:
@@ -138,21 +149,48 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
         db.rollback()
         raise HTTPException(status_code=409, detail="Listener is busy")
     db.refresh(call)
-    # No token returned yet — user joins LiveKit only after listener accepts
+    # No token returned yet — user joins LiveKit only after listener accepts.
+    # The push goes out on a worker thread so the caller gets `call_id` back and
+    # can start ringing without waiting on the FCM round trip.
     if listener.fcm_token:
-        try:
-            send_call_notification(listener.fcm_token, room_name, current_user.name, current_user.id, call.id, call_type=call_type, caller_photo_url=current_user.photo_url or "")
-        except Exception as e:
-            print(f"[FCM ERROR] Failed to notify listener {listener.id}: {e}")
+        send_async(
+            send_call_notification,
+            listener.fcm_token, room_name, current_user.name, current_user.id, call.id,
+            call_type=call_type, caller_photo_url=current_user.photo_url or "",
+        )
     return {"call_id": call.id}
 
+async def _notify_caller_accepted(db: Session, call: Call) -> None:
+    """Hand the caller their LiveKit token the moment the listener accepts, so
+    both sides negotiate with LiveKit at the same time instead of the caller
+    waiting for the listener to finish joining first.
+
+    The websocket is the fast path (the caller is sitting on the call screen
+    with it open); the push is the fallback for a socket that just dropped."""
+    user = db.query(User).filter(User.id == call.caller_user_id).first()
+    if not user:
+        return
+    user_token = generate_token(call.room_name, f"user-{user.id}", user.name)
+    await manager.send_to_user(user.id, {
+        "type": "call_accepted",
+        "call_id": call.id,
+        "room_name": call.room_name,
+        "token": user_token,
+        "livekit_url": settings.livekit_url,
+        "call_type": call.call_type,
+    })
+    if user.fcm_token:
+        send_async(send_call_accepted, user.fcm_token, call.id, call.room_name, user_token, settings.livekit_url)
+
+
 @router.post("/{call_id}/accept")
-def accept_call(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+async def accept_call(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     call = db.query(Call).filter(Call.id == call_id, Call.callee_listener_id == current_listener.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     if call.status == "accepted":
         listener_token = generate_token(call.room_name, f"listener-{current_listener.id}", current_listener.name)
+        await _notify_caller_accepted(db, call)
         return {"room_name": call.room_name, "token": listener_token, "livekit_url": settings.livekit_url, "call_type": call.call_type}
     if call.status != "ringing":
         raise HTTPException(status_code=400, detail="Call has already been cancelled, ended, or accepted")
@@ -163,6 +201,7 @@ def accept_call(call_id: int, db: Session = Depends(get_db), current_listener: L
     call.status = "accepted"
     db.commit()
     listener_token = generate_token(call.room_name, f"listener-{current_listener.id}", current_listener.name)
+    await _notify_caller_accepted(db, call)
     return {"room_name": call.room_name, "token": listener_token, "livekit_url": settings.livekit_url, "call_type": call.call_type}
 
 @router.post("/{call_id}/ready")
@@ -172,19 +211,28 @@ async def ready_call(call_id: int, db: Session = Depends(get_db), current_listen
         raise HTTPException(status_code=404, detail="Call not found")
     if call.status != "accepted":
         raise HTTPException(status_code=400, detail="Call is not in accepted state")
-    call.connected_at = datetime.now(timezone.utc)
-    db.commit()
-    asyncio.create_task(run_call_billing(call.id))
+    if call.connected_at is None:
+        call.connected_at = datetime.now(timezone.utc)
+        db.commit()
+        asyncio.create_task(run_call_billing(call.id))
     user = db.query(User).filter(User.id == call.caller_user_id).first()
     max_seconds = max_call_seconds(db, user, call.call_type) if user else 0
+    # The caller was already handed their token at accept time; repeat it here so
+    # a socket that reconnected in between still gets it. The client ignores the
+    # duplicate.
+    await _notify_caller_accepted(db, call)
+    # Both call screens seed their timer from this, so they tick together and
+    # match the billed duration instead of each starting whenever its own device
+    # happened to finish setting up. The server sends the already-elapsed time
+    # rather than a timestamp, so a skewed device clock cannot shift it.
+    elapsed = _elapsed_since_connected(call)
     if user:
-        user_token = generate_token(call.room_name, f"user-{user.id}", user.name)
-        if user.fcm_token:
-            try:
-                send_call_accepted(user.fcm_token, call.id, call.room_name, user_token, settings.livekit_url)
-            except Exception as e:
-                print(f"[FCM ERROR] Failed to notify user {user.id} of acceptance: {e}")
-    return {"status": "ready", "max_seconds": max_seconds}
+        await manager.send_to_user(user.id, {
+            "type": "call_connected",
+            "call_id": call.id,
+            "elapsed_seconds": elapsed,
+        })
+    return {"status": "ready", "max_seconds": max_seconds, "elapsed_seconds": elapsed}
 
 
 @router.post("/{call_id}/recording/start")
@@ -349,22 +397,24 @@ async def finalize_abandoned_call(
 
 @router.get("/{call_id}/status")
 def call_status(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Caller-side polling fallback for the `call_accepted` push.
+    """Caller-side polling fallback for the `call_accepted` signal.
 
-    The caller's LiveKit token is otherwise only delivered through a single
-    data-only FCM message, so a dropped or throttled push leaves the caller
-    stuck on the ringing screen. Returns the same token, but only to the
-    authenticated caller of this call, and only once the listener has joined
-    the room (`connected_at`), which is the exact moment the push is sent.
+    Both the websocket event and the push can be lost, which would leave the
+    caller stuck on the ringing screen. Returns the same token, only to the
+    authenticated caller of this call, as soon as the listener has accepted —
+    waiting for `connected_at` here used to hold the caller back until the
+    listener had finished joining the room.
     """
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     response = {"status": call.status, "call_type": call.call_type}
-    if call.status == "accepted" and call.connected_at:
+    if call.status == "accepted":
         response["room_name"] = call.room_name
         response["token"] = generate_token(call.room_name, f"user-{current_user.id}", current_user.name)
         response["livekit_url"] = settings.livekit_url
+        if call.connected_at:
+            response["elapsed_seconds"] = _elapsed_since_connected(call)
     return response
 
 

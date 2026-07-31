@@ -10,6 +10,7 @@ import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
@@ -139,6 +140,7 @@ void main() async {
   );
 
   FirebaseMessaging.onMessage.listen(_handleChatMessage);
+  await UserDataCache().restore();
   runApp(const UserApp());
   _registerFcmToken();
 }

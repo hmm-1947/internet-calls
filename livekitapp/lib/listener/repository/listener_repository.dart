@@ -175,16 +175,17 @@ class ListenerRepository {
     return data;
   }
 
-  Future<void> readyCall(String token, int callId) async {
+  Future<Map<String, dynamic>> readyCall(String token, int callId) async {
     final res = await _apiClient.post(
       ApiConstants.callReady(callId),
       {},
       token: token,
     );
+    final data = jsonDecode(res.body);
     if (res.statusCode != 200) {
-      final data = jsonDecode(res.body);
       throw Exception(data['detail'] ?? 'Failed to mark call ready');
     }
+    return Map<String, dynamic>.from(data);
   }
 
   Future<void> rejectCall(String token, int callId) async {

@@ -10,6 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -163,6 +164,7 @@ void main() async {
     _registerFcmToken();
   });
 
+  await ListenerDataCache().restore();
   runApp(const ListenerApp());
   _registerFcmToken();
 }
@@ -393,7 +395,10 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
         if (ActiveCallManager.instance.hasActiveCall) return;
         final activeCall = await _localStorage.getActiveCall();
         if (activeCall != null) return;
-        _updateStatus(false);
+        // Only drop the socket. Users already see the listener as offline the
+        // moment presence is gone, and the availability switch stays where the
+        // listener left it instead of being turned off behind their back after
+        // a call or any other trip through the background.
         ChatSocketService().disconnect();
       });
     }
@@ -420,15 +425,9 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
 
   Future<void> _reconnectSocket() async {
     final token = await _localStorage.getToken();
-    if (token != null) ChatSocketService().connect(token, 'listener');
-  }
-
-  Future<void> _updateStatus(bool isOnline) async {
-    final token = await _localStorage.getToken();
     if (token == null) return;
-    try {
-      await _repository.updateStatus(token, isOnline);
-    } catch (_) {}
+    ChatSocketService().connect(token, 'listener');
+    ChatSocketService().ensureConnected();
   }
 
   @override

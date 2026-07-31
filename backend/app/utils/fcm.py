@@ -1,4 +1,6 @@
 #fcm.py
+from concurrent.futures import ThreadPoolExecutor
+
 import firebase_admin
 from firebase_admin import credentials, messaging
 from app.core.config import settings
@@ -6,6 +8,25 @@ from app.core.config import settings
 if not firebase_admin._apps:
     cred = credentials.Certificate(settings.firebase_credentials_path)
     firebase_admin.initialize_app(cred)
+
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="fcm")
+
+
+def send_async(fn, *args, **kwargs):
+    """Dispatch a blocking FCM send onto a worker thread.
+
+    `messaging.send()` is a synchronous HTTPS round trip. Called inline from an
+    `async def` endpoint it stalls the event loop, so everything else in flight
+    (the caller's status poll, both websockets) waits behind it. Call-setup
+    pushes are latency critical and nothing in the request needs their result,
+    so they go through here instead."""
+    def _run():
+        try:
+            fn(*args, **kwargs)
+        except Exception as e:
+            print(f"[FCM ERROR] background send {getattr(fn, '__name__', fn)} failed: {e}")
+
+    _executor.submit(_run)
 
 def _send_data_only(token: str, data: dict, ttl: int = 30):
     """Send a HIGH-priority data-only message.

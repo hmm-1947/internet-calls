@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class HomeHeader extends StatelessWidget {
-  final int coins;
+  final int? coins;
   final String title;
   final bool isHome;
   const HomeHeader({
@@ -43,14 +43,23 @@ class HomeHeader extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+                const Icon(
+                  Icons.monetization_on,
+                  color: Colors.amber,
+                  size: 16,
+                ),
                 const SizedBox(width: 6),
-                Text(
-                  '$coins',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                SizedBox(
+                  width: 34,
+                  child: Text(
+                    coins == null ? '' : '$coins',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],

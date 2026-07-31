@@ -56,7 +56,7 @@ class _UserMainScreenState extends State<UserMainScreen> {
             color: Colors.black,
             child: SafeArea(
               bottom: false,
-              child: ValueListenableBuilder<int>(
+              child: ValueListenableBuilder<int?>(
                 valueListenable: userCoinsNotifier,
                 builder: (context, coins, _) => HomeHeader(
                   coins: coins,

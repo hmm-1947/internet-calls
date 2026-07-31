@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/presence_dot.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
+import 'package:livekitapp/core/network/presence_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -21,8 +23,8 @@ class ListenerChatsListScreen extends StatefulWidget {
 class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
-  List<Map<String, dynamic>> _threads = ListenerDataCache().cachedThreads ?? [];
-  bool _loading = ListenerDataCache().cachedThreads == null;
+  List<Map<String, dynamic>> _threads = ListenerDataCache().lastThreads ?? [];
+  late bool _loading = _threads.isEmpty;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
   String _chatFilter = 'all';
@@ -60,13 +62,12 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
         _refreshSilently,
       );
     } else if (type == 'user_online' || type == 'user_offline') {
-      final uid = data['user_id'];
-      final idx = _threads.indexWhere((t) => t['user_id'] == uid);
-      if (idx != -1) {
-        setState(() {
-          _threads[idx]['is_online'] = type == 'user_online';
-        });
-      }
+      final userId = data['user_id'];
+      if (userId is! int) return;
+      final online = type == 'user_online';
+      PresenceCache().setUserOnline(userId, online);
+      final index = _threads.indexWhere((t) => t['user_id'] == userId);
+      if (index != -1) _threads[index]['is_online'] = online;
     }
   }
 
@@ -117,7 +118,12 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
         token,
         forceRefresh: true,
       );
-      if (mounted) setState(() => _threads = threads);
+      if (!mounted) return;
+      if (!dataChanged(_threads, threads)) return;
+      setState(() {
+        _threads = threads;
+        _loading = false;
+      });
     } catch (_) {}
   }
 
@@ -147,7 +153,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
       thread['user_id'],
       isPinned: !(thread['is_pinned'] ?? false),
     );
-    _load();
+    _refreshSilently();
   }
 
   Future<void> _toggleArchive(Map<String, dynamic> thread) async {
@@ -158,7 +164,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
       thread['user_id'],
       isArchived: !(thread['is_archived'] ?? false),
     );
-    _load();
+    _refreshSilently();
   }
 
   Future<void> _toggleMute(Map<String, dynamic> thread) async {
@@ -169,7 +175,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
       thread['user_id'],
       isMuted: !(thread['is_muted'] ?? false),
     );
-    _load();
+    _refreshSilently();
   }
 
   void _showThreadOptions(Map<String, dynamic> thread) {
@@ -270,9 +276,14 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                                 setState(() => _chatFilter = 'all');
                               }, pink),
                               const SizedBox(width: 8),
-                              _filterChip('Unread', _chatFilter == 'unread', () {
-                                setState(() => _chatFilter = 'unread');
-                              }, pink),
+                              _filterChip(
+                                'Unread',
+                                _chatFilter == 'unread',
+                                () {
+                                  setState(() => _chatFilter = 'unread');
+                                },
+                                pink,
+                              ),
                               const SizedBox(width: 8),
                               _filterChip(
                                 'Favorites',
@@ -283,9 +294,14 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                                 pink,
                               ),
                               const SizedBox(width: 8),
-                              _filterChip('Archived', _chatFilter == 'archived', () {
-                                setState(() => _chatFilter = 'archived');
-                              }, pink),
+                              _filterChip(
+                                'Archived',
+                                _chatFilter == 'archived',
+                                () {
+                                  setState(() => _chatFilter = 'archived');
+                                },
+                                pink,
+                              ),
                             ],
                           ),
                         ),
@@ -310,13 +326,19 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                                 color: Colors.blueGrey,
                                 alignment: Alignment.centerLeft,
                                 padding: const EdgeInsets.only(left: 20),
-                                child: const Icon(Icons.archive, color: Colors.white),
+                                child: const Icon(
+                                  Icons.archive,
+                                  color: Colors.white,
+                                ),
                               ),
                               secondaryBackground: Container(
                                 color: Colors.blueGrey,
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 20),
-                                child: const Icon(Icons.archive, color: Colors.white),
+                                child: const Icon(
+                                  Icons.archive,
+                                  color: Colors.white,
+                                ),
                               ),
                               confirmDismiss: (_) async {
                                 await _toggleArchive(thread);
@@ -335,22 +357,21 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                                         photoUrl: thread['photo_url'],
                                         radius: 26,
                                         iconSize: 26,
-                                        backgroundColor: const Color(0xFF2A3145),
-                                      ),
-                                      if (thread['is_online'] == true)
-                                        Positioned(
-                                          right: 0,
-                                          bottom: 0,
-                                          child: Container(
-                                            width: 12,
-                                            height: 12,
-                                            decoration: BoxDecoration(
-                                              color: Colors.green,
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: bg, width: 2),
-                                            ),
-                                          ),
+                                        backgroundColor: const Color(
+                                          0xFF2A3145,
                                         ),
+                                      ),
+                                      Positioned(
+                                        right: 0,
+                                        bottom: 0,
+                                        child: PresenceDot(
+                                          presence: PresenceCache().user(
+                                            thread['user_id'],
+                                          ),
+                                          fallback: thread['is_online'] == true,
+                                          borderColor: bg,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                   title: Row(
@@ -451,7 +472,6 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
       ),
     );
   }
-
 
   Widget _filterChip(
     String label,

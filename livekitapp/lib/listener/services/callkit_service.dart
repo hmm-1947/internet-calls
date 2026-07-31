@@ -295,18 +295,21 @@ if (event is CallEventActionCallAccept) {
         callerName: callerName,
         callerPhotoUrl: callerPhotoUrl,
       );
-      await localStorage.saveActiveCall(
+      _pendingCallNav = nav;
+      if (navigatorKey.currentState != null) {
+        _navigateToCallScreen(nav);
+      }
+      // Persisting the call for cold-start recovery is a secure-storage write
+      // that nothing here waits on, so it happens after navigation rather than
+      // delaying the LiveKit connect.
+      unawaited(localStorage.saveActiveCall(
         callId,
         nav.url,
         nav.token,
         isVideo: nav.isVideo,
         callerName: callerName,
         callerPhotoUrl: callerPhotoUrl,
-      );
-      _pendingCallNav = nav;
-      if (navigatorKey.currentState != null) {
-        _navigateToCallScreen(nav);
-      }
+      ));
     } catch (e) {
       print('[Callkit] Failed to accept call $callId: $e');
       _acceptingCallId = null;

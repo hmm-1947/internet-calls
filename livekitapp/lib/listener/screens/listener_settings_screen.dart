@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -136,6 +137,10 @@ Future<void> refresh() async {
       final token = await _localStorage.getToken();
       if (token == null) return;
       await _repository.updateStatus(token, value);
+      if (value) {
+        ChatSocketService().connect(token, 'listener');
+        ChatSocketService().ensureConnected();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _statusOnline = previous);

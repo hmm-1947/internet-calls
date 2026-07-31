@@ -313,7 +313,9 @@ async def user_get_messages(listener_id: int, before_id: int | None = None, limi
     if unread:
         await manager.send_to_listener(listener_id, {
             "type": "read_receipt", "user_id": current_user.id, "listener_id": listener_id,
-            "message_ids": [m.id for m in unread], "read_at": now.isoformat(),
+            "message_ids": [m.id for m in unread],
+            "client_ids": [m.client_id for m in unread if m.client_id],
+            "read_at": now.isoformat(),
         })
     return messages
 
@@ -342,7 +344,9 @@ async def listener_get_messages(user_id: int, before_id: int | None = None, limi
     if unread:
         await manager.send_to_user(user_id, {
             "type": "read_receipt", "user_id": user_id, "listener_id": current_listener.id,
-            "message_ids": [m.id for m in unread], "read_at": now.isoformat(),
+            "message_ids": [m.id for m in unread],
+            "client_ids": [m.client_id for m in unread if m.client_id],
+            "read_at": now.isoformat(),
         })
     return messages
 
@@ -369,6 +373,7 @@ async def user_mark_delivered(payload: DeliveredAck, db: Session = Depends(get_d
             await manager.send_to_listener(listener_id, {
                 "type": "message_status_bulk",
                 "ids": ids,
+                "client_ids": [m.client_id for m in msgs if m.client_id],
                 "status": "delivered",
             })
         else:
@@ -400,6 +405,7 @@ async def listener_mark_delivered(payload: DeliveredAck, db: Session = Depends(g
             await manager.send_to_user(user_id, {
                 "type": "message_status_bulk",
                 "ids": ids,
+                "client_ids": [m.client_id for m in msgs if m.client_id],
                 "status": "delivered",
             })
         else:
@@ -451,7 +457,9 @@ async def user_mark_read(listener_id: int, db: Session = Depends(get_db), curren
     if unread:
         await manager.send_to_listener(listener_id, {
             "type": "read_receipt", "user_id": current_user.id, "listener_id": listener_id,
-            "message_ids": [m.id for m in unread], "read_at": now.isoformat(),
+            "message_ids": [m.id for m in unread],
+            "client_ids": [m.client_id for m in unread if m.client_id],
+            "read_at": now.isoformat(),
         })
     return {"marked": len(unread)}
 
@@ -472,7 +480,9 @@ async def listener_mark_read(user_id: int, db: Session = Depends(get_db), curren
     if unread:
         await manager.send_to_user(user_id, {
             "type": "read_receipt", "user_id": user_id, "listener_id": current_listener.id,
-            "message_ids": [m.id for m in unread], "read_at": now.isoformat(),
+            "message_ids": [m.id for m in unread],
+            "client_ids": [m.client_id for m in unread if m.client_id],
+            "read_at": now.isoformat(),
         })
     return {"marked": len(unread)}
 
@@ -745,13 +755,13 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
         await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": False})
         listener = db.query(Listener).filter(Listener.id == listener_id).first()
         if listener:
-            listener.is_online = False
+            # Only the socket went away. `is_online` is the listener's own
+            # availability switch and is deliberately left untouched here: a
+            # dropped socket (app backgrounded during a call, network blip)
+            # must not silently flip their switch off.
             listener.last_seen = datetime.now(timezone.utc)
             db.commit()
         for uid in manager.get_online_user_ids(user_ids):
-            await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
-        user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
-        for uid in user_ids:
             await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
 
 

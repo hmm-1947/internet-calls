@@ -6,6 +6,8 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart' as ls;
 import 'package:livekitapp/core/network/home_cache.dart';
+import 'package:livekitapp/core/network/presence_cache.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -282,6 +284,12 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     if (type == 'listener_online' || type == 'listener_offline') {
       final listenerId = data['listener_id'];
       if (listenerId == null) return;
+      if (listenerId is int) {
+        PresenceCache().setListenerOnline(
+          listenerId,
+          type == 'listener_online',
+        );
+      }
       setState(() {
         final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
         if (idx != -1) {
@@ -301,6 +309,7 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     } else if (type == 'coins_updated') {
       final coins = data['coins'];
       if (coins == null) return;
+      if (coins is int) UserDataCache().updateCoins(coins);
       setState(() {
         _profileCoins = coins;
       });
@@ -321,6 +330,12 @@ class UserHomeScreenState extends State<UserHomeScreen> {
   /// loading spinner. Called by the bottom nav whenever the Home tab is
   /// (re)selected, so toggling video calls in Settings reflects immediately.
   Future<void> refresh() => _load(silent: true);
+
+  Future<void> _pullToRefresh() async {
+    ChatSocketService().ensureConnected();
+    if (_socketSub == null) await _initSocket();
+    await Future.wait([_load(forceRefresh: true), _loadSpecialOffers()]);
+  }
 
   int _loadRequestId = 0;
 
@@ -362,6 +377,7 @@ class UserHomeScreenState extends State<UserHomeScreen> {
             _videoCallEnabled = newVideoCallEnabled;
             _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
             _loading = false;
+            _error = null;
           });
           HomeCache().setJson('user_home_listeners', listeners);
           HomeCache().setJson('user_home_profile', {
@@ -371,8 +387,11 @@ class UserHomeScreenState extends State<UserHomeScreen> {
             'video_call_enabled': newVideoCallEnabled,
             'video_call_disabled_by_admin': newVideoCallDisabledByAdmin,
           });
-        } else if (_loading) {
-          setState(() => _loading = false);
+        } else if (_loading || _error != null) {
+          setState(() {
+            _loading = false;
+            _error = null;
+          });
         }
       }
     } catch (e) {
@@ -449,7 +468,7 @@ ChatHistoryScreen(
       backgroundColor: _AppColors.bg,
       endDrawer: _buildProfileDrawer(),
       body: RefreshIndicator(
-        onRefresh: () => _load(forceRefresh: true),
+        onRefresh: _pullToRefresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.fromLTRB(5, 24, 5, 32 + MediaQuery.of(context).padding.bottom + 90),
@@ -677,7 +696,7 @@ ChatHistoryScreen(
                 color: _AppColors.textMuted,
                 size: 20,
               ),
-              onPressed: () => _load(forceRefresh: true),
+              onPressed: _pullToRefresh,
               tooltip: 'Refresh',
             ),
           ],
@@ -688,7 +707,7 @@ ChatHistoryScreen(
             padding: EdgeInsets.symmetric(vertical: 48),
             child: Center(child: CircularProgressIndicator()),
           )
-        else if (_error != null)
+        else if (_error != null && _listeners.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 48),
             child: Center(
