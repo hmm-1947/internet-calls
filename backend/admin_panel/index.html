@@ -981,6 +981,33 @@
       justify-content: center;
     }
     .confirm-btns .btn { min-width: 110px; }
+
+    /* ── Edit Profile modal (sits under the confirm dialog) ── */
+    .profile-overlay { z-index: 9990; }
+    .profile-box { max-width: 420px; text-align: left; }
+    .profile-box .confirm-title,
+    .profile-box .confirm-body { text-align: center; }
+    .profile-field { margin-bottom: 12px; }
+    .profile-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--slate);
+      margin-bottom: 5px;
+    }
+    .profile-field input { width: 100%; margin: 0; }
+    .profile-username {
+      font-size: 12px;
+      color: var(--slate);
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .profile-hint {
+      font-size: 12px;
+      color: var(--slate);
+      line-height: 1.5;
+      margin: 2px 0 16px;
+    }
   </style>
 </head>
 
@@ -995,6 +1022,29 @@
     <div class="confirm-btns">
       <button class="btn btn-ghost" id="confirmCancelBtn" onclick="_confirmResolve(false)">Cancel</button>
       <button class="btn btn-danger" id="confirmOkBtn" onclick="_confirmResolve(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit admin profile modal -->
+<div class="confirm-overlay profile-overlay" id="profileOverlay" style="display:none;">
+  <div class="confirm-box profile-box">
+    <div class="confirm-icon info">&#128100;</div>
+    <div class="confirm-title">Edit Profile</div>
+    <div class="profile-username" id="profileUsernameLabel"></div>
+    <div class="profile-field">
+      <label for="profileEmail">Email address</label>
+      <input id="profileEmail" type="email" autocomplete="email">
+    </div>
+    <div class="profile-field">
+      <label for="profilePhone">Phone number</label>
+      <input id="profilePhone" type="tel" autocomplete="tel">
+    </div>
+    <div class="profile-hint">This email is used to receive the OTP when you use &ldquo;Forgot password?&rdquo;.</div>
+    <div id="profileMsg" style="font-weight:600;font-size:13px;text-align:center;min-height:18px;margin-bottom:12px;"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeEditProfile()">Cancel</button>
+      <button class="btn btn-primary" id="profileSaveBtn" onclick="submitEditProfile()">Confirm</button>
     </div>
   </div>
 </div>
@@ -1084,6 +1134,7 @@
               <span class="ar">Admin</span>
             </div>
             <div class="admin-menu" id="adminMenu">
+              <div class="admin-menu-item" onclick="openEditProfile()">Edit Profile</div>
               <div class="admin-menu-item" onclick="confirmLogout()">Logout</div>
             </div>
           </div>
@@ -1477,7 +1528,8 @@
       document.getElementById('forgotStepEmail').style.display = '';
       document.getElementById('forgotStepOtp').style.display = 'none';
       document.getElementById('forgotStepReset').style.display = 'none';
-      document.getElementById('forgotEmail').value = '';
+      // Pre-fill with the email saved in Edit Profile — that inbox receives the OTP.
+      document.getElementById('forgotEmail').value = localStorage.getItem('adminEmail') || '';
       document.getElementById('forgotOtp').value = '';
       document.getElementById('forgotNewPassword').value = '';
       document.getElementById('forgotConfirmPassword').value = '';
@@ -1818,6 +1870,7 @@
         if (!res.ok) throw new Error(data.detail || 'Login failed');
         setAdminToken(data.token);
         localStorage.setItem('adminUsername', data.username || 'Admin');
+        if (data.email) localStorage.setItem('adminEmail', data.email);
         showPanel();
       } catch (e) {
         setLoginMsg('✗ ' + e.message, false);
@@ -1880,6 +1933,137 @@
         iconClass: 'warning'
       });
       if (ok) doAdminLogout();
+    }
+
+    // ─── Edit admin profile (email + phone) ───────────────────────────────────
+    let _adminProfile = { email: '', phone: '' };
+
+    function setProfileMsg(text, ok) {
+      const el = document.getElementById('profileMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    function openEditProfile() {
+      document.getElementById('adminMenu').classList.remove('open');
+      const overlay = document.getElementById('profileOverlay');
+      document.getElementById('profileUsernameLabel').textContent = '@' + (localStorage.getItem('adminUsername') || 'admin');
+      // Show the last known email straight away, then refresh from the server.
+      document.getElementById('profileEmail').value = _adminProfile.email || localStorage.getItem('adminEmail') || '';
+      document.getElementById('profilePhone').value = _adminProfile.phone || '';
+      document.getElementById('profileSaveBtn').disabled = true;
+      setProfileMsg('Loading your details…', null);
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('show'));
+      loadAdminProfile();
+    }
+
+    function closeEditProfile() {
+      const overlay = document.getElementById('profileOverlay');
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 180);
+      setProfileMsg('', null);
+    }
+
+    // Close on backdrop click
+    document.getElementById('profileOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeEditProfile();
+    });
+
+    // Responses are not always JSON (a 404 from the static mount, a proxy error page…),
+    // so read the body defensively before trying to use it.
+    async function readResponseBody(res) {
+      const text = await res.text();
+      try { return JSON.parse(text); } catch (e) { return { detail: text.slice(0, 160) }; }
+    }
+
+    function profileRequestError(res, data) {
+      if (res.status === 404) return 'Profile endpoint not found — restart the backend so /admin/auth/me is served.';
+      if (res.status >= 500) return 'Server error — apply the pending database migration (alembic upgrade head), then retry.';
+      return detailMessage(data && data.detail) || ('Request failed (HTTP ' + res.status + ')');
+    }
+
+    async function loadAdminProfile() {
+      try {
+        const res = await fetch(API_URL + '/admin/auth/me', { headers: authHeaders() });
+        const data = await readResponseBody(res);
+        if (!res.ok) throw new Error(profileRequestError(res, data));
+        // Current values straight from the account: the email is the one saved when the
+        // admin was created, shown as editable text. Phone stays blank until one is set.
+        _adminProfile = { email: data.email || '', phone: data.phone || '' };
+        document.getElementById('profileEmail').value = _adminProfile.email;
+        document.getElementById('profilePhone').value = _adminProfile.phone;
+        document.getElementById('profileUsernameLabel').textContent = '@' + (data.username || 'admin');
+        if (data.email) localStorage.setItem('adminEmail', data.email);
+        setProfileMsg(
+          data.email
+            ? ''
+            : 'No email is saved for @' + (data.username || 'this account') + ' yet. Add one so password reset codes can reach you.',
+          null
+        );
+      } catch (e) {
+        setProfileMsg('✗ ' + e.message, false);
+      } finally {
+        document.getElementById('profileSaveBtn').disabled = false;
+      }
+    }
+
+    async function submitEditProfile() {
+      const email = document.getElementById('profileEmail').value.trim();
+      const phone = document.getElementById('profilePhone').value.trim();
+      if (!email) { setProfileMsg('Email address is required.', false); return; }
+      if (!/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(email)) { setProfileMsg('Enter a valid email address.', false); return; }
+      if (phone && !/^\+?\d{7,15}$/.test(phone.replace(/[\s\-()]/g, ''))) {
+        setProfileMsg('Enter a valid phone number (7-15 digits, optional leading +).', false);
+        return;
+      }
+
+      const emailChanged = email.toLowerCase() !== (_adminProfile.email || '').toLowerCase();
+      const phoneChanged = phone !== (_adminProfile.phone || '');
+      if (!emailChanged && !phoneChanged) { setProfileMsg('No changes to save.', null); return; }
+
+      const changes = [];
+      if (emailChanged) changes.push('email to ' + email);
+      if (phoneChanged) changes.push('phone number to ' + (phone || 'empty'));
+      const ok = await confirmDialog({
+        title: 'Confirm profile change',
+        body: 'Do you want to change your ' + changes.join(' and ') + '?'
+          + (emailChanged ? ' Password reset codes will be sent to the new email from now on.' : ''),
+        okLabel: 'Yes, change',
+        okClass: 'btn-primary',
+        icon: '✏️',
+        iconClass: 'warning'
+      });
+      if (!ok) return;
+
+      setProfileMsg('Saving…', null);
+      document.getElementById('profileSaveBtn').disabled = true;
+      try {
+        const res = await fetch(API_URL + '/admin/auth/me', {
+          method: 'PATCH', headers: authHeaders(true),
+          body: JSON.stringify({ email, phone: phone || null })
+        });
+        const data = await readResponseBody(res);
+        if (!res.ok) throw new Error(profileRequestError(res, data));
+        _adminProfile = { email: data.email || '', phone: data.phone || '' };
+        document.getElementById('profileEmail').value = _adminProfile.email;
+        document.getElementById('profilePhone').value = _adminProfile.phone;
+        if (data.email) localStorage.setItem('adminEmail', data.email);
+        setProfileMsg('✓ Profile updated', true);
+        setTimeout(closeEditProfile, 1000);
+      } catch (e) {
+        setProfileMsg('✗ ' + e.message, false);
+      } finally {
+        document.getElementById('profileSaveBtn').disabled = false;
+      }
+    }
+
+    // FastAPI validation errors arrive as a list of objects — surface the first message.
+    function detailMessage(detail) {
+      if (!detail) return '';
+      if (typeof detail === 'string') return detail;
+      if (Array.isArray(detail)) return (detail[0] && detail[0].msg || '').replace(/^Value error, /, '');
+      return '';
     }
 
     let setupInviteToken = null;

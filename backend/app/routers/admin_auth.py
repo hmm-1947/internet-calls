@@ -1,8 +1,10 @@
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -19,6 +21,8 @@ from app.schemas.schemas import (
     AdminForgotPasswordVerifyOtp,
     AdminForgotPasswordReset,
     AdminAuthResponse,
+    AdminProfileOut,
+    AdminProfileUpdate,
 )
 
 from app.utils.email_otp import generate_otp_code, send_otp_email
@@ -134,9 +138,61 @@ def complete_invite(payload: AdminInviteComplete, db: Session = Depends(get_db))
 
 
 
+def _profile_out(admin: AdminUser) -> AdminProfileOut:
+    return AdminProfileOut(id=admin.id, username=admin.username, email=admin.email, phone=admin.phone)
+
+
+@router.get("/me", response_model=AdminProfileOut)
+def get_admin_profile(admin: AdminUser = Depends(verify_admin)):
+    return _profile_out(admin)
+
+
+@router.patch("/me", response_model=AdminProfileOut)
+def update_admin_profile(
+    payload: AdminProfileUpdate,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(verify_admin),
+):
+    # Re-read through this request's session so the row is always attached to `db`.
+    admin = db.query(AdminUser).filter(AdminUser.id == current_admin.id).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    if payload.email != (admin.email or "").strip().lower():
+        clash = (
+            db.query(AdminUser)
+            .filter(func.lower(AdminUser.email) == payload.email, AdminUser.id != admin.id)
+            .first()
+        )
+        if clash:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Email already in use by another admin account (@{clash.username})",
+            )
+        # A new recovery email invalidates any pending password reset OTP.
+        admin.reset_otp_code = None
+        admin.reset_otp_expires_at = None
+        admin.reset_otp_attempts = 0
+
+    admin.email = payload.email
+    admin.phone = payload.phone
+    db.commit()
+    db.refresh(admin)
+
+    return _profile_out(admin)
+
+
+def _find_admin_by_email(db: Session, email: str) -> Optional[AdminUser]:
+    """Admins are looked up case-insensitively so the email saved in Edit Profile always matches."""
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return None
+    return db.query(AdminUser).filter(func.lower(AdminUser.email) == normalized).first()
+
+
 @router.post("/forgot-password/request-otp")
 def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, db: Session = Depends(get_db)):
-    admin = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    admin = _find_admin_by_email(db, payload.email)
     if not admin:
         raise HTTPException(status_code=404, detail="Email not registered")
 
@@ -146,13 +202,14 @@ def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, db: Sess
     admin.reset_otp_attempts = 0
     db.commit()
 
-    send_otp_email(payload.email, otp_code)
+    # Always send to the email stored on the admin profile, never to the raw input.
+    send_otp_email(admin.email, otp_code)
     return {"status": "otp_sent"}
 
 
 @router.post("/forgot-password/verify-otp")
 def forgot_password_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
-    admin = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    admin = _find_admin_by_email(db, payload.email)
     if not admin:
         raise HTTPException(status_code=404, detail="Email not registered")
     if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
@@ -169,7 +226,7 @@ def forgot_password_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Sessio
 
 @router.post("/forgot-password/reset")
 def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depends(get_db)):
-    admin = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    admin = _find_admin_by_email(db, payload.email)
     if not admin:
         raise HTTPException(status_code=404, detail="Email not registered")
     if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
@@ -221,8 +278,9 @@ def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
     if not _verify_recaptcha(payload.captcha_token):
         raise HTTPException(status_code=400, detail="Captcha verification failed. Please try again.")
 
+    identifier = (payload.identifier or "").strip()
     admin = db.query(AdminUser).filter(
-        (AdminUser.username == payload.identifier) | (AdminUser.email == payload.identifier)
+        (AdminUser.username == identifier) | (func.lower(AdminUser.email) == identifier.lower())
     ).first()
 
     if admin and admin.locked_until and admin.locked_until > datetime.now(timezone.utc):

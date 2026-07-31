@@ -524,3 +524,41 @@ class AdminAuthResponse(BaseModel):
     username: str
     email: Optional[str] = None
 
+
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+PHONE_PATTERN = re.compile(r"^\+?\d{7,15}$")
+
+
+class AdminProfileOut(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class AdminProfileUpdate(BaseModel):
+    email: str
+    phone: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, v: str) -> str:
+        v = (v or "").strip().lower()
+        if not EMAIL_PATTERN.match(v):
+            raise ValueError("Enter a valid email address")
+        if len(v) > 254:
+            raise ValueError("Email address is too long")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def valid_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        compact = re.sub(r"[\s\-()]", "", v.strip())
+        if not compact:
+            return None
+        if not PHONE_PATTERN.match(compact):
+            raise ValueError("Enter a valid phone number (7-15 digits, optional leading +)")
+        return compact
+
