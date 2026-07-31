@@ -8,6 +8,7 @@ import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_personal_info_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0F1A);
@@ -22,16 +23,20 @@ class _MenuTile extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
 
+  /// Swaps the chevron for a spinner and blocks taps while an action runs.
+  final bool busy;
+
   const _MenuTile({
     required this.icon,
     required this.title,
     required this.onTap,
+    this.busy = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -59,7 +64,17 @@ class _MenuTile extends StatelessWidget {
                 style: const TextStyle(color: Colors.white, fontSize: 15),
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.white38),
+            if (busy)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _AppColors.brandRed,
+                ),
+              )
+            else
+              const Icon(Icons.chevron_right, color: Colors.white38),
           ],
         ),
       ),
@@ -166,6 +181,7 @@ int _coins = 0;
   bool _videoCallDisabledByAdmin = false;
   bool _savingVideoCallSetting = false;
   bool _loggingOut = false;
+  bool _openingEnrollChat = false;
 
   @override
   void initState() {
@@ -250,16 +266,14 @@ Future<void> refresh() async {
     Navigator.of(context).push(fadeRoute(WalletCoinsScreen(coins: _coins)));
   }
 
-  void _openEnrollAsListener() {
+  void _showEnrollNotice(String title, String message) {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: _AppColors.cardBg,
-        title: const Text('Coming Soon', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Listener enrollment will be available soon.',
-          style: TextStyle(color: Colors.white70),
-        ),
+        title: Text(title, style: const TextStyle(color: Colors.white)),
+        content: Text(message, style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -271,6 +285,50 @@ Future<void> refresh() async {
         ],
       ),
     );
+  }
+
+  /// Opens a WhatsApp chat with the admin, pre-filled with an enrollment
+  /// request. The destination is the phone saved on the admin profile, so it
+  /// follows whatever the admin sets in the panel.
+  Future<void> _openEnrollAsListener() async {
+    if (_openingEnrollChat) return;
+    setState(() => _openingEnrollChat = true);
+    String? number;
+    try {
+      number = await _repository.getEnrollWhatsappNumber();
+      if (number == null) {
+        _showEnrollNotice(
+          'Not available yet',
+          'Listener enrollment is not set up yet. Please try again later.',
+        );
+        return;
+      }
+
+      // Identify the sender so the admin can match the request to an account.
+      final who = [
+        if (_name.trim().isNotEmpty) _name.trim(),
+        if (_phone.trim().isNotEmpty) _phone.trim(),
+      ].join(', ');
+      final message =
+          'Hi, I would like to enroll as a listener on the app.'
+          '${who.isEmpty ? '' : ' My account details: $who.'}'
+          ' Please let me know the next steps.';
+
+      final uri = Uri.https('wa.me', '/$number', {'text': message});
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) throw Exception('no app available to handle $uri');
+    } catch (e) {
+      debugPrint('Enroll as listener: could not open WhatsApp: $e');
+      _showEnrollNotice(
+        'Could not open WhatsApp',
+        number == null
+            ? 'Something went wrong. Please check your connection and try again.'
+            : 'Make sure WhatsApp is installed, then try again. '
+                  'You can also message us on +$number.',
+      );
+    } finally {
+      if (mounted) setState(() => _openingEnrollChat = false);
+    }
   }
 
   @override
@@ -340,6 +398,7 @@ Future<void> refresh() async {
                     icon: Icons.headset_mic_outlined,
                     title: 'Enroll as a listener',
                     onTap: _openEnrollAsListener,
+                    busy: _openingEnrollChat,
                   ),
                   _SectionLabel('ACCOUNT'),
                   _SettingsCard([

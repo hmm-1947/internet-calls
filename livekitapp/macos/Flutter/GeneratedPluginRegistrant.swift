@@ -17,6 +17,7 @@ import just_audio
 import livekit_client
 import record_macos
 import sqflite_darwin
+import url_launcher_macos
 import volume_controller
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
@@ -32,5 +33,6 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   LiveKitPlugin.register(with: registry.registrar(forPlugin: "LiveKitPlugin"))
   RecordMacOsPlugin.register(with: registry.registrar(forPlugin: "RecordMacOsPlugin"))
   SqflitePlugin.register(with: registry.registrar(forPlugin: "SqflitePlugin"))
+  UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
   VolumeControllerPlugin.register(with: registry.registrar(forPlugin: "VolumeControllerPlugin"))
 }

@@ -1,6 +1,8 @@
 import os
+import re
 import uuid
 from fastapi import APIRouter, Depends, UploadFile, File
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.models import AppSettings, AdminUser
@@ -23,6 +25,25 @@ def _get_or_create_settings(db: Session) -> AppSettings:
 def get_upgrade_banner(db: Session = Depends(get_db)):
     settings_row = _get_or_create_settings(db)
     return {"upgrade_banner_url": settings_row.upgrade_banner_url}
+
+
+@router.get("/enroll-contact")
+def get_enroll_contact(db: Session = Depends(get_db)):
+    """WhatsApp number the user app opens for "Enroll as a listener" requests.
+
+    The number is the phone saved on the admin profile (admin panel -> Edit Profile).
+    When several admins have one, the lowest id wins so the destination stays stable
+    as more admins are added. Returns null when no admin has saved a phone yet.
+    """
+    admin = (
+        db.query(AdminUser)
+        .filter(AdminUser.phone.isnot(None), func.trim(AdminUser.phone) != "")
+        .order_by(AdminUser.id)
+        .first()
+    )
+    # wa.me only accepts digits in international format, so drop "+", spaces and dashes.
+    number = re.sub(r"\D", "", admin.phone) if admin else ""
+    return {"whatsapp_number": number or None}
 
 
 @router.post("/admin/upgrade-banner")

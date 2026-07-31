@@ -1037,10 +1037,14 @@
       <input id="profileEmail" type="email" autocomplete="email">
     </div>
     <div class="profile-field">
-      <label for="profilePhone">Phone number</label>
-      <input id="profilePhone" type="tel" autocomplete="tel">
+      <label for="profilePhone">Phone number (WhatsApp)</label>
+      <input id="profilePhone" type="tel" autocomplete="tel" placeholder="+91 98765 43210">
     </div>
-    <div class="profile-hint">This email is used to receive the OTP when you use &ldquo;Forgot password?&rdquo;.</div>
+    <div class="profile-hint">
+      This email is used to receive the OTP when you use &ldquo;Forgot password?&rdquo;.
+      The phone number is the WhatsApp chat users are sent to when they tap
+      &ldquo;Enroll as a listener&rdquo; in the app, so include the country code.
+    </div>
     <div id="profileMsg" style="font-weight:600;font-size:13px;text-align:center;min-height:18px;margin-bottom:12px;"></div>
     <div class="confirm-btns">
       <button class="btn btn-ghost" onclick="closeEditProfile()">Cancel</button>

@@ -11,6 +11,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   livekit_client
   permission_handler_windows
   record_windows
+  url_launcher_windows
   volume_controller
 )
 
