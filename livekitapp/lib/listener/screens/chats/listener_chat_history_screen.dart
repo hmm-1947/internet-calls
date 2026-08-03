@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/chat_composer.dart';
@@ -104,11 +105,15 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     final thread = ListenerDataCache().thread(widget.userId);
     _favorite = ValueNotifier<bool>(thread['is_pinned'] == true);
     _scrollController.addListener(_onScroll);
+    // Drops any stacked notification for this chat and keeps new messages from
+    // notifying while the conversation is on screen.
+    ChatNotificationService.instance.setVisibleConversation(widget.userId);
     _init();
   }
 
   @override
   void dispose() {
+    ChatNotificationService.instance.clearVisibleConversation(widget.userId);
     voiceChatRouteObserver.unsubscribe(this);
     VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
     WidgetsBinding.instance.removeObserver(this);

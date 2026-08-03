@@ -189,11 +189,57 @@ def send_withdrawal_decision(fcm_token: str, request_id: int, status: str, coins
     )
 
 
-def send_chat_message(fcm_token: str, sender_name: str, message: str, user_id: int, listener_id: int, sender_type: str, message_id: int, client_id: str | None = None):
+def _send_chat_push(token: str, data: dict, title: str, body: str, thread_id: str, collapse_key: str | None = None, ttl: int = 86400):
+    """Send a chat push.
+
+    Android gets a DATA-ONLY message on purpose. A `notification` block makes
+    the OS post one tray notification — with its own sound — per message, which
+    is exactly the behaviour we are replacing. Without it the app's FCM handler
+    (foreground and background isolate alike) receives the data and renders a
+    single stacked MessagingStyle notification per conversation, alerting only
+    once per cooldown window. Data-only wake-ups are already proven in this app
+    by the incoming-call path.
+
+    iOS has no equivalent client-side rendering hook while backgrounded, so it
+    still gets an APNs alert; `thread-id` at least groups a conversation into
+    one stack in Notification Center."""
+    apns_headers = {"apns-priority": "10", "apns-push-type": "alert"}
+    if collapse_key:
+        apns_headers["apns-collapse-id"] = collapse_key[:64]
+    message = messaging.Message(
+        data=data,
+        token=token,
+        android=messaging.AndroidConfig(
+            priority="high",
+            ttl=ttl,
+            **({"collapse_key": collapse_key} if collapse_key else {}),
+        ),
+        apns=messaging.APNSConfig(
+            headers=apns_headers,
+            payload=messaging.APNSPayload(
+                aps=messaging.Aps(
+                    alert=messaging.ApsAlert(title=title, body=body),
+                    sound="default",
+                    thread_id=thread_id,
+                    content_available=True,
+                ),
+            ),
+        ),
+    )
+    response = messaging.send(message)
+    print(f"[FCM] Sent '{data.get('type')}' (chat) → {token[:20]}... | {response}")
+
+
+def send_chat_message(fcm_token: str, sender_name: str, message: str, user_id: int, listener_id: int, sender_type: str, message_id: int, client_id: str | None = None, sender_photo_url: str | None = None):
     """Notify the other party of a new chat message.
     Includes full message content so the background isolate can cache it
-    offline and ack delivery even if the app is fully closed."""
-    _send_with_notification(
+    offline, ack delivery and render the stacked notification even if the app
+    is fully closed.
+
+    Deliberately NOT collapsible: the client now stacks messages itself, so
+    every message needs to survive the trip. The collapsible variant is
+    `send_chat_summary`, used when the recipient is offline."""
+    _send_chat_push(
         token=fcm_token,
         data={
             "type": "chat_message",
@@ -204,26 +250,26 @@ def send_chat_message(fcm_token: str, sender_name: str, message: str, user_id: i
             "sender_type": sender_type,
             "message": message,
             "sender_name": sender_name,
+            "sender_photo_url": sender_photo_url or "",
         },
         title=sender_name,
         body=message,
-        channel_id="chat_messages",
-        ttl=86400,
-        collapse_key=f"chat_{sender_type}_{user_id}_{listener_id}",
+        thread_id=f"chat_{sender_type}_{user_id}_{listener_id}",
     )
 
 
-def send_chat_summary(fcm_token: str, sender_name: str, messages: list[dict], user_id: int, listener_id: int, sender_type: str):
+def send_chat_summary(fcm_token: str, sender_name: str, messages: list[dict], user_id: int, listener_id: int, sender_type: str, sender_photo_url: str | None = None):
     """Notify the other party of one or more undelivered chat messages in a
     single collapsible push. `messages` is a list of dicts each containing
     id, client_id, message. When several of these are sent in quick succession
     while the recipient is offline, FCM/Android collapse them into just the
     last one delivered — since every push here carries the FULL undelivered
-    set, whichever push survives still lets the client ack every message."""
+    set, whichever push survives still lets the client ack every message and
+    rebuild the complete stacked notification."""
     import json
     count = len(messages)
     body = messages[-1]["message"] if count == 1 else f"{count} new messages"
-    _send_with_notification(
+    _send_chat_push(
         token=fcm_token,
         data={
             "type": "chat_summary",
@@ -231,12 +277,12 @@ def send_chat_summary(fcm_token: str, sender_name: str, messages: list[dict], us
             "listener_id": str(listener_id),
             "sender_type": sender_type,
             "sender_name": sender_name,
+            "sender_photo_url": sender_photo_url or "",
             "messages": json.dumps(messages),
         },
         title=sender_name,
         body=body,
-        channel_id="chat_messages",
-        ttl=86400,
+        thread_id=f"chat_{sender_type}_{user_id}_{listener_id}",
         collapse_key=f"chat_{sender_type}_{user_id}_{listener_id}",
     )
 

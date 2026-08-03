@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/chat_composer.dart';
 import 'package:livekitapp/common/widgets/chat_message_list.dart';
@@ -113,11 +114,17 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
           (me?['video_call_disabled_by_admin'] ?? false) != true,
     );
     _scrollController.addListener(_onScroll);
+    // Drops any stacked notification for this chat and keeps new messages from
+    // notifying while the conversation is on screen.
+    ChatNotificationService.instance.setVisibleConversation(widget.listenerId);
     _init();
   }
 
   @override
   void dispose() {
+    ChatNotificationService.instance.clearVisibleConversation(
+      widget.listenerId,
+    );
     voiceChatRouteObserver.unsubscribe(this);
     VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
     WidgetsBinding.instance.removeObserver(this);

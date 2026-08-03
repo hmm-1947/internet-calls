@@ -191,10 +191,10 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     if listener.fcm_token:
         try:
             if listener_online:
-                send_chat_message(listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user", msg.id, msg.client_id)
+                send_chat_message(listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
             else:
                 payload_msgs = _undelivered_summary_payload(db, current_user.id, listener.id, "user")
-                send_chat_summary(listener.fcm_token, current_user.name, payload_msgs, current_user.id, listener.id, "user")
+                send_chat_summary(listener.fcm_token, current_user.name, payload_msgs, current_user.id, listener.id, "user", current_user.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of chat message: {e}")
     return msg
@@ -222,10 +222,10 @@ async def listener_send_message(payload: ListenerChatMessageSend, db: Session = 
     if user.fcm_token:
         try:
             if user_online:
-                send_chat_message(user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener", msg.id, msg.client_id)
+                send_chat_message(user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
             else:
                 payload_msgs = _undelivered_summary_payload(db, user.id, current_listener.id, "listener")
-                send_chat_summary(user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener")
+                send_chat_summary(user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener", current_listener.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of chat message: {e}")
     return msg

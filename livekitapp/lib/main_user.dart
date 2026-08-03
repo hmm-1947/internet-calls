@@ -13,9 +13,11 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
+import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
@@ -35,6 +37,11 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   await _cacheAndAckChatMessage(message);
   await _cacheAndAckChatSummary(message);
   await _applyStatusPush(message);
+  // Chat pushes are data-only, so nothing is shown unless we render it here.
+  await ChatNotificationService.instance.handlePush(
+    message.data,
+    isUserApp: true,
+  );
 }
 
 Future<void> _cacheAndAckChatSummary(RemoteMessage message) async {
@@ -116,6 +123,55 @@ void _handleChatMessage(RemoteMessage message) {
   } else if (message.data['type'] == 'message_status_bulk') {
     _applyStatusPush(message);
   }
+  // The service skips conversations that are already on screen.
+  ChatNotificationService.instance.handlePush(message.data, isUserApp: true);
+}
+
+/// Tapped-notification target parked until the navigator exists (cold start).
+ChatNotificationTarget? _pendingChatTarget;
+
+Future<void> _initChatNotifications() async {
+  await ChatNotificationService.instance.init(onTap: _onChatNotificationTap);
+  // App launched by tapping a chat notification while it was killed.
+  final target = await ChatNotificationService.instance.launchTarget();
+  if (target == null) return;
+  _pendingChatTarget = target;
+  flushPendingChatTarget();
+}
+
+void _onChatNotificationTap(ChatNotificationTarget target) {
+  _pendingChatTarget = target;
+  flushPendingChatTarget();
+}
+
+/// Opens the chat named by a tapped notification instead of dropping the user
+/// on the home screen. Retries while the navigator is still being built, which
+/// is the normal case for a cold start.
+Future<void> flushPendingChatTarget({int attempt = 0}) async {
+  final target = _pendingChatTarget;
+  if (target == null) return;
+  final navigator = userNavigatorKey.currentState;
+  if (navigator == null) {
+    if (attempt >= 20) return;
+    Future.delayed(
+      const Duration(milliseconds: 250),
+      () => flushPendingChatTarget(attempt: attempt + 1),
+    );
+    return;
+  }
+  _pendingChatTarget = null;
+  final token = await LocalStorage().getToken();
+  if (token == null) return;
+  await ChatNotificationService.instance.cancelConversation(target.otherId);
+  navigator.push(
+    MaterialPageRoute(
+      builder: (_) => ChatHistoryScreen(
+        listenerId: target.otherId,
+        listenerName: target.name,
+        listenerPhotoUrl: target.photoUrl,
+      ),
+    ),
+  );
 }
 
 void main() async {
@@ -144,6 +200,12 @@ void main() async {
   );
 
   FirebaseMessaging.onMessage.listen(_handleChatMessage);
+
+  // Deliberately not awaited: chat notifications are a nice-to-have, and
+  // blocking startup on them would also block FCM token registration and the
+  // call path if the plugin ever fails to come up.
+  unawaited(_initChatNotifications());
+
   await UserDataCache().restore();
   runApp(const UserApp());
   _registerFcmToken();
@@ -175,6 +237,9 @@ class _UserAppState extends State<UserApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      flushPendingChatTarget();
+    });
     _chatSub = ChatSocketService().stream.listen((data) {
       if (data['type'] == 'chat_message') {
         userChatDotNotifier.value = true;
@@ -191,6 +256,7 @@ class _UserAppState extends State<UserApp> {
     if (_loggingOut) return;
     _loggingOut = true;
     await LocalStorage().clear();
+    await ChatNotificationService.instance.cancelAll();
     ChatSocketService().disconnect();
     final ctx = userNavigatorKey.currentState;
     if (ctx != null) {

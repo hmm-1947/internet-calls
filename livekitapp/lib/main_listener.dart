@@ -14,11 +14,13 @@ import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
@@ -38,6 +40,11 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   await _cacheAndAckChatMessage(message);
   await _cacheAndAckChatSummary(message);
   await _applyStatusPush(message);
+  // Chat pushes are data-only, so nothing is shown unless we render it here.
+  await ChatNotificationService.instance.handlePush(
+    message.data,
+    isUserApp: false,
+  );
 }
 
 Future<void> _cacheAndAckChatSummary(RemoteMessage message) async {
@@ -156,18 +163,23 @@ void main() async {
   FirebaseMessaging.onMessage.listen((message) {
     if (message.data['type'] == 'chat_message' ||
         message.data['type'] == 'chat_summary') {
-      FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
       chatMessageNotifier.value++;
+      // The service skips conversations that are already on screen.
+      ChatNotificationService.instance.handlePush(
+        message.data,
+        isUserApp: false,
+      );
     }
   });
   // Re-register whenever FCM rotates the token
   FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
     _registerFcmToken();
   });
+
+  // Deliberately not awaited: chat notifications are a nice-to-have, and
+  // blocking startup on them would also block FCM token registration and the
+  // callkit path if the plugin ever fails to come up.
+  unawaited(_initChatNotifications());
 
   await ListenerDataCache().restore();
   runApp(const ListenerApp());
@@ -195,6 +207,53 @@ Future<void> _handleMessage(RemoteMessage message) async {
 
 final chatMessageNotifier = ValueNotifier<int>(0);
 
+/// Tapped-notification target parked until the navigator exists (cold start).
+ChatNotificationTarget? _pendingChatTarget;
+
+Future<void> _initChatNotifications() async {
+  await ChatNotificationService.instance.init(onTap: _onChatNotificationTap);
+  // App launched by tapping a chat notification while it was killed.
+  final target = await ChatNotificationService.instance.launchTarget();
+  if (target == null) return;
+  _pendingChatTarget = target;
+  flushPendingChatTarget();
+}
+
+void _onChatNotificationTap(ChatNotificationTarget target) {
+  _pendingChatTarget = target;
+  flushPendingChatTarget();
+}
+
+/// Opens the chat named by a tapped notification instead of dropping the
+/// listener on the home screen. Retries while the navigator is still being
+/// built, which is the normal case for a cold start.
+Future<void> flushPendingChatTarget({int attempt = 0}) async {
+  final target = _pendingChatTarget;
+  if (target == null) return;
+  final navigator = CallkitService.instance.navigatorKey.currentState;
+  if (navigator == null) {
+    if (attempt >= 20) return;
+    Future.delayed(
+      const Duration(milliseconds: 250),
+      () => flushPendingChatTarget(attempt: attempt + 1),
+    );
+    return;
+  }
+  _pendingChatTarget = null;
+  final token = await LocalStorage().getToken();
+  if (token == null) return;
+  await ChatNotificationService.instance.cancelConversation(target.otherId);
+  navigator.push(
+    MaterialPageRoute(
+      builder: (_) => ListenerChatHistoryScreen(
+        userId: target.otherId,
+        userName: target.name,
+        userPhotoUrl: target.photoUrl,
+      ),
+    ),
+  );
+}
+
 class ListenerApp extends StatefulWidget {
   const ListenerApp({super.key});
 
@@ -214,6 +273,7 @@ class _ListenerAppState extends State<ListenerApp> {
     CallkitService.instance.warmup();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallkitService.instance.flushPendingNav();
+      flushPendingChatTarget();
     });
     _chatSub = ChatSocketService().stream.listen((data) {
       if (data['type'] == 'chat_message') {
@@ -247,6 +307,7 @@ class _ListenerAppState extends State<ListenerApp> {
     if (_loggingOut) return;
     _loggingOut = true;
     await LocalStorage().clear();
+    await ChatNotificationService.instance.cancelAll();
     ChatSocketService().disconnect();
     final ctx = CallkitService.instance.navigatorKey.currentState;
     if (ctx != null) {
