@@ -4,6 +4,10 @@
 <head>
   <meta charset="UTF-8">
   <title>Admin ka Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400&family=Open+Sans:ital,wght@0,400;0,700;1,400&family=Lato:ital,wght@0,400;0,700;1,400&family=PT+Sans:ital,wght@0,400;0,700;1,400&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
   <style>
     :root {
       --mint: #f4f5f7;
@@ -540,6 +544,66 @@
       box-shadow: 0 2px 10px rgba(20, 20, 30, .05);
       margin-bottom: 22px;
       border: 1px solid var(--line);
+    }
+
+    .tp-quill-wrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--white);
+    }
+
+    .tp-quill-wrap .ql-toolbar.ql-snow {
+      border: none;
+      border-bottom: 1px solid var(--line);
+      background: var(--mint);
+    }
+
+    .tp-quill-wrap .ql-container.ql-snow {
+      border: none;
+      font-size: 14px;
+    }
+
+    .tp-quill-wrap .ql-editor {
+      min-height: 320px;
+      max-height: 640px;
+      color: var(--ink);
+      line-height: 1.6;
+      padding: 32px 40px;
+    }
+
+    /* Word-like page canvas: centered, max-width column with generous
+       margins so the editor reads as a document rather than a text box. */
+    .tp-quill-wrap .ql-editor {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    .tp-quill-wrap .ql-editor h1 { font-size: 1.7em; font-weight: 700; margin: 0.6em 0 0.3em; }
+    .tp-quill-wrap .ql-editor h2 { font-size: 1.4em; font-weight: 700; margin: 0.6em 0 0.3em; }
+    .tp-quill-wrap .ql-editor h3 { font-size: 1.2em; font-weight: 700; margin: 0.6em 0 0.3em; }
+    .tp-quill-wrap .ql-editor blockquote {
+      border-left: 3px solid var(--line);
+      padding-left: 14px;
+      margin: 0.6em 0;
+      color: var(--slate);
+    }
+    .tp-quill-wrap .ql-editor a { color: #2a6df5; text-decoration: underline; }
+
+    .tp-quill-wrap .ql-picker.ql-font { width: 170px; }
+    .tp-quill-wrap .ql-picker.ql-size { width: 90px; }
+    .tp-quill-wrap .ql-picker.ql-font .ql-picker-options,
+    .tp-quill-wrap .ql-picker.ql-size .ql-picker-options { width: max-content; }
+
+    .tp-tab-btn {
+      background: var(--white);
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .tp-tab-btn.active {
+      background: var(--ink);
+      color: var(--white);
     }
 
     .stat-cards {
@@ -1389,6 +1453,8 @@
         <div class="nav-item" id="navGifts" onclick="switchPage('gifts')"><span class="nav-ic">&#127873;</span>Gifts</div>
       <div class="nav-item" id="navSpecialOffers" onclick="switchPage('specialoffers')"><span class="nav-ic">&#127942;</span>Special Offers</div>
       <div class="nav-item" id="navWeeklyChallenges" onclick="switchPage('weeklychallenges')"><span class="nav-ic">&#128197;</span>Weekly Challenges</div>
+      <div class="nav-item" id="navTermsPrivacy" onclick="switchPage('termsprivacy')"><span class="nav-ic">&#128220;</span>Terms &amp; Privacy</div>
+
     </div>
     <div class="main-col">
       <div class="top-bar">
@@ -1770,13 +1836,43 @@
     </div>
   </div>
 
+  <div id="page-termsprivacy" style="display:none;">
+    <div class="card">
+      <h2>Terms &amp; Privacy Policy</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Write the Terms of Service and Privacy Policy shown inside both apps. This editor behaves like Word — pick a font, size, color or style and it applies to whatever you type next, or select existing text to restyle it.
+      </p>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+        <button type="button" class="tp-tab-btn active" id="tpTabTermsBtn" onclick="switchTermsPrivacyTab('terms')" style="padding:8px 16px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Terms of Service</button>
+        <button type="button" class="tp-tab-btn" id="tpTabPrivacyBtn" onclick="switchTermsPrivacyTab('privacy')" style="padding:8px 16px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Privacy Policy</button>
+        <span style="flex:1;"></span>
+        <button type="button" class="tp-tab-btn" onclick="tpUndo()" title="Undo (Ctrl+Z)" style="padding:8px 12px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">&#8630; Undo</button>
+        <button type="button" class="tp-tab-btn" onclick="tpRedo()" title="Redo (Ctrl+Y)" style="padding:8px 12px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">&#8631; Redo</button>
+      </div>
+
+      <div id="tpTermsQuillWrap" class="tp-quill-wrap">
+        <div id="tpTermsQuill"></div>
+      </div>
+      <div id="tpPrivacyQuillWrap" class="tp-quill-wrap" style="display:none;">
+        <div id="tpPrivacyQuill"></div>
+      </div>
+
+
+      <button class="btn btn-leaf" onclick="saveTermsPrivacy()" style="margin-top:12px;">Save</button>
+      <div id="tpMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+  </div>
+
       </div>
     </div>
   </div>
   </div>
 
+
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
   <script>
 
       const API_URL = CONFIG.API_URL;
@@ -2017,6 +2113,7 @@
       document.getElementById('page-gifts').style.display = page === 'gifts' ? '' : 'none';
       document.getElementById('page-specialoffers').style.display = page === 'specialoffers' ? '' : 'none';
       document.getElementById('page-weeklychallenges').style.display = page === 'weeklychallenges' ? '' : 'none';
+      document.getElementById('page-termsprivacy').style.display = page === 'termsprivacy' ? '' : 'none';
       document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
       document.getElementById('navUsers').classList.toggle('active', page === 'users');
       document.getElementById('navListeners').classList.toggle('active', page === 'listeners');
@@ -2025,7 +2122,8 @@
       document.getElementById('navGifts').classList.toggle('active', page === 'gifts');
       document.getElementById('navSpecialOffers').classList.toggle('active', page === 'specialoffers');
       document.getElementById('navWeeklyChallenges').classList.toggle('active', page === 'weeklychallenges');
-      const titles = { dashboard: 'Dashboard', notifications: 'Notifications', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges' };
+      document.getElementById('navTermsPrivacy').classList.toggle('active', page === 'termsprivacy');
+      const titles = { dashboard: 'Dashboard', notifications: 'Notifications', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges', termsprivacy: 'Terms & Privacy' };
       if (page === 'notifications') openNotificationsPage();
       if (page === 'weeklychallenges') {
         loadWeeklyChallengeGoals();
@@ -2033,6 +2131,10 @@
         loadWeeklyChallengeCompletions();
         loadWeeklyChallengeHistory();
       }
+      if (page === 'termsprivacy') {
+        loadTermsPrivacy();
+      }
+
       document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
       if (page === 'users') {
         loadUserAuditLog();
@@ -2043,6 +2145,148 @@
         loadWithdrawalLog();
       }
     }
+
+    // ---- Terms & Privacy Policy rich text editor (Quill) ----
+    let tpActiveTab = 'terms';
+    let tpLoaded = false;
+    let tpTermsQuill = null;
+    let tpPrivacyQuill = null;
+
+    // Register style-based (inline style="...") attributors instead of
+    // Quill's default class-based ones, so the saved HTML carries plain
+    // font-family/font-size/color styles that both the admin preview and
+    // the Flutter apps can read directly.
+    //
+    // Font names are kept unquoted (valid CSS even for multi-word names
+    // like `font-family: Times New Roman`). Quoting them here used to
+    // break font selection: Quill reads the applied font back from
+    // domNode.style.fontFamily to know which picker item is active, and
+    // the browser doesn't reliably round-trip an embedded quote character
+    // through that property, so the read-back value stopped matching any
+    // whitelist entry and the picker silently fell back to the default.
+    const TP_FONTS = [
+      'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Garamond', 'Cambria',
+      'Book Antiqua', 'Verdana', 'Tahoma', 'Calibri', 'Segoe UI', 'Trebuchet MS',
+      'Courier New', 'Roboto', 'Open Sans', 'Lato', 'PT Sans', 'Merriweather',
+      'Comic Sans MS',
+    ];
+    const TP_SIZES = ['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt', '28pt', '32pt', '36pt', '48pt', '72pt'];
+
+    function tpInitQuillFormats() {
+      if (tpTermsQuill || tpPrivacyQuill) return; // already registered
+      const FontStyle = Quill.import('attributors/style/font');
+      const SizeStyle = Quill.import('attributors/style/size');
+      const ColorStyle = Quill.import('attributors/style/color');
+      FontStyle.whitelist = TP_FONTS;
+      SizeStyle.whitelist = TP_SIZES;
+      Quill.register(FontStyle, true);
+      Quill.register(SizeStyle, true);
+      Quill.register(ColorStyle, true);
+    }
+
+    // Quill's snow theme only ships CSS ::before content for its own default
+    // font/size whitelist (sans-serif/serif/monospace, small/large/huge).
+    // Any custom whitelist value falls through to the generic rule and
+    // renders as the same fallback label for every option - so the picker
+    // needs its own generated CSS rule per value to actually show the name.
+    function tpInjectPickerLabelCss() {
+      if (document.getElementById('tpPickerLabelCss')) return;
+      let css = '';
+      TP_FONTS.forEach((f) => {
+        css += '.tp-quill-wrap .ql-picker.ql-font .ql-picker-label[data-value="' + f + '"]::before,'
+             + '.tp-quill-wrap .ql-picker.ql-font .ql-picker-item[data-value="' + f + '"]::before {'
+             + "content: '" + f + "'; font-family: '" + f + "';}";
+      });
+      TP_SIZES.forEach((s) => {
+        css += '.tp-quill-wrap .ql-picker.ql-size .ql-picker-label[data-value="' + s + '"]::before,'
+             + '.tp-quill-wrap .ql-picker.ql-size .ql-picker-item[data-value="' + s + '"]::before {'
+             + "content: '" + s + "';}";
+      });
+      const style = document.createElement('style');
+      style.id = 'tpPickerLabelCss';
+      style.textContent = css;
+      document.head.appendChild(style);
+    }
+
+    const TP_TOOLBAR_OPTIONS = [
+      [{ header: [1, 2, 3, false] }],
+      [{ font: TP_FONTS }],
+      [{ size: TP_SIZES }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ color: [] }],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      [{ indent: '-1' }, { indent: '+1' }],
+      [{ align: [] }],
+    ];
+
+    function tpMakeQuill(containerId) {
+      tpInitQuillFormats();
+      tpInjectPickerLabelCss();
+      return new Quill('#' + containerId, {
+        theme: 'snow',
+        modules: {
+          toolbar: TP_TOOLBAR_OPTIONS,
+          history: { delay: 500, maxStack: 200, userOnly: true },
+        },
+      });
+    }
+
+    function tpEditorFor(tab) {
+      return tab === 'privacy' ? tpPrivacyQuill : tpTermsQuill;
+    }
+
+    // Word-style visible Undo/Redo buttons, on top of Quill's built-in
+    // Ctrl+Z / Ctrl+Y keyboard shortcuts.
+    function tpUndo() {
+      const q = tpEditorFor(tpActiveTab);
+      if (q) q.history.undo();
+    }
+    function tpRedo() {
+      const q = tpEditorFor(tpActiveTab);
+      if (q) q.history.redo();
+    }
+
+
+    function switchTermsPrivacyTab(tab) {
+      tpActiveTab = tab;
+      document.getElementById('tpTermsQuillWrap').style.display = tab === 'terms' ? '' : 'none';
+      document.getElementById('tpPrivacyQuillWrap').style.display = tab === 'privacy' ? '' : 'none';
+      document.getElementById('tpTabTermsBtn').classList.toggle('active', tab === 'terms');
+      document.getElementById('tpTabPrivacyBtn').classList.toggle('active', tab === 'privacy');
+    }
+
+    async function loadTermsPrivacy() {
+      if (!tpTermsQuill) tpTermsQuill = tpMakeQuill('tpTermsQuill');
+      if (!tpPrivacyQuill) tpPrivacyQuill = tpMakeQuill('tpPrivacyQuill');
+      if (tpLoaded) return;
+      try {
+        const res = await fetch(API_URL + '/app-settings/terms-privacy');
+        const data = await res.json();
+        tpTermsQuill.root.innerHTML = data.terms_of_service || '';
+        tpPrivacyQuill.root.innerHTML = data.privacy_policy || '';
+        tpLoaded = true;
+      } catch (e) { }
+    }
+
+    async function saveTermsPrivacy() {
+      const terms_of_service = tpTermsQuill ? tpTermsQuill.root.innerHTML : '';
+      const privacy_policy = tpPrivacyQuill ? tpPrivacyQuill.root.innerHTML : '';
+      const msgEl = document.getElementById('tpMsg');
+      try {
+        const res = await fetch(API_URL + '/app-settings/admin/terms-privacy', {
+          method: 'PUT', headers: authHeaders(true),
+          body: JSON.stringify({ terms_of_service, privacy_policy })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to save');
+        msgEl.textContent = '✓ Saved';
+        msgEl.style.color = '#1c9a5b';
+      } catch (e) {
+        msgEl.textContent = '✗ ' + e.message;
+        msgEl.style.color = '#d9435e';
+      }
+    }
+
 
     function setAdminNameLabel() {
       const name = localStorage.getItem('adminUsername') || 'Admin';

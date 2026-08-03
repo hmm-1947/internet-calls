@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 from fastapi import APIRouter, Depends, UploadFile, File
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -72,6 +73,42 @@ def admin_clear_upgrade_banner(db: Session = Depends(get_db), admin: AdminUser =
     settings_row.upgrade_banner_url = None
     db.commit()
     return {"upgrade_banner_url": None}
+
+
+@router.get("/terms-privacy")
+def get_terms_privacy(db: Session = Depends(get_db)):
+    """Public endpoint used by both apps to display the admin-authored
+    Terms of Service and Privacy Policy. Content is stored as sanitized-ish
+    HTML produced by the admin panel's rich text editor."""
+    settings_row = _get_or_create_settings(db)
+    return {
+        "terms_of_service": settings_row.terms_of_service or "",
+        "privacy_policy": settings_row.privacy_policy or "",
+    }
+
+
+class TermsPrivacyPayload(BaseModel):
+    terms_of_service: str | None = None
+    privacy_policy: str | None = None
+
+
+@router.put("/admin/terms-privacy")
+def admin_set_terms_privacy(
+    payload: TermsPrivacyPayload,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(verify_admin),
+):
+    settings_row = _get_or_create_settings(db)
+    if payload.terms_of_service is not None:
+        settings_row.terms_of_service = payload.terms_of_service
+    if payload.privacy_policy is not None:
+        settings_row.privacy_policy = payload.privacy_policy
+    db.commit()
+    db.refresh(settings_row)
+    return {
+        "terms_of_service": settings_row.terms_of_service or "",
+        "privacy_policy": settings_row.privacy_policy or "",
+    }
 
 
 

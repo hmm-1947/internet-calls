@@ -11,6 +11,7 @@ import 'package:livekitapp/listener/screens/listener_reviews_screen.dart';
 import 'package:livekitapp/listener/screens/listener_wallet_screen.dart';
 
 import 'package:livekitapp/common/screens/change_password_screen.dart';
+import 'package:livekitapp/common/screens/legal_document_screen.dart';
 
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 
@@ -314,14 +315,27 @@ Future<void> refresh() async {
             _SettingsTile(
               icon: Icons.description_outlined,
               title: 'Terms of Service',
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const LegalDocumentScreen(documentType: 'terms'),
+                  ),
+                );
+              },
             ),
             const Divider(height: 1, color: Colors.white12),
             _SettingsTile(
               icon: Icons.privacy_tip_outlined,
               title: 'Privacy Policy',
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const LegalDocumentScreen(documentType: 'privacy'),
+                  ),
+                );
+              },
             ),
+
           ]),
           const SizedBox(height: 16),
           _SettingsCard([

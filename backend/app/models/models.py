@@ -205,6 +205,8 @@ class AppSettings(Base):
     ringtone_url = Column(String, nullable=True)
     ringtone_version = Column(Integer, default=0, nullable=False)
     upgrade_banner_url = Column(String, nullable=True)
+    terms_of_service = Column(Text, nullable=True)
+    privacy_policy = Column(Text, nullable=True)
 
 
 

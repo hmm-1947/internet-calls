@@ -113,7 +113,9 @@ static const String userBio = '/user/bio';
 
   static const String appUpgradeBanner = '/app-settings/upgrade-banner';
   static const String appEnrollContact = '/app-settings/enroll-contact';
+  static const String appTermsPrivacy = '/app-settings/terms-privacy';
   static const String specialOffers = '/special-offers';
+
   static const String weeklyChallengeProgress = '/weekly-challenge/progress';
 
 
