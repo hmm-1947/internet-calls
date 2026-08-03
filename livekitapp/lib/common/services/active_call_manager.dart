@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
+import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/user/services/pip_service.dart';
 
 enum ActiveCallRole { user, listener }
@@ -103,6 +104,7 @@ class ActiveCallManager {
   }
 
   void minimize() {
+    if (LockscreenService.instance.locked) return;
     if (hasActiveCall) expanded.value = false;
   }
 
@@ -148,6 +150,7 @@ class _ActiveCallBackObserver extends WidgetsBindingObserver {
     final manager = ActiveCallManager.instance;
     final info = manager.activeCall;
     if (info == null) return false;
+    if (LockscreenService.instance.locked) return true;
     if (manager.expanded.value) {
       final navigator = manager.callNavigatorKey.currentState;
       if (navigator != null && navigator.canPop()) {

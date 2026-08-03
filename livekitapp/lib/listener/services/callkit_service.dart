@@ -5,6 +5,7 @@ import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
+import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -41,8 +42,13 @@ class CallkitService {
   PendingCallNav? _pendingCallNav;
   StreamSubscription? _eventSub;
 
+  static const _lockscreenChannel = MethodChannel('livekitapp/lockscreen');
+
   Future<void> warmup() async {
     await AvatarCache.instance.init();
+    try {
+      await _lockscreenChannel.invokeMethod('setApiBaseUrl', ApiConstants.baseUrl);
+    } catch (_) {}
   }
 
   String? _syncLocalAvatarPath(String? url) => AvatarCache.instance.localPathSync(url);
@@ -50,11 +56,22 @@ class CallkitService {
   Future<String?> _localAvatarPath(String? url) => AvatarCache.instance.ensureCached(url);
 
 
-  Future<void> _playCustomRingtone() async {
+  Future<void> _playCustomRingtone({
+    String callId = '',
+    String callerName = '',
+    String callType = 'audio',
+    String callerPhotoUrl = '',
+  }) async {
     try {
-      await const MethodChannel(
-        'livekitapp/ringtone',
-      ).invokeMethod('startNativeRingtone');
+      await const MethodChannel('livekitapp/ringtone').invokeMethod(
+        'startNativeRingtone',
+        {
+          'callId': callId,
+          'callerName': callerName,
+          'callType': callType,
+          'callerPhotoUrl': callerPhotoUrl,
+        },
+      );
     } catch (_) {}
   }
 
@@ -66,6 +83,12 @@ class CallkitService {
         'livekitapp/ringtone',
       ).invokeMethod('stopNativeRingtone');
     } catch (_) {}
+  }
+
+  Future<void> _releaseLockscreen() async {
+    if (ActiveCallManager.instance.hasActiveCall) return;
+    await LockscreenService.instance.dismissIncomingCall();
+    await LockscreenService.instance.hideOverLockscreen();
   }
 
 
@@ -85,6 +108,7 @@ class CallkitService {
       if (event is CallEventActionCallEnded) {
         _lastShownCallId = null;
         _stopCustomRingtone();
+        _releaseLockscreen();
         if (_acceptingCallId != null ||
             _pendingCallNav != null ||
             ActiveCallManager.instance.hasActiveCall) {
@@ -105,6 +129,7 @@ class CallkitService {
       if (event is CallEventActionCallTimeout) {
         _lastShownCallId = null;
         _stopCustomRingtone();
+        _releaseLockscreen();
         final callId = _uuidToCallId(event.id);
         if (callId != null) {
           _rejectCallFromSystem(callId);
@@ -120,6 +145,8 @@ if (event is CallEventActionCallAccept) {
         final callerName = extra?['caller_name'] ?? 'User';
         final callerPhotoUrl = extra?['caller_photo_url'] as String?;
         _stopCustomRingtone();
+        LockscreenService.instance.dismissIncomingCall();
+        LockscreenService.instance.showOverLockscreen();
         if (callId != null && _acceptingCallId != callId) {
           _acceptCallFromSystem(callId, isVideo, callerName: callerName, callerPhotoUrl: callerPhotoUrl);
         }
@@ -130,6 +157,7 @@ if (event is CallEventActionCallAccept) {
         final callId = int.tryParse(extra?['call_id'] ?? '');
         print('[Callkit] Decline event action parsed callId: $callId');
         _stopCustomRingtone();
+        _releaseLockscreen();
         if (callId != null) {
           _rejectCallFromSystem(callId);
         }
@@ -313,6 +341,7 @@ if (event is CallEventActionCallAccept) {
     } catch (e) {
       print('[Callkit] Failed to accept call $callId: $e');
       _acceptingCallId = null;
+      await _releaseLockscreen();
     }
   }
 
@@ -365,6 +394,7 @@ if (event is CallEventActionCallAccept) {
     }
     _lastShownCallId = null;
     _stopCustomRingtone();
+    await _releaseLockscreen();
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
@@ -400,6 +430,7 @@ if (event is CallEventActionCallAccept) {
   }
 
   Future<void> _rejectBusyCall(int callId) async {
+    await LockscreenService.instance.dismissIncomingCall();
     await _forceEndCall(_callIdToUuid(callId.toString()));
     try {
       final authToken = await LocalStorage().getToken();
@@ -412,6 +443,7 @@ if (event is CallEventActionCallAccept) {
     if (_rejectingCallId == callId) return;
     _rejectingCallId = callId;
     await _forceEndCall(_callIdToUuid(callId.toString()));
+    await _releaseLockscreen();
     final state = navigatorKey.currentState;
     if (!ActiveCallManager.instance.hasActiveCall &&
         state != null &&
@@ -447,10 +479,6 @@ if (event is CallEventActionCallAccept) {
     final callerName = data['caller_name'] ?? 'Unknown';
     final callType = data['call_type'] ?? 'audio';
     final remoteCallerPhotoUrl = ApiConstants.resolveMediaUrl(data['caller_photo_url'] as String?);
-    // The native callkit UI needs a file it can read straight away, but the
-    // Flutter screens must get the remote url: a cached path can be evicted by
-    // the OS, and the widgets would then treat it as a server path.
-    final nativeAvatar = _syncLocalAvatarPath(remoteCallerPhotoUrl) ?? remoteCallerPhotoUrl;
     if (_syncLocalAvatarPath(remoteCallerPhotoUrl) == null) {
       // ignore: unawaited_futures
       _localAvatarPath(remoteCallerPhotoUrl);
@@ -458,39 +486,25 @@ if (event is CallEventActionCallAccept) {
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
+    await LockscreenService.instance.showOverLockscreen();
     final micStatus = await Permission.microphone.status;
     if (!micStatus.isGranted) {
       await Permission.microphone.request();
     }
-    final params = CallKitParams(
-      id: _callIdToUuid(callId.toString()),
-      nameCaller: callerName,
-      appName: 'Listener App',
-      handle: callerName,
-      type: 0,
-      avatar: nativeAvatar,
-      extra: {
-        'call_id': callId,
-        'caller_name': callerName,
-        'call_type': callType,
-        'caller_photo_url': remoteCallerPhotoUrl,
-      },
-      android: const AndroidParams(
-        isCustomNotification: true,
-        isShowLogo: false,
-        ringtonePath: 'silent_ring',
-
-        backgroundColor: '#0B0F1A',
-        actionColor: '#E53950',
-        incomingCallNotificationChannelName: 'Incoming Call',
-        isShowFullLockedScreen: false,
-        isFullScreen: false,
-      ),
-    );
     try {
-      await FlutterCallkitIncoming.showCallkitIncoming(params);
-    } catch (e) {}
-    await _playCustomRingtone();
+      await _lockscreenChannel.invokeMethod('showIncomingCall', {
+        'callId': callId.toString(),
+        'callerName': callerName,
+        'callType': callType,
+        'callerPhotoUrl': remoteCallerPhotoUrl,
+      });
+    } catch (_) {}
+    await _playCustomRingtone(
+      callId: callId.toString(),
+      callerName: callerName,
+      callType: callType,
+      callerPhotoUrl: remoteCallerPhotoUrl,
+    );
   }
   Future<void> setCallConnected(String callId) async {
     try {
@@ -518,6 +532,7 @@ if (event is CallEventActionCallAccept) {
     _stopCustomRingtone();
 
     await _forceEndCall(_callIdToUuid(callId));
+    await _releaseLockscreen();
 
 
     final state = navigatorKey.currentState;

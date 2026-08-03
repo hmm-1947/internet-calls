@@ -7,6 +7,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
+import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -37,7 +38,8 @@ class ListenerCallScreen extends StatefulWidget {
   State<ListenerCallScreen> createState() => _ListenerCallScreenState();
 }
 
-class _ListenerCallScreenState extends State<ListenerCallScreen> {
+class _ListenerCallScreenState extends State<ListenerCallScreen>
+    with WidgetsBindingObserver {
   final _localStorage = LocalStorage();
   final _repository = ListenerRepository();
   Room? _room;
@@ -57,15 +59,28 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
   int _callDurationSeconds = 0;
   StreamSubscription? _giftSub;
   Timer? _audioLevelTimer;
+  bool _foregroundServiceStarted = false;
+  Timer? _remoteVideoPoll;
+  bool _cameraRequestInFlight = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     ActiveCallManager.instance.onHangUp = _hangUp;
     ActiveCallManager.instance.updateStatus(_status);
+    LockscreenService.instance.isLocked.addListener(_onLockStateChanged);
     _connect();
     _listenForSignals();
     _listenForGifts();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!mounted || _isEnding) return;
+    if (!_foregroundServiceStarted) _startForegroundService();
+    if (widget.isVideo && !_cameraEnabled) _retryCamera();
   }
 
   void _showMessage(String message) {
@@ -214,20 +229,88 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
     }
   }
 
+  Future<void> _startForegroundService() async {
+    try {
+      await CallForegroundService.instance.start(
+        title: 'Call with ${widget.otherPartyName}',
+        video: widget.isVideo,
+      );
+      _foregroundServiceStarted = true;
+    } catch (e) {
+      _foregroundServiceStarted = false;
+      print('Call foreground service failed: $e');
+    }
+  }
+
+  Future<VideoTrack?> _enableCamera(Room room) async {
+    try {
+      final status = await Permission.camera.status;
+      if (!status.isGranted) {
+        if (LockscreenService.instance.locked) return null;
+        final result = await Permission.camera.request();
+        if (!result.isGranted) return null;
+      }
+      await room.localParticipant
+          ?.setCameraEnabled(true)
+          .timeout(const Duration(seconds: 8));
+      final track =
+          room.localParticipant?.videoTrackPublications.firstOrNull?.track;
+      _cameraEnabled = true;
+      return track is VideoTrack ? track : null;
+    } catch (e) {
+      _cameraEnabled = false;
+      print('Camera enable failed: $e');
+      return null;
+    }
+  }
+
+  void _onLockStateChanged() {
+    if (!mounted || _isEnding) return;
+    if (LockscreenService.instance.locked) return;
+    if (!_foregroundServiceStarted) _startForegroundService();
+    if (widget.isVideo && !_cameraEnabled) _retryCamera();
+  }
+
+  Future<void> _retryCamera() async {
+    final room = _room;
+    if (room == null || _cameraRequestInFlight || _cameraEnabled) return;
+    _cameraRequestInFlight = true;
+    try {
+      final track = await _enableCamera(room);
+      if (!mounted || track == null) return;
+      setState(() => _localVideoTrack = track);
+    } finally {
+      _cameraRequestInFlight = false;
+    }
+  }
+
+  void _startRemoteVideoPoll(Room room) {
+    _remoteVideoPoll?.cancel();
+    var ticks = 0;
+    _remoteVideoPoll = Timer.periodic(const Duration(milliseconds: 700), (
+      timer,
+    ) {
+      ticks++;
+      if (!mounted || _isEnding || ticks > 30) {
+        timer.cancel();
+        return;
+      }
+      _adoptExistingRemoteVideo(room);
+      if (_remoteVideoTrack != null) timer.cancel();
+    });
+  }
+
   Future<void> _connect() async {
     try {
-      final keyguardLocked = await const MethodChannel(
-        'livekitapp/lockscreen',
-      ).invokeMethod<bool>('isDeviceLocked');
-      if (keyguardLocked == true) {
-        await const MethodChannel(
-          'livekitapp/lockscreen',
-        ).invokeMethod('showOverLockscreen');
-      }
+      await LockscreenService.instance.showOverLockscreen();
 
       if (_isEnding || !mounted) return;
 
-      await Permission.microphone.request();
+      try {
+        await Permission.microphone.request();
+      } catch (e) {
+        print('Microphone permission request failed: $e');
+      }
       final room = Room();
 
       if (_isEnding || !mounted) return;
@@ -252,21 +335,10 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
         return;
       }
 
-      await room.localParticipant?.setMicrophoneEnabled(true);
-      await CallForegroundService.instance.start(
-        title: 'Call with ${widget.otherPartyName}',
-        video: widget.isVideo,
-      );
-
-
-      VideoTrack? localVideoTrack;
-      if (widget.isVideo) {
-        await Permission.camera.request();
-        await room.localParticipant?.setCameraEnabled(true);
-        _cameraEnabled = true;
-        final track =
-            room.localParticipant?.videoTrackPublications.firstOrNull?.track;
-        if (track is VideoTrack) localVideoTrack = track;
+      try {
+        await room.localParticipant?.setMicrophoneEnabled(true);
+      } catch (e) {
+        print('Microphone enable failed: $e');
       }
 
       if (_isEnding || !mounted) {
@@ -275,28 +347,31 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
         return;
       }
 
-      if (mounted) {
-        await room.setSpeakerOn(_speakerOn);
-        VolumeController.instance.showSystemUI = false;
-        VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
-        if (widget.callId != null) {
-          await CallkitService.instance.setCallConnected(
-            widget.callId.toString(),
-          );
-        }
-        setState(() {
-          _room = room;
-          _roomListener = roomListener;
-          _status = '';
-          _localVideoTrack = localVideoTrack;
-        });
-        ActiveCallManager.instance.updateStatus(_status);
-        _adoptExistingRemoteVideo(room);
-        _armDurationFallback(room);
-      } else {
+      await room.setSpeakerOn(_speakerOn);
+      VolumeController.instance.showSystemUI = false;
+      VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
+      if (widget.callId != null) {
+        await CallkitService.instance.setCallConnected(widget.callId.toString());
+      }
+
+      if (_isEnding || !mounted) {
         roomListener.dispose();
         room.disconnect();
+        return;
       }
+
+      setState(() {
+        _room = room;
+        _roomListener = roomListener;
+        _status = '';
+      });
+      ActiveCallManager.instance.updateStatus(_status);
+      _adoptExistingRemoteVideo(room);
+      _startRemoteVideoPoll(room);
+      _armDurationFallback(room);
+
+      unawaited(_startForegroundService());
+      if (widget.isVideo) unawaited(_retryCamera());
     } catch (e) {
       print('Connection error: $e');
       if (mounted && !_isEnding) {
@@ -373,11 +448,15 @@ class _ListenerCallScreenState extends State<ListenerCallScreen> {
   Future<void> _hangUp({bool notifyBackend = true}) async {
     if (_isEnding) return;
     _isEnding = true;
+    if (LockscreenService.instance.locked) {
+      unawaited(LockscreenService.instance.leaveLockscreen());
+    }
     _roomListener?.dispose();
     _roomListener = null;
 _room?.disconnect();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
+    _remoteVideoPoll?.cancel();
     await CallForegroundService.instance.stop();
     await _localStorage.clearActiveCall();
     if (widget.callId != null) {
@@ -398,20 +477,23 @@ _room?.disconnect();
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (ActiveCallManager.instance.onHangUp == _hangUp) {
       ActiveCallManager.instance.onHangUp = null;
     }
-    try {
-      const MethodChannel(
-        'livekitapp/lockscreen',
-      ).invokeMethod('hideOverLockscreen');
-    } catch (_) {}
+    LockscreenService.instance.isLocked.removeListener(_onLockStateChanged);
+    if (LockscreenService.instance.locked) {
+      LockscreenService.instance.leaveLockscreen();
+    } else {
+      LockscreenService.instance.hideOverLockscreen();
+    }
 _fcmSubscription?.cancel();
     _giftSub?.cancel();
     _roomListener?.dispose();
     _room?.disconnect();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
+    _remoteVideoPoll?.cancel();
     CallForegroundService.instance.stop();
     super.dispose();
   }
@@ -436,14 +518,35 @@ _fcmSubscription?.cancel();
     });
   }
 
+  bool get _lockedForCall => LockscreenService.instance.locked;
+
+  Future<void> _openNotes() async {
+    if (_lockedForCall) {
+      final unlocked = await LockscreenService.instance.requestUnlock();
+      if (!unlocked) return;
+    }
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ListenerCallNotesScreen(
+          callId: widget.callId,
+          otherPartyName: widget.otherPartyName,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     _syncMinimizedVideoTrack();
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: widget.isVideo && _status.isEmpty
-          ? _buildConnectedVideo()
-          : _buildConnectedAudio(),
+    return ValueListenableBuilder<bool>(
+      valueListenable: LockscreenService.instance.isLocked,
+      builder: (context, _, __) => Scaffold(
+        backgroundColor: Colors.black,
+        body: widget.isVideo && _status.isEmpty
+            ? _buildConnectedVideo()
+            : _buildConnectedAudio(),
+      ),
     );
   }
 
@@ -525,22 +628,14 @@ _fcmSubscription?.cancel();
                 CallActionButton(
                   icon: Icons.note_alt_outlined,
                   label: 'Notes',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ListenerCallNotesScreen(
-                          callId: widget.callId,
-                          otherPartyName: widget.otherPartyName,
-                        ),
-                      ),
-                    );
-                  },
+                  onTap: _openNotes,
                 ),
-                CallActionButton(
-                  icon: Icons.close_fullscreen,
-                  label: 'Minimize',
-                  onTap: ActiveCallManager.instance.minimize,
-                ),
+                if (!_lockedForCall)
+                  CallActionButton(
+                    icon: Icons.close_fullscreen,
+                    label: 'Minimize',
+                    onTap: ActiveCallManager.instance.minimize,
+                  ),
               ],
             ),
           ),
@@ -591,14 +686,17 @@ _fcmSubscription?.cancel();
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: ActiveCallManager.instance.minimize,
-                  icon: const Icon(
-                    Icons.close_fullscreen,
-                    color: Colors.white,
+                if (_lockedForCall)
+                  const SizedBox(width: 48)
+                else
+                  IconButton(
+                    onPressed: ActiveCallManager.instance.minimize,
+                    icon: const Icon(
+                      Icons.close_fullscreen,
+                      color: Colors.white,
+                    ),
+                    tooltip: 'Minimize call',
                   ),
-                  tooltip: 'Minimize call',
-                ),
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -707,16 +805,7 @@ _fcmSubscription?.cancel();
                 icon: Icons.note_alt_outlined,
                 label: 'Notes',
                 background: Colors.black.withOpacity(0.35),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ListenerCallNotesScreen(
-                        callId: widget.callId,
-                        otherPartyName: widget.otherPartyName,
-                      ),
-                    ),
-                  );
-                },
+                onTap: _openNotes,
               ),
             ],
           ),

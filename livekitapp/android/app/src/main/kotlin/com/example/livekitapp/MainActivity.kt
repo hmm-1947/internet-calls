@@ -23,6 +23,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         const val ENGINE_ID = "livekitapp.main.engine"
         const val EXTRA_OPEN_ACTIVE_CALL = "open_active_call"
+        const val EXTRA_FROM_LOCKSCREEN = "from_lockscreen"
         const val CALL_FG_CHANNEL = "livekitapp/callforeground"
 
         private var isInCallState = false
@@ -31,6 +32,7 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "livekitapp/lockscreen"
     private var pendingUnlockResult: MethodChannel.Result? = null
     private var unlockReceiver: BroadcastReceiver? = null
+    private var lockStateReceiver: BroadcastReceiver? = null
     private val PIP_CHANNEL = "livekitapp/pip"
     private val RINGTONE_CHANNEL = "livekitapp/ringtone"
 
@@ -55,15 +57,70 @@ class MainActivity : FlutterActivity() {
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
+        if (intent?.getBooleanExtra(EXTRA_FROM_LOCKSCREEN, false) == true) {
+            CallLockscreen.setCallActive(true)
+        }
+        applyLockscreenMode()
         super.onCreate(savedInstanceState)
         resetStaleIncomingCallChannel()
+        registerLockStateReceiver()
         applyPipParams()
         handleOpenActiveCallIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_FROM_LOCKSCREEN, false)) {
+            intent.removeExtra(EXTRA_FROM_LOCKSCREEN)
+            CallLockscreen.setCallActive(true)
+        }
+        applyLockscreenMode()
         handleOpenActiveCallIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyLockscreenMode()
+        notifyLockState()
+    }
+
+    override fun onPause() {
+        applyLockscreenMode()
+        super.onPause()
+    }
+
+    private fun applyLockscreenMode() {
+        CallLockscreen.apply(this, CallLockscreen.isCallActive())
+    }
+
+    private fun registerLockStateReceiver() {
+        if (lockStateReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                notifyLockState()
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        lockStateReceiver = receiver
+        registerReceiver(receiver, filter)
+    }
+
+    private fun notifyLockState() {
+        val engine = flutterEngine ?: return
+        MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
+            .invokeMethod("onLockStateChanged", CallLockscreen.isDeviceLocked(this))
+    }
+
+    private fun leaveLockscreen() {
+        CallLockscreen.setCallActive(false)
+        applyLockscreenMode()
+        if (CallLockscreen.isDeviceLocked(this)) {
+            moveTaskToBack(true)
+        }
     }
 
     private fun handleOpenActiveCallIntent(intent: Intent?) {
@@ -101,32 +158,86 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "isDeviceLocked" -> {
-                    val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                    result.success(keyguardManager.isKeyguardLocked)
+                    result.success(CallLockscreen.isDeviceLocked(this))
+                }
+                "setCallActive" -> {
+                    CallLockscreen.setCallActive(call.arguments as? Boolean ?: false)
+                    applyLockscreenMode()
+                    result.success(null)
                 }
                 "showOverLockscreen" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        setShowWhenLocked(true)
-                        setTurnScreenOn(true)
-                    } else {
-                        window.addFlags(
-                            android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                        )
-                    }
+                    CallLockscreen.setCallActive(true)
+                    applyLockscreenMode()
                     result.success(null)
                 }
                 "hideOverLockscreen" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        setShowWhenLocked(false)
-                        setTurnScreenOn(false)
-                    } else {
-                        window.clearFlags(
-                            android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                        )
-                    }
+                    CallLockscreen.setCallActive(false)
+                    applyLockscreenMode()
                     result.success(null)
+                }
+                "leaveLockscreen" -> {
+                    leaveLockscreen()
+                    result.success(null)
+                }
+                "dismissIncomingCall" -> {
+                    IncomingCallActivity.dismiss(applicationContext)
+                    result.success(null)
+                }
+                "setApiBaseUrl" -> {
+                    AvatarLoader.setBaseUrl(applicationContext, call.arguments as? String ?: "")
+                    result.success(null)
+                }
+                "showIncomingCall" -> {
+                    val callId = call.argument<String>("callId") ?: ""
+                    if (callId.isEmpty()) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
+                    val locked = CallLockscreen.isDeviceLocked(this)
+                    val screenOff = !CallLockscreen.isDeviceInteractive(this)
+                    IncomingCallActivity.show(
+                        applicationContext,
+                        callId,
+                        call.argument<String>("callerName") ?: "Unknown",
+                        call.argument<String>("callType") ?: "audio",
+                        call.argument<String>("callerPhotoUrl") ?: "",
+                        fullScreen = locked || screenOff
+                    )
+                    result.success(true)
+                }
+                "requestUnlock" -> {
+                    val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                    if (!keyguardManager.isKeyguardLocked) {
+                        result.success(true)
+                        return@setMethodCallHandler
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        var replied = false
+                        keyguardManager.requestDismissKeyguard(
+                            this,
+                            object : KeyguardManager.KeyguardDismissCallback() {
+                                override fun onDismissSucceeded() {
+                                    if (replied) return
+                                    replied = true
+                                    result.success(true)
+                                }
+
+                                override fun onDismissCancelled() {
+                                    if (replied) return
+                                    replied = true
+                                    result.success(false)
+                                }
+
+                                override fun onDismissError() {
+                                    if (replied) return
+                                    replied = true
+                                    result.success(false)
+                                }
+                            }
+                        )
+                    } else {
+                        result.success(false)
+                    }
                 }
                 "forceClearTelecomCalls" -> {
                     forceClearTelecomCalls()
@@ -170,6 +281,8 @@ class MainActivity : FlutterActivity() {
                 }
                 "setCallActive" -> {
                     isInCallState = call.arguments as? Boolean ?: false
+                    CallLockscreen.setCallActive(isInCallState)
+                    applyLockscreenMode()
                     applyPipParams()
                     result.success(null)
                 }
@@ -182,6 +295,22 @@ class MainActivity : FlutterActivity() {
                 "startNativeRingtone" -> {
                     val intent = Intent(applicationContext, RingtoneService::class.java)
                     intent.action = RingtoneService.ACTION_START_APP
+                    intent.putExtra(
+                        IncomingCallActivity.EXTRA_CALL_ID,
+                        call.argument<String>("callId") ?: ""
+                    )
+                    intent.putExtra(
+                        IncomingCallActivity.EXTRA_CALLER_NAME,
+                        call.argument<String>("callerName") ?: ""
+                    )
+                    intent.putExtra(
+                        IncomingCallActivity.EXTRA_CALL_TYPE,
+                        call.argument<String>("callType") ?: "audio"
+                    )
+                    intent.putExtra(
+                        IncomingCallActivity.EXTRA_CALLER_PHOTO_URL,
+                        call.argument<String>("callerPhotoUrl") ?: ""
+                    )
                     applicationContext.startForegroundService(intent)
                     result.success(null)
                 }
@@ -204,8 +333,13 @@ class MainActivity : FlutterActivity() {
                     intent.action = CallForegroundService.ACTION_START
                     intent.putExtra(CallForegroundService.EXTRA_TITLE, title)
                     intent.putExtra(CallForegroundService.EXTRA_VIDEO, video)
-                    applicationContext.startForegroundService(intent)
-                    result.success(null)
+                    try {
+                        applicationContext.startForegroundService(intent)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        android.util.Log.w("Callkit", "startForegroundService threw: $e")
+                        result.success(null)
+                    }
                 }
                 "stop" -> {
                     val intent = Intent(applicationContext, CallForegroundService::class.java)
@@ -278,6 +412,7 @@ private fun pipParams(autoEnter: Boolean): PictureInPictureParams {
         }
     }
 private fun closeIncomingCallScreen() {
+    IncomingCallActivity.dismiss(applicationContext)
     val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
     try {
         for (task in am.appTasks) {
@@ -294,6 +429,14 @@ private fun closeIncomingCallScreen() {
 }
     override fun onDestroy() {
         unlockReceiver?.let { unregisterReceiver(it) }
+        lockStateReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: Exception) {
+                android.util.Log.d("Callkit", "unregister lockStateReceiver threw: $e")
+            }
+        }
+        lockStateReceiver = null
         super.onDestroy()
     }
 }

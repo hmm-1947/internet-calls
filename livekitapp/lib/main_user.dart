@@ -14,6 +14,7 @@ import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
+import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
@@ -179,6 +180,7 @@ void main() async {
 
   await dotenv.load(fileName: ".env");
   FlavorConfig.set(AppFlavor.user);
+  LockscreenService.instance.init();
   ActiveCallManager.instance.init();
   ActiveCallManager.instance.rootNavigatorKey = userNavigatorKey;
   await Firebase.initializeApp();

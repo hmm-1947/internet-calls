@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/api_client.dart';
@@ -21,6 +23,7 @@ import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
+import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
@@ -36,6 +39,9 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
     await Firebase.initializeApp();
   }
   print('[FCM-BG] Background message received: type=${message.data["type"]}');
+  if (message.data['type'] == 'call') {
+    _bindBackgroundCallEvents();
+  }
   await _handleMessage(message);
   await _cacheAndAckChatMessage(message);
   await _cacheAndAckChatSummary(message);
@@ -45,6 +51,37 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
     message.data,
     isUserApp: false,
   );
+}
+
+bool _backgroundCallEventsBound = false;
+
+void _bindBackgroundCallEvents() {
+  if (_backgroundCallEventsBound) return;
+  _backgroundCallEventsBound = true;
+  FlutterCallkitIncoming.onEvent.listen((CallEvent? event) async {
+    if (event == null) return;
+    int? callId;
+    if (event is CallEventActionCallDecline) {
+      callId = int.tryParse('${event.callKitParams.extra?['call_id'] ?? ''}');
+    } else if (event is CallEventActionCallTimeout) {
+      callId = int.tryParse(event.id.split('-').last);
+    } else {
+      return;
+    }
+    if (callId == null) return;
+    print('[FCM-BG] Rejecting call $callId from background isolate');
+    try {
+      final token = await LocalStorage().getToken();
+      if (token != null) {
+        await ListenerRepository().rejectCall(token, callId);
+      }
+    } catch (e) {
+      print('[FCM-BG] Background reject failed: $e');
+    }
+    try {
+      await FlutterCallkitIncoming.endAllCalls();
+    } catch (_) {}
+  });
 }
 
 Future<void> _cacheAndAckChatSummary(RemoteMessage message) async {
@@ -132,6 +169,7 @@ void main() async {
   }
 
   FlavorConfig.set(AppFlavor.listener);
+  LockscreenService.instance.init();
   ActiveCallManager.instance.init();
   ActiveCallManager.instance.rootNavigatorKey =
       CallkitService.instance.navigatorKey;

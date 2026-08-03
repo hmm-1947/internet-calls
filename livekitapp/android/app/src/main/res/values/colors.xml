@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="incoming_call_background">#0B0F1A</color>
+    <color name="incoming_call_subtitle">#B9C0CC</color>
+    <color name="incoming_call_avatar">#1F2430</color>
+    <color name="incoming_call_accept">#2FBF71</color>
+    <color name="incoming_call_decline">#E53950</color>
+</resources>

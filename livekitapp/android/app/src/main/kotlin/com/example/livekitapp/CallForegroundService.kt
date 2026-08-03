@@ -68,23 +68,41 @@ class CallForegroundService : Service() {
     }
 
     private fun goForeground() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-                if (withCamera) {
-                    types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-                }
-                startForeground(
-                    NOTIFICATION_ID,
-                    buildNotification(currentTitle),
-                    types
-                )
-            } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            try {
                 startForeground(NOTIFICATION_ID, buildNotification(currentTitle))
+            } catch (e: Exception) {
+                Log.w(TAG, "startForeground failed: $e")
             }
+            return
+        }
+        val baseTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+        val types = if (withCamera) {
+            baseTypes or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        } else {
+            baseTypes
+        }
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(currentTitle), types)
+            return
         } catch (e: Exception) {
-            Log.w(TAG, "startForeground failed: $e")
+            Log.w(TAG, "startForeground with types=$types failed: $e")
+        }
+        try {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(currentTitle),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+            )
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground phoneCall fallback failed: $e")
+        }
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(currentTitle))
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground untyped fallback failed: $e")
         }
     }
 
