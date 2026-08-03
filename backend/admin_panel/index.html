@@ -20,6 +20,38 @@
       --sidebar-w: 240px;
     }
 
+    [data-theme="dark"] {
+      --mint: #1a1d24;
+      --ink: #eef0f4;
+      --slate: #9aa2b1;
+      --line: #2a2e38;
+      --white: #232733;
+      --bg: #14161c;
+    }
+
+    [data-theme="dark"] .confirm-icon.danger  { background: #3a2224; color: #ff6b6b; }
+    [data-theme="dark"] .confirm-icon.warning { background: #3a3020; color: #e0a83e; }
+    [data-theme="dark"] .confirm-icon.info    { background: #1e3a2c; color: #3ed687; }
+
+    .theme-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-right: 12px;
+    }
+
+    .theme-toggle:hover {
+      background: var(--mint);
+    }
+
     * {
       box-sizing: border-box;
     }
@@ -46,6 +78,62 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+    }
+
+    .theme-toggle {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--slate);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .theme-toggle:hover {
+      background: var(--mint);
+    }
+
+    .theme-switch {
+      width: 38px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--line);
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .theme-switch .knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--white);
+      transition: left 0.2s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    body.dark-mode .theme-switch {
+      background: var(--leaf);
+    }
+
+    body.dark-mode .theme-switch .knob {
+      left: 18px;
+    }
+
+    body.dark-mode {
+      --bg: #14161c;
+      --white: #1e212b;
+      --ink: #e8e9ee;
+      --slate: #9aa1b0;
+      --line: #2a2e3a;
+      --mint: #262a35;
     }
 
     .side-brand {
@@ -95,6 +183,133 @@
     .nav-item.active {
       background: #fdecee;
       color: var(--leaf);
+    }
+
+    /* Red counter of unseen notifications, sits at the end of the nav row. */
+    .nav-badge {
+      margin-left: auto;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 10px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .nav-badge.show {
+      display: inline-flex;
+    }
+
+    /* ─── Notifications feed ─── */
+    .notif-date-sep {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 18px 0 12px;
+    }
+
+    .notif-date-sep::before,
+    .notif-date-sep::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+
+    .notif-date-sep span {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--slate);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 14px;
+      white-space: nowrap;
+    }
+
+    .notif-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      background: var(--white);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .notif-row.unread {
+      border-color: rgba(230, 57, 70, .45);
+      background: rgba(230, 57, 70, .05);
+    }
+
+    .notif-row.leaving {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+
+    .notif-tick {
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 1.5px solid var(--line);
+      background: transparent;
+      color: #1c9a5b;
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .notif-tick:hover {
+      background: #e6f7ee;
+      border-color: #1c9a5b;
+    }
+
+    .notif-tick:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+
+    .notif-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .notif-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .notif-text {
+      font-size: 13px;
+      color: var(--slate);
+      margin-top: 3px;
+      word-break: break-word;
+    }
+
+    .notif-time {
+      font-size: 12px;
+      color: var(--slate);
+      white-space: nowrap;
+      margin-left: 8px;
     }
 
     .main-col {
@@ -310,7 +525,7 @@
     }
 
     .btn-ghost:hover {
-      background: #e9eaed;
+      background: var(--line);
     }
 
     .btn-ghost:disabled {
@@ -387,6 +602,34 @@
     .stat-sub .down {
       color: var(--danger);
       font-weight: 700;
+    }
+
+    /* Live presence line under the active/inactive split. */
+    .stat-presence {
+      margin-top: 4px;
+    }
+
+    .stat-presence span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 700;
+    }
+
+    .stat-presence span::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .stat-presence .dot-online {
+      color: #1c9a5b;
+    }
+
+    .stat-presence .dot-offline {
+      color: var(--slate);
     }
 
     .stat-icon {
@@ -577,6 +820,25 @@
     .person-sub {
       font-size: 12px;
       color: var(--slate);
+    }
+
+    /* @username line under the display name in the people list. */
+    .person-handle {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--leaf);
+    }
+
+    .person-handle.missing {
+      color: var(--slate);
+      font-weight: 500;
+      font-style: italic;
+    }
+
+    /* "No email added" style hints in a contact line. */
+    .contact-missing {
+      font-style: italic;
+      opacity: .8;
     }
 
     .content {
@@ -941,7 +1203,7 @@
     }
     .confirm-overlay.show { opacity: 1; }
     .confirm-box {
-      background: #fff;
+      background: var(--white);
       border-radius: 18px;
       padding: 28px 28px 22px;
       max-width: 380px;
@@ -1119,6 +1381,7 @@
     <div class="side-nav">
       <div class="side-brand"><span class="brand-icon">&#128222;</span>LailaNowAdmin</div>
       <div class="nav-item active" id="navDashboard" onclick="switchPage('dashboard')"><span class="nav-ic">&#9635;</span>Dashboard</div>
+      <div class="nav-item" id="navNotifications" onclick="switchPage('notifications')"><span class="nav-ic">&#128276;</span>Notifications<span class="nav-badge" id="navNotificationsBadge">0</span></div>
       <div class="nav-item" id="navUsers" onclick="switchPage('users')"><span class="nav-ic">&#128100;</span>Users</div>
       <div class="nav-item" id="navListeners" onclick="switchPage('listeners')"><span class="nav-ic">&#127911;</span>Listeners</div>
       <div class="nav-item" id="navCoinSettings" onclick="switchPage('coinsettings')"><span class="nav-ic">&#9881;</span>Coin Settings</div>
@@ -1131,6 +1394,7 @@
       <div class="top-bar">
         <div class="top-bar-title" id="topBarTitle">Dashboard</div>
         <div class="top-bar-right">
+          <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">&#9788;</button>
           <div class="admin-chip" onclick="toggleAdminMenu()">
             <div class="admin-avatar" id="adminAvatarInitial">A</div>
             <div class="admin-name-block">
@@ -1157,6 +1421,10 @@
           <span class="up" id="statActiveUsers">0 active</span>
           <span class="down" id="statInactiveUsers">0 inactive</span>
         </div>
+        <div class="stat-sub stat-presence">
+          <span class="dot-online" id="statOnlineUsers">0 online</span>
+          <span class="dot-offline" id="statOfflineUsers">0 offline</span>
+        </div>
       </div>
       <div class="stat-icon">&#128101;</div>
     </div>
@@ -1167,6 +1435,10 @@
         <div class="stat-sub">
           <span class="up" id="statActiveListeners">0 active</span>
           <span class="down" id="statInactiveListeners">0 inactive</span>
+        </div>
+        <div class="stat-sub stat-presence">
+          <span class="dot-online" id="statOnlineListeners">0 online</span>
+          <span class="dot-offline" id="statOfflineListeners">0 offline</span>
         </div>
       </div>
       <div class="stat-icon">&#127911;</div>
@@ -1221,6 +1493,19 @@
 
   </div>
 
+  <div id="page-notifications" style="display:none;">
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Notifications</span>
+        <button class="btn btn-ghost" onclick="loadNotifications()">↻ Refresh</button>
+      </h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Requests and events raised from the apps. Tick a notification to mark it as done and remove it from this list.
+      </p>
+      <div id="notificationsList"></div>
+    </div>
+  </div>
+
   <div id="page-users" style="display:none;">
     <div class="card">
       <h2>Users
@@ -1229,7 +1514,7 @@
       <div class="msg-box" id="usersMsgBox"></div>
       <div class="layout">
         <div class="sidebar">
-          <input class="search-box" id="userSearch" placeholder="Search by name or phone" oninput="renderPersonList('user')">
+          <input class="search-box" id="userSearch" placeholder="Search by name, username, email or phone" oninput="renderPersonList('user')">
           <div id="userList"></div>
         </div>
         <div class="content" id="userContent">
@@ -1716,11 +2001,14 @@
       loadActiveCalls();
       loadStats();
       loadOverview();
+      loadNotificationsUnreadCount();
       setAdminNameLabel();
       connectAdminWs();
     }
 
     function switchPage(page) {
+      document.getElementById('page-notifications').style.display = page === 'notifications' ? '' : 'none';
+      document.getElementById('navNotifications').classList.toggle('active', page === 'notifications');
       document.getElementById('page-dashboard').style.display = page === 'dashboard' ? '' : 'none';
       document.getElementById('page-users').style.display = page === 'users' ? '' : 'none';
       document.getElementById('page-listeners').style.display = page === 'listeners' ? '' : 'none';
@@ -1737,7 +2025,8 @@
       document.getElementById('navGifts').classList.toggle('active', page === 'gifts');
       document.getElementById('navSpecialOffers').classList.toggle('active', page === 'specialoffers');
       document.getElementById('navWeeklyChallenges').classList.toggle('active', page === 'weeklychallenges');
-      const titles = { dashboard: 'Dashboard', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges' };
+      const titles = { dashboard: 'Dashboard', notifications: 'Notifications', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges' };
+      if (page === 'notifications') openNotificationsPage();
       if (page === 'weeklychallenges') {
         loadWeeklyChallengeGoals();
         loadWeeklyChallengeLeaderboard();
@@ -1788,10 +2077,36 @@
         document.getElementById('statActiveListeners').textContent = data.active_listeners + ' active';
         document.getElementById('statInactiveListeners').textContent = data.inactive_listeners + ' inactive';
 
+        setPresenceStats('Users', data.online_users, data.offline_users);
+        setPresenceStats('Listeners', data.online_listeners, data.offline_listeners);
+
         document.getElementById('statAvgDuration').innerHTML = formatDuration(data.avg_call_duration_seconds) + ' <small>avg</small>';
 
         renderCallsChart(data.calls_series);
       } catch (e) { }
+    }
+
+    function setPresenceStats(which, online, offline) {
+      const on = document.getElementById('statOnline' + which);
+      const off = document.getElementById('statOffline' + which);
+      if (on) on.textContent = (online || 0) + ' online';
+      if (off) off.textContent = (offline || 0) + ' offline';
+    }
+
+    /**
+     * Recomputes the dashboard presence counters from the people caches, which
+     * the admin websocket keeps current. Cheaper than refetching the overview
+     * (and its chart) every time somebody connects or disconnects.
+     */
+    function refreshPresenceStatsFromCache() {
+      if (Array.isArray(usersCache)) {
+        const online = usersCache.filter(u => u.is_online).length;
+        setPresenceStats('Users', online, usersCache.length - online);
+      }
+      if (Array.isArray(listenersCache)) {
+        const online = listenersCache.filter(l => l.is_online).length;
+        setPresenceStats('Listeners', online, listenersCache.length - online);
+      }
     }
 
     function renderCallsChart(series) {
@@ -2180,6 +2495,14 @@
       const phone = document.getElementById('phone').value.trim();
       const password = document.getElementById('password').value;
       if (!name || !phone || !password) { setMsg('Please fill in all fields.', false); return; }
+
+      // Caught again server-side; this is just so the admin does not wait for
+      // a round trip to be told the name or number is taken.
+      const dupName = (listenersCache || []).find(l => (l.name || '').trim().toLowerCase() === name.toLowerCase());
+      if (dupName) { setMsg('✗ A listener named "' + dupName.name + '" already exists. Please use a different name.', false); return; }
+      const dupPhone = (listenersCache || []).find(l => (l.phone || '').trim() === phone);
+      if (dupPhone) { setMsg('✗ That phone number is already registered to "' + dupPhone.name + '".', false); return; }
+
       setMsg('Submitting…', null);
       try {
         const res = await fetch(API_URL + '/admin/listeners', {
@@ -3101,6 +3424,161 @@
       `;
     }
 
+    // ─── Notifications ────────────────────────────────────────────────────────
+    /** Notification text is user supplied (names, reasons), so never trust it. */
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Open (not yet done) notifications, newest first. Kept in memory so a
+    // websocket push can prepend without refetching the whole feed.
+    let notificationsCache = [];
+    let notificationsUnread = 0;
+
+    function setNotificationsBadge(count) {
+      notificationsUnread = Math.max(0, count | 0);
+      const badge = document.getElementById('navNotificationsBadge');
+      if (!badge) return;
+      badge.textContent = notificationsUnread > 99 ? '99+' : String(notificationsUnread);
+      badge.classList.toggle('show', notificationsUnread > 0);
+    }
+
+    async function loadNotificationsUnreadCount() {
+      try {
+        const res = await fetch(API_URL + '/admin/notifications/unread-count', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setNotificationsBadge(data.count);
+      } catch (e) { }
+    }
+
+    async function loadNotifications() {
+      const wrap = document.getElementById('notificationsList');
+      if (!wrap) return;
+      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      try {
+        const res = await fetch(API_URL + '/admin/notifications?skip=0&limit=200', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load notifications');
+        notificationsCache = data;
+        renderNotifications();
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load notifications.</div>';
+      }
+    }
+
+    /** Clears the red counter once an admin has actually looked at the feed. */
+    async function markNotificationsSeen(force = false) {
+      if (!force && notificationsUnread === 0) return;
+      try {
+        await fetch(API_URL + '/admin/notifications/mark-seen', { method: 'POST', headers: authHeaders() });
+      } catch (e) { }
+      setNotificationsBadge(0);
+    }
+
+    async function openNotificationsPage() {
+      await loadNotifications();
+      await markNotificationsSeen();
+    }
+
+    /** "Today" / "Yesterday" / "12 March 2026" for the centered date separator. */
+    function notificationDateLabel(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return 'Unknown date';
+      const today = new Date();
+      const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+      const diffDays = Math.round((startOf(today) - startOf(d)) / 86400000);
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Yesterday';
+      return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function notificationTimeLabel(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderNotifications() {
+      const wrap = document.getElementById('notificationsList');
+      if (!wrap) return;
+      if (!notificationsCache.length) {
+        wrap.innerHTML = '<div class="empty-state">No notifications right now.</div>';
+        return;
+      }
+
+      // Newest first, then split into day buckets so each day gets one header.
+      const items = [...notificationsCache].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const groups = [];
+      items.forEach(n => {
+        const label = notificationDateLabel(n.created_at);
+        const last = groups[groups.length - 1];
+        if (last && last.label === label) last.items.push(n);
+        else groups.push({ label, items: [n] });
+      });
+
+      wrap.innerHTML = groups.map(g => `
+        <div class="notif-date-sep"><span>${escapeHtml(g.label)}</span></div>
+        ${g.items.map(n => `
+          <div class="notif-row ${n.is_read ? '' : 'unread'}" id="notifRow${n.id}">
+            <button class="notif-tick" title="Mark as done" onclick="confirmNotificationDone(${n.id})">✓</button>
+            <div class="notif-body">
+              <div class="notif-title">
+                <span>${escapeHtml(n.title)}</span>
+                ${n.is_read ? '' : '<span class="badge badge-no">New</span>'}
+              </div>
+              ${n.body ? `<div class="notif-text">${escapeHtml(n.body)}</div>` : ''}
+            </div>
+            <div class="notif-time">${notificationTimeLabel(n.created_at)}</div>
+          </div>
+        `).join('')}
+      `).join('');
+    }
+
+    async function confirmNotificationDone(id) {
+      const ok = await confirmDialog({
+        title: 'Mark as done',
+        body: 'Mark this notification as done? It will be removed from the list.',
+        okLabel: 'Mark as done',
+        okClass: 'btn-leaf',
+        icon: '✅',
+        iconClass: 'info'
+      });
+      if (!ok) return;
+
+      const btn = document.querySelector('#notifRow' + id + ' .notif-tick');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch(API_URL + '/admin/notifications/' + id + '/done', {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to mark notification as done');
+
+        const removed = notificationsCache.find(n => n.id === id);
+        notificationsCache = notificationsCache.filter(n => n.id !== id);
+        if (removed && !removed.is_read) setNotificationsBadge(notificationsUnread - 1);
+
+        // Fade the row out before the list is rebuilt, so it doesn't jump.
+        const row = document.getElementById('notifRow' + id);
+        if (row) {
+          row.classList.add('leaving');
+          setTimeout(renderNotifications, 180);
+        } else {
+          renderNotifications();
+        }
+      } catch (e) {
+        if (btn) btn.disabled = false;
+        alert(e.message || 'Failed to mark notification as done');
+      }
+    }
+
     const WITHDRAWAL_LOG_PAGE_SIZE = 10;
     let withdrawalLogCache = [];
     let withdrawalLogPage = 1;
@@ -3358,6 +3836,22 @@
       return d.toLocaleString();
     }
 
+    /**
+     * Date + time only, e.g. "03 Aug 2026, 10:22 AM". The API hands back raw
+     * ISO timestamps ("2026-08-03T10:22:33.481+00:00"), which are unreadable
+     * in a table, so every timestamp in the person detail view goes through
+     * this. Seconds and the timezone offset are dropped on purpose, and the
+     * value is rendered in the admin's own local time.
+     */
+    function formatDateTime(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      const date = d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+      const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      return `${date}, ${time}`;
+    }
+
     async function loadBillingPurchases() {
       const wrap = document.getElementById('billingPurchasesList');
       try {
@@ -3472,7 +3966,7 @@
                   <td>${c.listener_name || ''}</td>
                   <td>${c.call_type}</td>
                   <td>${c.status}</td>
-                  <td>${c.connected_at || ''}</td>
+                  <td style="white-space:nowrap;">${formatDateTime(c.connected_at)}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3544,10 +4038,15 @@
 
     function renderPersonList(type) {
       const list = document.getElementById(type === 'user' ? 'userList' : 'listenerList');
-      const q = document.getElementById(type === 'user' ? 'userSearch' : 'listenerSearch').value.trim().toLowerCase();
+      const raw = document.getElementById(type === 'user' ? 'userSearch' : 'listenerSearch').value.trim().toLowerCase();
+      // Admins naturally type "@handle", but usernames are stored bare.
+      const q = raw.startsWith('@') ? raw.slice(1) : raw;
       const source = type === 'user' ? usersCache : listenersCache;
       const filtered = (source || []).filter(p =>
-        (p.name || '').toLowerCase().includes(q) || (p.phone || '').includes(q)
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.username || '').toLowerCase().includes(q) ||
+        (p.email || '').toLowerCase().includes(q) ||
+        (p.phone || '').includes(q)
       ).sort((a, b) => (b.is_online === true) - (a.is_online === true));
       if (filtered.length === 0) {
         list.innerHTML = '<div class="empty-state">No results.</div>';
@@ -3558,14 +4057,39 @@
         const div = document.createElement('div');
         div.className = 'person-item' + (selectedPerson && selectedPerson.type === type && selectedPerson.id === p.id ? ' selected' : '');
         const extra = `${p.coins} coins · <span class="badge ${p.is_online ? 'badge-yes' : 'badge-no'}">${p.is_online ? 'Online' : 'Offline'}</span>${p.is_active === false ? ' · <span class="badge badge-no">Inactive</span>' : ''}`;
-        div.innerHTML = `<span class="person-name">${p.name}</span><span class="person-sub">${p.phone} · ${extra}</span>`;
+        // Users list stays to display name + @username; their email/phone is
+        // only shown in the detail header. Listeners have no username, so
+        // their phone stays on the row.
+        div.innerHTML = `<span class="person-name">${escapeHtml(p.name)}</span>`
+          + (type === 'user' ? personHandle(p) : '')
+          + `<span class="person-sub">${type === 'user' ? extra : personContact(p, type) + ' · ' + extra}</span>`;
         div.onclick = () => selectPerson(type, p);
         list.appendChild(div);
       });
     }
 
+    /** The @username line shown under a user's display name. */
+    function personHandle(p) {
+      return p.username
+        ? `<span class="person-handle">@${escapeHtml(p.username)}</span>`
+        : '<span class="person-handle missing">No username added</span>';
+    }
+
+    // Users sign up with either a phone number or an email and can add the
+    // other one later, so always show both slots: the value when it is there,
+    // and an explicit "not added" hint when it is not. Listeners only ever
+    // have a phone number.
+    function personContact(p, type) {
+      if (type !== 'user') return escapeHtml(p.phone || '') || '<span class="contact-missing">No phone added</span>';
+      const parts = [
+        p.email ? escapeHtml(p.email) : '<span class="contact-missing">No email added</span>',
+        p.phone ? escapeHtml(p.phone) : '<span class="contact-missing">No phone added</span>',
+      ];
+      return parts.join(' · ');
+    }
+
     function selectPerson(type, person) {
-      selectedPerson = { type, id: person.id, name: person.name, phone: person.phone, raw: person };
+      selectedPerson = { type, id: person.id, name: person.name, phone: person.phone, username: person.username, contact: personContact(person, type), raw: person };
       logSection = 'calls';
       logPage = 1;
       otherPersonFilter = null;
@@ -3581,8 +4105,9 @@
       content.innerHTML = `
 <div class="detail-header">
           <div>
-            <h3>${p.name} <span class="badge badge-role">${roleLabel}</span></h3>
-            <div class="person-sub">${p.phone}</div>
+            <h3>${escapeHtml(p.name)} <span class="badge badge-role">${roleLabel}</span></h3>
+            ${p.type === 'user' ? personHandle(p.raw) : ''}
+            <div class="person-sub">${p.contact || escapeHtml(p.phone || '')}</div>
           </div>
           <div class="other-person-picker">
             <label>${p.type === 'user' ? 'Listener' : 'User'}</label>
@@ -3616,6 +4141,8 @@
               <label>Bio</label>
               <textarea id="bioInput-${p.id}" rows="2" style="width:100%">${(p.raw.bio || '').replace(/</g, '&lt;')}</textarea>
               ` : `
+              <label>Display name</label>
+              <input type="text" id="nameInput-${p.id}" style="width:100%" maxlength="30" value="${escapeHtml(p.raw.name || '')}">
               <label>About</label>
               <textarea id="aboutInput-${p.id}" rows="2" style="width:100%">${(p.raw.about || '').replace(/</g, '&lt;')}</textarea>
               <label>Good to talk about (comma separated)</label>
@@ -3860,7 +4387,7 @@ ${logSection === 'chats' ? '' : `
                   <td>${c.caller_name || ''}</td>
                   <td>${c.listener_name || ''}</td>
                   <td>${c.status}</td>
-                  <td>${c.created_at || ''}</td>
+                  <td style="white-space:nowrap;">${formatDateTime(c.created_at)}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3878,8 +4405,8 @@ ${logSection === 'chats' ? '' : `
                   <td>${r.caller_name || ''}</td>
                   <td>${r.listener_name || ''}</td>
                   <td>${r.status}</td>
-                  <td>${r.started_at || ''}</td>
-                  <td>${r.ended_at || ''}</td>
+                  <td style="white-space:nowrap;">${formatDateTime(r.started_at)}</td>
+                  <td style="white-space:nowrap;">${formatDateTime(r.ended_at)}</td>
                   <td>${audio}</td>
                 </tr>`;
         }).join('')}
@@ -3955,12 +4482,27 @@ ${logSection === 'chats' ? '' : `
           endpoint = `/admin/listeners/${id}/profile`;
           const tags = document.getElementById(`tagsInput-${id}`).value.split(',').map(s => s.trim()).filter(Boolean);
           const languages = document.getElementById(`languagesInput-${id}`).value.split(',').map(s => s.trim()).filter(Boolean);
-          body = { about: document.getElementById(`aboutInput-${id}`).value, tags, languages };
+          const name = document.getElementById(`nameInput-${id}`).value.trim();
+          if (!name) throw new Error('Display name cannot be empty');
+
+          // Same duplicate rule as registering, checked here first so the
+          // admin is told before the round trip. Own row is excluded.
+          const clash = (listenersCache || []).find(l => l.id !== id && (l.name || '').trim().toLowerCase() === name.toLowerCase());
+          if (clash) throw new Error(`A listener named "${clash.name}" already exists. Please use a different name.`);
+
+          body = { name, about: document.getElementById(`aboutInput-${id}`).value, tags, languages };
         }
         const res = await fetch(API_URL + endpoint, { method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(body) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg('✓ Profile updated', true);
+
+        // Keep the open detail view in step with the new name.
+        if (type === 'listener' && data.name && selectedPerson && selectedPerson.id === id) {
+          selectedPerson.name = data.name;
+          selectedPerson.raw.name = data.name;
+          renderPersonContent();
+        }
         loadPeople();
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
@@ -4070,6 +4612,19 @@ ${logSection === 'chats' ? '' : `
       } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + e.message + '</span>'; }
     }
 
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const btn = document.getElementById('themeToggleBtn');
+      if (btn) btn.innerHTML = theme === 'dark' ? '&#9789;' : '&#9788;';
+      localStorage.setItem('adminTheme', theme);
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+    }
+
+    applyTheme(localStorage.getItem('adminTheme') || 'light');
     window.addEventListener('DOMContentLoaded', initAuth);
 
     let adminWs = null;
@@ -4083,10 +4638,22 @@ ${logSection === 'chats' ? '' : `
           const data = JSON.parse(evt.data);
           if (data.type === 'user_status') {
             const u = usersCache.find(x => x.id === data.id);
-            if (u) { u.is_online = data.is_online; renderPersonList('user'); }
+            if (u) { u.is_online = data.is_online; renderPersonList('user'); refreshPresenceStatsFromCache(); }
           } else if (data.type === 'listener_status') {
             const l = listenersCache.find(x => x.id === data.id);
-            if (l) { l.is_online = data.is_online; renderPersonList('listener'); }
+            if (l) { l.is_online = data.is_online; renderPersonList('listener'); refreshPresenceStatsFromCache(); }
+          } else if (data.type === 'admin_notification' && data.notification) {
+            const isOpen = document.getElementById('page-notifications').style.display !== 'none';
+            if (!notificationsCache.some(n => n.id === data.notification.id)) {
+              notificationsCache.unshift(data.notification);
+            }
+            if (isOpen) {
+              // Already looking at the feed: show it and keep the counter clear.
+              renderNotifications();
+              markNotificationsSeen(true);
+            } else {
+              setNotificationsBadge(notificationsUnread + 1);
+            }
           }
         } catch (e) {}
       };

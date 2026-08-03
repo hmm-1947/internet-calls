@@ -1,7 +1,10 @@
 import json
 import os
+import secrets
 import uuid
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
@@ -9,10 +12,35 @@ from app.schemas.schemas import ListenerStatusUpdate
 from app.models.models import CallRating
 from sqlalchemy import func as sqlfunc
 from datetime import datetime, timedelta, timezone
-from app.schemas.schemas import UserRegisterInitiate, UserRegisterVerifyOtp, UserLogin, AuthResponse, FcmTokenUpdate, UserBioUpdate, UserForgotPasswordRequestOtp, UserForgotPasswordVerifyOtp, UserForgotPasswordReset, UserChangePassword, UserVideoCallSettingUpdate
+from app.schemas.schemas import (
+    UserRegisterInitiate,
+    UserRegisterVerifyEmailOtp,
+    UserRegisterResendOtp,
+    UserRegisterVerifyPhone,
+    UserRegisterComplete,
+    UserLoginInitiate,
+    UserLoginVerify,
+    AuthResponse,
+    FcmTokenUpdate,
+    UserBioUpdate,
+    UserForgotPasswordRequestOtp,
+    UserForgotPasswordVerifyOtp,
+    UserForgotPasswordReset,
+    UserChangePassword,
+    UserContactChangeRequest,
+    UserContactChangeVerify,
+    UserProfileUpdate,
+    UserVideoCallSettingUpdate,
+    AccountDeletionRequestCreate,
+    detect_identifier,
+    validate_username,
+)
 from app.core.database import get_db
-from app.models.models import User, Session as SessionModel, EmailOtp
+from app.models.models import AdminNotification, PendingSignup, User, Session as SessionModel
+from app.routers.notifications import create_admin_notification
 from app.utils.email_otp import generate_otp_code, send_otp_email
+from app.utils.firebase_phone import verify_phone_token, normalize_indian_phone
+from app.utils.rate_limit import enforce_rate_limit, rate_limit
 from app.utils.security import hash_password, verify_password, generate_session_token, session_expiry
 from app.utils.audit import record_audit_event
 from app.models.models import Listener
@@ -26,80 +54,498 @@ def session_check(current_user: User = Depends(get_current_user)):
     return {"valid": True, "is_active": current_user.is_active}
 
 
-@router.post("/register/initiate")
-def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(
-        (User.phone == payload.phone) | (User.email == payload.email)
+MAX_OTP_ATTEMPTS = 5
+
+# How long an emailed sign-up code stays valid.
+SIGNUP_OTP_TTL_MINUTES = 10
+# How long the user has to finish the profile step after verifying.
+SIGNUP_TOKEN_TTL_MINUTES = 30
+# Abandoned sign-ups are cleared out after this long.
+PENDING_SIGNUP_TTL_HOURS = 24
+# Per-identifier ceiling on OTP requests, on top of the per-IP limits.
+MAX_OTP_SENDS = 5
+OTP_SEND_WINDOW_SECONDS = 900
+
+# The username and each contact detail can only be changed once a day. The
+# display name and bio are free to change at any time.
+USERNAME_CHANGE_COOLDOWN = timedelta(hours=24)
+CONTACT_CHANGE_COOLDOWN = timedelta(hours=24)
+# How long a code emailed for an email change stays valid. Phone changes get
+# the same window to finish the Firebase flow.
+CONTACT_OTP_TTL_MINUTES = 10
+
+
+def _find_user_by_phone(db: Session, phone: str):
+    user = db.query(User).filter(User.phone == phone).first()
+    if user:
+        return user
+    try:
+        normalized = normalize_indian_phone(phone)
+    except ValueError:
+        return None
+    return db.query(User).filter(User.phone == normalized).first()
+
+
+def _find_user_by_email(db: Session, email: str):
+    return db.query(User).filter(
+        sqlfunc.lower(User.email) == (email or "").strip().lower()
     ).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Phone or email already registered")
 
-    otp_code = generate_otp_code()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
 
-    db.query(EmailOtp).filter(EmailOtp.email == payload.email).delete()
-    db.add(EmailOtp(
-        email=payload.email,
-        otp_code=otp_code,
-        name=payload.name,
-        phone=payload.phone,
-        password_hash=hash_password(payload.password),
-        expires_at=expires_at,
-    ))
+USERNAME_TAKEN_MESSAGE = "This username is already taken"
+PHONE_TAKEN_MESSAGE = "This phone number is already registered. Please log in instead."
+EMAIL_TAKEN_MESSAGE = "This email is already registered. Please log in instead."
+SIGNUP_EXPIRED_MESSAGE = "Your verification has expired. Please start sign-up again."
+
+
+def _is_username_taken(db: Session, username: str, exclude_user_id: Optional[int] = None) -> bool:
+    """Case-insensitive check so "Riya" and "riya" cannot both exist.
+
+    `exclude_user_id` keeps a user's own handle from counting as taken when
+    they re-save it from the edit profile screen.
+    """
+    query = db.query(User.id).filter(
+        sqlfunc.lower(User.username) == username.strip().lower()
+    )
+    if exclude_user_id is not None:
+        query = query.filter(User.id != exclude_user_id)
+    return query.first() is not None
+
+
+def _taken_message(db: Session, channel: str, identifier: str):
+    """Returns the user-facing reason the identifier cannot be used, else None."""
+    if channel == "email":
+        return EMAIL_TAKEN_MESSAGE if _find_user_by_email(db, identifier) else None
+    return PHONE_TAKEN_MESSAGE if _find_user_by_phone(db, identifier) else None
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _as_utc(value):
+    """SQLite hands back naive datetimes; compare everything in UTC."""
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _cooldown_remaining(changed_at, cooldown: timedelta) -> int:
+    """Seconds left before the field may be changed again; 0 when it is free."""
+    changed_at = _as_utc(changed_at)
+    if not changed_at:
+        return 0
+    remaining = (changed_at + cooldown) - _utcnow()
+    return max(0, int(remaining.total_seconds()))
+
+
+def _humanize_wait(seconds: int) -> str:
+    """"23 hours 5 minutes" / "42 minutes" / "less than a minute"."""
+    if seconds < 60:
+        return "less than a minute"
+    hours, minutes = divmod(seconds // 60, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    return " ".join(parts)
+
+
+def _enforce_change_cooldown(changed_at, cooldown: timedelta, what: str) -> None:
+    remaining = _cooldown_remaining(changed_at, cooldown)
+    if remaining:
+        raise HTTPException(
+            status_code=429,
+            detail=f"You can change your {what} again in {_humanize_wait(remaining)}",
+            headers={"Retry-After": str(remaining)},
+        )
+
+
+def _purge_expired_pending_signups(db: Session) -> None:
+    cutoff = _utcnow() - timedelta(hours=PENDING_SIGNUP_TTL_HOURS)
+    db.query(PendingSignup).filter(PendingSignup.created_at < cutoff).delete(
+        synchronize_session=False
+    )
+
+
+def _issue_email_otp(db: Session, pending: PendingSignup) -> None:
+    """Generate, store and mail a fresh code for a pending email sign-up."""
+    enforce_rate_limit(
+        "signup_otp_send",
+        pending.identifier,
+        MAX_OTP_SENDS,
+        OTP_SEND_WINDOW_SECONDS,
+        detail="Too many codes requested for this address. Please wait a few minutes and try again.",
+    )
+    code = generate_otp_code()
+    pending.otp_code = code
+    pending.otp_expires_at = _utcnow() + timedelta(minutes=SIGNUP_OTP_TTL_MINUTES)
+    pending.otp_attempts = 0
+    pending.otp_sent_count = (pending.otp_sent_count or 0) + 1
+    db.commit()
+    send_otp_email(pending.identifier, code)
+
+
+def _issue_signup_token(db: Session, pending: PendingSignup) -> str:
+    """Mark the identifier verified and hand out the token for the last step."""
+    pending.is_verified = True
+    pending.otp_code = None
+    pending.otp_expires_at = None
+    pending.otp_attempts = 0
+    pending.signup_token = secrets.token_urlsafe(32)
+    pending.signup_token_expires_at = _utcnow() + timedelta(minutes=SIGNUP_TOKEN_TTL_MINUTES)
+    db.commit()
+    return pending.signup_token
+
+
+def _require_pending(db: Session, identifier: str, channel: str) -> PendingSignup:
+    pending = db.query(PendingSignup).filter(
+        PendingSignup.identifier == identifier,
+        PendingSignup.channel == channel,
+    ).first()
+    if not pending:
+        raise HTTPException(status_code=404, detail=SIGNUP_EXPIRED_MESSAGE)
+    if _as_utc(pending.created_at) and _as_utc(pending.created_at) < _utcnow() - timedelta(
+        hours=PENDING_SIGNUP_TTL_HOURS
+    ):
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(status_code=404, detail=SIGNUP_EXPIRED_MESSAGE)
+    return pending
+
+
+def _optional_user_id(db: Session, authorization: Optional[str]) -> Optional[int]:
+    """The signed-in user's id when a valid session is presented, else None.
+
+    Used by endpoints that are open to anonymous callers but should behave
+    differently for the account making the request.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    session = db.query(SessionModel).filter(
+        SessionModel.token == authorization.removeprefix("Bearer "),
+        SessionModel.user_id.isnot(None),
+    ).first()
+    return session.user_id if session else None
+
+
+@router.get(
+    "/username/available",
+    dependencies=[Depends(rate_limit("username_available", limit=30, window_seconds=60))],
+)
+def username_available(
+    username: str,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None),
+):
+    """Live availability check used while the user types.
+
+    Always returns 200 so the client can render an inline hint: `available`
+    tells it whether the handle can be used and `reason` explains why not.
+
+    The session token is optional and only used to ignore the caller's own
+    row: from the edit profile screen a user's current handle is still theirs
+    to keep, so reporting it as taken would be wrong.
+    """
+    try:
+        cleaned = validate_username(username)
+    except ValueError as exc:
+        return {"username": (username or "").strip(), "available": False, "reason": str(exc)}
+
+    if _is_username_taken(db, cleaned, exclude_user_id=_optional_user_id(db, authorization)):
+        return {"username": cleaned, "available": False, "reason": USERNAME_TAKEN_MESSAGE}
+    return {"username": cleaned, "available": True, "reason": None}
+
+
+@router.get(
+    "/identifier/available",
+    dependencies=[Depends(rate_limit("identifier_available", limit=10, window_seconds=60))],
+)
+def identifier_available(identifier: str, db: Session = Depends(get_db)):
+    """Checked before we send any code.
+
+    Mailing or texting a code to an identifier that already has an account
+    costs money and leaves the user stuck at the OTP screen, so sign-up stops
+    here instead.
+    """
+    try:
+        channel, normalized = detect_identifier(identifier)
+    except ValueError as exc:
+        return {"available": False, "channel": None, "reason": str(exc)}
+
+    reason = _taken_message(db, channel, normalized)
+    return {
+        "available": reason is None,
+        "channel": channel,
+        "identifier": normalized,
+        "reason": reason,
+    }
+
+
+@router.post(
+    "/register/initiate",
+    dependencies=[Depends(rate_limit("register_initiate", limit=10, window_seconds=300))],
+)
+def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_db)):
+    """Step 1: take the email/phone and password, then start verification.
+
+    Nothing is written to `users` yet. The details sit in `pending_signups`
+    until the code is verified and the profile step is finished, so abandoning
+    sign-up here does not reserve the email, phone or username.
+    """
+    try:
+        channel, identifier = detect_identifier(payload.identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    _purge_expired_pending_signups(db)
+
+    taken = _taken_message(db, channel, identifier)
+    if taken:
+        raise HTTPException(status_code=409, detail=taken)
+
+    pending = db.query(PendingSignup).filter(
+        PendingSignup.identifier == identifier
+    ).first()
+    if pending is None:
+        pending = PendingSignup(identifier=identifier, channel=channel)
+        db.add(pending)
+
+    # Restarting sign-up replaces whatever was there: the password may have
+    # changed and any previously issued code or token must stop working.
+    pending.channel = channel
+    pending.password_hash = hash_password(payload.password)
+    pending.is_verified = False
+    pending.signup_token = None
+    pending.signup_token_expires_at = None
+    pending.otp_code = None
+    pending.otp_expires_at = None
+    pending.otp_attempts = 0
     db.commit()
 
-    send_otp_email(payload.email, otp_code)
+    if channel == "email":
+        _issue_email_otp(db, pending)
+        return {"channel": "email", "identifier": identifier, "otp_sent": True}
+
+    # Firebase sends and verifies the SMS code from the app; we only limit how
+    # often a given number can be put through that flow.
+    enforce_rate_limit(
+        "signup_otp_send",
+        identifier,
+        MAX_OTP_SENDS,
+        OTP_SEND_WINDOW_SECONDS,
+        detail="Too many codes requested for this number. Please wait a few minutes and try again.",
+    )
+    return {"channel": "phone", "identifier": identifier, "otp_sent": False}
+
+
+@router.post(
+    "/register/resend-otp",
+    dependencies=[Depends(rate_limit("register_resend_otp", limit=5, window_seconds=300))],
+)
+def register_resend_otp(payload: UserRegisterResendOtp, db: Session = Depends(get_db)):
+    """Re-send the emailed code. Phone codes are re-sent by Firebase instead."""
+    try:
+        channel, identifier = detect_identifier(payload.identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if channel != "email":
+        raise HTTPException(status_code=400, detail="Phone codes are resent from the app")
+
+    pending = _require_pending(db, identifier, "email")
+    if _taken_message(db, "email", identifier):
+        raise HTTPException(status_code=409, detail=EMAIL_TAKEN_MESSAGE)
+
+    _issue_email_otp(db, pending)
     return {"status": "otp_sent"}
 
 
-MAX_OTP_ATTEMPTS = 5
+@router.post(
+    "/register/verify-otp",
+    dependencies=[Depends(rate_limit("register_verify_otp", limit=20, window_seconds=300))],
+)
+def register_verify_otp(payload: UserRegisterVerifyEmailOtp, db: Session = Depends(get_db)):
+    """Step 2 (email): check the mailed code and hand back the sign-up token."""
+    try:
+        channel, identifier = detect_identifier(payload.identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if channel != "email":
+        raise HTTPException(status_code=400, detail="Use phone verification for this number")
 
+    pending = _require_pending(db, identifier, "email")
 
-@router.post("/register/verify-otp", response_model=AuthResponse)
-def register_verify_otp(payload: UserRegisterVerifyOtp, db: Session = Depends(get_db)):
-    record = db.query(EmailOtp).filter(EmailOtp.email == payload.email).order_by(EmailOtp.id.desc()).first()
-    if not record:
-        raise HTTPException(status_code=400, detail="No OTP request found")
-    if record.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="OTP expired")
-    if record.attempts >= MAX_OTP_ATTEMPTS:
+    expires_at = _as_utc(pending.otp_expires_at)
+    if not expires_at or expires_at < _utcnow():
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    if pending.otp_attempts >= MAX_OTP_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
-    if record.otp_code != payload.otp_code:
-        record.attempts += 1
+    if not pending.otp_code or pending.otp_code != (payload.otp_code or "").strip():
+        pending.otp_attempts += 1
         db.commit()
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
-    existing_user = db.query(User).filter(
-        (User.phone == record.phone) | (User.email == record.email)
+    return {"status": "verified", "signup_token": _issue_signup_token(db, pending)}
+
+
+@router.post(
+    "/register/verify-phone",
+    dependencies=[Depends(rate_limit("register_verify_phone", limit=20, window_seconds=300))],
+)
+def register_verify_phone(payload: UserRegisterVerifyPhone, db: Session = Depends(get_db)):
+    """Step 2 (phone): swap the Firebase token for the sign-up token."""
+    try:
+        channel, identifier = detect_identifier(payload.identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if channel != "phone":
+        raise HTTPException(status_code=400, detail="Use email verification for this address")
+
+    pending = _require_pending(db, identifier, "phone")
+
+    try:
+        verified_phone = normalize_indian_phone(verify_phone_token(payload.firebase_id_token))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Phone verification failed. Please try again.")
+    if verified_phone != identifier:
+        raise HTTPException(
+            status_code=401, detail="Verified phone number does not match the one you entered"
+        )
+
+    # Someone may have registered this number while the OTP was in flight.
+    if _find_user_by_phone(db, identifier):
+        raise HTTPException(status_code=409, detail=PHONE_TAKEN_MESSAGE)
+
+    return {"status": "verified", "signup_token": _issue_signup_token(db, pending)}
+
+
+@router.post(
+    "/register/complete",
+    response_model=AuthResponse,
+    dependencies=[Depends(rate_limit("register_complete", limit=10, window_seconds=300))],
+)
+def register_complete(payload: UserRegisterComplete, db: Session = Depends(get_db)):
+    """Step 3: create the account from a verified sign-up and log the user in.
+
+    The profile photo is optional and is uploaded separately through
+    `/user/photo` with the session token returned here.
+    """
+    pending = db.query(PendingSignup).filter(
+        PendingSignup.signup_token == payload.signup_token
     ).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Phone or email already registered")
+    token_expires_at = _as_utc(pending.signup_token_expires_at) if pending else None
+    if (
+        not pending
+        or not pending.is_verified
+        or not token_expires_at
+        or token_expires_at < _utcnow()
+    ):
+        raise HTTPException(status_code=401, detail=SIGNUP_EXPIRED_MESSAGE)
+
+    taken = _taken_message(db, pending.channel, pending.identifier)
+    if taken:
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(status_code=409, detail=taken)
+
+    username = payload.username.strip()
+    if _is_username_taken(db, username):
+        raise HTTPException(status_code=409, detail=USERNAME_TAKEN_MESSAGE)
 
     user = User(
-        name=record.name,
-        email=record.email,
-        phone=record.phone,
-        password_hash=record.password_hash,
+        name=payload.display_name,
+        username=username.lower(),
+        email=pending.identifier if pending.channel == "email" else None,
+        phone=pending.identifier if pending.channel == "phone" else None,
+        password_hash=pending.password_hash,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.flush()
+    except IntegrityError:
+        # Someone claimed the username or the identifier itself in the moment
+        # between the checks above and this insert.
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_taken_message(db, pending.channel, pending.identifier)
+            or USERNAME_TAKEN_MESSAGE,
+        )
 
-    db.query(EmailOtp).filter(EmailOtp.email == payload.email).delete()
-    db.commit()
+    db.delete(pending)
 
     token = generate_session_token()
     db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
+    record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
+    db.refresh(user)
     return AuthResponse(token=token, id=user.id, name=user.name)
 
-@router.post("/login", response_model=AuthResponse)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.phone == payload.phone).first()
+
+@router.post(
+    "/login/initiate",
+    dependencies=[Depends(rate_limit("login_initiate", limit=10, window_seconds=60))],
+)
+def login_initiate(payload: UserLoginInitiate, db: Session = Depends(get_db)):
+    """Login step 1: check the password, then say what the second step is.
+
+    Phone accounts finish with a Firebase OTP; email accounts have no second
+    factor, so the session is returned straight away.
+    """
+    try:
+        channel, identifier = detect_identifier(payload.identifier)
+    except ValueError:
+        # A malformed identifier cannot match an account; keep the same wording
+        # as a wrong password so this cannot be used to probe for accounts.
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    user = (
+        _find_user_by_email(db, identifier)
+        if channel == "email"
+        else _find_user_by_phone(db, identifier)
+    )
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if channel == "phone":
+        try:
+            otp_phone = normalize_indian_phone(user.phone)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="This account has an invalid phone number. Please contact support.")
+        return {"channel": "phone", "status": "credentials_ok", "phone": otp_phone}
+
+    token = generate_session_token()
+    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
+    record_audit_event(db, "user", user.id, user.name, "login")
+    db.commit()
+    return {
+        "channel": "email",
+        "status": "authenticated",
+        "token": token,
+        "id": user.id,
+        "name": user.name,
+    }
+
+
+@router.post("/login/verify", response_model=AuthResponse)
+def login_verify(payload: UserLoginVerify, db: Session = Depends(get_db)):
+    user = _find_user_by_phone(db, payload.phone)
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    try:
+        firebase_phone = normalize_indian_phone(verify_phone_token(payload.firebase_id_token))
+        user_phone = normalize_indian_phone(user.phone)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Phone verification failed. Please try again.")
+    if firebase_phone != user_phone:
+        raise HTTPException(status_code=401, detail="Verified phone number does not match this account")
+
     token = generate_session_token()
     db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
     record_audit_event(db, "user", user.id, user.name, "login")
@@ -116,55 +562,141 @@ def logout(authorization: str = Header(...), db: Session = Depends(get_db), curr
     return {"status": "logged_out"}
 
 
-MAX_OTP_ATTEMPTS = 5
+ACCOUNT_DELETION_NOTIFICATION_TYPE = "account_deletion_request"
 
 
-@router.post("/forgot-password/request-otp")
-def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email).first()
+@router.post("/delete-account")
+async def request_account_deletion(
+    payload: AccountDeletionRequestCreate = AccountDeletionRequestCreate(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Raises an account deletion request for the admins to action.
+
+    The account is deliberately left untouched: deleting a user also removes
+    their calls, chats and coin history, so that stays a manual admin step.
+    Repeat taps do not pile up - while a request is still open the same
+    confirmation is returned.
+    """
+    existing = (
+        db.query(AdminNotification)
+        .filter(
+            AdminNotification.type == ACCOUNT_DELETION_NOTIFICATION_TYPE,
+            AdminNotification.subject_type == "user",
+            AdminNotification.subject_id == current_user.id,
+            AdminNotification.is_done.is_(False),
+        )
+        .first()
+    )
+    if existing:
+        return {"status": "already_requested", "requested_at": existing.created_at}
+
+    contact = current_user.email or current_user.phone or "no contact on file"
+    reason = (payload.reason or "").strip() if payload else ""
+    body = f"{current_user.name} ({contact}) requested deletion of their account."
+    if reason:
+        body = f"{body} Reason: {reason}"
+
+    notification = await create_admin_notification(
+        db,
+        type=ACCOUNT_DELETION_NOTIFICATION_TYPE,
+        title="Account deletion request",
+        body=body,
+        subject_type="user",
+        subject_id=current_user.id,
+        subject_name=current_user.name,
+    )
+    return {"status": "requested", "requested_at": notification.created_at}
+
+
+def _reset_account(db: Session, identifier: str):
+    """Resolve the account a password reset is for.
+
+    Returns `(channel, normalized_identifier, user)`. Raises 404 with the same
+    wording the app has always shown when nothing matches.
+    """
+    try:
+        channel, normalized = detect_identifier(identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    user = (
+        _find_user_by_email(db, normalized)
+        if channel == "email"
+        else _find_user_by_phone(db, normalized)
+    )
     if not user:
-        raise HTTPException(status_code=404, detail="enter a registered email id")
+        raise HTTPException(
+            status_code=404, detail="enter a registered email id or phone number"
+        )
+    return channel, normalized, user
 
+
+def _check_reset_otp(db: Session, user: User, otp_code: Optional[str]) -> None:
+    """Validate the emailed reset code, counting failed attempts."""
+    expires_at = _as_utc(user.reset_otp_expires_at)
+    if not expires_at or expires_at < _utcnow():
+        raise HTTPException(status_code=400, detail="OTP expired")
+    if user.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
+    if not user.reset_otp_code or user.reset_otp_code != (otp_code or "").strip():
+        user.reset_otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+
+@router.post(
+    "/forgot-password/request-otp",
+    dependencies=[Depends(rate_limit("forgot_password_otp", limit=5, window_seconds=300))],
+)
+def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Session = Depends(get_db)):
+    """Start a password reset for either an email or a phone account."""
+    channel, identifier, user = _reset_account(db, payload.identifier)
+
+    if channel == "phone":
+        # Firebase sends this code, exactly as it does when logging in.
+        enforce_rate_limit("reset_otp_send", identifier, MAX_OTP_SENDS, OTP_SEND_WINDOW_SECONDS)
+        return {"channel": "phone", "identifier": identifier, "status": "verify_with_firebase"}
+
+    enforce_rate_limit("reset_otp_send", identifier, MAX_OTP_SENDS, OTP_SEND_WINDOW_SECONDS)
     otp_code = generate_otp_code()
     user.reset_otp_code = otp_code
     user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     user.reset_otp_attempts = 0
     db.commit()
 
-    send_otp_email(payload.email, otp_code)
-    return {"status": "otp_sent"}
+    send_otp_email(identifier, otp_code)
+    return {"channel": "email", "identifier": identifier, "status": "otp_sent"}
 
 
 @router.post("/forgot-password/verify-otp")
 def forgot_password_verify_otp(payload: UserForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="enter a registered email id")
-    if not user.reset_otp_expires_at or user.reset_otp_expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="OTP expired")
-    if user.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
-    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
-        user.reset_otp_attempts += 1
-        db.commit()
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-
+    channel, _identifier, user = _reset_account(db, payload.identifier)
+    if channel != "phone":
+        _check_reset_otp(db, user, payload.otp_code)
     return {"status": "otp_verified"}
 
 
 @router.post("/forgot-password/reset")
 def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="enter a registered email id")
-    if not user.reset_otp_expires_at or user.reset_otp_expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="OTP expired")
-    if user.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
-    if not user.reset_otp_code or user.reset_otp_code != payload.otp_code:
-        user.reset_otp_attempts += 1
-        db.commit()
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+    channel, identifier, user = _reset_account(db, payload.identifier)
+
+    if channel == "phone":
+        # The Firebase token is the proof of ownership here, so it has to be
+        # checked again: verifying it earlier would not stop a caller from
+        # posting straight to this endpoint.
+        if not payload.firebase_id_token:
+            raise HTTPException(status_code=400, detail="Phone verification is required")
+        try:
+            verified_phone = normalize_indian_phone(verify_phone_token(payload.firebase_id_token))
+        except Exception:
+            raise HTTPException(status_code=401, detail="Phone verification failed. Please try again.")
+        if verified_phone != identifier:
+            raise HTTPException(
+                status_code=401, detail="Verified phone number does not match this account"
+            )
+    else:
+        _check_reset_otp(db, user, payload.otp_code)
 
     if verify_password(payload.new_password, user.password_hash):
         raise HTTPException(status_code=400, detail="New password must be different from your current password")
@@ -255,8 +787,25 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
     return {
         "id": current_user.id,
         "name": current_user.name,
+        "username": current_user.username,
         "email": current_user.email,
         "phone": current_user.phone,
+        # An email/phone only ever reaches the account through an OTP, so
+        # having one stored is the same thing as it being verified.
+        "email_verified": bool(current_user.email),
+        "phone_verified": bool(current_user.phone),
+        # Seconds the edit profile screen has to keep each field locked for.
+        # Sent as a duration rather than a timestamp so a wrong device clock
+        # cannot unlock the field early or lock it forever.
+        "username_cooldown_seconds": _cooldown_remaining(
+            current_user.username_changed_at, USERNAME_CHANGE_COOLDOWN
+        ),
+        "email_cooldown_seconds": _cooldown_remaining(
+            current_user.email_changed_at, CONTACT_CHANGE_COOLDOWN
+        ),
+        "phone_cooldown_seconds": _cooldown_remaining(
+            current_user.phone_changed_at, CONTACT_CHANGE_COOLDOWN
+        ),
         "coins": current_user.coins,
         "chat_message_coin_cost": chat_message_coin_cost(db),
         "bio": current_user.bio,
@@ -264,6 +813,251 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         "video_call_enabled": current_user.video_call_enabled,
         "video_call_disabled_by_admin": current_user.video_call_disabled_by_admin,
     }
+
+
+def _profile_state(current_user: User) -> dict:
+    """The fields the edit profile screen re-renders after a change."""
+    return {
+        "name": current_user.name,
+        "username": current_user.username,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "bio": current_user.bio,
+        "email_verified": bool(current_user.email),
+        "phone_verified": bool(current_user.phone),
+        "username_cooldown_seconds": _cooldown_remaining(
+            current_user.username_changed_at, USERNAME_CHANGE_COOLDOWN
+        ),
+        "email_cooldown_seconds": _cooldown_remaining(
+            current_user.email_changed_at, CONTACT_CHANGE_COOLDOWN
+        ),
+        "phone_cooldown_seconds": _cooldown_remaining(
+            current_user.phone_changed_at, CONTACT_CHANGE_COOLDOWN
+        ),
+    }
+
+
+@router.post("/profile")
+def update_profile(
+    payload: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save the display name, username and bio from the edit profile screen.
+
+    Only the fields present in the request are touched. The display name and
+    bio can be changed at will; the username is limited to one change every
+    24 hours, so an unchanged username in the payload is a no-op rather than
+    an error.
+    """
+    if payload.display_name is not None:
+        current_user.name = payload.display_name
+
+    if payload.bio is not None:
+        current_user.bio = payload.bio
+
+    if payload.username is not None:
+        username = payload.username.strip()
+        # Re-saving the same handle (in any casing) must not burn the daily
+        # change or trip the "already taken" check against the user's own row.
+        if username.lower() != (current_user.username or "").lower():
+            _enforce_change_cooldown(
+                current_user.username_changed_at, USERNAME_CHANGE_COOLDOWN, "username"
+            )
+            if _is_username_taken(db, username, exclude_user_id=current_user.id):
+                raise HTTPException(status_code=409, detail=USERNAME_TAKEN_MESSAGE)
+            current_user.username = username.lower()
+            current_user.username_changed_at = _utcnow()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Someone claimed the handle between the check above and the write.
+        db.rollback()
+        raise HTTPException(status_code=409, detail=USERNAME_TAKEN_MESSAGE)
+
+    db.refresh(current_user)
+    return {"status": "updated", **_profile_state(current_user)}
+
+
+EMAIL_LINKED_MESSAGE = "This email is already linked to another account"
+PHONE_LINKED_MESSAGE = "This phone number is already linked to another account"
+CONTACT_CHANGE_EXPIRED_MESSAGE = (
+    "This verification has expired. Please start the change again."
+)
+
+
+def _contact_change_state(current_user: User, channel: str):
+    """(current value, when it last changed, wording) for the given channel."""
+    if channel == "email":
+        return current_user.email, current_user.email_changed_at, "email address"
+    return current_user.phone, current_user.phone_changed_at, "phone number"
+
+
+def _assert_contact_free(db: Session, channel: str, identifier: str, user_id: int) -> None:
+    """Reject a new email/phone that already belongs to somebody else."""
+    other = (
+        _find_user_by_email(db, identifier)
+        if channel == "email"
+        else _find_user_by_phone(db, identifier)
+    )
+    if other and other.id != user_id:
+        raise HTTPException(
+            status_code=409,
+            detail=EMAIL_LINKED_MESSAGE if channel == "email" else PHONE_LINKED_MESSAGE,
+        )
+
+
+def _clear_pending_contact(current_user: User) -> None:
+    current_user.pending_contact_channel = None
+    current_user.pending_contact_identifier = None
+    current_user.pending_contact_otp_code = None
+    current_user.pending_contact_otp_expires_at = None
+    current_user.pending_contact_otp_attempts = 0
+
+
+@router.post(
+    "/contact/request-otp",
+    dependencies=[Depends(rate_limit("contact_change_otp", limit=10, window_seconds=300))],
+)
+def contact_change_request_otp(
+    payload: UserContactChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Start adding or changing the registered email / phone number.
+
+    Nothing is written to the account yet: the new value waits in the
+    `pending_contact_*` columns until `/user/contact/verify` confirms the user
+    can actually receive on it, so a typo can never take away a working login.
+    """
+    try:
+        channel, identifier = detect_identifier(payload.identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    current_value, changed_at, label = _contact_change_state(current_user, channel)
+    if current_value and current_value.strip().lower() == identifier:
+        raise HTTPException(status_code=400, detail=f"This is already your {label}")
+
+    _enforce_change_cooldown(changed_at, CONTACT_CHANGE_COOLDOWN, label)
+    _assert_contact_free(db, channel, identifier, current_user.id)
+
+    current_user.pending_contact_channel = channel
+    current_user.pending_contact_identifier = identifier
+    current_user.pending_contact_otp_code = None
+    current_user.pending_contact_otp_attempts = 0
+    current_user.pending_contact_otp_expires_at = _utcnow() + timedelta(
+        minutes=CONTACT_OTP_TTL_MINUTES
+    )
+
+    if channel == "email":
+        enforce_rate_limit(
+            "contact_change_otp_send",
+            identifier,
+            MAX_OTP_SENDS,
+            OTP_SEND_WINDOW_SECONDS,
+            detail="Too many codes requested for this address. Please wait a few minutes and try again.",
+        )
+        code = generate_otp_code()
+        current_user.pending_contact_otp_code = code
+        db.commit()
+        send_otp_email(identifier, code)
+        return {"channel": "email", "identifier": identifier, "otp_sent": True}
+
+    # Firebase sends and checks the SMS from the app, exactly as at sign-up.
+    enforce_rate_limit(
+        "contact_change_otp_send",
+        identifier,
+        MAX_OTP_SENDS,
+        OTP_SEND_WINDOW_SECONDS,
+        detail="Too many codes requested for this number. Please wait a few minutes and try again.",
+    )
+    db.commit()
+    return {"channel": "phone", "identifier": identifier, "otp_sent": False}
+
+
+@router.post(
+    "/contact/verify",
+    dependencies=[Depends(rate_limit("contact_change_verify", limit=20, window_seconds=300))],
+)
+def contact_change_verify(
+    payload: UserContactChangeVerify,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Finish the change: verify the new email/phone and save it."""
+    try:
+        channel, identifier = detect_identifier(payload.identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if (
+        current_user.pending_contact_channel != channel
+        or (current_user.pending_contact_identifier or "") != identifier
+    ):
+        raise HTTPException(status_code=400, detail=CONTACT_CHANGE_EXPIRED_MESSAGE)
+
+    expires_at = _as_utc(current_user.pending_contact_otp_expires_at)
+    if not expires_at or expires_at < _utcnow():
+        _clear_pending_contact(current_user)
+        db.commit()
+        raise HTTPException(status_code=400, detail=CONTACT_CHANGE_EXPIRED_MESSAGE)
+
+    if channel == "email":
+        if current_user.pending_contact_otp_attempts >= MAX_OTP_ATTEMPTS:
+            raise HTTPException(
+                status_code=429, detail="Too many attempts. Please request a new OTP."
+            )
+        if (
+            not current_user.pending_contact_otp_code
+            or current_user.pending_contact_otp_code != (payload.otp_code or "").strip()
+        ):
+            current_user.pending_contact_otp_attempts += 1
+            db.commit()
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+    else:
+        if not payload.firebase_id_token:
+            raise HTTPException(status_code=400, detail="Phone verification is required")
+        try:
+            verified_phone = normalize_indian_phone(
+                verify_phone_token(payload.firebase_id_token)
+            )
+        except Exception:
+            raise HTTPException(
+                status_code=401, detail="Phone verification failed. Please try again."
+            )
+        if verified_phone != identifier:
+            raise HTTPException(
+                status_code=401,
+                detail="Verified phone number does not match the one you entered",
+            )
+
+    # Re-checked here because both can change while the code is in flight, and
+    # verifying earlier is no proof the write is still allowed.
+    _, changed_at, label = _contact_change_state(current_user, channel)
+    _enforce_change_cooldown(changed_at, CONTACT_CHANGE_COOLDOWN, label)
+    _assert_contact_free(db, channel, identifier, current_user.id)
+
+    if channel == "email":
+        current_user.email = identifier
+        current_user.email_changed_at = _utcnow()
+    else:
+        current_user.phone = identifier
+        current_user.phone_changed_at = _utcnow()
+    _clear_pending_contact(current_user)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=EMAIL_LINKED_MESSAGE if channel == "email" else PHONE_LINKED_MESSAGE,
+        )
+
+    db.refresh(current_user)
+    return {"status": "verified", "channel": channel, **_profile_state(current_user)}
 
 @router.post("/video-call-setting")
 def update_video_call_setting(payload: UserVideoCallSettingUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

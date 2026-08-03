@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, WebSocket, WebSoc
 
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.core.database import get_db
 from app.core.config import settings
 from app.models.models import (
@@ -86,18 +87,48 @@ async def admin_ws(websocket: WebSocket, token: str = Query(...)):
 
 
 
+def _assert_listener_name_available(db: Session, name: str, exclude_id: Optional[int] = None) -> None:
+    """Users pick a listener by name, so two "Priya" rows are indistinguishable
+    in the app. Matched case-insensitively, so "priya" collides with "Priya".
+    `exclude_id` keeps a rename from clashing with the listener's own row."""
+    q = db.query(Listener).filter(func.lower(Listener.name) == name.lower())
+    if exclude_id is not None:
+        q = q.filter(Listener.id != exclude_id)
+    duplicate = q.first()
+    if duplicate:
+        raise HTTPException(
+            status_code=400,
+            detail=f'A listener named "{duplicate.name}" already exists. Please use a different name.',
+        )
+
+
 @router.post("/listeners")
 def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=Depends(verify_admin)):
-    existing = db.query(Listener).filter(Listener.phone == payload.phone).first()
+    name = (payload.name or "").strip()
+    phone = (payload.phone or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone is required")
+
+    existing = db.query(Listener).filter(Listener.phone == phone).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Phone already registered")
+        raise HTTPException(status_code=400, detail=f'Phone already registered to "{existing.name}"')
+
+    _assert_listener_name_available(db, name)
+
     listener = Listener(
-        name=payload.name,
-        phone=payload.phone,
+        name=name,
+        phone=phone,
         password_hash=hash_password(payload.password),
     )
     db.add(listener)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two admins registering the same phone at once: the unique index wins.
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Phone already registered")
     db.refresh(listener)
     return {"id": listener.id, "name": listener.name, "phone": listener.phone}
 
@@ -116,6 +147,9 @@ def update_listener_profile(listener_id: int, payload: AdminListenerProfileUpdat
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
+    if payload.name is not None and payload.name != listener.name:
+        _assert_listener_name_available(db, payload.name, exclude_id=listener.id)
+        listener.name = payload.name
     if payload.about is not None:
         listener.about = payload.about
     if payload.tags is not None:
@@ -123,7 +157,7 @@ def update_listener_profile(listener_id: int, payload: AdminListenerProfileUpdat
     if payload.languages is not None:
         listener.languages = json.dumps(payload.languages)
     db.commit()
-    return {"id": listener.id, "about": listener.about, "tags": listener.tags, "languages": listener.languages}
+    return {"id": listener.id, "name": listener.name, "about": listener.about, "tags": listener.tags, "languages": listener.languages}
 
 @router.post("/listeners/{listener_id}/photo")
 async def update_listener_photo(listener_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _=Depends(verify_admin)):
@@ -188,7 +222,7 @@ def list_users(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None, ge
     if limit is not None:
         q = q.limit(limit)
     users = q.all()
-    result = [{"id": u.id, "name": u.name, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url, "video_call_disabled_by_admin": u.video_call_disabled_by_admin} for u in users]
+    result = [{"id": u.id, "name": u.name, "username": u.username, "email": u.email, "phone": u.phone, "is_active": u.is_active, "coins": u.coins, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url, "video_call_disabled_by_admin": u.video_call_disabled_by_admin} for u in users]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -481,6 +515,13 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
     active_listeners = db.query(func.count(Listener.id)).filter(Listener.is_active == True).scalar() or 0
     inactive_listeners = total_listeners - active_listeners
 
+    # Presence is the live websocket, not the `is_online` column, so it matches
+    # what the people lists show and can never go stale after a restart.
+    online_users = sum(1 for (uid,) in db.query(User.id).all() if manager.is_user_online(uid))
+    offline_users = total_users - online_users
+    online_listeners = sum(1 for (lid,) in db.query(Listener.id).all() if manager.is_listener_online(lid))
+    offline_listeners = total_listeners - online_listeners
+
     avg_duration = db.query(func.coalesce(func.avg(Call.duration_seconds), 0)).filter(Call.status == "ended").scalar() or 0
 
     now = datetime.now(timezone.utc)
@@ -517,9 +558,13 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
         "total_users": total_users,
         "active_users": active_users,
         "inactive_users": inactive_users,
+        "online_users": online_users,
+        "offline_users": offline_users,
         "total_listeners": total_listeners,
         "active_listeners": active_listeners,
         "inactive_listeners": inactive_listeners,
+        "online_listeners": online_listeners,
+        "offline_listeners": offline_listeners,
         "avg_call_duration_seconds": round(avg_duration),
         "calls_series": series,
     }

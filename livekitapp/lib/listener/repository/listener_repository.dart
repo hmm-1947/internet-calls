@@ -383,6 +383,20 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     return users;
   }
 
+  /// The public profile of a single user, shown when the listener taps them
+  /// in the users list or in a chat's app bar.
+  Future<Map<String, dynamic>> getUserProfile(String token, int userId) async {
+    final response = await _apiClient.get(
+      ApiConstants.listenerUserProfile(userId),
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Failed to load profile');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
   Future<void> editMessage(String token, int messageId, String message) async {
     final response = await _apiClient.post(ApiConstants.messageEdit, {
       'message_id': messageId,

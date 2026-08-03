@@ -5,12 +5,19 @@ class ApiConstants {
 
   static const String userRegisterInitiate = '/user/register/initiate';
   static const String userRegisterVerifyOtp = '/user/register/verify-otp';
-  static const String userLogin = '/user/login';
+  static const String userRegisterResendOtp = '/user/register/resend-otp';
+  static const String userRegisterVerifyPhone = '/user/register/verify-phone';
+  static const String userRegisterComplete = '/user/register/complete';
+  static const String userUsernameAvailable = '/user/username/available';
+  static const String userIdentifierAvailable = '/user/identifier/available';
+  static const String userLoginInitiate = '/user/login/initiate';
+  static const String userLoginVerify = '/user/login/verify';
   static const String userSessionCheck = '/user/session/check';
   static const String userForgotPasswordRequestOtp = '/user/forgot-password/request-otp';
   static const String userForgotPasswordVerifyOtp = '/user/forgot-password/verify-otp';
   static const String userForgotPasswordReset = '/user/forgot-password/reset';
   static const String userLogout = '/user/logout';
+  static const String userDeleteAccount = '/user/delete-account';
   static const String userChangePassword = '/user/change-password';
   static const String userListeners = '/user/listeners';
   static const String listenerLogin = '/listener/login';
@@ -41,6 +48,7 @@ class ApiConstants {
 static const String listenerProfile = '/listener/profile';
   static const String listenerPhoto = '/listener/photo';
   static const String listenerUsers = '/listener/users';
+  static String listenerUserProfile(int userId) => '/listener/user/$userId';
   static const String listenerReviews = '/call/listener/reviews';
   static String userListenerProfile(int listenerId) => '/user/listener/$listenerId';
 
@@ -84,6 +92,9 @@ static const String listenerProfile = '/listener/profile';
 
   static const String userMe = '/user/me';
 static const String userBio = '/user/bio';
+  static const String userProfile = '/user/profile';
+  static const String userContactRequestOtp = '/user/contact/request-otp';
+  static const String userContactVerify = '/user/contact/verify';
   static const String userVideoCallSetting = '/user/video-call-setting';
   static const String userPhoto = '/user/photo';
 

@@ -15,6 +15,7 @@ import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/core/network/voice_note_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_notes_screen.dart';
+import 'package:livekitapp/listener/screens/user_profile_view_screen.dart';
 import 'package:uuid/uuid.dart';
 
 class ListenerChatHistoryScreen extends StatefulWidget {
@@ -525,6 +526,21 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     }
   }
 
+  /// Opens the profile of the user this chat is with. What the app bar is
+  /// already showing is passed along so the profile paints without a flash.
+  void _openUserProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => UserProfileViewScreen(
+          userId: widget.userId,
+          initialName: widget.userName,
+          initialPhotoUrl: widget.userPhotoUrl,
+          initialIsOnline: PresenceCache().user(widget.userId).value == true,
+        ),
+      ),
+    );
+  }
+
   Widget _subtitle() {
     return SizedBox(
       height: 16,
@@ -582,34 +598,40 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Row(
-          children: [
-            AvatarImage(
-              photoUrl: widget.userPhotoUrl,
-              radius: isNarrow ? 15 : 18,
-              iconSize: isNarrow ? 15 : 18,
-              backgroundColor: const Color(0xFF2A3145),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.userName,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: isNarrow ? 14 : 16,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  _subtitle(),
-                ],
+        // Tapping the avatar/name opens the user's profile, the same gesture
+        // every other chat app uses for "who am I talking to?".
+        title: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _openUserProfile,
+          child: Row(
+            children: [
+              AvatarImage(
+                photoUrl: widget.userPhotoUrl,
+                radius: isNarrow ? 15 : 18,
+                iconSize: isNarrow ? 15 : 18,
+                backgroundColor: const Color(0xFF2A3145),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.userName,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isNarrow ? 14 : 16,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    _subtitle(),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           IconButton(

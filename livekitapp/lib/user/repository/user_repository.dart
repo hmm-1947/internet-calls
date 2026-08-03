@@ -15,43 +15,219 @@ class InsufficientCoinsException implements Exception {
   String toString() => message;
 }
 
+/// Result of a sign-up availability lookup (username or email/phone).
+/// [reason] is a user-facing message explaining why it cannot be used, null
+/// when available.
+class AvailabilityResult {
+  final bool available;
+  final String? reason;
+
+  const AvailabilityResult({required this.available, this.reason});
+}
+
+/// Which channel a sign-up or login is being verified through.
+enum AuthChannel { email, phone }
+
+AuthChannel _channelFrom(String? value) =>
+    value == 'email' ? AuthChannel.email : AuthChannel.phone;
+
+/// Outcome of sign-up step 1. For [AuthChannel.email] the backend has already
+/// mailed the code; for [AuthChannel.phone] the app asks Firebase to send it.
+class SignupStart {
+  final AuthChannel channel;
+
+  /// The identifier as the backend stored it: a lower-cased email or the bare
+  /// 10 digits of the phone number. Every later step must send this value.
+  final String identifier;
+  final bool otpSent;
+
+  const SignupStart({
+    required this.channel,
+    required this.identifier,
+    required this.otpSent,
+  });
+}
+
+/// Outcome of login step 1. Email accounts are logged in straight away, phone
+/// accounts still have to pass the Firebase OTP.
+class LoginStart {
+  final AuthChannel channel;
+  final AuthResponse? auth;
+  final String? phone;
+
+  const LoginStart({required this.channel, this.auth, this.phone});
+}
+
 class UserRepository {
   final ApiClient _apiClient = ApiClient();
 
-  Future<void> registerInitiate(
-    String name,
-    String email,
-    String phone,
+  /// Checked before requesting an OTP so we never send a code to an email or
+  /// phone number that already has an account.
+  Future<AvailabilityResult> checkIdentifierAvailable(String identifier) async {
+    final response = await _apiClient.get(
+      '${ApiConstants.userIdentifierAvailable}'
+      '?identifier=${Uri.encodeQueryComponent(identifier)}',
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Could not check this email or phone number');
+    }
+    return AvailabilityResult(
+      available: data['available'] == true,
+      reason: data['reason'] as String?,
+    );
+  }
+
+  /// Asks the backend whether [username] can still be claimed. Returns the
+  /// reason (already taken, invalid format, ...) when it cannot.
+  ///
+  /// [token] is optional and only needed from the edit profile screen: with it
+  /// the backend ignores the caller's own row, so a user's current handle is
+  /// not reported back to them as taken.
+  Future<AvailabilityResult> checkUsernameAvailable(
+    String username, {
+    String? token,
+  }) async {
+    final response = await _apiClient.get(
+      '${ApiConstants.userUsernameAvailable}'
+      '?username=${Uri.encodeQueryComponent(username)}',
+      token: token,
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'Could not check username');
+    }
+    return AvailabilityResult(
+      available: data['available'] == true,
+      reason: data['reason'] as String?,
+    );
+  }
+
+  /// Sign-up step 1: hand over the email/phone and password. No account exists
+  /// until [registerComplete] succeeds.
+  Future<SignupStart> registerInitiate(
+    String identifier,
     String password,
+    String confirmPassword,
   ) async {
     final response = await _apiClient.post(ApiConstants.userRegisterInitiate, {
-      'name': name,
-      'email': email,
-      'phone': phone,
+      'identifier': identifier,
       'password': password,
+      'confirm_password': confirmPassword,
     });
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(data['detail'] ?? 'Registration failed');
+      throw Exception(_detail(data) ?? 'Could not start sign-up');
     }
+    return SignupStart(
+      channel: _channelFrom(data['channel'] as String?),
+      identifier: data['identifier'] as String,
+      otpSent: data['otp_sent'] == true,
+    );
   }
 
-  Future<AuthResponse> registerVerifyOtp(String email, String otpCode) async {
+  /// Sign-up step 2 (email): exchange the mailed code for the sign-up token.
+  Future<String> registerVerifyOtp(String identifier, String otpCode) async {
     final response = await _apiClient.post(ApiConstants.userRegisterVerifyOtp, {
-      'email': email,
+      'identifier': identifier,
       'otp_code': otpCode,
     });
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(data['detail'] ?? 'OTP verification failed');
+      throw Exception(_detail(data) ?? 'OTP verification failed');
+    }
+    return data['signup_token'] as String;
+  }
+
+  /// Mails a fresh sign-up code. Phone codes are resent through Firebase.
+  Future<void> registerResendOtp(String identifier) async {
+    final response = await _apiClient.post(ApiConstants.userRegisterResendOtp, {
+      'identifier': identifier,
+    });
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(_detail(data) ?? 'Failed to resend OTP');
+    }
+  }
+
+  /// Sign-up step 2 (phone): exchange the Firebase token for the sign-up token.
+  Future<String> registerVerifyPhone(
+    String identifier,
+    String firebaseIdToken,
+  ) async {
+    final response = await _apiClient.post(
+      ApiConstants.userRegisterVerifyPhone,
+      {'identifier': identifier, 'firebase_id_token': firebaseIdToken},
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(data) ?? 'Phone verification failed');
+    }
+    return data['signup_token'] as String;
+  }
+
+  /// Sign-up step 3: create the account and log in. The profile photo is
+  /// uploaded separately with [updatePhoto] using the returned session token.
+  Future<AuthResponse> registerComplete(
+    String signupToken,
+    String username,
+    String displayName,
+  ) async {
+    final response = await _apiClient.post(ApiConstants.userRegisterComplete, {
+      'signup_token': signupToken,
+      'username': username,
+      'display_name': displayName,
+    });
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(data) ?? 'Registration failed');
     }
     return AuthResponse.fromJson(data);
   }
 
-  Future<AuthResponse> login(String phone, String password) async {
-    final response = await _apiClient.post(ApiConstants.userLogin, {
+  /// Login step 1. Email accounts come back logged in; phone accounts come
+  /// back with the number to send a Firebase OTP to.
+  Future<LoginStart> loginInitiate(String identifier, String password) async {
+    final response = await _apiClient.post(ApiConstants.userLoginInitiate, {
+      'identifier': identifier,
+      'password': password,
+    });
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(data) ?? 'Login failed');
+    }
+    final channel = _channelFrom(data['channel'] as String?);
+    return LoginStart(
+      channel: channel,
+      auth: channel == AuthChannel.email ? AuthResponse.fromJson(data) : null,
+      phone: data['phone'] as String?,
+    );
+  }
+
+  /// FastAPI reports validation errors as a list of objects rather than a
+  /// string, so pull out the first message instead of showing raw JSON.
+  String? _detail(dynamic data) {
+    if (data is! Map) return null;
+    final detail = data['detail'];
+    if (detail is String) return detail;
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map && first['msg'] is String) {
+        return (first['msg'] as String).replaceFirst('Value error, ', '');
+      }
+    }
+    return null;
+  }
+
+  Future<AuthResponse> loginVerify(
+    String phone,
+    String password,
+    String firebaseIdToken,
+  ) async {
+    final response = await _apiClient.post(ApiConstants.userLoginVerify, {
       'phone': phone,
       'password': password,
+      'firebase_id_token': firebaseIdToken,
     });
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
@@ -60,41 +236,48 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
-  Future<void> forgotPasswordRequestOtp(String email) async {
+  /// Starts a password reset. Email accounts get a mailed code; phone accounts
+  /// are told to verify through Firebase instead.
+  Future<AuthChannel> forgotPasswordRequestOtp(String identifier) async {
     final response = await _apiClient.post(
       ApiConstants.userForgotPasswordRequestOtp,
-      {'email': email},
+      {'identifier': identifier},
     );
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(data['detail'] ?? 'Failed to send OTP');
+      throw Exception(_detail(data) ?? 'Failed to send OTP');
     }
+    return _channelFrom(data['channel'] as String?);
   }
 
-  Future<void> forgotPasswordVerifyOtp(String email, String otpCode) async {
+  Future<void> forgotPasswordVerifyOtp(String identifier, String otpCode) async {
     final response = await _apiClient.post(
       ApiConstants.userForgotPasswordVerifyOtp,
-      {'email': email, 'otp_code': otpCode},
+      {'identifier': identifier, 'otp_code': otpCode},
     );
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(data['detail'] ?? 'OTP verification failed');
+      throw Exception(_detail(data) ?? 'OTP verification failed');
     }
   }
 
+  /// Finishes the reset with whichever proof the channel uses: the mailed
+  /// [otpCode] for email accounts, or [firebaseIdToken] for phone accounts.
   Future<void> forgotPasswordReset(
-    String email,
-    String otpCode,
-    String newPassword,
-  ) async {
+    String identifier,
+    String newPassword, {
+    String? otpCode,
+    String? firebaseIdToken,
+  }) async {
     final response = await _apiClient.post(ApiConstants.userForgotPasswordReset, {
-      'email': email,
+      'identifier': identifier,
       'otp_code': otpCode,
+      'firebase_id_token': firebaseIdToken,
       'new_password': newPassword,
     });
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(data['detail'] ?? 'Failed to reset password');
+      throw Exception(_detail(data) ?? 'Failed to reset password');
     }
   }
 
@@ -107,6 +290,21 @@ class UserRepository {
     if (response.statusCode != 200) {
       final data = jsonDecode(response.body);
       throw Exception(data['detail'] ?? 'Logout failed');
+    }
+  }
+
+  /// Asks the admins to delete this account. Nothing is removed right away:
+  /// the request lands in the admin panel's notification feed and an admin
+  /// carries out the deletion from there.
+  Future<void> requestAccountDeletion(String token, {String? reason}) async {
+    final response = await _apiClient.post(
+      ApiConstants.userDeleteAccount,
+      {if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim()},
+      token: token,
+    );
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(_detail(data) ?? 'Failed to request account deletion');
     }
   }
 
@@ -508,6 +706,66 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
       throw Exception(data['detail'] ?? 'Failed to update bio');
     }
     UserDataCache().invalidateMe();
+  }
+
+  /// Saves the freely editable profile fields. Only the arguments that are
+  /// non-null are sent, so an unchanged field is never touched by the server.
+  /// Returns the profile as it now stands, including the refreshed cool-downs.
+  Future<Map<String, dynamic>> updateProfile(
+    String token, {
+    String? displayName,
+    String? username,
+    String? bio,
+  }) async {
+    final response = await _apiClient.post(ApiConstants.userProfile, {
+      if (displayName != null) 'display_name': displayName,
+      if (username != null) 'username': username,
+      if (bio != null) 'bio': bio,
+    }, token: token);
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(data) ?? 'Failed to save your profile');
+    }
+    UserDataCache().invalidateMe();
+    return Map<String, dynamic>.from(data);
+  }
+
+  /// Step 1 of adding or changing the registered email / phone number. Email
+  /// codes are mailed by the backend; phone codes are sent through Firebase,
+  /// which is why the channel comes back to the caller.
+  Future<AuthChannel> requestContactChangeOtp(
+    String token,
+    String identifier,
+  ) async {
+    final response = await _apiClient.post(ApiConstants.userContactRequestOtp, {
+      'identifier': identifier,
+    }, token: token);
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(data) ?? 'Could not send the verification code');
+    }
+    return _channelFrom(data['channel'] as String?);
+  }
+
+  /// Step 2: prove the new email/phone is reachable and save it on the
+  /// account. Email changes pass [otpCode], phone changes [firebaseIdToken].
+  Future<Map<String, dynamic>> verifyContactChange(
+    String token,
+    String identifier, {
+    String? otpCode,
+    String? firebaseIdToken,
+  }) async {
+    final response = await _apiClient.post(ApiConstants.userContactVerify, {
+      'identifier': identifier,
+      'otp_code': otpCode,
+      'firebase_id_token': firebaseIdToken,
+    }, token: token);
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(data) ?? 'Verification failed');
+    }
+    UserDataCache().invalidateMe();
+    return Map<String, dynamic>.from(data);
   }
 
   Future<void> updateVideoCallSetting(String token, bool enabled) async {

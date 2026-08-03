@@ -1,11 +1,12 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
-import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
-import 'package:livekitapp/user/screens/user_main_screen.dart';
+import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_register_screen.dart';
 import 'package:livekitapp/user/screens/auth/user_forgot_password_screen.dart';
+import 'package:livekitapp/user/screens/auth/user_phone_otp_screen.dart';
+import 'package:livekitapp/user/screens/user_main_screen.dart';
 
 class UserLoginScreen extends StatefulWidget {
   const UserLoginScreen({super.key});
@@ -15,14 +16,14 @@ class UserLoginScreen extends StatefulWidget {
 }
 
 class _UserLoginScreenState extends State<UserLoginScreen> {
-  final _phoneController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   bool _loading = false;
   @override
   void dispose() {
-    _phoneController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -30,18 +31,35 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   Future<void> _login() async {
     setState(() => _loading = true);
     try {
-      final result = await _repository.login(
-        _phoneController.text.trim(),
+      // The backend works out from the identifier which account this is and
+      // what the second step should be: phone accounts still need a Firebase
+      // OTP, email accounts are signed in by password alone.
+      final start = await _repository.loginInitiate(
+        _identifierController.text.trim(),
         _passwordController.text,
       );
-      await _localStorage.saveSession(result.token, result.id, result.name);
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      if (fcmToken != null) {
-        await _repository.updateFcmToken(result.token, fcmToken);
-      }
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const UserMainScreen()),
+      if (start.channel == AuthChannel.email) {
+        final auth = start.auth!;
+        await _localStorage.saveSession(auth.token, auth.id, auth.name);
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          await _repository.updateFcmToken(auth.token, fcmToken);
+        }
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const UserMainScreen()),
+          (route) => false,
+        );
+        return;
+      }
+      await Navigator.of(context).push(
+        fadeRoute(
+          UserPhoneOtpScreen(
+            phone: start.phone!,
+            password: _passwordController.text,
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -73,11 +91,11 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
               ),
               const SizedBox(height: 32),
               TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
+                controller: _identifierController,
+                keyboardType: TextInputType.emailAddress,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  labelText: 'Phone',
+                  labelText: 'Email or Phone',
                   labelStyle: const TextStyle(color: Colors.white),
                   enabledBorder: OutlineInputBorder(
                     borderSide: const BorderSide(color: Colors.white),

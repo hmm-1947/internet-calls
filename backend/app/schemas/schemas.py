@@ -4,6 +4,8 @@ from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
 
+from app.utils.phone import normalize_indian_phone
+
 ALLOWED_PLAN_ICONS = {"coin", "diamond", "star"}
 
 
@@ -24,11 +26,94 @@ def validate_password_strength(v: str) -> str:
     return v
 
 
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 20
+_USERNAME_ALLOWED = re.compile(r"^[A-Za-z0-9._]+$")
+# Handles we never hand out, so they stay available for system/support use.
+RESERVED_USERNAMES = {"admin", "administrator", "support", "root", "system", "listener", "me"}
+
+
+def validate_username(v: str) -> str:
+    """Validate a user-chosen handle and return it trimmed (original casing kept).
+
+    Raises ValueError with a user-facing message when the handle is unusable.
+    """
+    v = (v or "").strip()
+    if len(v) < USERNAME_MIN_LENGTH:
+        raise ValueError(f"Username must be at least {USERNAME_MIN_LENGTH} characters long")
+    if len(v) > USERNAME_MAX_LENGTH:
+        raise ValueError(f"Username must be at most {USERNAME_MAX_LENGTH} characters long")
+    if not _USERNAME_ALLOWED.match(v):
+        raise ValueError("Username can only contain letters, numbers, dots and underscores")
+    if not re.search(r"[A-Za-z]", v):
+        raise ValueError("Username must contain at least one letter")
+    if v.startswith(".") or v.endswith("."):
+        raise ValueError("Username cannot start or end with a dot")
+    if v.lower() in RESERVED_USERNAMES:
+        raise ValueError("This username is reserved. Please choose another one.")
+    return v
+
+
+DISPLAY_NAME_MAX_LENGTH = 30
+
+
+def validate_display_name(v: str) -> str:
+    """The name shown to listeners. Not unique, but must not be blank."""
+    v = " ".join((v or "").split())
+    if len(v) < 2:
+        raise ValueError("Display name must be at least 2 characters long")
+    if len(v) > DISPLAY_NAME_MAX_LENGTH:
+        raise ValueError(
+            f"Display name must be at most {DISPLAY_NAME_MAX_LENGTH} characters long"
+        )
+    return v
+
+
+# Deliberately permissive: the OTP mail is the real proof the address works,
+# so this only rejects input that clearly is not an address.
+_EMAIL_ALLOWED = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
+EMAIL_MAX_LENGTH = 254
+
+
+def validate_email_address(v: str) -> str:
+    """Return the address lower-cased so lookups are case-insensitive."""
+    v = (v or "").strip().lower()
+    if not v:
+        raise ValueError("Enter your email address")
+    if len(v) > EMAIL_MAX_LENGTH or not _EMAIL_ALLOWED.match(v):
+        raise ValueError("Enter a valid email address")
+    return v
+
+
+def detect_identifier(v: str) -> tuple[str, str]:
+    """Work out whether the user typed an email or a phone number.
+
+    Returns `(channel, normalized)` where channel is "email" or "phone".
+    Anything containing "@" is treated as an email attempt so a typo in an
+    address reports an email error instead of a confusing phone-number one.
+    Raises ValueError with a user-facing message when neither form is valid.
+    """
+    raw = (v or "").strip()
+    if not raw:
+        raise ValueError("Enter your email address or phone number")
+    if "@" in raw:
+        return "email", validate_email_address(raw)
+    return "phone", normalize_indian_phone(raw)
+
+
 
 class AdminListenerProfileUpdate(BaseModel):
+    # Renaming a listener from the panel. Uniqueness is enforced by the
+    # endpoint, which needs the database to check it against.
+    name: Optional[str] = None
     about: Optional[str] = None
     tags: Optional[list[str]] = None
     languages: Optional[list[str]] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_format(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else validate_display_name(v)
 
     @field_validator("about")
     @classmethod
@@ -223,40 +308,133 @@ class AdminPurchaseOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 class UserRegisterInitiate(BaseModel):
-    name: str
-    email: str
-    phone: str
+    """Step 1: the email or phone number to verify, plus the account password.
+
+    `confirm_password` is optional because the app already compares the two
+    fields; when it is sent we check it again so an API client cannot create an
+    account with a password the user never confirmed.
+    """
+
+    identifier: str
     password: str
+    confirm_password: Optional[str] = None
 
     @field_validator("password")
     @classmethod
     def password_strength(cls, v: str) -> str:
         return validate_password_strength(v)
 
-class UserRegisterVerifyOtp(BaseModel):
-    email: str
+    @field_validator("confirm_password")
+    @classmethod
+    def passwords_match(cls, v: Optional[str], info) -> Optional[str]:
+        password = info.data.get("password")
+        if v is not None and password is not None and v != password:
+            raise ValueError("Passwords do not match")
+        return v
+
+class UserRegisterVerifyEmailOtp(BaseModel):
+    identifier: str
     otp_code: str
 
-class UserLogin(BaseModel):
+class UserRegisterResendOtp(BaseModel):
+    identifier: str
+
+class UserRegisterVerifyPhone(BaseModel):
+    identifier: str
+    firebase_id_token: str
+
+class UserRegisterComplete(BaseModel):
+    """Step 3: the profile details, exchanged for a real account."""
+
+    signup_token: str
+    username: str
+    display_name: str
+
+    @field_validator("username")
+    @classmethod
+    def username_format(cls, v: str) -> str:
+        return validate_username(v)
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_format(cls, v: str) -> str:
+        return validate_display_name(v)
+
+class UserLoginInitiate(BaseModel):
+    identifier: str
+    password: str
+
+class UserLoginVerify(BaseModel):
     phone: str
     password: str
+    firebase_id_token: str
 
 class UserBioUpdate(BaseModel):
     bio: str
+
+
+class UserProfileUpdate(BaseModel):
+    """Edit profile screen: any subset of the freely editable fields.
+
+    Omitted fields are left untouched, so the client can send only what the
+    user actually changed. The display name may be changed as often as the
+    user likes; the username is rate limited to once every 24 hours by the
+    endpoint, not here.
+    """
+
+    display_name: Optional[str] = None
+    username: Optional[str] = None
+    bio: Optional[str] = None
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_format(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else validate_display_name(v)
+
+    @field_validator("username")
+    @classmethod
+    def username_format(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else validate_username(v)
+
+    @field_validator("bio")
+    @classmethod
+    def bio_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 2000:
+            raise ValueError("Bio must be under 2000 characters")
+        return v
+
+
+class UserContactChangeRequest(BaseModel):
+    """`identifier` is the new email address or phone number to verify."""
+
+    identifier: str
+
+
+class UserContactChangeVerify(BaseModel):
+    identifier: str
+    # Email changes are proved with the mailed code, phone changes with a
+    # Firebase token, so exactly one of these is filled in.
+    otp_code: Optional[str] = None
+    firebase_id_token: Optional[str] = None
 
 class UserVideoCallSettingUpdate(BaseModel):
     enabled: bool
 
 class UserForgotPasswordRequestOtp(BaseModel):
-    email: str
+    """`identifier` is an email or a phone number, as on the login screen."""
+
+    identifier: str
 
 class UserForgotPasswordVerifyOtp(BaseModel):
-    email: str
-    otp_code: str
+    identifier: str
+    otp_code: Optional[str] = None
 
 class UserForgotPasswordReset(BaseModel):
-    email: str
-    otp_code: str
+    identifier: str
+    # Email accounts prove ownership with the mailed code, phone accounts with
+    # a Firebase token, so exactly one of these is filled in.
+    otp_code: Optional[str] = None
+    firebase_id_token: Optional[str] = None
     new_password: str
 
     @field_validator("new_password")
@@ -473,6 +651,30 @@ class WithdrawalRequestOut(BaseModel):
 
 class WithdrawalDecision(BaseModel):
     reason: Optional[str] = None
+
+
+class AdminNotificationOut(BaseModel):
+    id: int
+    type: str
+    title: str
+    body: Optional[str] = None
+    subject_type: Optional[str] = None
+    subject_id: Optional[int] = None
+    subject_name: Optional[str] = None
+    is_read: bool
+    is_done: bool
+    done_at: Optional[datetime] = None
+    done_by_admin_username: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AccountDeletionRequestCreate(BaseModel):
+    """Optional free-text reason typed by the user before confirming."""
+    reason: Optional[str] = None
+
 
 class AdminInviteCreate(BaseModel):
     expires_in_hours: Optional[int] = 72

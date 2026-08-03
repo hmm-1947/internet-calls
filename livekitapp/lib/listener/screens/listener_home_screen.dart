@@ -6,11 +6,7 @@ import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
-import 'package:livekitapp/listener/screens/listener_login_screen.dart';
-import 'package:livekitapp/listener/screens/listener_edit_profile_screen.dart';
-import 'package:livekitapp/listener/screens/listener_reviews_screen.dart';
-import 'package:livekitapp/common/utils/fade_page_route.dart';
-import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.dart';
+import 'package:livekitapp/listener/screens/user_profile_view_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class ListenerHomeScreen extends StatefulWidget {
@@ -220,9 +216,29 @@ Future<void> _loadProfile() async {
     );
   }
 
+  /// Opens the tapped user's profile. The values already on the tile are
+  /// handed over so the profile paints instantly instead of flashing empty.
+  void _openUserProfile(Map<String, dynamic> user) {
+    final id = user['id'];
+    if (id is! int) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => UserProfileViewScreen(
+          userId: id,
+          initialName: user['name'] as String?,
+          initialPhotoUrl: user['photo_url'] as String?,
+          initialIsOnline: user['is_online'] == true,
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserTile(Map<String, dynamic> user) {
     final bool isOnline = user['is_online'] == true;
-    return Container(
+    return InkWell(
+      onTap: () => _openUserProfile(user),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xCC1A1A1A),
@@ -292,8 +308,9 @@ Future<void> _loadProfile() async {
               ],
             ),
           ),
-        
+          const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
         ],
+      ),
       ),
     );
   }

@@ -249,6 +249,42 @@ def get_users(db: Session = Depends(get_db), current_listener: Listener = Depend
     from app.models.models import User
     users = db.query(User).filter(User.is_active == True).all()
     return [
-        {"id": u.id, "name": u.name, "is_online": manager.is_user_online(u.id), "bio": u.bio, "photo_url": u.photo_url}
+        {
+            "id": u.id,
+            "name": u.name,
+            "username": u.username,
+            "is_online": manager.is_user_online(u.id),
+            "bio": u.bio,
+            "photo_url": u.photo_url,
+        }
         for u in users
     ]
+
+
+@router.get("/user/{user_id}")
+def get_user_profile(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_listener: Listener = Depends(get_current_listener),
+):
+    """The public profile a listener sees when they tap a user.
+
+    Deliberately limited to what the listener needs to recognise who they are
+    talking to: the contact details, coin balance and settings on the account
+    are never exposed here.
+    """
+    from app.models.models import User
+
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": user.id,
+        "name": user.name,
+        "username": user.username,
+        "bio": user.bio,
+        "photo_url": user.photo_url,
+        "is_online": manager.is_user_online(user.id),
+        "last_seen": user.last_seen.isoformat() if user.last_seen else None,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
 import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/user/services/phone_auth_service.dart';
 
-enum _ForgotPasswordStep { email, otp, reset }
+enum _ForgotPasswordStep { identifier, otp, reset }
 
 class UserForgotPasswordScreen extends StatefulWidget {
   const UserForgotPasswordScreen({super.key});
@@ -15,16 +17,32 @@ class UserForgotPasswordScreen extends StatefulWidget {
 }
 
 class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _otpController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _repository = UserRepository();
+  final _phoneAuth = PhoneAuthService();
 
-  _ForgotPasswordStep _step = _ForgotPasswordStep.email;
+  _ForgotPasswordStep _step = _ForgotPasswordStep.identifier;
   bool _loading = false;
   bool _otpExpired = false;
   String _newPassword = '';
+
+  /// Which channel the account uses, decided by the backend in step 1.
+  AuthChannel _channel = AuthChannel.email;
+
+  /// The identifier exactly as sent to the backend: a trimmed email or the
+  /// bare 10 digits of the phone number.
+  String _identifier = '';
+
+  /// Phone accounts only: Firebase's SMS session and the token proving the
+  /// code was entered correctly.
+  String? _verificationId;
+  int? _resendToken;
+  String? _firebaseIdToken;
+
+  bool get _isEmail => _channel == AuthChannel.email;
 
   @override
   void initState() {
@@ -36,7 +54,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _otpController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
@@ -50,31 +68,67 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _submitEmail() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      _showError('Please enter your email');
+  Future<void> _submitIdentifier() async {
+    final input = _identifierController.text.trim();
+    final normalizedPhone = PhoneAuthService.normalize(input);
+    final error = identifierError(input, normalizedPhone: normalizedPhone);
+    if (error != null) {
+      _showError(error);
       return;
     }
+    final identifier = looksLikeEmail(input) ? input : normalizedPhone;
+
     setState(() => _loading = true);
     try {
-      await _repository.forgotPasswordRequestOtp(email);
+      // The backend looks the account up and says how it can be verified:
+      // a mailed code for email accounts, Firebase for phone accounts.
+      final channel = await _repository.forgotPasswordRequestOtp(identifier);
       if (!mounted) return;
       setState(() {
+        _channel = channel;
+        _identifier = identifier;
         _otpController.clear();
+        _firebaseIdToken = null;
         _otpExpired = false;
         _step = _ForgotPasswordStep.otp;
       });
+      if (channel == AuthChannel.phone) await _sendPhoneOtp();
     } catch (e) {
       final message = e.toString().replaceFirst('Exception: ', '');
       _showError(
         message.toLowerCase().contains('registered')
-            ? 'enter a registered email id'
+            ? 'enter a registered email id or phone number'
             : message,
       );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _sendPhoneOtp() async {
+    await _phoneAuth.sendOtp(
+      phone: _identifier,
+      resendToken: _resendToken,
+      onCodeSent: (verificationId, resendToken) {
+        if (!mounted) return;
+        setState(() {
+          _verificationId = verificationId;
+          _resendToken = resendToken;
+          _otpExpired = false;
+        });
+      },
+      onFailed: (message) {
+        if (!mounted) return;
+        _showError(message);
+      },
+      onAutoVerified: (idToken) {
+        if (!mounted) return;
+        setState(() {
+          _firebaseIdToken = idToken;
+          _step = _ForgotPasswordStep.reset;
+        });
+      },
+    );
   }
 
   Future<void> _submitOtp() async {
@@ -89,10 +143,17 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
     }
     setState(() => _loading = true);
     try {
-      await _repository.forgotPasswordVerifyOtp(
-        _emailController.text.trim(),
-        otp,
-      );
+      if (_isEmail) {
+        await _repository.forgotPasswordVerifyOtp(_identifier, otp);
+      } else {
+        if (_verificationId == null) {
+          _showError('OTP has not been sent yet. Please resend.');
+          return;
+        }
+        // Kept in memory only until the new password is submitted; the
+        // backend checks this token again before changing the password.
+        _firebaseIdToken = await _phoneAuth.verifyOtp(_verificationId!, otp);
+      }
       if (!mounted) return;
       setState(() => _step = _ForgotPasswordStep.reset);
     } catch (e) {
@@ -120,9 +181,10 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
     setState(() => _loading = true);
     try {
       await _repository.forgotPasswordReset(
-        _emailController.text.trim(),
-        _otpController.text.trim(),
+        _identifier,
         newPassword,
+        otpCode: _isEmail ? _otpController.text.trim() : null,
+        firebaseIdToken: _isEmail ? null : _firebaseIdToken,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -173,21 +235,22 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
     );
   }
 
-  Widget _buildEmailStep() {
+  Widget _buildIdentifierStep() {
     return AuthCard(
-      key: const ValueKey('email'),
+      key: const ValueKey('identifier'),
       icon: Icons.lock_reset,
       title: 'Forgot Password',
       subtitle:
-          'Enter your registered email id. We will send you an OTP to reset your password.',
+          'Enter the email or phone number you signed up with. We will send '
+          'you an OTP to reset your password.',
       children: [
         AuthTextField(
-          controller: _emailController,
-          label: 'Email',
+          controller: _identifierController,
+          label: 'Email or Phone',
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 24),
-        _buildButton('Send OTP', _submitEmail),
+        _buildButton('Send OTP', _submitIdentifier),
       ],
     );
   }
@@ -195,9 +258,10 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
   Widget _buildOtpStep() {
     return AuthCard(
       key: const ValueKey('otp'),
-      icon: Icons.mark_email_read_outlined,
+      icon: _isEmail ? Icons.mark_email_read_outlined : Icons.sms_outlined,
       title: 'Verify OTP',
-      subtitle: 'Enter the code sent to ${_emailController.text.trim()}',
+      subtitle:
+          'Enter the code sent to ${_isEmail ? _identifier : '+91 $_identifier'}',
       children: [
         AuthTextField(
           controller: _otpController,
@@ -212,9 +276,11 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
           seconds: 60,
           onExpire: () => setState(() => _otpExpired = true),
           onResend: () async {
-            await _repository.forgotPasswordRequestOtp(
-              _emailController.text.trim(),
-            );
+            if (_isEmail) {
+              await _repository.forgotPasswordRequestOtp(_identifier);
+            } else {
+              await _sendPhoneOtp();
+            }
             if (!mounted) return;
             _otpController.clear();
             setState(() => _otpExpired = false);
@@ -228,11 +294,13 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
               ? null
               : () => setState(() {
                     _otpController.clear();
-                    _step = _ForgotPasswordStep.email;
+                    _verificationId = null;
+                    _firebaseIdToken = null;
+                    _step = _ForgotPasswordStep.identifier;
                   }),
           icon: const Icon(Icons.arrow_back, color: Colors.white60, size: 16),
           label: const Text(
-            'Change email address',
+            'Change email or phone number',
             style: TextStyle(color: Colors.white60, fontSize: 12.5),
           ),
         ),
@@ -275,8 +343,8 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
 
   Widget _buildStep() {
     switch (_step) {
-      case _ForgotPasswordStep.email:
-        return _buildEmailStep();
+      case _ForgotPasswordStep.identifier:
+        return _buildIdentifierStep();
       case _ForgotPasswordStep.otp:
         return _buildOtpStep();
       case _ForgotPasswordStep.reset:

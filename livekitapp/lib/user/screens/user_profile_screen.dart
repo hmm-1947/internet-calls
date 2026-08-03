@@ -182,6 +182,7 @@ int _coins = 0;
   bool _savingVideoCallSetting = false;
   bool _loggingOut = false;
   bool _openingEnrollChat = false;
+  bool _requestingDeletion = false;
 
   @override
   void initState() {
@@ -259,6 +260,74 @@ Future<void> refresh() async {
           MaterialPageRoute(builder: (_) => const UserLoginScreen()),
         );
       }
+    }
+  }
+
+  /// Asks for a confirmation first, then tells the admins. The account itself
+  /// is removed by an admin, so nothing is destroyed from here.
+  Future<void> _deleteAccount() async {
+    if (_requestingDeletion) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _AppColors.cardBg,
+        title: const Text(
+          'Delete Account',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Are you sure you want to delete your account?\n\n'
+          'The admins will be notified about your account deletion and will '
+          'process it. This cannot be undone once it is done.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(
+              'Delete Account',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _requestingDeletion = true);
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) throw Exception('You are not signed in anymore');
+      await _repository.requestAccountDeletion(token);
+      if (!mounted) return;
+      _showEnrollNotice(
+        'Deletion requested',
+        'The admins have been notified about your account deletion. '
+            'Your account will be removed once they process the request.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not send your deletion request. Please try again.',
+          ),
+        ),
+      );
+      debugPrint('Delete account: request failed: $e');
+    } finally {
+      if (mounted) setState(() => _requestingDeletion = false);
     }
   }
 
@@ -479,6 +548,31 @@ Future<void> refresh() async {
                   ]),
                   const SizedBox(height: 16),
                   _SettingsCard([
+                    ListTile(
+                      onTap: _requestingDeletion ? null : _deleteAccount,
+                      leading: const Icon(
+                        Icons.delete_forever_outlined,
+                        color: Colors.red,
+                      ),
+                      title: const Text(
+                        'Delete Account',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      trailing: _requestingDeletion
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.red,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const Divider(height: 1, color: Colors.white12),
                     ListTile(
                       onTap: _loggingOut ? null : _logout,
                       leading: const Icon(Icons.logout, color: Colors.red),

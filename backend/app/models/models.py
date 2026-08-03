@@ -9,8 +9,14 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    phone = Column(String, unique=True, index=True, nullable=False)
+    # Lower-cased unique handle chosen by the user at sign-up. Stored lower-cased
+    # so the unique index also makes the username case-insensitively unique.
+    # Nullable because accounts created before usernames existed have none.
+    username = Column(String, unique=True, index=True, nullable=True)
+    # Exactly one of email / phone is filled at sign-up (the user picks the
+    # channel), so both are nullable and the other can be added later.
+    email = Column(String, unique=True, index=True, nullable=True)
+    phone = Column(String, unique=True, index=True, nullable=True)
     password_hash = Column(String, nullable=False)
     fcm_token = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -22,6 +28,22 @@ class User(Base):
     reset_otp_code = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
     reset_otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
+    # Stamped every time the handle / contact details are set from the edit
+    # profile screen, so the 24h cool-down on each of them can be enforced.
+    # Null means "never changed", i.e. no cool-down is in force.
+    username_changed_at = Column(DateTime(timezone=True), nullable=True)
+    email_changed_at = Column(DateTime(timezone=True), nullable=True)
+    phone_changed_at = Column(DateTime(timezone=True), nullable=True)
+    # An email/phone change that has been requested but not verified yet. The
+    # new value only lands on `email`/`phone` once the OTP is confirmed, so an
+    # abandoned change never locks the user out of their account.
+    # For phone changes Firebase sends and checks the SMS, so `otp_code` stays
+    # null and the signed Firebase token is the proof instead.
+    pending_contact_channel = Column(String, nullable=True)
+    pending_contact_identifier = Column(String, nullable=True)
+    pending_contact_otp_code = Column(String, nullable=True)
+    pending_contact_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    pending_contact_otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     video_call_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
     video_call_disabled_by_admin = Column(Boolean, default=False, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -372,6 +394,36 @@ class AuditLog(Base):
     )
 
 
+class AdminNotification(Base):
+    """Something that happened in the apps and needs an admin's attention.
+
+    Rows are never deleted: "mark as done" only flips `is_done`, so the panel
+    stops showing it while the trail of who handled it stays intact.
+    `is_read` is separate and only drives the red counter in the sidebar - it
+    is cleared as soon as an admin opens the notifications page.
+    """
+
+    __tablename__ = "admin_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String, nullable=False, index=True)  # e.g. "account_deletion_request"
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=True)
+    subject_type = Column(String, nullable=True)  # "user" | "listener"
+    subject_id = Column(Integer, nullable=True, index=True)
+    subject_name = Column(String, nullable=True)  # snapshot in case the account is later removed
+    is_read = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_done = Column(Boolean, default=False, nullable=False, server_default="false")
+    done_at = Column(DateTime(timezone=True), nullable=True)
+    done_by_admin_id = Column(Integer, ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    done_by_admin_username = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index('ix_admin_notifications_done_created', 'is_done', 'created_at'),
+    )
+
+
 class WithdrawalRequest(Base):
     __tablename__ = "withdrawal_requests"
 
@@ -389,16 +441,35 @@ class WithdrawalRequest(Base):
     )
 
 
-class EmailOtp(Base):
-    __tablename__ = "email_otps"
+class PendingSignup(Base):
+    """A sign-up that has been started but not finished.
+
+    The row is created when the user submits their email/phone and password,
+    and is deleted once the account exists. No `users` row is written until the
+    identifier is verified and the profile step is done, so an abandoned
+    sign-up never occupies an email, phone or username.
+
+    `channel` is "email" or "phone":
+    - email: we generate `otp_code` ourselves and mail it.
+    - phone: Firebase sends and checks the SMS code, so `otp_code` stays null
+      and we only trust the signed Firebase token handed back to us.
+    """
+
+    __tablename__ = "pending_signups"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, nullable=False, index=True)
-    otp_code = Column(String, nullable=False)
-    name = Column(String, nullable=False)
-    phone = Column(String, nullable=False)
+    # Lower-cased email or 10-digit phone; unique so a retry reuses the row.
+    identifier = Column(String, nullable=False, unique=True, index=True)
+    channel = Column(String, nullable=False)
     password_hash = Column(String, nullable=False)
-    is_verified = Column(Boolean, default=False)
-    attempts = Column(Integer, default=0, nullable=False, server_default="0")
-    expires_at = Column(DateTime(timezone=True), nullable=False)
+    otp_code = Column(String, nullable=True)
+    otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
+    otp_sent_count = Column(Integer, default=0, nullable=False, server_default="0")
+    is_verified = Column(Boolean, default=False, nullable=False, server_default="0")
+    # Handed to the client after verification and exchanged for the account in
+    # the final profile step, so that step cannot be called without verifying.
+    signup_token = Column(String, nullable=True, unique=True, index=True)
+    signup_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

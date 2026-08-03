@@ -84,6 +84,7 @@ class AuthTextField extends StatelessWidget {
   final TextAlign textAlign;
   final double? letterSpacing;
   final double? fontSize;
+  final int? maxLength;
 
   const AuthTextField({
     super.key,
@@ -94,6 +95,7 @@ class AuthTextField extends StatelessWidget {
     this.textAlign = TextAlign.start,
     this.letterSpacing,
     this.fontSize,
+    this.maxLength,
   });
 
   @override
@@ -103,6 +105,7 @@ class AuthTextField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       textAlign: textAlign,
+      maxLength: maxLength,
       style: TextStyle(
         color: Colors.white,
         letterSpacing: letterSpacing,
@@ -112,6 +115,7 @@ class AuthTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white60),
+        counterText: '',
         filled: true,
         fillColor: Colors.white.withOpacity(0.04),
         enabledBorder: OutlineInputBorder(
