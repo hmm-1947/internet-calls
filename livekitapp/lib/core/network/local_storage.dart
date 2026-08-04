@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:livekitapp/common/services/native_call_bridge.dart';
 
 class LocalStorage {
   static const _storage = FlutterSecureStorage();
@@ -10,6 +11,8 @@ class LocalStorage {
     await _storage.write(key: _tokenKey, value: token);
     await _storage.write(key: _idKey, value: id.toString());
     await _storage.write(key: _nameKey, value: name);
+    // Native declines the call by itself when no isolate is alive to do it.
+    await NativeCallBridge.setAuthToken(token);
   }
 
   Future<String?> getToken() async {
@@ -27,6 +30,7 @@ class LocalStorage {
 
   Future<void> clear() async {
     await _storage.deleteAll();
+    await NativeCallBridge.setAuthToken(null);
   }
 
   static const _activeCallIdKey = 'active_call_id';

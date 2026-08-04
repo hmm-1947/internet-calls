@@ -33,6 +33,18 @@ object CallkitBridge {
         android["isShowFullLockedScreen"] = false
         android["isFullScreen"] = false
 
+        // This app posts its own ongoing-call notification from
+        // CallForegroundService (the "active_call" channel), so the plugin must
+        // not post a second one. It also must not try: the plugin only creates
+        // its "callkit_ongoing_channel_id" channel inside showIncomingCall /
+        // ACTION_CALL_START, paths this app never uses (incoming calls are shown
+        // by IncomingCallActivity). Without that channel,
+        // CallkitNotificationService.startForeground() on accept throws
+        // RemoteServiceException: "invalid channel for service notification".
+        val callingNotification = HashMap<String, Any?>()
+        callingNotification["showNotification"] = false
+        callingNotification["isShowCallback"] = false
+
         val args = HashMap<String, Any?>()
         args["id"] = callIdToUuid(callId)
         args["nameCaller"] = callerName
@@ -43,6 +55,7 @@ object CallkitBridge {
         args["duration"] = 30000L
         args["extra"] = extra
         args["android"] = android
+        args["callingNotification"] = callingNotification
 
         return Data(args).toBundle()
     }
@@ -88,7 +101,14 @@ object CallkitBridge {
         send(context, CallkitIncomingBroadcastReceiver.getIntentAccept(context, data))
     }
 
-    fun sendDecline(context: Context, data: Bundle) {
+    /**
+     * [callId] is passed separately so the reject can also be sent straight to
+     * the backend, which is the only path that survives the app having been
+     * killed: the callkit event below is dropped whenever no Flutter engine has
+     * attached a listener yet.
+     */
+    fun sendDecline(context: Context, callId: String, data: Bundle) {
+        CallApi.reject(context, callId)
         send(context, CallkitIncomingBroadcastReceiver.getIntentDecline(context, data))
     }
 

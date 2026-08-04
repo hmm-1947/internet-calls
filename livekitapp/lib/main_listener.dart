@@ -34,14 +34,19 @@ import 'package:livekitapp/common/widgets/splash_screen.dart';
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: ".env");
+  // Bound before anything is awaited. The lock screen shows the call natively
+  // the moment the push lands, so a decline can be tapped while this isolate is
+  // still booting, and the callkit plugin drops events that arrive before an
+  // engine has a listener attached. Android also rejects the call by itself
+  // (CallApi) for the case where nothing here is up in time.
+  if (message.data['type'] == 'call') {
+    _bindBackgroundCallEvents();
+  }
+  await _ensureEnvLoaded();
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();
   }
   print('[FCM-BG] Background message received: type=${message.data["type"]}');
-  if (message.data['type'] == 'call') {
-    _bindBackgroundCallEvents();
-  }
   await _handleMessage(message);
   await _cacheAndAckChatMessage(message);
   await _cacheAndAckChatSummary(message);
@@ -51,6 +56,13 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
     message.data,
     isUserApp: false,
   );
+}
+
+/// The event listener can fire before the handler has loaded the environment,
+/// so every path that needs `ApiConstants` goes through this.
+Future<void> _ensureEnvLoaded() async {
+  if (dotenv.isInitialized && dotenv.env.isNotEmpty) return;
+  await dotenv.load(fileName: ".env");
 }
 
 bool _backgroundCallEventsBound = false;
@@ -71,6 +83,7 @@ void _bindBackgroundCallEvents() {
     if (callId == null) return;
     print('[FCM-BG] Rejecting call $callId from background isolate');
     try {
+      await _ensureEnvLoaded();
       final token = await LocalStorage().getToken();
       if (token != null) {
         await ListenerRepository().rejectCall(token, callId);

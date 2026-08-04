@@ -6,6 +6,7 @@ import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
+import 'package:livekitapp/common/services/native_call_bridge.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -49,6 +50,9 @@ class CallkitService {
     try {
       await _lockscreenChannel.invokeMethod('setApiBaseUrl', ApiConstants.baseUrl);
     } catch (_) {}
+    // Refreshed on every start so a decline handled purely natively (app killed,
+    // lock screen) can still reach the backend and stop the caller ringing.
+    await NativeCallBridge.setAuthToken(await LocalStorage().getToken());
   }
 
   String? _syncLocalAvatarPath(String? url) => AvatarCache.instance.localPathSync(url);
