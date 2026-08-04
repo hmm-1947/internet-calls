@@ -49,7 +49,7 @@ class CallActionReceiver : BroadcastReceiver() {
             ACTION_DECLINE -> {
                 CallLockscreen.setCallActive(false)
                 IncomingCallActivity.dismiss(app, handled = true)
-                CallkitBridge.sendDecline(app, data)
+                CallkitBridge.sendDecline(app, callId, data)
             }
         }
     }

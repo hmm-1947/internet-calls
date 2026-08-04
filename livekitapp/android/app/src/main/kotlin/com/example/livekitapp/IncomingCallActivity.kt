@@ -379,7 +379,7 @@ class IncomingCallActivity : Activity() {
         cancelNotification(this)
         clearCallkitNotification()
         val data = CallkitBridge.buildCallBundle(callId, callerName, callType, callerPhotoUrl)
-        CallkitBridge.sendDecline(applicationContext, data)
+        CallkitBridge.sendDecline(applicationContext, callId, data)
         CallLockscreen.setCallActive(false)
         finishScreen()
     }
@@ -394,7 +394,7 @@ class IncomingCallActivity : Activity() {
         cancelNotification(this)
         clearCallkitNotification()
         val data = CallkitBridge.buildCallBundle(callId, callerName, callType, callerPhotoUrl)
-        CallkitBridge.sendDecline(applicationContext, data)
+        CallkitBridge.sendDecline(applicationContext, callId, data)
         CallLockscreen.setCallActive(false)
         finishScreen()
     }

@@ -187,6 +187,11 @@ class MainActivity : FlutterActivity() {
                     AvatarLoader.setBaseUrl(applicationContext, call.arguments as? String ?: "")
                     result.success(null)
                 }
+                // Mirrored so CallApi can reject a call without a Flutter engine.
+                "setAuthToken" -> {
+                    CallApi.setAuthToken(applicationContext, call.arguments as? String)
+                    result.success(null)
+                }
                 "showIncomingCall" -> {
                     val callId = call.argument<String>("callId") ?: ""
                     if (callId.isEmpty()) {

@@ -61,6 +61,7 @@ class RingtoneService : Service() {
         CallLockscreen.setCallActive(false)
         CallkitBridge.sendDecline(
             app,
+            callId,
             CallkitBridge.buildCallBundle(callId, callerName, callType, callerPhotoUrl)
         )
         callId = ""
