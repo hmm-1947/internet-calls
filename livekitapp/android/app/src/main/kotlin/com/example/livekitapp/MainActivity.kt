@@ -17,6 +17,7 @@ import android.content.res.Configuration
 import io.flutter.plugin.common.MethodChannel
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.WindowManager
 
 class MainActivity : FlutterActivity() {
@@ -35,8 +36,10 @@ class MainActivity : FlutterActivity() {
     private var lockStateReceiver: BroadcastReceiver? = null
     private val PIP_CHANNEL = "livekitapp/pip"
     private val RINGTONE_CHANNEL = "livekitapp/ringtone"
+    private val PROXIMITY_CHANNEL = "livekitapp/proximity"
 
     private var isInPipMode = false
+    private var proximityWakeLock: PowerManager.WakeLock? = null
 
     override fun provideFlutterEngine(context: Context): FlutterEngine {
         val cache = FlutterEngineCache.getInstance()
@@ -91,6 +94,46 @@ class MainActivity : FlutterActivity() {
 
     private fun applyLockscreenMode() {
         CallLockscreen.apply(this, CallLockscreen.isCallActive())
+    }
+
+    // Uses the same PROXIMITY_SCREEN_OFF_WAKE_LOCK the system Phone app relies
+    // on: the OS turns the display off when the sensor reports "near" and back
+    // on when it reports "far", with no Dart-side sensor polling needed. Only
+    // held while a voice call is actually connected; released the moment the
+    // call ends, the screen is left, or the activity is destroyed, so it can
+    // never linger and keep the screen artificially awake/asleep.
+    private fun isProximityWakeLockSupported(pm: PowerManager): Boolean {
+        return try {
+            pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun acquireProximityWakeLock(): Boolean {
+        if (proximityWakeLock?.isHeld == true) return true
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+        if (!isProximityWakeLockSupported(pm)) return false
+        return try {
+            val lock = proximityWakeLock ?: pm.newWakeLock(
+                PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK,
+                "livekitapp:proximityCallLock"
+            ).also { it.setReferenceCounted(false) }
+            proximityWakeLock = lock
+            lock.acquire()
+            true
+        } catch (e: Exception) {
+            android.util.Log.d("Proximity", "acquireProximityWakeLock threw: $e")
+            false
+        }
+    }
+
+    private fun releaseProximityWakeLock() {
+        try {
+            proximityWakeLock?.let { if (it.isHeld) it.release() }
+        } catch (e: Exception) {
+            android.util.Log.d("Proximity", "releaseProximityWakeLock threw: $e")
+        }
     }
 
     private fun registerLockStateReceiver() {
@@ -324,6 +367,23 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PROXIMITY_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isSupported" -> {
+                    val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    result.success(pm != null && isProximityWakeLockSupported(pm))
+                }
+                "acquire" -> {
+                    result.success(acquireProximityWakeLock())
+                }
+                "release" -> {
+                    releaseProximityWakeLock()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALL_FG_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "start" -> {
@@ -437,6 +497,7 @@ private fun closeIncomingCallScreen() {
             }
         }
         lockStateReceiver = null
+        releaseProximityWakeLock()
         super.onDestroy()
     }
 }

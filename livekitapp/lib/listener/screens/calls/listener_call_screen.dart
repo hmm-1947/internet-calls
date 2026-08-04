@@ -8,6 +8,7 @@ import 'package:livekitapp/common/widgets/call_ui.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
+import 'package:livekitapp/common/services/proximity_service.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -366,6 +367,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
         _status = '';
       });
       ActiveCallManager.instance.updateStatus(_status);
+      _syncProximityWithSpeaker();
       _adoptExistingRemoteVideo(room);
       _startRemoteVideoPoll(room);
       _armDurationFallback(room);
@@ -410,6 +412,16 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
         _localVideoTrack = track is VideoTrack ? track : null;
       });
     }
+    // A camera turned on mid-call needs the screen visible for the preview,
+    // even on a call that started as voice-only. Turning it back off, on
+    // what's otherwise still a voice call, restores the sensor lock.
+    if (!widget.isVideo) {
+      if (_cameraEnabled) {
+        ProximityService.instance.disable();
+      } else {
+        _syncProximityWithSpeaker();
+      }
+    }
   }
 
   Future<void> _toggleSpeaker() async {
@@ -419,6 +431,21 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     VolumeController.instance.showSystemUI = false;
     VolumeController.instance.setVolume(newSpeakerOn ? 1.0 : 0.3);
     if (mounted) setState(() => _speakerOn = newSpeakerOn);
+    _syncProximityWithSpeaker();
+  }
+
+  /// The proximity screen-off only makes sense while the phone is held to the
+  /// ear. On speakerphone the user is holding it away from their face, so the
+  /// sensor lock is paused there and restored once speaker is turned back off
+  /// — otherwise the screen could go dark while the phone is sitting on a
+  /// table facing up, with no way to bring it back except a proximity trip.
+  void _syncProximityWithSpeaker() {
+    if (widget.isVideo || _cameraEnabled || _room == null) return;
+    if (_speakerOn) {
+      ProximityService.instance.disable();
+    } else {
+      ProximityService.instance.enable();
+    }
   }
 
   Future<void> _toggleMic() async {
@@ -457,6 +484,7 @@ _room?.disconnect();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
     _remoteVideoPoll?.cancel();
+    ProximityService.instance.disable();
     await CallForegroundService.instance.stop();
     await _localStorage.clearActiveCall();
     if (widget.callId != null) {
@@ -494,6 +522,7 @@ _fcmSubscription?.cancel();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
     _remoteVideoPoll?.cancel();
+    ProximityService.instance.disable();
     CallForegroundService.instance.stop();
     super.dispose();
   }
