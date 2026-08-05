@@ -22,12 +22,30 @@ def voice_message_coin_cost(db: Session) -> int:
     settings = get_coin_settings(db)
     return settings.voice_message_coins
 
-def max_call_seconds(db: Session, user: User, call_type: str) -> int:
-    per_minute = coins_per_minute(db, call_type)
+# A call that cannot be billed at all (the per-minute rate is 0) has no coin
+# cut-off. The apps end the call when the allowance runs out, so hand them a
+# value no real call will ever reach instead of 0, which would end it at once.
+UNLIMITED_CALL_SECONDS = 24 * 60 * 60
+
+
+def remaining_call_seconds(db: Session, user: User, call: Call, elapsed_seconds: int = 0) -> int:
+    """How much longer this call may run, counting from now.
+
+    The balance on its own is not the answer once a call is live. The first
+    minute is charged the instant the call connects, so a user who could afford
+    exactly one minute is left on zero coins while still having a paid minute
+    ahead of them. The caller's app arms its cut-off timer from this value right
+    after joining the room, so reading the bare balance there ended video calls
+    within seconds of them connecting, without the user getting the minute they
+    had just paid for.
+    """
+    per_minute = coins_per_minute(db, call.call_type)
     if per_minute <= 0:
-        return 0
-    minutes_available = user.coins // per_minute
-    return minutes_available * 60
+        return UNLIMITED_CALL_SECONDS
+    paid_seconds = (call.billed_minutes or 0) * 60
+    remaining_paid = max(0, paid_seconds - max(0, elapsed_seconds))
+    affordable_seconds = (user.coins // per_minute) * 60
+    return remaining_paid + affordable_seconds
 
 async def _credit_listener(db: Session, listener_id: int, amount: int, reason: str, call_id: int | None = None):
     if amount <= 0:

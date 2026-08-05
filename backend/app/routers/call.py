@@ -21,7 +21,7 @@ from app.utils.livekit_egress import start_recording, stop_recording
 from app.utils.livekit_room import delete_room_background
 
 
-from app.utils.coins import max_call_seconds, reconcile_call_billing, bill_call_minute, coins_per_minute
+from app.utils.coins import remaining_call_seconds, reconcile_call_billing, bill_call_minute, coins_per_minute
 from app.routers.weekly_challenge import add_talktime_seconds
 from app.schemas.schemas import CallInitiate
 from app.core.ws_manager import manager
@@ -216,7 +216,7 @@ async def ready_call(call_id: int, db: Session = Depends(get_db), current_listen
         db.commit()
         asyncio.create_task(run_call_billing(call.id))
     user = db.query(User).filter(User.id == call.caller_user_id).first()
-    max_seconds = max_call_seconds(db, user, call.call_type) if user else 0
+    max_seconds = remaining_call_seconds(db, user, call, _elapsed_since_connected(call)) if user else 0
     # The caller was already handed their token at accept time; repeat it here so
     # a socket that reconnected in between still gets it. The client ignores the
     # duplicate.
@@ -423,7 +423,10 @@ def coin_status(call_id: int, db: Session = Depends(get_db), current_user: User 
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    max_seconds = max_call_seconds(db, current_user, call.call_type)
+    # Asked for by the caller right after joining the room, by which point the
+    # first minute has usually already been billed - so this has to include the
+    # time that minute paid for, not just what the remaining balance buys.
+    max_seconds = remaining_call_seconds(db, current_user, call, _elapsed_since_connected(call))
     return {"coins": current_user.coins, "max_seconds": max_seconds}
 
 @router.post("/{call_id}/coin-exceeded")

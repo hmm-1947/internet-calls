@@ -62,6 +62,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
   Timer? _audioLevelTimer;
   bool _foregroundServiceStarted = false;
   Timer? _remoteVideoPoll;
+  Timer? _remoteLeftTimer;
   bool _cameraRequestInFlight = false;
 
   @override
@@ -181,10 +182,12 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
       }
     });
     roomListener.on<ParticipantConnectedEvent>((event) {
+      _remoteLeftTimer?.cancel();
       _adoptExistingRemoteVideo(room);
+      _armDurationFallback(room);
     });
     roomListener.on<ParticipantDisconnectedEvent>((event) {
-      _hangUp();
+      _onRemoteParticipantLeft(room);
     });
     roomListener.on<RoomDisconnectedEvent>((event) {
       _hangUp();
@@ -219,6 +222,21 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
       }
     });
     return roomListener;
+  }
+
+  /// The caller also disappears for a moment when their app has to rejoin the
+  /// room outright - a network handover, or Android freezing a backgrounded
+  /// app. LiveKit reports that as a disconnect immediately followed by a
+  /// reconnect, and tearing the call down on the first blip is why calls were
+  /// dropping seconds after they started. A genuine hang-up is pushed by the
+  /// backend as well, so nothing is lost by waiting this out.
+  void _onRemoteParticipantLeft(Room room) {
+    _remoteLeftTimer?.cancel();
+    _remoteLeftTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted || _isEnding) return;
+      if (room.remoteParticipants.isNotEmpty) return;
+      _hangUp();
+    });
   }
 
   /// Picks up a remote video track that was already published before we bound
@@ -313,27 +331,93 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     });
   }
 
-  Future<void> _connect() async {
+  /// Permissions plus the camera device, which together take a second or two.
+  /// Nothing about it depends on the signalling handshake, so it runs alongside
+  /// the connect rather than after it. Every failure is non-fatal: the call
+  /// carries on as audio and [_retryCamera] gets another go.
+  Future<LocalVideoTrack?> _prepareLocalMedia() async {
+    // One combined request: permission_handler rejects a second request while
+    // another is still in flight.
+    final wanted = <Permission>[
+      Permission.microphone,
+      if (widget.isVideo && !LockscreenService.instance.locked)
+        Permission.camera,
+    ];
     try {
-      await LockscreenService.instance.showOverLockscreen();
+      await wanted.request();
+    } catch (e) {
+      print('Permission request failed: $e');
+    }
+    if (!widget.isVideo || _isEnding || !mounted) return null;
+    try {
+      if (!await Permission.camera.status.isGranted) return null;
+      return await LocalVideoTrack.createCameraTrack();
+    } catch (e) {
+      print('Camera prepare failed: $e');
+      return null;
+    }
+  }
+
+  /// Publishes the microphone and, if it made it in time, the camera prepared
+  /// alongside the connect. Runs off the connect path so neither one delays the
+  /// call being shown as connected.
+  Future<void> _publishLocalMedia(
+    Room room,
+    Future<LocalVideoTrack?> cameraFuture,
+  ) async {
+    try {
+      await room.localParticipant?.setMicrophoneEnabled(true);
+    } catch (e) {
+      print('Microphone enable failed: $e');
+    }
+    final track = await cameraFuture;
+    if (track == null) {
+      if (widget.isVideo) unawaited(_retryCamera());
+      return;
+    }
+    if (_isEnding || !mounted) {
+      await track.dispose();
+      return;
+    }
+    try {
+      await room.localParticipant?.publishVideoTrack(track);
+      _cameraEnabled = true;
+      if (mounted) setState(() => _localVideoTrack = track);
+    } catch (e) {
+      print('Camera publish failed: $e');
+      await track.dispose();
+      unawaited(_retryCamera());
+    }
+  }
+
+  Future<void> _applyAudioRoute(Room room) async {
+    try {
+      await room.setSpeakerOn(_speakerOn);
+      VolumeController.instance.showSystemUI = false;
+      VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
+    } catch (e) {
+      print('Audio route failed: $e');
+    }
+  }
+
+  Future<void> _connect() async {
+    Room? room;
+    EventsListener<RoomEvent>? roomListener;
+    Future<LocalVideoTrack?>? cameraFuture;
+    try {
+      unawaited(LockscreenService.instance.showOverLockscreen());
 
       if (_isEnding || !mounted) return;
 
-      try {
-        await Permission.microphone.request();
-      } catch (e) {
-        print('Microphone permission request failed: $e');
-      }
-      final room = Room();
-
-      if (_isEnding || !mounted) return;
+      cameraFuture = _prepareLocalMedia();
+      room = Room();
 
       // Bind the room events BEFORE connecting. The caller is already in the
       // room and publishing by the time we get here, so its TrackSubscribed
       // event fires within a few hundred ms of the connect — a listener created
       // further down (after the mic publish, the foreground service and the
       // camera) never sees it, which is why the caller's video stayed blank.
-      final roomListener = _bindRoomEvents(room);
+      roomListener = _bindRoomEvents(room);
 
       await room.connect(widget.url, widget.token);
       // Tell the backend as soon as we are in the room. This releases the
@@ -341,55 +425,43 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
       // publish, the foreground service and the camera setup below — that
       // serialisation was several seconds of dead air on the caller's side.
       _signalReady();
-      _adoptExistingRemoteVideo(room);
-      if (_isEnding || !mounted) {
-        roomListener.dispose();
-        room.disconnect();
-        return;
-      }
-
-      try {
-        await room.localParticipant?.setMicrophoneEnabled(true);
-      } catch (e) {
-        print('Microphone enable failed: $e');
-      }
 
       if (_isEnding || !mounted) {
         roomListener.dispose();
-        room.disconnect();
+        unawaited(room.disconnect());
         return;
       }
 
-      await room.setSpeakerOn(_speakerOn);
-      VolumeController.instance.showSystemUI = false;
-      VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
-      if (widget.callId != null) {
-        await CallkitService.instance.setCallConnected(
-          widget.callId.toString(),
-        );
-      }
-
-      if (_isEnding || !mounted) {
-        roomListener.dispose();
-        room.disconnect();
-        return;
-      }
-
+      // Connected as soon as the room is joined. Everything below is
+      // independent of the media path, and awaiting the audio route, CallKit
+      // and the camera here used to keep both video feeds off screen for
+      // several seconds.
       setState(() {
         _room = room;
         _roomListener = roomListener;
         _status = '';
       });
       ActiveCallManager.instance.updateStatus(_status);
-      _syncProximityWithSpeaker();
       _adoptExistingRemoteVideo(room);
       _startRemoteVideoPoll(room);
       _armDurationFallback(room);
+      _syncProximityWithSpeaker();
 
+      unawaited(_publishLocalMedia(room, cameraFuture));
+      unawaited(_applyAudioRoute(room));
       unawaited(_startForegroundService());
-      if (widget.isVideo) unawaited(_retryCamera());
+      if (widget.callId != null) {
+        unawaited(
+          CallkitService.instance.setCallConnected(widget.callId.toString()),
+        );
+      }
     } catch (e) {
       print('Connection error: $e');
+      roomListener?.dispose();
+      unawaited(room?.disconnect());
+      unawaited(
+        cameraFuture?.then((track) => track?.dispose()) ?? Future.value(),
+      );
       if (mounted && !_isEnding) {
         // Tell the backend: the caller may already be waiting in the room now
         // that their token is released at accept time, and only a real end
@@ -506,6 +578,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
     _remoteVideoPoll?.cancel();
+    _remoteLeftTimer?.cancel();
     ProximityService.instance.disable();
     await CallForegroundService.instance.stop();
     await _localStorage.clearActiveCall();
@@ -544,6 +617,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
     _remoteVideoPoll?.cancel();
+    _remoteLeftTimer?.cancel();
     _remoteAudioLevel.dispose();
     _callDurationSeconds.dispose();
     ProximityService.instance.disable();
