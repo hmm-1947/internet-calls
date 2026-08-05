@@ -65,6 +65,8 @@ class _CallScreenState extends State<CallScreen> {
   bool _micEnabled = true;
   bool _speakerOn = false;
   final ValueNotifier<double> _remoteAudioLevel = ValueNotifier<double>(0);
+  bool _remoteJoined = false;
+  bool get _fullyConnected => _phase == _CallPhase.connected && _remoteJoined;
   Timer? _audioLevelTimer;
   ConnectionQuality _connectionQuality = ConnectionQuality.unknown;
   VideoTrack? _localVideoTrack;
@@ -520,6 +522,7 @@ class _CallScreenState extends State<CallScreen> {
         _phase = _CallPhase.connected;
         _cameraEnabled = widget.startWithVideo && cameraTrack != null;
         _localVideoTrack = cameraTrack;
+        _remoteJoined = room?.remoteParticipants.isNotEmpty ?? false;
       });
       _publishStatus();
       _adoptExistingRemoteVideo(room);
@@ -650,6 +653,7 @@ class _CallScreenState extends State<CallScreen> {
     roomListener.on<ParticipantConnectedEvent>((event) {
       _remoteLeftTimer?.cancel();
       _remoteJoinTimer?.cancel();
+      if (mounted && !_remoteJoined) setState(() => _remoteJoined = true);
       _adoptExistingRemoteVideo(room);
       _armDurationFallback(room);
     });
@@ -1034,7 +1038,7 @@ class _CallScreenState extends State<CallScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          if (_phase == _CallPhase.connected)
+          if (_fullyConnected)
             _durationText(
               const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
             )
@@ -1050,7 +1054,7 @@ class _CallScreenState extends State<CallScreen> {
             videoTrack: _remoteVideoTrack,
             photoUrl: widget.otherPartyPhotoUrl,
           ),
-          if (_phase != _CallPhase.connected)
+          if (!_fullyConnected)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
               child: Text(
@@ -1113,7 +1117,7 @@ class _CallScreenState extends State<CallScreen> {
       case _CallPhase.connecting:
         return 'Connecting...';
       case _CallPhase.connected:
-        return _connectionQualityText();
+        return _remoteJoined ? _connectionQualityText() : 'Connecting...';
     }
   }
 
@@ -1180,7 +1184,7 @@ class _CallScreenState extends State<CallScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      if (_phase == _CallPhase.connected)
+                      if (_fullyConnected)
                         _durationText(
                           const TextStyle(
                             color: Color(0xFFE5BDBE),

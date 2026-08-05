@@ -183,6 +183,10 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     });
     roomListener.on<ParticipantConnectedEvent>((event) {
       _remoteLeftTimer?.cancel();
+      if (mounted && _status.isNotEmpty) {
+        setState(() => _status = '');
+        ActiveCallManager.instance.updateStatus(_status);
+      }
       _adoptExistingRemoteVideo(room);
       _armDurationFallback(room);
     });
@@ -439,7 +443,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
       setState(() {
         _room = room;
         _roomListener = roomListener;
-        _status = '';
+        if (room?.remoteParticipants.isNotEmpty ?? false) _status = '';
       });
       ActiveCallManager.instance.updateStatus(_status);
       _adoptExistingRemoteVideo(room);

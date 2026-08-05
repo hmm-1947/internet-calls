@@ -75,7 +75,10 @@ class _EditableField extends StatelessWidget {
         hintStyle: const TextStyle(color: Colors.white38),
         prefixIcon: Icon(icon, color: Colors.white38, size: 18),
         prefixIconConstraints: const BoxConstraints(minWidth: 46),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _kFieldBorder),
@@ -188,9 +191,7 @@ class _EditFieldButton extends StatelessWidget {
           height: 48,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: editing && enabled
-                ? _kBrandRed
-                : const Color(0xFF141B26),
+            color: editing && enabled ? _kBrandRed : const Color(0xFF141B26),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: _kFieldBorder),
           ),
@@ -265,8 +266,6 @@ class _FieldHint extends StatelessWidget {
     );
   }
 }
-
-
 
 class UserPersonalInfoScreen extends StatefulWidget {
   const UserPersonalInfoScreen({super.key});
@@ -581,7 +580,8 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
 
     // Validated here so the user gets the message next to the field instead of
     // a round trip; the backend enforces the same rules again.
-    final error = (nameChanged ? displayNameError(displayName) : null) ??
+    final error =
+        (nameChanged ? displayNameError(displayName) : null) ??
         (usernameChanged ? usernameFormatError(username) : null) ??
         (usernameChanged && _usernameAvailable == false
             ? (_usernameMessage ?? 'This username is already taken')
@@ -711,15 +711,17 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B0B),
       appBar: AppBar(
+        foregroundColor: Colors.white,
         backgroundColor: const Color(0xFF0B0B0B),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+
         title: const Text(
           'Personal Information',
-          style: TextStyle(color: _kBrandRed, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
       ),
       body: _loading
@@ -741,7 +743,10 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                           onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
                           child: Stack(
                             children: [
-                              HeroProfileImage(photoUrl: _photoUrl, height: 320),
+                              HeroProfileImage(
+                                photoUrl: _photoUrl,
+                                height: 320,
+                              ),
                               if (_uploadingPhoto)
                                 Positioned.fill(
                                   child: ClipRRect(

@@ -87,14 +87,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     const pink = Color(0xFFE53950);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Change Password',style: TextStyle(color: pink, fontWeight: FontWeight.bold),),
+        title: const Text(
+          'Change Password',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
         backgroundColor: Colors.black,
-        foregroundColor: Colors.red,
+        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: SafeArea(
@@ -144,8 +150,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      onPressed:
-                          (_loading || !isPasswordValid(_newPassword))
+                      onPressed: (_loading || !isPasswordValid(_newPassword))
                           ? null
                           : _submit,
                       child: _loading

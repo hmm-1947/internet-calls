@@ -322,6 +322,8 @@ class _UserAppState extends State<UserApp> {
           theme: ThemeData(
             colorSchemeSeed: Colors.blue,
             useMaterial3: true,
+
+            brightness: Brightness.dark,
             scaffoldBackgroundColor: const Color(0xFF0B0B0B),
             appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),
           ),

@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 Route<T> fadeRoute<T>(Widget page, {Color? barrierColor}) {
@@ -9,4 +12,12 @@ Route<T> fadeRoute<T>(Widget page, {Color? barrierColor}) {
     opaque: true,
     barrierColor: barrierColor,
   );
+}
+
+Route<T> slideRoute<T>(Widget page) {
+  if (Platform.isIOS) {
+    return CupertinoPageRoute(builder: (_) => page);
+  }
+
+  return MaterialPageRoute(builder: (_) => page);
 }

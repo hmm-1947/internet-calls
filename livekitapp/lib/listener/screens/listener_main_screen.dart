@@ -9,7 +9,6 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
-import 'package:livekitapp/common/widgets/faded_indexed_stack.dart';
 import 'package:livekitapp/common/widgets/listener_home_header.dart';
 
 class ListenerMainScreen extends StatefulWidget {
@@ -25,6 +24,9 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   final _weeklyChallengeRepository = WeeklyChallengeRepository();
   final _localStorage = LocalStorage();
   bool _weeklyChallengeActive = false;
+  late final PageController _pageController = PageController(
+    initialPage: _index,
+  );
 
   late final List<Widget> _screens = [
     ListenerHomeScreen(onRefresh: _refreshWeeklyChallengeStatus),
@@ -37,6 +39,12 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   void initState() {
     super.initState();
     _refreshWeeklyChallengeStatus();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _refreshWeeklyChallengeStatus() async {
@@ -53,7 +61,16 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
     }
   }
 
-  void _onDestinationSelected(int i) {
+  void _onTabSelected(int i) {
+    if (i == _index) return;
+    _pageController.animateToPage(
+      i,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _onPageChanged(int i) {
     setState(() => _index = i);
     if (i == 1) {
       chatMessageNotifier.value = 0;
@@ -90,7 +107,16 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
           Expanded(
             child: Stack(
               children: [
-                FadedIndexedStack(index: _index, children: _screens),
+                PageView(
+                  controller: _pageController,
+                  physics: const ClampingScrollPhysics(),
+                  onPageChanged: _onPageChanged,
+                  children: [
+                    for (final screen in _screens)
+                      RepaintBoundary(child: screen),
+                  ],
+                ),
+
                 if (_index == 0 && _weeklyChallengeActive)
                   Positioned(
                     right: 16,
@@ -112,7 +138,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
 
       bottomNavigationBar: CrownNavBar(
         selectedIndex: _index,
-        onDestinationSelected: _onDestinationSelected,
+        onDestinationSelected: _onTabSelected,
         onCrownTap: () {},
         showCrown: false,
         labels: const ['Home', 'Chat', 'Calls', 'Settings'],

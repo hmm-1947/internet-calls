@@ -172,7 +172,7 @@ class UserProfileScreen extends StatefulWidget {
 class UserProfileScreenState extends State<UserProfileScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
-int _coins = 0;
+  int _coins = 0;
   String _name = '';
   String _phone = '';
   String? _photoUrl;
@@ -189,7 +189,8 @@ int _coins = 0;
     super.initState();
     refresh();
   }
-Future<void> refresh() async {
+
+  Future<void> refresh() async {
     final isFirstLoad = _name.isEmpty;
     if (isFirstLoad) setState(() => _loading = true);
     try {
@@ -200,9 +201,14 @@ Future<void> refresh() async {
       final newPhone = data['phone'] ?? '';
       final newPhotoUrl = data['photo_url'];
       final newVideoCallEnabled = data['video_call_enabled'] ?? true;
-      final newVideoCallDisabledByAdmin = data['video_call_disabled_by_admin'] ?? false;
-      if (_coins != newCoins || _name != newName || _phone != newPhone || _photoUrl != newPhotoUrl ||
-          _videoCallEnabled != newVideoCallEnabled || _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin) {
+      final newVideoCallDisabledByAdmin =
+          data['video_call_disabled_by_admin'] ?? false;
+      if (_coins != newCoins ||
+          _name != newName ||
+          _phone != newPhone ||
+          _photoUrl != newPhotoUrl ||
+          _videoCallEnabled != newVideoCallEnabled ||
+          _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin) {
         setState(() {
           _coins = newCoins;
           _name = newName;
@@ -248,7 +254,9 @@ Future<void> refresh() async {
       if (token != null) {
         await _repository.logout(token);
       } else {
-        debugPrint('Logout: no token found in local storage, skipping API call');
+        debugPrint(
+          'Logout: no token found in local storage, skipping API call',
+        );
       }
     } catch (e) {
       debugPrint('Logout: API call failed: $e');
@@ -294,10 +302,7 @@ Future<void> refresh() async {
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text(
               'Delete Account',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -329,10 +334,6 @@ Future<void> refresh() async {
     } finally {
       if (mounted) setState(() => _requestingDeletion = false);
     }
-  }
-
-  void _openWallet() {
-    Navigator.of(context).push(fadeRoute(WalletCoinsScreen(coins: _coins)));
   }
 
   void _showEnrollNotice(String title, String message) {
@@ -418,7 +419,12 @@ Future<void> refresh() async {
               )
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.paddingOf(context).bottom + 90),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  32 + MediaQuery.paddingOf(context).bottom + 90,
+                ),
                 children: [
                   Center(
                     child: Container(
@@ -432,7 +438,11 @@ Future<void> refresh() async {
                           width: 2,
                         ),
                       ),
-                 child: AvatarImage(photoUrl: _photoUrl, radius: 44, iconSize: 44),
+                      child: AvatarImage(
+                        photoUrl: _photoUrl,
+                        radius: 44,
+                        iconSize: 44,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -456,28 +466,23 @@ Future<void> refresh() async {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  _MenuTile(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'Wallet & Coins',
-                    onTap: _openWallet,
-                  ),
                   const SizedBox(height: 12),
-                  _MenuTile(
-                    icon: Icons.headset_mic_outlined,
-                    title: 'Enroll as a listener',
-                    onTap: _openEnrollAsListener,
-                    busy: _openingEnrollChat,
-                  ),
+
                   _SectionLabel('ACCOUNT'),
                   _SettingsCard([
+                    _MenuTile(
+                      icon: Icons.headset_mic_outlined,
+                      title: 'Enroll as a listener',
+                      onTap: _openEnrollAsListener,
+                      busy: _openingEnrollChat,
+                    ),
                     _SettingsTile(
                       icon: Icons.person_outline,
                       title: 'Edit Profile',
                       onTap: () {
                         Navigator.of(
                           context,
-                        ).push(fadeRoute(const UserPersonalInfoScreen()));
+                        ).push(slideRoute(const UserPersonalInfoScreen()));
                       },
                     ),
                     const Divider(height: 1, color: Colors.white12),
@@ -504,7 +509,6 @@ Future<void> refresh() async {
                   ]),
                   _SectionLabel('PREFERENCES'),
                   _SettingsCard([
-          
                     const Divider(height: 1, color: Colors.white12),
                     _SettingsTile(
                       icon: Icons.videocam_outlined,
@@ -512,11 +516,15 @@ Future<void> refresh() async {
                           ? 'Video Calls (disabled by admin)'
                           : 'Video Calls',
                       trailing: Switch(
-                        value: _videoCallDisabledByAdmin ? false : _videoCallEnabled,
+                        value: _videoCallDisabledByAdmin
+                            ? false
+                            : _videoCallEnabled,
                         activeColor: const Color(0xFFE53950),
                         onChanged: _videoCallDisabledByAdmin
                             ? null
-                            : (_savingVideoCallSetting ? null : _toggleVideoCall),
+                            : (_savingVideoCallSetting
+                                  ? null
+                                  : _toggleVideoCall),
                       ),
                     ),
                     const Divider(height: 1, color: Colors.white12),
@@ -540,7 +548,9 @@ Future<void> refresh() async {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const LegalDocumentScreen(documentType: 'terms'),
+                            builder: (_) => const LegalDocumentScreen(
+                              documentType: 'terms',
+                            ),
                           ),
                         );
                       },
@@ -552,12 +562,13 @@ Future<void> refresh() async {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const LegalDocumentScreen(documentType: 'privacy'),
+                            builder: (_) => const LegalDocumentScreen(
+                              documentType: 'privacy',
+                            ),
                           ),
                         );
                       },
                     ),
-
                   ]),
                   const SizedBox(height: 16),
                   _SettingsCard([
@@ -600,46 +611,6 @@ Future<void> refresh() async {
                   ]),
                 ],
               ),
-      ),
-    );
-  }
-}
-
-class WalletCoinsScreen extends StatelessWidget {
-  final int coins;
-
-  const WalletCoinsScreen({super.key, required this.coins});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: _AppColors.bg,
-        elevation: 0,
-        title: const Text('Wallet & Coins'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.monetization_on, color: Colors.amber, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              '$coins',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Coins',
-              style: TextStyle(color: _AppColors.textMuted, fontSize: 14),
-            ),
-          ],
-        ),
       ),
     );
   }

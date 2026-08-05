@@ -16,7 +16,7 @@ import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
-import 'package:livekitapp/user/screens/user_profile_screen.dart';
+import 'package:livekitapp/user/screens/user_settings_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
@@ -553,13 +553,12 @@ class UserHomeScreenState extends State<UserHomeScreen>
 
   void _openChat(Map<String, dynamic> listener) {
     Navigator.of(context).push(
-      fadeRoute(
+      slideRoute(
         ChatHistoryScreen(
           listenerId: listener['id'],
           listenerName: listener['name'],
           listenerPhotoUrl: listener['photo_url'],
         ),
-        barrierColor: _AppColors.bg,
       ),
     );
   }
@@ -567,7 +566,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
   void _openListenerProfile(Map<String, dynamic> listener) {
     Navigator.of(
       context,
-    ).push(fadeRoute(ListenerProfileViewScreen(listenerId: listener['id'])));
+    ).push(slideRoute(ListenerProfileViewScreen(listenerId: listener['id'])));
   }
 
   @override

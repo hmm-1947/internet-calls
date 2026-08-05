@@ -237,7 +237,7 @@ Future<void> refresh() async {
               onTap: () {
                 Navigator.of(
                   context,
-                ).push(fadeRoute(const ListenerWalletScreen()));
+                ).push(slideRoute(const ListenerWalletScreen()));
               },
             ),
             const Divider(height: 1, color: Colors.white12),
@@ -247,7 +247,7 @@ Future<void> refresh() async {
               onTap: () {
                 Navigator.of(
                   context,
-                ).push(fadeRoute(const ListenerProfileScreen()));
+                ).push(slideRoute(const ListenerProfileScreen()));
               },
             ),
 
@@ -257,7 +257,7 @@ Future<void> refresh() async {
               title: 'Change Password',
               onTap: () {
                 Navigator.of(context).push(
-                  fadeRoute(
+                  slideRoute(
                     ChangePasswordScreen(
                       onSubmit: (current, next) async {
                         final token = await _localStorage.getToken();
@@ -279,7 +279,7 @@ Future<void> refresh() async {
              onTap: () {
                   Navigator.of(
                     context,
-                  ).push(fadeRoute(const ListenerReviewsScreen()));
+                  ).push(slideRoute(const ListenerReviewsScreen()));
                 },
             ),
           ]),

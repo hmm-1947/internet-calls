@@ -48,26 +48,27 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFF0B0B0B);
-    const pink = Color(0xFFE53950);
     const dimText = Colors.white54;
 
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: bg,
+        foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
           'Reviews & Ratings',
-          style: TextStyle(color: pink, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: const IconThemeData(color: pink),
-               leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE53950)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE53950)),
+            )
           : _reviews.isEmpty
           ? const Center(
               child: Text('No reviews yet', style: TextStyle(color: dimText)),

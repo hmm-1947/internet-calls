@@ -421,6 +421,7 @@ class _ListenerAppState extends State<ListenerApp> {
           ),
           theme: ThemeData(
             colorSchemeSeed: Colors.deepPurple,
+            brightness: Brightness.dark,
             useMaterial3: true,
             scaffoldBackgroundColor: const Color(0xFF0B0F1A),
             appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),

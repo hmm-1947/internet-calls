@@ -309,13 +309,12 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
   Future<void> _openThread(Map<String, dynamic> thread) async {
     await Navigator.of(context).push(
-      fadeRoute(
+      slideRoute(
         ChatHistoryScreen(
           listenerId: thread['listener_id'],
           listenerName: '${thread['listener_name'] ?? ''}',
           listenerPhotoUrl: thread['photo_url'],
         ),
-        barrierColor: _bg,
       ),
     );
     _refreshSilently();

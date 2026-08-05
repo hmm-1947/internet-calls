@@ -598,18 +598,11 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: _bg,
+        foregroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 0,
         leadingWidth: 40,
-        leading: IconButton(
-          style: iconButtonStyle,
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+
         // Tapping the avatar/name opens the user's profile, the same gesture
         // every other chat app uses for "who am I talking to?".
         title: GestureDetector(

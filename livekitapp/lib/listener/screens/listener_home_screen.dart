@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
+import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
@@ -251,8 +252,8 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
     final id = user['id'];
     if (id is! int) return;
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => UserProfileViewScreen(
+      slideRoute(
+        UserProfileViewScreen(
           userId: id,
           initialName: user['name'] as String?,
           initialPhotoUrl: user['photo_url'] as String?,

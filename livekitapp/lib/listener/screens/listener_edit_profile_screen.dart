@@ -75,7 +75,7 @@ class ListenerProfileScreen extends StatefulWidget {
 class ListenerProfileScreenState extends State<ListenerProfileScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
-String _name = '';
+  String _name = '';
   String? _photoUrl;
   bool _uploadingPhoto = false;
   String _about = '';
@@ -124,7 +124,7 @@ String _name = '';
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!);
-final newSnapshot = {
+      final newSnapshot = {
         'name': data['name'] ?? '',
         'photo_url': data['photo_url'],
         'about': data['about'] ?? '',
@@ -138,7 +138,7 @@ final newSnapshot = {
         'is_online': data['is_online'] ?? false,
         'created_at': data['created_at'],
       };
-final oldSnapshot = {
+      final oldSnapshot = {
         'name': _name,
         'photo_url': _photoUrl,
         'about': _about,
@@ -154,7 +154,7 @@ final oldSnapshot = {
       };
       if (dataChanged(oldSnapshot, newSnapshot)) {
         setState(() {
-  _name = newSnapshot['name'] as String;
+          _name = newSnapshot['name'] as String;
           _photoUrl = newSnapshot['photo_url'] as String?;
           _about = newSnapshot['about'] as String;
           _tags = newSnapshot['tags'] as List<String>;
@@ -168,7 +168,6 @@ final oldSnapshot = {
           _createdAt = newSnapshot['created_at'] as String?;
           _loading = false;
         });
-
       } else if (_loading) {
         setState(() => _loading = false);
       }
@@ -185,7 +184,8 @@ final oldSnapshot = {
     _editLanguages = List.from(_languages);
     setState(() => _editing = true);
   }
-Future<void> _pickAndUploadPhoto() async {
+
+  Future<void> _pickAndUploadPhoto() async {
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
       imageQuality: 80,
@@ -208,6 +208,7 @@ Future<void> _pickAndUploadPhoto() async {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
   }
+
   void _cancelEditing() {
     setState(() => _editing = false);
   }
@@ -301,17 +302,16 @@ Future<void> _pickAndUploadPhoto() async {
       appBar: AppBar(
         backgroundColor: _AppColors.bg,
         elevation: 0,
+        foregroundColor: Colors.white,
         title: const Text(
           'Profile',
           style: TextStyle(
-            color: Color.fromARGB(255, 255, 90, 90),
+            color: Colors.white,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+
         actions: [
           if (!_loading)
             _editing
@@ -372,10 +372,15 @@ Future<void> _pickAndUploadPhoto() async {
                           minHeight: 320,
                           maxHeight: 320,
                           child: GestureDetector(
-                            onTap: _editing && !_uploadingPhoto ? _pickAndUploadPhoto : null,
+                            onTap: _editing && !_uploadingPhoto
+                                ? _pickAndUploadPhoto
+                                : null,
                             child: Stack(
                               children: [
-                                HeroProfileImage(photoUrl: _photoUrl, height: 320),
+                                HeroProfileImage(
+                                  photoUrl: _photoUrl,
+                                  height: 320,
+                                ),
                                 if (_uploadingPhoto)
                                   Positioned.fill(
                                     child: ClipRRect(
@@ -385,7 +390,8 @@ Future<void> _pickAndUploadPhoto() async {
                                       child: Container(
                                         color: Colors.black45,
                                         alignment: Alignment.center,
-                                        child: const CircularProgressIndicator(),
+                                        child:
+                                            const CircularProgressIndicator(),
                                       ),
                                     ),
                                   ),
@@ -432,7 +438,11 @@ Future<void> _pickAndUploadPhoto() async {
                                         color: _AppColors.brandRed,
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                                      child: const Icon(
+                                        Icons.camera_alt,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
                                     ),
                                   ),
                               ],
@@ -458,7 +468,9 @@ Future<void> _pickAndUploadPhoto() async {
                     child: Text(
                       _isOnline ? 'ONLINE NOW' : 'OFFLINE',
                       style: TextStyle(
-                        color: _isOnline ? _AppColors.online : _AppColors.textMuted,
+                        color: _isOnline
+                            ? _AppColors.online
+                            : _AppColors.textMuted,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1,
@@ -478,7 +490,11 @@ Future<void> _pickAndUploadPhoto() async {
                           ),
                           child: Column(
                             children: [
-                              const Icon(Icons.star, color: Colors.amber, size: 20),
+                              const Icon(
+                                Icons.star,
+                                color: Colors.amber,
+                                size: 20,
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 _avgRating != null
@@ -514,7 +530,11 @@ Future<void> _pickAndUploadPhoto() async {
                           ),
                           child: Column(
                             children: [
-                              const Icon(Icons.call, color: _AppColors.brandRed, size: 20),
+                              const Icon(
+                                Icons.call,
+                                color: _AppColors.brandRed,
+                                size: 20,
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 '$_totalCalls',
@@ -551,7 +571,9 @@ Future<void> _pickAndUploadPhoto() async {
                                 style: const TextStyle(color: Colors.white),
                                 decoration: InputDecoration(
                                   hintText: 'Age',
-                                  hintStyle: const TextStyle(color: Colors.white38),
+                                  hintStyle: const TextStyle(
+                                    color: Colors.white38,
+                                  ),
                                   filled: true,
                                   fillColor: _AppColors.cardBg,
                                   border: OutlineInputBorder(
@@ -573,7 +595,9 @@ Future<void> _pickAndUploadPhoto() async {
                                 style: const TextStyle(color: Colors.white),
                                 decoration: InputDecoration(
                                   hintText: 'Occupation',
-                                  hintStyle: const TextStyle(color: Colors.white38),
+                                  hintStyle: const TextStyle(
+                                    color: Colors.white38,
+                                  ),
                                   filled: true,
                                   fillColor: _AppColors.cardBg,
                                   border: OutlineInputBorder(

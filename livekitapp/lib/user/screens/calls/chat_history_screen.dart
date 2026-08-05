@@ -763,19 +763,12 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       backgroundColor: _bg,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
+        foregroundColor: Colors.white,
         backgroundColor: _bg,
         elevation: 0,
         titleSpacing: 0,
         leadingWidth: 40,
-        leading: IconButton(
-          style: iconButtonStyle,
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+
         title: GestureDetector(
           onTap: _openProfile,
           behavior: HitTestBehavior.opaque,

@@ -108,15 +108,14 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
+        foregroundColor: Colors.white,
         backgroundColor: const Color(0xFF0D0D0D),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+
         title: const Text(
           'Wallet',
           style: TextStyle(
-            color: Color.fromARGB(255, 255, 90, 90),
+            color: Colors.white,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),

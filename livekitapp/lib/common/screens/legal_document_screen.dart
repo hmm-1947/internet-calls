@@ -48,13 +48,22 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
   @override
   Widget build(BuildContext context) {
     const pink = Color(0xFFE53950);
-    final title = widget.documentType == 'privacy' ? 'Privacy Policy' : 'Terms of Service';
+    final title = widget.documentType == 'privacy'
+        ? 'Privacy Policy'
+        : 'Terms of Service';
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(title, style: const TextStyle(color: pink, fontWeight: FontWeight.bold)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.black,
-        foregroundColor: Colors.red,
+        foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -66,20 +75,20 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: pink))
             : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Text(
-                        _error!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: SimpleHtmlView(html: _content),
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70),
                   ),
+                ),
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: SimpleHtmlView(html: _content),
+              ),
       ),
     );
   }
