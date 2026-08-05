@@ -81,6 +81,10 @@ class _CallScreenState extends State<CallScreen> {
   int? _maxSeconds;
   Timer? _durationTimer;
   final ValueNotifier<int> _callDurationSeconds = ValueNotifier<int>(0);
+  Timer? _remoteLeftTimer;
+  LocalVideoTrack? _pendingVideoTrack;
+  bool _cameraWarmupInFlight = false;
+  bool _cameraRequestInFlight = false;
 
   @override
   void initState() {
@@ -101,7 +105,92 @@ class _CallScreenState extends State<CallScreen> {
     _startRingingTimeout();
     _startStatusPolling();
     _startRingingTone();
-    _requestMicAndStartCall();
+    // Marked in flight here, synchronously, so an acceptance that lands before
+    // the warm-up has even started still knows to wait for it.
+    _cameraWarmupInFlight = widget.startWithVideo;
+    unawaited(_startOutgoingCallAndWarmUp());
+  }
+
+  /// The outgoing CallKit entry asks for the microphone, so the camera can only
+  /// be asked for once that is done: permission_handler rejects a request while
+  /// another one is still in flight.
+  Future<void> _startOutgoingCallAndWarmUp() async {
+    try {
+      await _requestMicAndStartCall();
+    } catch (e) {
+      debugPrint('Outgoing call setup failed: $e');
+    }
+    await _warmUpLocalMedia();
+  }
+
+  /// Opens the camera while the phone is still ringing.
+  ///
+  /// Acquiring the permission and the capture device costs a couple of seconds
+  /// on most handsets, and it used to run *after* the listener answered, behind
+  /// the room connect, the mic publish and the foreground service. Doing it up
+  /// front means the track only has to be handed to LiveKit once the call is
+  /// accepted, which is what the other side is waiting for.
+  ///
+  /// Every failure here is non-fatal: the call still connects as audio and
+  /// [_retryCamera] gets another go once we are in the room.
+  Future<void> _warmUpLocalMedia() async {
+    if (!widget.startWithVideo) {
+      _cameraWarmupInFlight = false;
+      return;
+    }
+    _cameraWarmupInFlight = true;
+    try {
+      final camera = await Permission.camera.request();
+      if (!camera.isGranted || _isEnding || !mounted) return;
+      final track = await LocalVideoTrack.createCameraTrack();
+      if (_isEnding || !mounted) {
+        await track.dispose();
+        return;
+      }
+      _pendingVideoTrack = track;
+      // The preview can already be shown while the call is still ringing.
+      setState(() => _localVideoTrack = track);
+    } catch (e) {
+      debugPrint('Camera warm-up failed: $e');
+    } finally {
+      _cameraWarmupInFlight = false;
+      // The listener can answer while the permission dialog is still up or the
+      // camera is still opening. Joining the room never waits for this, so the
+      // track is published here instead when it lands late.
+      final room = _room;
+      if (room != null) unawaited(_publishWarmedCamera(room));
+    }
+  }
+
+  /// Hands a camera opened during the ringing phase to a room that is already
+  /// connected. A failure here only costs the video, never the call.
+  Future<void> _publishWarmedCamera(Room room) async {
+    final track = _pendingVideoTrack;
+    _pendingVideoTrack = null;
+    if (track == null || _isEnding || !mounted) return;
+    try {
+      await room.localParticipant?.publishVideoTrack(track);
+      if (!mounted) return;
+      setState(() {
+        _cameraEnabled = true;
+        _localVideoTrack = track;
+      });
+    } catch (e) {
+      debugPrint('Camera publish failed: $e');
+      await track.dispose();
+      unawaited(_retryCamera());
+    }
+  }
+
+  /// Stops a warmed-up camera that never made it into a room, so the capture
+  /// device is not left running after a call that was declined or missed.
+  Future<void> _disposeUnpublishedCamera() async {
+    final track = _pendingVideoTrack;
+    _pendingVideoTrack = null;
+    if (track == null) return;
+    try {
+      await track.dispose();
+    } catch (_) {}
   }
 
   /// Second fallback, behind the websocket and the push: while ringing, ask the
@@ -389,99 +478,143 @@ class _CallScreenState extends State<CallScreen> {
     if (!mounted || _isEnding) return;
     setState(() => _phase = _CallPhase.connecting);
     _publishStatus();
+    Room? room;
+    EventsListener<RoomEvent>? roomListener;
+    LocalVideoTrack? cameraTrack;
     try {
-      await Permission.microphone.request();
-      final room = Room();
-
-      if (_isEnding || !mounted) return;
-
+      room = Room();
       // Bound before connecting so no track event can slip through the gap
       // between the handshake completing and the handlers being attached.
-      final roomListener = _bindRoomEvents(room);
+      roomListener = _bindRoomEvents(room);
 
-      await room.connect(url, token);
+      // The camera opened while ringing rides along with the connect handshake,
+      // so it is live for the listener as soon as we are in the room instead of
+      // costing a separate capture and negotiation afterwards. Still opening is
+      // fine: joining never waits for it, and the warm-up publishes it itself.
+      cameraTrack = _pendingVideoTrack;
+      _pendingVideoTrack = null;
+      await room.connect(
+        url,
+        token,
+        fastConnectOptions: FastConnectOptions(
+          microphone: TrackOption(enabled: _micEnabled),
+          camera: cameraTrack != null
+              ? TrackOption(track: cameraTrack)
+              : const TrackOption(enabled: false),
+        ),
+      );
 
       if (_isEnding || !mounted) {
         roomListener.dispose();
-        room.disconnect();
+        unawaited(room.disconnect());
         return;
       }
 
+      // Connected as soon as the room is joined. Everything below is
+      // independent of the media path, and awaiting any of it here (the
+      // foreground service, CallKit, the audio route) used to hold both video
+      // feeds back by several seconds.
+      setState(() {
+        _room = room;
+        _roomListener = roomListener;
+        _phase = _CallPhase.connected;
+        _cameraEnabled = widget.startWithVideo && cameraTrack != null;
+        _localVideoTrack = cameraTrack;
+      });
+      _publishStatus();
       _adoptExistingRemoteVideo(room);
 
-      // Recording is server side and nothing here depends on it, so it must not
-      // sit between joining the room and showing the call as connected.
       unawaited(_startRecording());
-
-      await room.localParticipant?.setMicrophoneEnabled(_micEnabled);
-      await CallForegroundService.instance.start(
-        title: 'Call with ${widget.otherPartyName}',
-        video: widget.startWithVideo,
+      unawaited(
+        CallForegroundService.instance.start(
+          title: 'Call with ${widget.otherPartyName}',
+          video: widget.startWithVideo,
+        ),
       );
+      unawaited(
+        UserCallkitService.instance.setCallConnected(widget.callId.toString()),
+      );
+      unawaited(_applyAudioRoute(room));
       _startCoinTimer();
-      if (room.remoteParticipants.isNotEmpty) {
-        _armDurationFallback(room);
-      } else {
-        roomListener.on<ParticipantConnectedEvent>((event) {
-          _remoteJoinTimer?.cancel();
-          _armDurationFallback(room);
-        });
-        // The caller can now be in the room before the listener finishes
-        // joining. If the listener never makes it, nothing else would take the
-        // caller off a silent call, so bail out instead of hanging there.
-        _remoteJoinTimer = Timer(const Duration(seconds: 25), () {
-          if (!mounted || _isEnding) return;
-          if (_room?.remoteParticipants.isNotEmpty ?? false) return;
-          _showMessage('Could not connect to the listener.');
-          _hangUp();
-        });
-      }
+      _watchForRemoteJoin(room);
 
-      VideoTrack? localVideoTrack;
       if (widget.startWithVideo) {
-        await Permission.camera.request();
-        await room.localParticipant?.setCameraEnabled(true);
-        final track =
-            room.localParticipant?.videoTrackPublications.firstOrNull?.track;
-        if (track is VideoTrack) localVideoTrack = track;
-      }
-
-      if (_isEnding || !mounted) {
-        roomListener.dispose();
-        room.disconnect();
-        return;
-      }
-      if (mounted) {
-        await room.setSpeakerOn(_speakerOn);
-        VolumeController.instance.showSystemUI = false;
-        VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
-        await UserCallkitService.instance.setCallConnected(
-          widget.callId.toString(),
-        );
-        setState(() {
-          _room = room;
-          _roomListener = roomListener;
-          _phase = _CallPhase.connected;
-          _localVideoTrack = localVideoTrack;
-        });
-        _publishStatus();
-        _adoptExistingRemoteVideo(room);
-        if (widget.startWithVideo) {
-          PipService.instance.setCallActive(true);
-        } else {
-          _syncProximityWithSpeaker();
+        PipService.instance.setCallActive(true);
+        // Permission denied or the camera was busy while ringing: try once more
+        // now that we are in the room, still without blocking the call.
+        if (cameraTrack == null && !_cameraWarmupInFlight) {
+          unawaited(_retryCamera());
         }
       } else {
-        roomListener.dispose();
-        room.disconnect();
+        _syncProximityWithSpeaker();
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _phase = _CallPhase.ringing);
-        _publishStatus();
-        _showMessage('Connection error: $e');
-      }
+      roomListener?.dispose();
+      unawaited(room?.disconnect());
+      _pendingVideoTrack ??= cameraTrack;
+      await _disposeUnpublishedCamera();
+      if (!mounted || _isEnding) return;
+      // The listener is already sitting in the room, so leaving the caller on a
+      // "Calling..." screen would strand them both. End it properly instead.
+      _showMessage('Connection error: $e');
+      unawaited(_hangUp());
     }
+  }
+
+  Future<void> _applyAudioRoute(Room room) async {
+    try {
+      await room.setSpeakerOn(_speakerOn);
+      VolumeController.instance.showSystemUI = false;
+      VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
+    } catch (e) {
+      debugPrint('Audio route failed: $e');
+    }
+  }
+
+  /// Turns the camera on from inside the room. Only used when the warm-up could
+  /// not get it before the call connected.
+  Future<void> _retryCamera() async {
+    final room = _room;
+    if (room == null || _cameraRequestInFlight || _cameraEnabled) return;
+    // A warm-up that landed just as the room came up already holds the camera;
+    // opening a second one would fail or fight it for the device.
+    if (_pendingVideoTrack != null) {
+      await _publishWarmedCamera(room);
+      return;
+    }
+    _cameraRequestInFlight = true;
+    try {
+      final camera = await Permission.camera.request();
+      if (!camera.isGranted || !mounted || _isEnding) return;
+      await room.localParticipant?.setCameraEnabled(true);
+      final track =
+          room.localParticipant?.videoTrackPublications.firstOrNull?.track;
+      if (!mounted || _isEnding) return;
+      setState(() {
+        _cameraEnabled = true;
+        _localVideoTrack = track is VideoTrack ? track : null;
+      });
+    } catch (e) {
+      debugPrint('Camera enable failed: $e');
+    } finally {
+      _cameraRequestInFlight = false;
+    }
+  }
+
+  /// The caller can be in the room before the listener finishes joining. If the
+  /// listener never makes it, nothing else would take the caller off a silent
+  /// call, so bail out instead of hanging there.
+  void _watchForRemoteJoin(Room room) {
+    if (room.remoteParticipants.isNotEmpty) {
+      _armDurationFallback(room);
+      return;
+    }
+    _remoteJoinTimer = Timer(const Duration(seconds: 25), () {
+      if (!mounted || _isEnding) return;
+      if (_room?.remoteParticipants.isNotEmpty ?? false) return;
+      _showMessage('Could not connect to the listener.');
+      _hangUp();
+    });
   }
 
   void _setRemoteAudioLevel(double level) {
@@ -514,8 +647,14 @@ class _CallScreenState extends State<CallScreen> {
         setState(() => _connectionQuality = event.connectionQuality);
       }
     });
+    roomListener.on<ParticipantConnectedEvent>((event) {
+      _remoteLeftTimer?.cancel();
+      _remoteJoinTimer?.cancel();
+      _adoptExistingRemoteVideo(room);
+      _armDurationFallback(room);
+    });
     roomListener.on<ParticipantDisconnectedEvent>((event) {
-      _hangUp();
+      _onRemoteParticipantLeft(room);
     });
     roomListener.on<RoomDisconnectedEvent>((event) {
       _hangUp();
@@ -550,6 +689,21 @@ class _CallScreenState extends State<CallScreen> {
       }
     });
     return roomListener;
+  }
+
+  /// A participant also disappears for a moment when their app has to rejoin
+  /// the room outright - a network handover, or Android freezing a backgrounded
+  /// app. LiveKit reports that as a disconnect immediately followed by a
+  /// reconnect, and tearing the call down on the first blip is why calls were
+  /// dropping seconds after they started. A genuine hang-up is pushed by the
+  /// backend as well, so nothing is lost by waiting this out.
+  void _onRemoteParticipantLeft(Room room) {
+    _remoteLeftTimer?.cancel();
+    _remoteLeftTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted || _isEnding) return;
+      if (room.remoteParticipants.isNotEmpty) return;
+      _hangUp();
+    });
   }
 
   /// Picks up a remote video track that was already published before we bound
@@ -759,6 +913,8 @@ class _CallScreenState extends State<CallScreen> {
     _ringingTimer?.cancel();
     _statusPollTimer?.cancel();
     _remoteJoinTimer?.cancel();
+    _remoteLeftTimer?.cancel();
+    unawaited(_disposeUnpublishedCamera());
     _busyTimer?.cancel();
     _coinTimer?.cancel();
     _fcmSubscription?.cancel();
@@ -814,7 +970,13 @@ class _CallScreenState extends State<CallScreen> {
       body: compact
           ? _buildPipVideoUi()
           : Center(
-              child: widget.startWithVideo && _phase == _CallPhase.connected
+              // The warmed-up camera is shown as a self-preview while the call
+              // is still ringing, so the video layout is already up when the
+              // listener answers instead of swapping in a beat later.
+              child:
+                  widget.startWithVideo &&
+                      (_phase == _CallPhase.connected ||
+                          _localVideoTrack != null)
                   ? _buildConnectedVideo()
                   : _buildAudioCallUi(),
             ),
@@ -1018,9 +1180,21 @@ class _CallScreenState extends State<CallScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      _durationText(
-                        const TextStyle(color: Color(0xFFE5BDBE), fontSize: 15),
-                      ),
+                      if (_phase == _CallPhase.connected)
+                        _durationText(
+                          const TextStyle(
+                            color: Color(0xFFE5BDBE),
+                            fontSize: 15,
+                          ),
+                        )
+                      else
+                        Text(
+                          _statusText(),
+                          style: const TextStyle(
+                            color: Color(0xFFE5BDBE),
+                            fontSize: 15,
+                          ),
+                        ),
                     ],
                   ),
                 ),
