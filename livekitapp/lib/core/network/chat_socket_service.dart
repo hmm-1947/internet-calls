@@ -77,8 +77,15 @@ class ChatSocketService {
     _channel!.stream.listen(
       (data) {
         _failedAttempts = 0;
-        final decoded = jsonDecode(data);
-        _controller?.add(decoded);
+        if (data is! String) return;
+        Object? decoded;
+        try {
+          decoded = jsonDecode(data);
+        } catch (_) {
+          return;
+        }
+        if (decoded is! Map) return;
+        _controller?.add(Map<String, dynamic>.from(decoded));
       },
       onDone: () {
         final code = _channel?.closeCode;
@@ -155,7 +162,8 @@ class ChatSocketService {
     final role = _role;
     if (token == null || role == null) return;
     final now = DateTime.now();
-    final shouldCheckSession = _lastSessionCheck == null ||
+    final shouldCheckSession =
+        _lastSessionCheck == null ||
         now.difference(_lastSessionCheck!).inSeconds >=
             _sessionCheckThrottleSeconds;
     if (shouldCheckSession) {

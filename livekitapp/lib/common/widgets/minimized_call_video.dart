@@ -29,7 +29,13 @@ class _MinimizedCallVideoState extends State<MinimizedCallVideo> {
 
   /// Null until first laid out or dragged, so the window sits in its default
   /// corner without needing the viewport size up front.
-  Offset? _offset;
+  final ValueNotifier<Offset?> _offset = ValueNotifier<Offset?>(null);
+
+  @override
+  void dispose() {
+    _offset.dispose();
+    super.dispose();
+  }
 
   Offset _clamp(Offset offset, Size bounds) {
     const minX = _margin;
@@ -57,55 +63,68 @@ class _MinimizedCallVideoState extends State<MinimizedCallVideo> {
                 bounds.height < widget.topInset + _height + _margin * 2) {
               return const SizedBox.shrink();
             }
-            final position = _clamp(
-              _offset ??
-                  Offset(
-                    bounds.width - _width - _margin,
-                    widget.topInset + _margin,
-                  ),
-              bounds,
-            );
-            return Stack(
-              children: [
-                Positioned(
-                  left: position.dx,
-                  top: position.dy,
-                  width: _width,
-                  height: _height,
-                  child: GestureDetector(
-                    onTap: ActiveCallManager.instance.expand,
-                    onPanUpdate: (details) => setState(
-                      () => _offset = _clamp(position + details.delta, bounds),
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white24),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black54, blurRadius: 8),
-                        ],
+            final window = RepaintBoundary(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white24),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black54, blurRadius: 8),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      VideoTrackRenderer(track, fit: VideoViewFit.cover),
+                      const Positioned(
+                        right: 2,
+                        top: 2,
+                        child: Icon(
+                          Icons.fullscreen,
+                          size: 16,
+                          color: Colors.white70,
+                        ),
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          VideoTrackRenderer(track, fit: VideoViewFit.cover),
-                          const Positioned(
-                            right: 2,
-                            top: 2,
-                            child: Icon(
-                              Icons.fullscreen,
-                              size: 16,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
+              ),
+            );
+
+            return ValueListenableBuilder<Offset?>(
+              valueListenable: _offset,
+              child: window,
+              builder: (context, offset, child) {
+                final position = _clamp(
+                  offset ??
+                      Offset(
+                        bounds.width - _width - _margin,
+                        widget.topInset + _margin,
+                      ),
+                  bounds,
+                );
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: position.dx,
+                      top: position.dy,
+                      width: _width,
+                      height: _height,
+                      child: GestureDetector(
+                        onTap: ActiveCallManager.instance.expand,
+                        onPanUpdate: (details) => _offset.value = _clamp(
+                          position + details.delta,
+                          bounds,
+                        ),
+                        child: child,
+                      ),
+                    ),
+                  ],
+                );
+              },
             );
           },
         );

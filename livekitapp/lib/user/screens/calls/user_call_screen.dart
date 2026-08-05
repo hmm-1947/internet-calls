@@ -56,13 +56,15 @@ class _CallScreenState extends State<CallScreen> {
   // Tracks the current phase shown to the user
   _CallPhase _phase = _CallPhase.ringing;
   StreamSubscription? _fcmSubscription;
+  StreamSubscription? _fcmOpenedSubscription;
   StreamSubscription? _socketSubscription;
   Timer? _remoteJoinTimer;
+  Timer? _busyTimer;
   bool _isEnding = false;
   late bool _cameraEnabled;
   bool _micEnabled = true;
   bool _speakerOn = false;
-  double _remoteAudioLevel = 0;
+  final ValueNotifier<double> _remoteAudioLevel = ValueNotifier<double>(0);
   Timer? _audioLevelTimer;
   ConnectionQuality _connectionQuality = ConnectionQuality.unknown;
   VideoTrack? _localVideoTrack;
@@ -78,7 +80,7 @@ class _CallScreenState extends State<CallScreen> {
   final _coinRepository = CoinRepository();
   int? _maxSeconds;
   Timer? _durationTimer;
-  int _callDurationSeconds = 0;
+  final ValueNotifier<int> _callDurationSeconds = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -172,7 +174,8 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _runBusyFlow() async {
     _busyPlayer = AudioPlayer();
-    Timer(const Duration(seconds: 5), () async {
+    _busyTimer = Timer(const Duration(seconds: 5), () async {
+      if (!mounted) return;
       try {
         await _busyPlayer?.setAsset('assets/audio/busy_tone.mp3');
         for (var i = 0; i < 3; i++) {
@@ -191,9 +194,11 @@ class _CallScreenState extends State<CallScreen> {
     // wins; `_onCallAccepted` ignores the rest.
     _socketSubscription = ChatSocketService().stream.listen(_handleSocketEvent);
     _fcmSubscription = FirebaseMessaging.onMessage.listen(_handleMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
+    _fcmOpenedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      _handleMessage,
+    );
     FirebaseMessaging.instance.getInitialMessage().then((message) {
-      if (message != null) _handleMessage(message);
+      if (message != null && mounted) _handleMessage(message);
     });
   }
 
@@ -252,14 +257,22 @@ class _CallScreenState extends State<CallScreen> {
 
   void _startDurationTimer({int seedSeconds = 0}) {
     if (_durationTimer != null || _isEnding) return;
-    _callDurationSeconds = seedSeconds;
-    if (mounted) setState(() {});
-    ActiveCallManager.instance.updateDuration(_callDurationSeconds);
+    _callDurationSeconds.value = seedSeconds;
+    ActiveCallManager.instance.updateDuration(seedSeconds);
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() => _callDurationSeconds++);
-      ActiveCallManager.instance.updateDuration(_callDurationSeconds);
+      final next = _callDurationSeconds.value + 1;
+      _callDurationSeconds.value = next;
+      ActiveCallManager.instance.updateDuration(next);
     });
+  }
+
+  Widget _durationText(TextStyle style) {
+    return ValueListenableBuilder<int>(
+      valueListenable: _callDurationSeconds,
+      builder: (context, seconds, _) =>
+          Text(_formatDuration(seconds), style: style),
+    );
   }
 
   void _publishStatus() {
@@ -471,19 +484,31 @@ class _CallScreenState extends State<CallScreen> {
     }
   }
 
+  void _setRemoteAudioLevel(double level) {
+    if (!mounted || _isEnding) return;
+    final clamped = level.clamp(0.0, 1.0);
+    if ((clamped - _remoteAudioLevel.value).abs() < 0.01) return;
+    _remoteAudioLevel.value = clamped;
+  }
+
+  void _startAudioLevelPolling(Room room) {
+    if (widget.startWithVideo) return;
+    _audioLevelTimer?.cancel();
+    _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted || _isEnding) return;
+      if (room.remoteParticipants.isEmpty) return;
+      _setRemoteAudioLevel(room.remoteParticipants.values.first.audioLevel);
+    });
+  }
+
   EventsListener<RoomEvent> _bindRoomEvents(Room room) {
     final roomListener = room.createListener();
     roomListener.on<SpeakingChangedEvent>((event) {
-      if (event.participant is RemoteParticipant && mounted) {
-        setState(() => _remoteAudioLevel = event.participant.audioLevel);
+      if (event.participant is RemoteParticipant) {
+        _setRemoteAudioLevel(event.participant.audioLevel);
       }
     });
-    _audioLevelTimer?.cancel();
-    _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (!mounted || room.remoteParticipants.isEmpty) return;
-      final level = room.remoteParticipants.values.first.audioLevel;
-      setState(() => _remoteAudioLevel = level);
-    });
+    _startAudioLevelPolling(room);
     roomListener.on<ParticipantConnectionQualityUpdatedEvent>((event) {
       if (event.participant is LocalParticipant && mounted) {
         setState(() => _connectionQuality = event.connectionQuality);
@@ -718,7 +743,7 @@ class _CallScreenState extends State<CallScreen> {
 
   Route _summaryRoute() {
     return PageRouteBuilder(
-      pageBuilder: (_, __, ___) => CallSummaryScreen(callId: widget.callId),
+      pageBuilder: (_, _, _) => CallSummaryScreen(callId: widget.callId),
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
       opaque: true,
@@ -734,13 +759,17 @@ class _CallScreenState extends State<CallScreen> {
     _ringingTimer?.cancel();
     _statusPollTimer?.cancel();
     _remoteJoinTimer?.cancel();
+    _busyTimer?.cancel();
     _coinTimer?.cancel();
     _fcmSubscription?.cancel();
+    _fcmOpenedSubscription?.cancel();
     _socketSubscription?.cancel();
     _roomListener?.dispose();
     _audioLevelTimer?.cancel();
     _room?.disconnect();
     _durationTimer?.cancel();
+    _remoteAudioLevel.dispose();
+    _callDurationSeconds.dispose();
     _busyPlayer?.dispose();
     _ringingPlayer?.dispose();
     _missedPlayer?.dispose();
@@ -843,12 +872,15 @@ class _CallScreenState extends State<CallScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            _phase == _CallPhase.connected
-                ? _formatDuration(_callDurationSeconds)
-                : _statusText(),
-            style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
-          ),
+          if (_phase == _CallPhase.connected)
+            _durationText(
+              const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+            )
+          else
+            Text(
+              _statusText(),
+              style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+            ),
           const Spacer(),
           PulsingAvatarRing(
             audioLevel: _remoteAudioLevel,
@@ -986,12 +1018,8 @@ class _CallScreenState extends State<CallScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _formatDuration(_callDurationSeconds),
-                        style: const TextStyle(
-                          color: Color(0xFFE5BDBE),
-                          fontSize: 15,
-                        ),
+                      _durationText(
+                        const TextStyle(color: Color(0xFFE5BDBE), fontSize: 15),
                       ),
                     ],
                   ),

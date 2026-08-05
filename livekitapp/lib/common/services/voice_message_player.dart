@@ -189,10 +189,17 @@ class VoiceMessagePlayer {
   }
 
   void _attachPlayerListeners() {
-    _player.positionStream.listen((position) {
-      if (activeTrack.value == null) return;
-      status.value = status.value.copyWith(position: position);
-    });
+    _player
+        .createPositionStream(
+          steps: 200,
+          minPeriod: const Duration(milliseconds: 100),
+          maxPeriod: const Duration(milliseconds: 200),
+        )
+        .listen((position) {
+          if (activeTrack.value == null) return;
+          if (status.value.position == position) return;
+          status.value = status.value.copyWith(position: position);
+        });
     _player.durationStream.listen((duration) {
       if (activeTrack.value == null) return;
       if (duration == null || duration <= Duration.zero) return;

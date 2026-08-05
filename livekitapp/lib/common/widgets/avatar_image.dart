@@ -2,6 +2,42 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
+class _FileExistsCache {
+  static const _missTtlMs = 5000;
+  static const _maxEntries = 512;
+
+  static final Set<String> _hits = <String>{};
+  static final Map<String, int> _misses = <String, int>{};
+
+  static bool exists(String path) {
+    if (_hits.contains(path)) return true;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final checkedAt = _misses[path];
+    if (checkedAt != null && now - checkedAt < _missTtlMs) return false;
+
+    bool found;
+    try {
+      found = File(path).existsSync();
+    } catch (_) {
+      found = false;
+    }
+    if (found) {
+      _misses.remove(path);
+      if (_hits.length >= _maxEntries) _hits.clear();
+      _hits.add(path);
+    } else {
+      if (_misses.length >= _maxEntries) _misses.clear();
+      _misses[path] = now;
+    }
+    return found;
+  }
+
+  static void evict(String path) {
+    _hits.remove(path);
+    _misses[path] = DateTime.now().millisecondsSinceEpoch;
+  }
+}
+
 class AvatarImage extends StatelessWidget {
   final String? photoUrl;
   final double radius;
@@ -34,18 +70,26 @@ class AvatarImage extends StatelessWidget {
     child: Icon(fallbackIcon, color: Colors.white54, size: iconSize),
   );
 
+  ImageProvider _sized(ImageProvider provider, BuildContext context) {
+    final pixels = (radius * 2 * MediaQuery.devicePixelRatioOf(context))
+        .round()
+        .clamp(1, 2048);
+    return ResizeImage(provider, width: pixels, allowUpscaling: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final path = photoUrl;
     if (path != null && path.isNotEmpty && !path.startsWith('http')) {
-      final file = File(
-        path.startsWith('file://') ? Uri.parse(path).toFilePath() : path,
-      );
-      if (file.existsSync()) {
+      final filePath = path.startsWith('file://')
+          ? Uri.parse(path).toFilePath()
+          : path;
+      if (_FileExistsCache.exists(filePath)) {
         return CircleAvatar(
           radius: radius,
           backgroundColor: backgroundColor,
-          backgroundImage: FileImage(file),
+          backgroundImage: _sized(FileImage(File(filePath)), context),
+          onBackgroundImageError: (_, _) => _FileExistsCache.evict(filePath),
         );
       }
       // A cached file the OS has since evicted. Falling through would prefix
@@ -59,7 +103,8 @@ class AvatarImage extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: backgroundColor,
-      backgroundImage: NetworkImage(resolved),
+      backgroundImage: _sized(NetworkImage(resolved), context),
+      onBackgroundImageError: (_, _) {},
     );
   }
 }

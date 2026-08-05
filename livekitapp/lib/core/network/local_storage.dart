@@ -7,7 +7,13 @@ class LocalStorage {
   static const _idKey = 'user_id';
   static const _nameKey = 'user_name';
 
+  static String? _token;
+  static bool _tokenLoaded = false;
+  static Future<String?>? _tokenRead;
+
   Future<void> saveSession(String token, int id, String name) async {
+    _token = token;
+    _tokenLoaded = true;
     await _storage.write(key: _tokenKey, value: token);
     await _storage.write(key: _idKey, value: id.toString());
     await _storage.write(key: _nameKey, value: name);
@@ -16,7 +22,19 @@ class LocalStorage {
   }
 
   Future<String?> getToken() async {
-    return await _storage.read(key: _tokenKey);
+    if (_tokenLoaded) return _token;
+    final pending = _tokenRead;
+    if (pending != null) return pending;
+    final read = _storage.read(key: _tokenKey);
+    _tokenRead = read;
+    try {
+      final value = await read;
+      _token = value;
+      _tokenLoaded = true;
+      return value;
+    } finally {
+      _tokenRead = null;
+    }
   }
 
   Future<int?> getId() async {
@@ -29,6 +47,8 @@ class LocalStorage {
   }
 
   Future<void> clear() async {
+    _token = null;
+    _tokenLoaded = true;
     await _storage.deleteAll();
     await NativeCallBridge.setAuthToken(null);
   }
@@ -56,7 +76,7 @@ class LocalStorage {
     await _storage.write(key: _activeCallPhotoKey, value: callerPhotoUrl ?? '');
   }
 
-Future<Map<String, dynamic>?> getActiveCall() async {
+  Future<Map<String, dynamic>?> getActiveCall() async {
     final idStr = await _storage.read(key: _activeCallIdKey);
     final url = await _storage.read(key: _activeCallUrlKey);
     final token = await _storage.read(key: _activeCallTokenKey);
@@ -72,7 +92,10 @@ Future<Map<String, dynamic>?> getActiveCall() async {
           'token': token,
           'isVideo': videoStr == 'true',
           'callerName': callerName ?? 'User',
-          'callerPhotoUrl': (callerPhotoUrl != null && callerPhotoUrl.isNotEmpty) ? callerPhotoUrl : null,
+          'callerPhotoUrl':
+              (callerPhotoUrl != null && callerPhotoUrl.isNotEmpty)
+              ? callerPhotoUrl
+              : null,
         };
       }
     }
@@ -97,4 +120,3 @@ Future<Map<String, dynamic>?> getActiveCall() async {
     return value == 'true';
   }
 }
-

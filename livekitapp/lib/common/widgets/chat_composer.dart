@@ -55,8 +55,8 @@ class _ChatComposerState extends State<ChatComposer> {
   bool _hasText = false;
   bool _isRecording = false;
   bool _isLocked = false;
-  Duration _recordElapsed = Duration.zero;
-  double _recordAmplitude = 0;
+  final _recordElapsed = ValueNotifier<Duration>(Duration.zero);
+  final _recordAmplitude = ValueNotifier<double>(0);
 
   @override
   void initState() {
@@ -70,6 +70,8 @@ class _ChatComposerState extends State<ChatComposer> {
     ActiveCallManager.instance.current.removeListener(_onActiveCallChanged);
     _controller.removeListener(_onChanged);
     _controller.dispose();
+    _recordElapsed.dispose();
+    _recordAmplitude.dispose();
     super.dispose();
   }
 
@@ -118,11 +120,10 @@ class _ChatComposerState extends State<ChatComposer> {
     Duration elapsed,
     double amplitude,
   ) {
-    setState(() {
-      _isRecording = recording;
-      _recordElapsed = elapsed;
-      _recordAmplitude = amplitude;
-    });
+    _recordElapsed.value = elapsed;
+    _recordAmplitude.value = amplitude;
+    if (recording == _isRecording) return;
+    setState(() => _isRecording = recording);
   }
 
   @override
@@ -133,7 +134,7 @@ class _ChatComposerState extends State<ChatComposer> {
         8,
         8,
         8,
-        8 + MediaQuery.of(context).padding.bottom,
+        8 + MediaQuery.paddingOf(context).bottom,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

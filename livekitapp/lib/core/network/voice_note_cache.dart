@@ -203,6 +203,7 @@ class VoiceNoteCache {
       }
       final total = response.contentLength ?? 0;
       var received = 0;
+      var lastReported = -1;
       _reportProgress(name, total > 0 ? 0 : null);
       sink = partial.openWrite();
       // The per-chunk timeout is the important one: it turns a connection that
@@ -210,10 +211,11 @@ class VoiceNoteCache {
       await for (final chunk in response.stream.timeout(_stallTimeout)) {
         sink.add(chunk);
         received += chunk.length;
-        _reportProgress(
-          name,
-          total > 0 ? (received / total).clamp(0.0, 1.0) : null,
-        );
+        if (total <= 0) continue;
+        final percent = ((received / total) * 100).clamp(0, 100).toInt();
+        if (percent == lastReported) continue;
+        lastReported = percent;
+        _reportProgress(name, percent / 100);
       }
       await sink.flush();
       await sink.close();

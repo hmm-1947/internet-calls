@@ -177,6 +177,8 @@ Future<void> flushPendingChatTarget({int attempt = 0}) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
+  PaintingBinding.instance.imageCache.maximumSize = 200;
 
   await dotenv.load(fileName: ".env");
   FlavorConfig.set(AppFlavor.user);
@@ -235,6 +237,8 @@ class _UserAppState extends State<UserApp> {
   StreamSubscription? _chatSub;
   StreamSubscription? _sessionSub;
   bool _loggingOut = false;
+
+  late final Future<String?> _initialToken = LocalStorage().getToken();
 
   @override
   void initState() {
@@ -322,7 +326,7 @@ class _UserAppState extends State<UserApp> {
             appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),
           ),
           home: FutureBuilder<String?>(
-            future: LocalStorage().getToken(),
+            future: _initialToken,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const SplashScreen();

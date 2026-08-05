@@ -341,7 +341,7 @@ class UserRegisterResendOtp(BaseModel):
 
 class UserRegisterVerifyPhone(BaseModel):
     identifier: str
-    firebase_id_token: str
+    otp_code: str
 
 class UserRegisterComplete(BaseModel):
     """Step 3: the profile details, exchanged for a real account."""
@@ -367,7 +367,7 @@ class UserLoginInitiate(BaseModel):
 class UserLoginVerify(BaseModel):
     phone: str
     password: str
-    firebase_id_token: str
+    otp_code: str
 
 class UserBioUpdate(BaseModel):
     bio: str
@@ -412,10 +412,7 @@ class UserContactChangeRequest(BaseModel):
 
 class UserContactChangeVerify(BaseModel):
     identifier: str
-    # Email changes are proved with the mailed code, phone changes with a
-    # Firebase token, so exactly one of these is filled in.
     otp_code: Optional[str] = None
-    firebase_id_token: Optional[str] = None
 
 class UserVideoCallSettingUpdate(BaseModel):
     enabled: bool
@@ -431,10 +428,7 @@ class UserForgotPasswordVerifyOtp(BaseModel):
 
 class UserForgotPasswordReset(BaseModel):
     identifier: str
-    # Email accounts prove ownership with the mailed code, phone accounts with
-    # a Firebase token, so exactly one of these is filled in.
     otp_code: Optional[str] = None
-    firebase_id_token: Optional[str] = None
     new_password: str
 
     @field_validator("new_password")

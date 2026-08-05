@@ -464,6 +464,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                     child: Image.network(
                       url,
                       fit: BoxFit.contain,
+                      cacheWidth: (260 * MediaQuery.devicePixelRatioOf(context))
+                          .round(),
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.workspace_premium,
                         color: _AppColors.gold,

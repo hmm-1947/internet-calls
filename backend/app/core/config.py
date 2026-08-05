@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     recaptcha_site_key: str = ""
     recaptcha_secret_key: str = ""
 
+    renflair_api_key: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"

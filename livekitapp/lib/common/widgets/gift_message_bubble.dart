@@ -24,6 +24,8 @@ Widget _giftMessageImage(String? icon, {double size = 40}) {
         width: size,
         height: size,
         fit: BoxFit.cover,
+        cacheWidth: (size * 3).round(),
+        cacheHeight: (size * 3).round(),
         errorBuilder: (_, __, ___) => Icon(
           giftMessageIconFor(icon),
           color: const Color(0xFFE53950),
@@ -32,7 +34,11 @@ Widget _giftMessageImage(String? icon, {double size = 40}) {
       ),
     );
   }
-  return Icon(giftMessageIconFor(icon), color: const Color(0xFFE53950), size: size);
+  return Icon(
+    giftMessageIconFor(icon),
+    color: const Color(0xFFE53950),
+    size: size,
+  );
 }
 
 /// Renders a gift as a chat bubble, used both in a normal chat thread and
@@ -84,7 +90,11 @@ class GiftMessageBubble extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.monetization_on, color: Colors.amber, size: 14),
+                const Icon(
+                  Icons.monetization_on,
+                  color: Colors.amber,
+                  size: 14,
+                ),
                 const SizedBox(width: 3),
                 Text(
                   '$coins coins',

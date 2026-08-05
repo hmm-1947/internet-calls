@@ -352,7 +352,7 @@ Future<void> _pickAndUploadPhoto() async {
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
                   SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.7,
+                    height: MediaQuery.sizeOf(context).height * 0.7,
                     child: const Center(child: CircularProgressIndicator()),
                   ),
                 ],

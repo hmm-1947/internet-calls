@@ -17,33 +17,15 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
   final _localStorage = LocalStorage();
   bool _loading = true;
   int _coins = 0;
-  int _audioCoins = 0;
-  int _audioMinutes = 0;
-  int _videoCoins = 0;
-  int _videoMinutes = 0;
-  int _chatCoins = 0;
 
-int _giftCoins = 0;
   Map<String, dynamic> _day = {};
   Map<String, dynamic> _night = {};
-  double _percentOf(int coins) {
-    final total = _audioCoins + _videoCoins + _chatCoins + _giftCoins;
-    if (total <= 0) return 0;
-    return (coins / total) * 100;
-  }
-
   @override
   void initState() {
     super.initState();
     final cached = ListenerDataCache().cachedWallet;
     if (cached != null) {
       _coins = cached['coins'] ?? 0;
-      _audioCoins = cached['audio_call_coins'] ?? 0;
-      _audioMinutes = cached['audio_call_minutes'] ?? 0;
-      _videoCoins = cached['video_call_coins'] ?? 0;
-      _videoMinutes = cached['video_call_minutes'] ?? 0;
-      _chatCoins = cached['chat_coins'] ?? 0;
-      _giftCoins = cached['gift_coins'] ?? 0;
       _day = cached['day'] ?? {};
       _night = cached['night'] ?? {};
       _loading = false;
@@ -54,15 +36,11 @@ int _giftCoins = 0;
   Future<void> _load() async {
     try {
       final token = await _localStorage.getToken();
-      final data = await _repository.getWallet(token!);
+      if (token == null) return;
+      final data = await _repository.getWallet(token);
+      if (!mounted) return;
       setState(() {
         _coins = data['coins'] ?? 0;
-        _audioCoins = data['audio_call_coins'] ?? 0;
-        _audioMinutes = data['audio_call_minutes'] ?? 0;
-        _videoCoins = data['video_call_coins'] ?? 0;
-        _videoMinutes = data['video_call_minutes'] ?? 0;
-        _chatCoins = data['chat_coins'] ?? 0;
-        _giftCoins = data['gift_coins'] ?? 0;
         _day = data['day'] ?? {};
         _night = data['night'] ?? {};
         _loading = false;
@@ -71,7 +49,8 @@ int _giftCoins = 0;
       if (mounted) setState(() => _loading = false);
     }
   }
-Widget _buildTimeSection(String title, Map<String, dynamic> data) {
+
+  Widget _buildTimeSection(String title, Map<String, dynamic> data) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -107,12 +86,23 @@ Widget _buildTimeSection(String title, Map<String, dynamic> data) {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -213,7 +203,7 @@ Widget _buildTimeSection(String title, Map<String, dynamic> data) {
                     ],
                   ),
                 ),
-            const SizedBox(height: 24),
+                const SizedBox(height: 24),
                 _buildTimeSection('DAY TIME', _day),
                 const SizedBox(height: 16),
                 _buildTimeSection('NIGHT TIME', _night),

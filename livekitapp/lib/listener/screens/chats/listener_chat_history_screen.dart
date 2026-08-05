@@ -67,6 +67,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
   String? _token;
   StreamSubscription? _socketSub;
   Timer? _typingSendTimer;
+  DateTime? _lastTypingSentAt;
   bool _hasMoreOlder = true;
   bool _loadingOlder = false;
 
@@ -410,9 +411,15 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
   }
 
   void _emitTyping() {
-    ChatSocketService().sendTyping(userId: widget.userId, isTyping: true);
+    final now = DateTime.now();
+    final last = _lastTypingSentAt;
+    if (last == null || now.difference(last) >= const Duration(seconds: 1)) {
+      _lastTypingSentAt = now;
+      ChatSocketService().sendTyping(userId: widget.userId, isTyping: true);
+    }
     _typingSendTimer?.cancel();
     _typingSendTimer = Timer(const Duration(seconds: 2), () {
+      _lastTypingSentAt = null;
       ChatSocketService().sendTyping(userId: widget.userId, isTyping: false);
     });
   }
@@ -579,7 +586,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final isNarrow = screenWidth < 380;
     final iconButtonStyle = IconButton.styleFrom(
       padding: EdgeInsets.symmetric(horizontal: isNarrow ? 4 : 8),

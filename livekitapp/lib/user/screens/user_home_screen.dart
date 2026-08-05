@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
@@ -21,10 +22,8 @@ import 'package:livekitapp/core/constants/api_constants.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0F1A);
-  static const headerBg = Color(0xCC0B0B0B);
   static const cardBg = Color(0xCC1A1A1A);
   static const cardBorder = Color(0x0DFFFFFF);
-  static const inputBg = Color(0xFF1C2B3C);
   static const brandRed = Color(0xFFE11D48);
   static const online = Color(0xFF74D8BD);
   static const textSecondary = Color(0xFFD4E4FA);
@@ -63,7 +62,6 @@ class _CoinBalanceChip extends StatelessWidget {
     );
   }
 }
-
 
 class _DummyOfferCard extends StatelessWidget {
   final String badge;
@@ -159,13 +157,17 @@ class _SpecialOfferImageCard extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: imageUrl.isEmpty
-          ? Container(color: _AppColors.cardBg)
+          ? const ColoredBox(color: _AppColors.cardBg)
           : Image.network(
               imageUrl,
               fit: BoxFit.cover,
               width: double.infinity,
+              cacheWidth:
+                  (MediaQuery.sizeOf(context).width *
+                          MediaQuery.devicePixelRatioOf(context))
+                      .round(),
               errorBuilder: (context, error, stackTrace) =>
-                  Container(color: _AppColors.cardBg),
+                  const ColoredBox(color: _AppColors.cardBg),
             ),
     );
   }
@@ -178,8 +180,8 @@ class UserHomeScreen extends StatefulWidget {
   State<UserHomeScreen> createState() => UserHomeScreenState();
 }
 
-class UserHomeScreenState extends State<UserHomeScreen> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
+class UserHomeScreenState extends State<UserHomeScreen>
+    with WidgetsBindingObserver {
   String _profileName = '';
   String? _profilePhotoUrl;
   int _profileCoins = 0;
@@ -189,7 +191,10 @@ class UserHomeScreenState extends State<UserHomeScreen> {
   bool _loading = true;
   String? _error;
   StreamSubscription? _socketSub;
-  List<Map<String, dynamic>> _listeners = [];
+  List<Map<String, dynamic>> _listeners = const [];
+
+  List<Map<String, dynamic>> _ordered = const [];
+
   int? _callingListenerId; // tracks in-flight call to prevent double-tap
   bool _videoCallEnabled = true;
   bool _videoCallDisabledByAdmin = false;
@@ -199,34 +204,83 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     viewportFraction: 0.92,
   );
   Timer? _offersAutoScrollTimer;
-  int _offersCurrentPage = 0;
-  static const int _offersCardCount = 2;
-  List<Map<String, dynamic>> _specialOffers = [];
+  final ValueNotifier<int> _offersPage = ValueNotifier<int>(0);
+  List<Map<String, dynamic>> _specialOffers = const [];
+
+  bool _visible = true;
+  ValueListenable<TickerModeData>? _tickerMode;
+  bool _foregrounded = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadFromCache();
     _load();
     _initSocket();
-    _pollTimer = Timer.periodic(
-      const Duration(minutes: 2),
-      (_) {
-        _load(silent: true);
-        _loadSpecialOffers();
-      },
-    );
-    _offersAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _loadSpecialOffers();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final notifier = TickerMode.getValuesNotifier(context);
+    if (identical(notifier, _tickerMode)) return;
+    _tickerMode?.removeListener(_onVisibilityChanged);
+    _tickerMode = notifier;
+    notifier.addListener(_onVisibilityChanged);
+    _onVisibilityChanged();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foregrounded = state == AppLifecycleState.resumed;
+    if (foregrounded == _foregrounded) return;
+    _foregrounded = foregrounded;
+    _syncTimers();
+  }
+
+  void _onVisibilityChanged() {
+    final visible = _tickerMode?.value.enabled ?? true;
+    if (visible == _visible) return;
+    _visible = visible;
+    _syncTimers();
+  }
+
+  bool get _active => _visible && _foregrounded;
+
+  void _syncTimers() {
+    if (!_active) {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      _offersAutoScrollTimer?.cancel();
+      _offersAutoScrollTimer = null;
+      return;
+    }
+    _pollTimer ??= Timer.periodic(const Duration(minutes: 2), (_) {
+      _load(silent: true);
+      _loadSpecialOffers();
+    });
+    _syncOffersAutoScroll();
+  }
+
+  void _syncOffersAutoScroll() {
+    final wanted = _active && _specialOffers.length > 1;
+    if (!wanted) {
+      _offersAutoScrollTimer?.cancel();
+      _offersAutoScrollTimer = null;
+      return;
+    }
+    _offersAutoScrollTimer ??= Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || !_active) return;
       if (!_offersController.hasClients || _specialOffers.length <= 1) return;
-      final current = _offersController.page?.round() ?? _offersCurrentPage;
-      final next = (current + 1) % _specialOffers.length;
+      final current = _offersController.page?.round() ?? _offersPage.value;
       _offersController.animateToPage(
-        next,
+        (current + 1) % _specialOffers.length,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
     });
-    _loadSpecialOffers();
   }
 
   Future<void> _loadFromCache() async {
@@ -236,27 +290,71 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     if (!mounted) return;
     setState(() {
       if (cachedListeners is List) {
-        _listeners = cachedListeners.cast<Map<String, dynamic>>();
+        _setListeners(cachedListeners.cast<Map<String, dynamic>>());
       }
       if (cachedProfile is Map) {
         _profileName = cachedProfile['name'] ?? '';
         _profilePhotoUrl = cachedProfile['photo_url'];
         _profileCoins = cachedProfile['coins'] ?? 0;
         _videoCallEnabled = cachedProfile['video_call_enabled'] ?? true;
-        _videoCallDisabledByAdmin = cachedProfile['video_call_disabled_by_admin'] ?? false;
+        _videoCallDisabledByAdmin =
+            cachedProfile['video_call_disabled_by_admin'] ?? false;
       }
       if (cachedOffers is List) {
         _specialOffers = cachedOffers.cast<Map<String, dynamic>>();
       }
       if (_listeners.isNotEmpty) _loading = false;
     });
+    _syncOffersAutoScroll();
+  }
+
+  void _setListeners(List<Map<String, dynamic>> listeners) {
+    _listeners = listeners;
+    _reorder();
+  }
+
+  /// Time of the most recent call this user placed to [listener], or null when
+  /// they have never called them. Mirrors `last_interacted_at` from the
+  /// `/user/listeners` payload.
+  static DateTime? _lastInteractedAt(Map<String, dynamic> listener) {
+    final raw = listener['last_interacted_at'];
+    return raw is String ? DateTime.tryParse(raw) : null;
+  }
+
+  /// Orders the catalogue the same way the backend does, so a presence change
+  /// pushed over the socket re-sorts the list without waiting for a refetch:
+  ///
+  ///  1. listeners the user has called before, online ones first
+  ///  2. everyone else, online ones first
+  ///
+  /// Previous contacts therefore stay above strangers even while offline. A
+  /// first-time user has no contacts, so this collapses to plain online-first.
+  /// The sort is stable, so listeners that tie keep the server's order
+  /// (most recent call first, then by id).
+  void _reorder() {
+    final ordered = List<Map<String, dynamic>>.of(_listeners);
+    mergeSort<Map<String, dynamic>>(
+      ordered,
+      compare: (a, b) {
+        final aInteracted = _lastInteractedAt(a) != null;
+        final bInteracted = _lastInteractedAt(b) != null;
+        if (aInteracted != bInteracted) return aInteracted ? -1 : 1;
+        final aOnline = a['is_online'] == true;
+        final bOnline = b['is_online'] == true;
+        if (aOnline != bOnline) return aOnline ? -1 : 1;
+        return 0;
+      },
+    );
+    _ordered = ordered;
   }
 
   Future<void> _loadSpecialOffers({int attempt = 0}) async {
     try {
       final offers = await _billingRepository.getSpecialOffers();
       if (!mounted) return;
+      if (!dataChanged(_specialOffers, offers)) return;
       setState(() => _specialOffers = offers);
+      _syncOffersAutoScroll();
       HomeCache().setJson('user_home_offers', offers);
     } catch (_) {
       if (!mounted || attempt >= 2) return;
@@ -267,7 +365,6 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     }
   }
 
-
   Future<void> _initSocket() async {
     final token = await _localStorage.getToken();
     if (token == null) return;
@@ -276,6 +373,7 @@ class UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   void _onSocketEvent(Map<String, dynamic> data) {
+    if (!mounted) return;
     final type = data['type'];
     if (type == 'socket_connected') {
       _load(silent: true);
@@ -284,44 +382,43 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     if (type == 'listener_online' || type == 'listener_offline') {
       final listenerId = data['listener_id'];
       if (listenerId == null) return;
+      final online = type == 'listener_online';
       if (listenerId is int) {
-        PresenceCache().setListenerOnline(
-          listenerId,
-          type == 'listener_online',
-        );
+        PresenceCache().setListenerOnline(listenerId, online);
       }
+      final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+      if (idx == -1) return;
+      if (_listeners[idx]['is_online'] == online) return;
       setState(() {
-        final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
-        if (idx != -1) {
-          _listeners[idx]['is_online'] = type == 'listener_online';
-        }
+        _listeners[idx]['is_online'] = online;
+        _reorder();
       });
     } else if (type == 'listener_rating_updated') {
       final listenerId = data['listener_id'];
       if (listenerId == null) return;
+      final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+      if (idx == -1) return;
       setState(() {
-        final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
-        if (idx != -1) {
-          _listeners[idx]['avg_rating'] = data['avg_rating'];
-          _listeners[idx]['rating_count'] = data['rating_count'];
-        }
+        _listeners[idx]['avg_rating'] = data['avg_rating'];
+        _listeners[idx]['rating_count'] = data['rating_count'];
       });
     } else if (type == 'coins_updated') {
       final coins = data['coins'];
-      if (coins == null) return;
-      if (coins is int) UserDataCache().updateCoins(coins);
-      setState(() {
-        _profileCoins = coins;
-      });
+      if (coins is! int || coins == _profileCoins) return;
+      UserDataCache().updateCoins(coins);
+      setState(() => _profileCoins = coins);
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tickerMode?.removeListener(_onVisibilityChanged);
     _socketSub?.cancel();
     _pollTimer?.cancel();
     _offersAutoScrollTimer?.cancel();
     _offersController.dispose();
+    _offersPage.dispose();
     super.dispose();
   }
 
@@ -350,61 +447,59 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     }
     try {
       final token = await _localStorage.getToken();
+      if (token == null) return;
       final listeners = await _repository.getListeners(
-        token!,
+        token,
         forceRefresh: forceRefresh,
       );
       final me = await _repository.getMe(token);
-      if (requestId != _loadRequestId) return;
+      if (requestId != _loadRequestId || !mounted) return;
       final newName = me['name'] ?? '';
       final newPhoto = me['photo_url'];
       final newCoins = me['coins'] ?? 0;
       final newVideoCallEnabled = me['video_call_enabled'] ?? true;
-      final newVideoCallDisabledByAdmin = me['video_call_disabled_by_admin'] ?? false;
-      final changed = dataChanged(_listeners, listeners) ||
+      final newVideoCallDisabledByAdmin =
+          me['video_call_disabled_by_admin'] ?? false;
+      final changed =
+          dataChanged(_listeners, listeners) ||
           _profileName != newName ||
           _profilePhotoUrl != newPhoto ||
           _profileCoins != newCoins ||
           _videoCallEnabled != newVideoCallEnabled ||
           _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin;
-      if (mounted) {
-        if (changed) {
-          setState(() {
-            _listeners = listeners;
-            _profileName = newName;
-            _profilePhotoUrl = newPhoto;
-            _profileCoins = newCoins;
-            _videoCallEnabled = newVideoCallEnabled;
-            _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
-            _loading = false;
-            _error = null;
-          });
-          HomeCache().setJson('user_home_listeners', listeners);
-          HomeCache().setJson('user_home_profile', {
-            'name': newName,
-            'photo_url': newPhoto,
-            'coins': newCoins,
-            'video_call_enabled': newVideoCallEnabled,
-            'video_call_disabled_by_admin': newVideoCallDisabledByAdmin,
-          });
-        } else if (_loading || _error != null) {
-          setState(() {
-            _loading = false;
-            _error = null;
-          });
-        }
-      }
-    } catch (e) {
-      if (requestId != _loadRequestId) return;
-      if (mounted) {
+      if (changed) {
+        setState(() {
+          _setListeners(listeners);
+          _profileName = newName;
+          _profilePhotoUrl = newPhoto;
+          _profileCoins = newCoins;
+          _videoCallEnabled = newVideoCallEnabled;
+          _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
+          _loading = false;
+          _error = null;
+        });
+        HomeCache().setJson('user_home_listeners', listeners);
+        HomeCache().setJson('user_home_profile', {
+          'name': newName,
+          'photo_url': newPhoto,
+          'coins': newCoins,
+          'video_call_enabled': newVideoCallEnabled,
+          'video_call_disabled_by_admin': newVideoCallDisabledByAdmin,
+        });
+      } else if (_loading || _error != null) {
         setState(() {
           _loading = false;
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _error = null;
         });
       }
+    } catch (e) {
+      if (requestId != _loadRequestId || !mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
     }
   }
-
 
   Future<void> _callListener(int listenerId, {bool video = false}) async {
     if (_callingListenerId != null) return;
@@ -448,10 +543,18 @@ class UserHomeScreenState extends State<UserHomeScreen> {
     }
   }
 
+  void _showVideoDisabledByAdmin() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Admin has disabled video calls for your account'),
+      ),
+    );
+  }
+
   void _openChat(Map<String, dynamic> listener) {
     Navigator.of(context).push(
       fadeRoute(
-ChatHistoryScreen(
+        ChatHistoryScreen(
           listenerId: listener['id'],
           listenerName: listener['name'],
           listenerPhotoUrl: listener['photo_url'],
@@ -461,31 +564,96 @@ ChatHistoryScreen(
     );
   }
 
+  void _openListenerProfile(Map<String, dynamic> listener) {
+    Navigator.of(
+      context,
+    ).push(fadeRoute(ListenerProfileViewScreen(listenerId: listener['id'])));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = 32 + MediaQuery.paddingOf(context).bottom + 90;
     return Scaffold(
-      key: _scaffoldKey,
       backgroundColor: _AppColors.bg,
       endDrawer: _buildProfileDrawer(),
       body: RefreshIndicator(
         onRefresh: _pullToRefresh,
-        child: ListView(
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(5, 24, 5, 32 + MediaQuery.of(context).padding.bottom + 90),
-          children: [
-            _buildDummyOffersSection(),
-            const SizedBox(height: 32),
-            _buildFeaturedProfilesSection(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(5, 24, 5, 0),
+              sliver: SliverToBoxAdapter(child: _buildOffersSection()),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(5, 32, 5, 0),
+              sliver: SliverToBoxAdapter(child: _buildFeaturedHeader()),
+            ),
+            ..._buildFeaturedBody(bottomPadding),
           ],
         ),
       ),
     );
   }
 
+  List<Widget> _buildFeaturedBody(double bottomPadding) {
+    if (_loading ||
+        (_error != null && _listeners.isEmpty) ||
+        _ordered.isEmpty) {
+      final String? message = _loading
+          ? null
+          : (_error != null && _listeners.isEmpty
+                ? _error
+                : 'No listeners available');
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 48),
+            child: Center(
+              child: message == null
+                  ? const CircularProgressIndicator()
+                  : Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: _AppColors.textMuted),
+                    ),
+            ),
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: EdgeInsets.fromLTRB(5, 8, 5, bottomPadding),
+        sliver: SliverList.separated(
+          itemCount: _ordered.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final listener = _ordered[index];
+            return _ListenerCard(
+              key: ValueKey<Object?>(listener['id']),
+              listener: listener,
+              isCalling: _callingListenerId == listener['id'],
+              canAct: _callingListenerId == null,
+              videoCallEnabled: _videoCallEnabled,
+              videoCallDisabledByAdmin: _videoCallDisabledByAdmin,
+              onOpenChat: () => _openChat(listener),
+              onOpenProfile: () => _openListenerProfile(listener),
+              onAudioCall: () => _callListener(listener['id']),
+              onVideoCall: () => _callListener(listener['id'], video: true),
+              onVideoBlocked: _showVideoDisabledByAdmin,
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
   Widget _buildProfileDrawer() {
     return Drawer(
       backgroundColor: Colors.transparent,
-      child: Container(
+      child: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -520,13 +688,17 @@ ChatHistoryScreen(
                   border: Border.all(color: _AppColors.brandRed, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: _AppColors.brandRed.withOpacity(0.5),
+                      color: _AppColors.brandRed.withValues(alpha: 0.5),
                       blurRadius: 16,
                       spreadRadius: 1,
                     ),
                   ],
                 ),
-           child: AvatarImage(photoUrl: _profilePhotoUrl, radius: 44, iconSize: 44),
+                child: AvatarImage(
+                  photoUrl: _profilePhotoUrl,
+                  radius: 44,
+                  iconSize: 44,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
@@ -542,7 +714,6 @@ ChatHistoryScreen(
               Center(
                 child: _CoinBalanceChip(coins: _profileCoins, showLabel: true),
               ),
-
               const SizedBox(height: 28),
               ListTile(
                 leading: const Icon(
@@ -599,8 +770,26 @@ ChatHistoryScreen(
   // Special Offers carousel — admin-uploaded images, falls back to dummy
   // placeholder cards when the admin hasn't uploaded any offers yet.
   // -------------------------------------------------------------------------
-  Widget _buildDummyOffersSection() {
-    final hasRealOffers = _specialOffers.isNotEmpty;
+  static const _dummyOffers = [
+    _DummyOfferCard(
+      badge: 'LIMITED TIME',
+      title: '50% Off First Call',
+      gradient: LinearGradient(colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)]),
+    ),
+    _DummyOfferCard(
+      badge: 'NEW',
+      title: 'Free 5-min Trial',
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [_AppColors.brandRed, Color(0xFF681A19)],
+      ),
+    ),
+  ];
+
+  Widget _buildOffersSection() {
+    final offers = _specialOffers;
+    final hasRealOffers = offers.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -612,369 +801,298 @@ ChatHistoryScreen(
             fontWeight: FontWeight.w600,
           ),
         ),
-
         const SizedBox(height: 16),
         SizedBox(
           height: 120,
-          child: PageView(
+          child: PageView.builder(
             controller: _offersController,
-            onPageChanged: (index) => setState(() => _offersCurrentPage = index),
-            children: hasRealOffers
-                ? _specialOffers
-                    .map((offer) => _SpecialOfferImageCard(
-                          imageUrl: ApiConstants.resolveMediaUrl(
-                            offer['image_url'] as String?,
-                          ),
-                        ))
-                    .toList()
-                : const [
-                    _DummyOfferCard(
-                      badge: 'LIMITED TIME',
-                      title: '50% Off First Call',
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)],
-                      ),
-                    ),
-                    _DummyOfferCard(
-                      badge: 'NEW',
-                      title: 'Free 5-min Trial',
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [_AppColors.brandRed, Color(0xFF681A19)],
-                      ),
-                    ),
-                  ],
-          ),
-        ),
-        if (hasRealOffers && _specialOffers.length > 1) ...[
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_specialOffers.length, (index) {
-              final isActive = index == _offersCurrentPage;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: isActive ? 18 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? _AppColors.brandRed
-                      : _AppColors.textMuted.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(3),
+            onPageChanged: (index) => _offersPage.value = index,
+            itemCount: hasRealOffers ? offers.length : _dummyOffers.length,
+            itemBuilder: (context, index) {
+              if (!hasRealOffers) return _dummyOffers[index];
+              return _SpecialOfferImageCard(
+                imageUrl: ApiConstants.resolveMediaUrl(
+                  offers[index]['image_url'] as String?,
                 ),
               );
-            }),
+            },
+          ),
+        ),
+        if (hasRealOffers && offers.length > 1) ...[
+          const SizedBox(height: 10),
+          ValueListenableBuilder<int>(
+            valueListenable: _offersPage,
+            builder: (context, page, _) => Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(offers.length, (index) {
+                final isActive = index == page;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: isActive ? 18 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? _AppColors.brandRed
+                        : _AppColors.textMuted.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
           ),
         ],
       ],
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Featured Profiles — REAL listener data: online status + call + chat
-  // -------------------------------------------------------------------------
-  Widget _buildFeaturedProfilesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildFeaturedHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Call me',
-              style: TextStyle(
-                fontSize: 16,
-                color: _AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            IconButton(
-              icon: const Icon(
-                Icons.refresh,
-                color: _AppColors.textMuted,
-                size: 20,
-              ),
-              onPressed: _pullToRefresh,
-              tooltip: 'Refresh',
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 48),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_error != null && _listeners.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 48),
-            child: Center(
-              child: Text(
-                _error!,
-                style: const TextStyle(color: _AppColors.textMuted),
-              ),
-            ),
-          )
-        else if (_listeners.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 48),
-            child: Center(
-              child: Text(
-                'No listeners available',
-                style: TextStyle(color: _AppColors.textMuted),
-              ),
-            ),
-          )
-        else
-          Builder(
-            builder: (context) {
-              final listeners = _onlineFirst(_listeners);
-              return Column(
-                children: [
-                  for (int i = 0; i < listeners.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 8),
-                    _buildProfileCard(listeners[i]),
-                  ],
-                ],
-              );
-            },
+        const Text(
+          'Call me',
+          style: TextStyle(
+            fontSize: 16,
+            color: _AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
           ),
+        ),
+        IconButton(
+          icon: const Icon(
+            Icons.refresh,
+            color: _AppColors.textMuted,
+            size: 20,
+          ),
+          onPressed: _pullToRefresh,
+          tooltip: 'Refresh',
+        ),
       ],
     );
   }
+}
 
-  /// Online listeners first, offline after, keeping the server's order within
-  /// each group. Done at build time so socket online/offline events reorder the
-  /// list immediately without refetching.
-  List<Map<String, dynamic>> _onlineFirst(List<Map<String, dynamic>> listeners) {
-    return [
-      ...listeners.where((l) => l['is_online'] == true),
-      ...listeners.where((l) => l['is_online'] != true),
-    ];
-  }
+class _ListenerCard extends StatelessWidget {
+  final Map<String, dynamic> listener;
+  final bool isCalling;
+  final bool canAct;
+  final bool videoCallEnabled;
+  final bool videoCallDisabledByAdmin;
+  final VoidCallback onOpenChat;
+  final VoidCallback onOpenProfile;
+  final VoidCallback onAudioCall;
+  final VoidCallback onVideoCall;
+  final VoidCallback onVideoBlocked;
 
-  Widget _buildProfileCard(Map<String, dynamic> listener) {
+  const _ListenerCard({
+    super.key,
+    required this.listener,
+    required this.isCalling,
+    required this.canAct,
+    required this.videoCallEnabled,
+    required this.videoCallDisabledByAdmin,
+    required this.onOpenChat,
+    required this.onOpenProfile,
+    required this.onAudioCall,
+    required this.onVideoCall,
+    required this.onVideoBlocked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final bool isOnline = listener['is_online'] == true;
-    final bool isCalling = _callingListenerId == listener['id'];
-    final bool canAct = _callingListenerId == null;
-    final tags = List<String>.from(listener['tags'] ?? const []);
+    final tags = (listener['tags'] as List?) ?? const [];
 
-    return GestureDetector(
-      onTap: () => _openChat(listener),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: _AppColors.cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _AppColors.cardBorder),
-        ),
-child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => _openListenerProfile(listener),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      AvatarImage(photoUrl: listener['photo_url'], radius: 50, iconSize: 40),
-                      Positioned(
-                        right: 2,
-                        bottom: 2,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: isOnline
-                                ? _AppColors.online
-                                : Colors.grey.shade600,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF050E17),
-                              width: 2,
-                            ),
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onOpenChat,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: _AppColors.cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _AppColors.cardBorder),
+          ),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: onOpenProfile,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    AvatarImage(
+                      photoUrl: listener['photo_url'],
+                      radius: 50,
+                      iconSize: 40,
+                    ),
+                    Positioned(
+                      right: 2,
+                      bottom: 2,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: isOnline
+                              ? _AppColors.online
+                              : Colors.grey.shade600,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFF050E17),
+                            width: 2,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        listener['name'] ?? 'Listener',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${listener['age']?.toString() ?? '...'} · ${(listener['occupation'] as String?)?.isNotEmpty == true ? listener['occupation'] : '...'}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: _AppColors.textMuted,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          Text(
-                            isOnline ? 'Online now' : 'Offline',
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isOnline
-                                  ? _AppColors.online
-                                  : _AppColors.textMuted,
-                            ),
-                          ),
-                          if (listener['avg_rating'] != null)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.star, color: Colors.amber, size: 14),
-                                const SizedBox(width: 2),
-                                Text(
-                                  '${listener['avg_rating']}',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.amber,
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                      if (tags.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: tags
-                              .take(3)
-                              .map(
-                                (tag) => Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _AppColors.brandRed.withOpacity(0.16),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    tag,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (_videoCallEnabled) ...[
-                  isCalling
-                      ? const SizedBox(width: 40, height: 40)
-                      : InkWell(
-                          onTap: !canAct
-                              ? null
-                              : _videoCallDisabledByAdmin
-                                  ? () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Admin has disabled video calls for your account',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  : () => _callListener(listener['id'], video: true),
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: _videoCallDisabledByAdmin
-                                  ? _AppColors.brandRed.withOpacity(0.2)
-                                  : (canAct
-                                      ? _AppColors.brandRed.withOpacity(0.85)
-                                      : _AppColors.brandRed.withOpacity(0.3)),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.videocam,
-                              color: _videoCallDisabledByAdmin
-                                  ? Colors.white38
-                                  : Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                        ),
-                  const SizedBox(width: 6),
-                ],
-                isCalling
-                    ? const SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: _AppColors.brandRed,
-                          ),
-                        ),
-                      )
-                    : InkWell(
-                        onTap: canAct ? () => _callListener(listener['id']) : null,
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: canAct
-                                ? _AppColors.brandRed
-                                : _AppColors.brandRed.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.call,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: _details(isOnline, tags)),
+              const SizedBox(width: 8),
+              if (videoCallEnabled) ...[
+                _videoButton(),
+                const SizedBox(width: 6),
               ],
-            ),
-          ],
+              _audioButton(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _openListenerProfile(Map<String, dynamic> listener) {
-    Navigator.of(
-      context,
-    ).push(fadeRoute(ListenerProfileViewScreen(listenerId: listener['id'])));
+  Widget _details(bool isOnline, List<dynamic> tags) {
+    final occupation = listener['occupation'] as String?;
+    final rating = listener['avg_rating'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          listener['name'] ?? 'Listener',
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '${listener['age']?.toString() ?? '...'} · '
+          '${occupation != null && occupation.isNotEmpty ? occupation : '...'}',
+          style: const TextStyle(fontSize: 12, color: _AppColors.textMuted),
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Text(
+              isOnline ? 'Online now' : 'Offline',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: isOnline ? _AppColors.online : _AppColors.textMuted,
+              ),
+            ),
+            if (rating != null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 14),
+                  const SizedBox(width: 2),
+                  Text(
+                    '$rating',
+                    style: const TextStyle(fontSize: 13, color: Colors.amber),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        if (tags.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final tag in tags.take(3))
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _AppColors.brandRed.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$tag',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _videoButton() {
+    if (isCalling) return const SizedBox(width: 40, height: 40);
+    return InkWell(
+      onTap: !canAct
+          ? null
+          : (videoCallDisabledByAdmin ? onVideoBlocked : onVideoCall),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: videoCallDisabledByAdmin
+              ? _AppColors.brandRed.withValues(alpha: 0.2)
+              : _AppColors.brandRed.withValues(alpha: canAct ? 0.85 : 0.3),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.videocam,
+          color: videoCallDisabledByAdmin ? Colors.white38 : Colors.white,
+          size: 18,
+        ),
+      ),
+    );
+  }
+
+  Widget _audioButton() {
+    if (isCalling) {
+      return const SizedBox(
+        width: 40,
+        height: 40,
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: _AppColors.brandRed,
+          ),
+        ),
+      );
+    }
+    return InkWell(
+      onTap: canAct ? onAudioCall : null,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: canAct
+              ? _AppColors.brandRed
+              : _AppColors.brandRed.withValues(alpha: 0.3),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.call, color: Colors.white, size: 18),
+      ),
+    );
   }
 }

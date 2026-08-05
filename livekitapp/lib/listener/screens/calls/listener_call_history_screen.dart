@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
-import 'package:livekitapp/core/constants/api_constants.dart';
 
 String _fmtDateTime(String iso) {
-  final dt = DateTime.parse(iso).toLocal();
+  final dt = (DateTime.tryParse(iso) ?? DateTime.now()).toLocal();
   final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
   final m = dt.minute.toString().padLeft(2, '0');
   final ampm = dt.hour >= 12 ? 'PM' : 'AM';
@@ -37,6 +39,7 @@ Color _statusColor(String status, Color pink) {
 }
 
 String _statusLabel(String status) {
+  if (status.isEmpty) return '';
   switch (status) {
     case 'ended':
       return 'Completed';
@@ -98,18 +101,54 @@ class ListenerCallHistoryScreen extends StatefulWidget {
 class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
-  List<Map<String, dynamic>> _calls = [];
+  List<Map<String, dynamic>> _calls = const [];
+  List<Map<String, dynamic>> _filteredCalls = const [];
   String _filter = 'all';
   bool _loading = true;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
   String _search = '';
-
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> _applyFilter() {
+    final query = _search.trim().toLowerCase();
+    final status = _filter == 'all' ? null : _filter;
+    return _calls.where((c) {
+      if (status != null && c['status'] != status) return false;
+      if (query.isEmpty) return true;
+      return '${c['user_name'] ?? ''}'.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  void _setFilter(String filter) {
+    if (_filter == filter) return;
+    setState(() {
+      _filter = filter;
+      _filteredCalls = _applyFilter();
+    });
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || _search == value) return;
+      setState(() {
+        _search = value;
+        _filteredCalls = _applyFilter();
+      });
+    });
   }
 
   Future<void> _load() async {
@@ -125,41 +164,24 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
     if (isFirstLoad) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
-      final calls = await _repository.getCallHistory(token!);
+      if (token == null) return;
+      final calls = await _repository.getCallHistory(token);
+      if (!mounted) return;
       if (dataChanged(_calls, calls)) {
         setState(() {
           _calls = calls;
+          _filteredCalls = _applyFilter();
           _loading = false;
         });
       } else if (_loading) {
         setState(() => _loading = false);
       }
-    } catch (e) {
-      setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     } finally {
       _refreshInFlight = false;
     }
   }
-
-  List<Map<String, dynamic>> get _filteredCalls {
-    var calls = _calls;
-    if (_filter == 'missed') {
-      calls = calls.where((c) => c['status'] == 'missed').toList();
-    } else if (_filter == 'rejected') {
-      calls = calls.where((c) => c['status'] == 'rejected').toList();
-    }
-
-    if (_search.isEmpty) return calls;
-    return calls
-        .where(
-          (c) => (c['user_name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .contains(_search.toLowerCase()),
-        )
-        .toList();
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -189,42 +211,34 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(vertical: 14),
                 ),
-                onChanged: (v) => setState(() => _search = v),
+                onChanged: _onSearchChanged,
               ),
             ),
           ),
           Padding(
-
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
               children: [
                 _CallFilterChip(
                   label: 'All',
                   selected: _filter == 'all',
-                  onTap: () {
-                    setState(() => _filter = 'all');
-                  },
+                  onTap: () => _setFilter('all'),
                   activeColor: pink,
                 ),
                 const SizedBox(width: 8),
                 _CallFilterChip(
                   label: 'Missed',
                   selected: _filter == 'missed',
-                  onTap: () {
-                    setState(() => _filter = 'missed');
-                  },
+                  onTap: () => _setFilter('missed'),
                   activeColor: pink,
                 ),
                 const SizedBox(width: 8),
                 _CallFilterChip(
                   label: 'Rejected',
                   selected: _filter == 'rejected',
-                  onTap: () {
-                    setState(() => _filter = 'rejected');
-                  },
+                  onTap: () => _setFilter('rejected'),
                   activeColor: pink,
                 ),
-
               ],
             ),
           ),
@@ -238,7 +252,7 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       children: [
                         SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.7,
+                          height: MediaQuery.sizeOf(context).height * 0.7,
                           child: const Center(
                             child: Text(
                               'No calls yet',
@@ -251,76 +265,10 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                   : ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemCount: _filteredCalls.length,
-                      itemBuilder: (context, index) {
-                        final call = _filteredCalls[index];
-                        final status = call['status'] as String;
-                        final callType = call['call_type'] as String;
-                        final photoUrl = ApiConstants.resolveMediaUrl(
-                          call['other_party_photo_url'],
-                        );
-                        return ListTile(
-                          leading: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundColor: const Color(0xFF2A3145),
-                                backgroundImage: photoUrl.isNotEmpty
-                                    ? NetworkImage(photoUrl)
-                                    : null,
-                                child: photoUrl.isEmpty
-                                    ? const Icon(Icons.person, color: Colors.white54)
-                                    : null,
-                              ),
-                              Positioned(
-                                bottom: -2,
-                                right: -2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    color: bg,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    callType == 'video'
-                                        ? Icons.videocam
-                                        : Icons.call,
-                                    size: 12,
-                                    color: pink,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          title: Text(
-                            call['user_name'],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Row(
-                            children: [
-                              Icon(
-                                _statusIcon(status, callType),
-                                size: 14,
-                                color: _statusColor(status, pink),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                status == 'ended'
-                                    ? _fmtDuration(call['duration_seconds'])
-                                    : _statusLabel(status),
-                                style: const TextStyle(color: dimText),
-                              ),
-                            ],
-                          ),
-                          trailing: Text(
-                            _fmtDateTime(call['created_at']),
-                            style: const TextStyle(color: dimText, fontSize: 12),
-                          ),
-                        );
-                      },
+                      itemExtent: 72,
+                      itemBuilder: (context, index) => RepaintBoundary(
+                        child: _CallHistoryTile(call: _filteredCalls[index]),
+                      ),
                     ),
             ),
           ),
@@ -330,3 +278,76 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   }
 }
 
+class _CallHistoryTile extends StatelessWidget {
+  final Map<String, dynamic> call;
+
+  const _CallHistoryTile({required this.call});
+
+  static const _bg = Color(0xFF0B0F1A);
+  static const _pink = Color(0xFFE53950);
+  static const _dimText = Colors.white54;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = '${call['status'] ?? ''}';
+    final callType = '${call['call_type'] ?? ''}';
+    return ListTile(
+      leading: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AvatarImage(
+            photoUrl: call['other_party_photo_url'] as String?,
+            radius: 24,
+            iconSize: 24,
+            backgroundColor: const Color(0xFF2A3145),
+          ),
+          Positioned(
+            bottom: -2,
+            right: -2,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: const BoxDecoration(
+                color: _bg,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                callType == 'video' ? Icons.videocam : Icons.call,
+                size: 12,
+                color: _pink,
+              ),
+            ),
+          ),
+        ],
+      ),
+      title: Text(
+        '${call['user_name'] ?? ''}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Row(
+        children: [
+          Icon(
+            _statusIcon(status, callType),
+            size: 14,
+            color: _statusColor(status, _pink),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            status == 'ended'
+                ? _fmtDuration((call['duration_seconds'] ?? 0) as int)
+                : _statusLabel(status),
+            style: const TextStyle(color: _dimText),
+          ),
+        ],
+      ),
+      trailing: Text(
+        _fmtDateTime('${call['created_at']}'),
+        style: const TextStyle(color: _dimText, fontSize: 12),
+      ),
+    );
+  }
+}

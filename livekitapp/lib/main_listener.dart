@@ -170,6 +170,8 @@ Future<void> _cacheAndAckChatMessage(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
+  PaintingBinding.instance.imageCache.maximumSize = 200;
 
   await dotenv.load(fileName: ".env");
   final isolateName = Isolate.current.debugName;
@@ -317,6 +319,8 @@ class _ListenerAppState extends State<ListenerApp> {
   StreamSubscription? _sessionSub;
   bool _loggingOut = false;
 
+  late final Future<String?> _initialToken = LocalStorage().getToken();
+
   @override
   void initState() {
     super.initState();
@@ -422,7 +426,7 @@ class _ListenerAppState extends State<ListenerApp> {
             appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),
           ),
           home: FutureBuilder<String?>(
-            future: LocalStorage().getToken(),
+            future: _initialToken,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const SplashScreen();
@@ -504,6 +508,7 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
 
   Timer? _offlineTimer;
 
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _offlineTimer?.cancel();

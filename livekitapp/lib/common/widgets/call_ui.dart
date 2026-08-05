@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:livekit_client/livekit_client.dart';
@@ -14,7 +17,7 @@ import 'package:livekitapp/core/constants/api_constants.dart';
 bool isCompactCallWindow(Size size) => size.width < 300 || size.height < 300;
 
 class PulsingAvatarRing extends StatefulWidget {
-  final double audioLevel;
+  final ValueListenable<double> audioLevel;
   final bool showVideo;
   final VideoTrack? videoTrack;
   final String? photoUrl;
@@ -32,123 +35,188 @@ class PulsingAvatarRing extends StatefulWidget {
 
 class _PulsingAvatarRingState extends State<PulsingAvatarRing>
     with SingleTickerProviderStateMixin {
+  static const _referenceBoxSize = 320.0;
+  static const _referencePhotoSize = 280.0;
+
+  static const _epsilon = 0.004;
+
+  static const _steps = 50;
+
   late final Ticker _ticker;
-  double _displayLevel = 0.0;
+  final ValueNotifier<double> _glow = ValueNotifier<double>(0);
+  double _level = 0;
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker(_onTick)..start();
+    _ticker = createTicker(_onTick);
+    widget.audioLevel.addListener(_onLevelChanged);
+    _onLevelChanged();
+  }
+
+  @override
+  void didUpdateWidget(PulsingAvatarRing oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.audioLevel, widget.audioLevel)) return;
+    oldWidget.audioLevel.removeListener(_onLevelChanged);
+    widget.audioLevel.addListener(_onLevelChanged);
+    _onLevelChanged();
+  }
+
+  void _onLevelChanged() {
+    if (_ticker.isActive) return;
+    final target = widget.audioLevel.value.clamp(0.0, 1.0);
+    if ((target - _level).abs() < _epsilon) return;
+    _ticker.start();
   }
 
   void _onTick(Duration elapsed) {
-    final raw = widget.audioLevel.clamp(0.0, 1.0);
-
-    // Glow grows quickly when someone starts speaking and eases back down
-    // smoothly when they stop, so it "spreads and shrinks" with intensity.
-    if (raw > _displayLevel) {
-      _displayLevel += (raw - _displayLevel) * 0.75;
-    } else {
-      _displayLevel += (raw - _displayLevel) * 0.18;
+    final target = widget.audioLevel.value.clamp(0.0, 1.0);
+    final delta = target - _level;
+    if (delta.abs() < _epsilon) {
+      _level = target;
+      _publish();
+      _ticker.stop();
+      return;
     }
+    _level += delta * (delta > 0 ? 0.75 : 0.18);
+    _publish();
+  }
 
-    if (mounted) {
-      setState(() {});
-    }
+  void _publish() {
+    final stepped = (_level * _steps).round() / _steps;
+    if (_glow.value == stepped) return;
+    _glow.value = stepped;
   }
 
   @override
   void dispose() {
+    widget.audioLevel.removeListener(_onLevelChanged);
     _ticker.dispose();
+    _glow.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const pink = Color(0xFFE53950);
-    // Reference sizes for a normal-width screen; both scale down together
-    // on narrow devices so the ring never overflows its parent.
-    const referenceBoxSize = 320.0;
-    const referencePhotoSize = 280.0;
-    final level = _displayLevel.clamp(0.0, 1.0);
-
-    // Halo strength scales with voice intensity: louder = bigger, brighter,
-    // softer glow radiating out from behind the photo; quiet = it shrinks
-    // back down to a subtle resting glow.
-    final innerSpread = 10.0 + level * 34.0;
-    final innerBlur = 30.0 + level * 50.0;
-    final outerSpread = 22.0 + level * 70.0;
-    final outerBlur = 55.0 + level * 110.0;
-    final glowOpacity = 0.45 + level * 0.4;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : referenceBoxSize;
-        final boxSize = referenceBoxSize < availableWidth
-            ? referenceBoxSize
-            : availableWidth;
-        final photoSize = referencePhotoSize * (boxSize / referenceBoxSize);
+            : _referenceBoxSize;
+        final boxSize = math.min(_referenceBoxSize, availableWidth);
+        final photoSize = _referencePhotoSize * (boxSize / _referenceBoxSize);
 
-        return SizedBox(
-          width: boxSize,
-          height: boxSize,
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              // Soft radiant halo that spreads and shrinks with voice intensity.
-              Container(
-                width: photoSize,
-                height: photoSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: pink.withOpacity(glowOpacity),
-                      blurRadius: innerBlur,
-                      spreadRadius: innerSpread,
-                    ),
-                    BoxShadow(
-                      color: pink.withOpacity(glowOpacity * 0.55),
-                      blurRadius: outerBlur,
-                      spreadRadius: outerSpread,
-                    ),
-                  ],
+        return RepaintBoundary(
+          child: SizedBox(
+            width: boxSize,
+            height: boxSize,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                _AvatarHalo(size: photoSize, level: _glow),
+                _AvatarRingFace(
+                  size: photoSize,
+                  showVideo: widget.showVideo,
+                  videoTrack: widget.videoTrack,
+                  photoUrl: widget.photoUrl,
                 ),
-              ),
-              Container(
-                width: photoSize,
-                height: photoSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: pink.withOpacity(0.9), width: 2.5),
-                ),
-                child: ClipOval(
-                  child: widget.showVideo && widget.videoTrack != null
-                      ? VideoTrackRenderer(widget.videoTrack!)
-                      : (ApiConstants.resolveMediaUrl(widget.photoUrl).isEmpty
-                            ? Container(
-                                color: const Color(0xFF2A2A2A),
-                                child: const Icon(
-                                  Icons.person,
-                                  color: Colors.white54,
-                                  size: 100,
-                                ),
-                              )
-                            : Image.network(
-                                ApiConstants.resolveMediaUrl(widget.photoUrl),
-                                fit: BoxFit.cover,
-                                width: photoSize,
-                                height: photoSize,
-                              )),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+}
+
+class _AvatarHalo extends StatelessWidget {
+  final double size;
+  final ValueListenable<double> level;
+
+  const _AvatarHalo({required this.size, required this.level});
+
+  static const _pink = Color(0xFFE53950);
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: ValueListenableBuilder<double>(
+        valueListenable: level,
+        builder: (context, value, _) {
+          final glowOpacity = 0.45 + value * 0.4;
+          return Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: _pink.withValues(alpha: glowOpacity),
+                  blurRadius: 30.0 + value * 50.0,
+                  spreadRadius: 10.0 + value * 34.0,
+                ),
+                BoxShadow(
+                  color: _pink.withValues(alpha: glowOpacity * 0.55),
+                  blurRadius: 55.0 + value * 110.0,
+                  spreadRadius: 22.0 + value * 70.0,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AvatarRingFace extends StatelessWidget {
+  final double size;
+  final bool showVideo;
+  final VideoTrack? videoTrack;
+  final String? photoUrl;
+
+  const _AvatarRingFace({
+    required this.size,
+    required this.showVideo,
+    required this.videoTrack,
+    required this.photoUrl,
+  });
+
+  static const _pink = Color(0xFFE53950);
+
+  @override
+  Widget build(BuildContext context) {
+    final track = videoTrack;
+    final resolved = ApiConstants.resolveMediaUrl(photoUrl);
+    final Widget face;
+    if (showVideo && track != null) {
+      face = VideoTrackRenderer(track);
+    } else if (resolved.isEmpty) {
+      face = Container(
+        color: const Color(0xFF2A2A2A),
+        child: const Icon(Icons.person, color: Colors.white54, size: 100),
+      );
+    } else {
+      final pixels = (size * MediaQuery.devicePixelRatioOf(context)).round();
+      face = Image.network(
+        resolved,
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+        cacheWidth: pixels,
+        cacheHeight: pixels,
+      );
+    }
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: _pink.withValues(alpha: 0.9), width: 2.5),
+      ),
+      child: ClipOval(child: face),
     );
   }
 }

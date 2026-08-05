@@ -9,10 +9,9 @@ import 'package:livekitapp/user/services/phone_auth_service.dart';
 /// Adds or replaces the email address / phone number registered on the
 /// account, always behind an OTP.
 ///
-/// The two channels are verified the same way they are at sign-up:
-/// - email: the backend mails a 6-digit code and checks it,
-/// - phone: Firebase sends and checks the SMS, and the backend then verifies
-///   the signed Firebase token belongs to the number that was entered.
+/// The two channels are verified the same way they are at sign-up: the
+/// backend sends a code (mailed for email, texted for phone) and checks it
+/// against what the user types back in.
 ///
 /// The account is only updated once that verification passes, so a typo can
 /// never take away a working login. Pops `true` when the change was saved.
@@ -39,7 +38,6 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
   final _otpController = TextEditingController();
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
-  final _phoneAuth = PhoneAuthService();
   final _countdownKey = GlobalKey<OtpCountdownState>();
 
   bool get _isEmail => widget.channel == AuthChannel.email;
@@ -52,16 +50,10 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
   /// is also what switches the screen to the code entry step.
   String? _pendingIdentifier;
 
-  String? _verificationId;
-  int? _resendToken;
   bool _sending = false;
   bool _verifying = false;
   String? _sendError;
   String? _fieldError;
-
-  /// Firebase can auto-retrieve the SMS while the user is still typing it;
-  /// this stops both paths from saving the change twice.
-  bool _handled = false;
 
   @override
   void dispose() {
@@ -109,15 +101,9 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
       setState(() {
         _pendingIdentifier = identifier;
         _otpController.clear();
+        _sending = false;
       });
-      // The backend has mailed the email code already; the SMS still has to
-      // be kicked off from the device.
-      if (_isEmail) {
-        setState(() => _sending = false);
-        _countdownKey.currentState?.restart();
-      } else {
-        await _sendPhoneOtp();
-      }
+      _countdownKey.currentState?.restart();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -127,79 +113,41 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
     }
   }
 
-  Future<void> _sendPhoneOtp() async {
+  /// Re-sends the code for the same pending change.
+  Future<void> _resend() async {
     setState(() {
       _sending = true;
       _sendError = null;
     });
-    await _phoneAuth.sendOtp(
-      phone: _pendingIdentifier!,
-      resendToken: _resendToken,
-      onCodeSent: (verificationId, resendToken) {
-        if (!mounted) return;
-        setState(() {
-          _verificationId = verificationId;
-          _resendToken = resendToken;
-          _sending = false;
-          _sendError = null;
-        });
-        _countdownKey.currentState?.restart();
-      },
-      onFailed: (message) {
-        if (!mounted) return;
-        setState(() {
-          _sending = false;
-          _sendError = message;
-        });
-        _showMessage(message);
-      },
-      onAutoVerified: (idToken) {
-        if (!mounted) return;
-        _save(firebaseIdToken: idToken);
-      },
-    );
-  }
-
-  /// Re-sends the code. For email the backend simply issues a new one for the
-  /// same pending change, so the original request is repeated.
-  Future<void> _resend() async {
-    if (!_isEmail) {
-      await _sendPhoneOtp();
-      return;
-    }
     try {
       final token = await _localStorage.getToken();
       await _repository.requestContactChangeOtp(token!, _pendingIdentifier!);
       if (!mounted) return;
+      setState(() => _sending = false);
       _otpController.clear();
       _showMessage('A new code has been sent to $_pendingIdentifier');
     } catch (e) {
       if (!mounted) return;
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      final message = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _sending = false;
+        _sendError = message;
+      });
+      _showMessage(message);
     }
   }
 
   Future<void> _verify() async {
     final code = _otpController.text.trim();
-    if (code.length != 6) {
-      _showMessage('Enter the 6-digit code');
-      return;
-    }
-    if (!_isEmail && _verificationId == null) {
-      _showMessage(
-        _sendError ?? 'OTP has not been sent yet. Tap Retry to request it again.',
-      );
+    final expectedLength = _isEmail ? 6 : 4;
+    if (code.length != expectedLength) {
+      _showMessage('Enter the $expectedLength-digit code');
       return;
     }
 
     setState(() => _verifying = true);
     try {
-      if (_isEmail) {
-        await _save(otpCode: code);
-      } else {
-        final idToken = await _phoneAuth.verifyOtp(_verificationId!, code);
-        await _save(firebaseIdToken: idToken);
-      }
+      await _save(otpCode: code);
     } catch (e) {
       if (!mounted) return;
       _showMessage(e.toString().replaceFirst('Exception: ', ''));
@@ -208,18 +156,15 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
     }
   }
 
-  Future<void> _save({String? otpCode, String? firebaseIdToken}) async {
-    if (_handled) return;
+  Future<void> _save({String? otpCode}) async {
     try {
       final token = await _localStorage.getToken();
       await _repository.verifyContactChange(
         token!,
         _pendingIdentifier!,
         otpCode: otpCode,
-        firebaseIdToken: firebaseIdToken,
       );
       if (!mounted) return;
-      _handled = true;
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -293,7 +238,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
           ? 'Sending code to $destination…'
           : _sendError != null
               ? 'Could not send the code to $destination'
-              : 'Enter the 6-digit code sent to $destination',
+              : 'Enter the code sent to $destination',
       children: [
         if (_sendError != null) ...[
           Text(
@@ -303,7 +248,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
           ),
           const SizedBox(height: 12),
           TextButton.icon(
-            onPressed: _sending ? null : _sendPhoneOtp,
+            onPressed: _sending ? null : _resend,
             icon: const Icon(Icons.refresh, color: Colors.red),
             label: const Text(
               'Retry',
@@ -316,7 +261,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
           controller: _otpController,
           label: 'OTP',
           keyboardType: TextInputType.number,
-          maxLength: 6,
+          maxLength: _isEmail ? 6 : 4,
           textAlign: TextAlign.center,
           letterSpacing: 8,
           fontSize: 20,
@@ -325,7 +270,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
         if (_sendError == null)
           OtpCountdown(
             key: _countdownKey,
-            seconds: _isEmail ? 600 : 60,
+            seconds: _isEmail ? 600 : 300,
             onExpire: () {},
             onResend: _resend,
           ),
@@ -341,7 +286,6 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
               ? null
               : () => setState(() {
                     _pendingIdentifier = null;
-                    _verificationId = null;
                     _sendError = null;
                   }),
           child: Text(

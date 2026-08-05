@@ -5,10 +5,9 @@ import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
-import 'package:livekitapp/user/services/phone_auth_service.dart';
 
 /// Second step of logging in to a phone account: the password was accepted,
-/// now Firebase has to confirm the user still holds the number.
+/// now the SMS OTP sent by the backend has to be entered.
 ///
 /// Sign-up has its own OTP screen, which also handles emailed codes.
 class UserPhoneOtpScreen extends StatefulWidget {
@@ -27,23 +26,13 @@ class UserPhoneOtpScreen extends StatefulWidget {
 
 class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
   final _otpController = TextEditingController();
-  final _phoneAuth = PhoneAuthService();
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   final _countdownKey = GlobalKey<OtpCountdownState>();
 
-  String? _verificationId;
-  int? _resendToken;
-  bool _sending = true;
+  bool _sending = false;
   bool _verifying = false;
-  bool _completed = false;
   String? _sendError;
-
-  @override
-  void initState() {
-    super.initState();
-    _sendOtp();
-  }
 
   @override
   void dispose() {
@@ -51,82 +40,43 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _resendOtp() async {
     setState(() {
       _sending = true;
       _sendError = null;
     });
-    await _phoneAuth.sendOtp(
-      phone: widget.phone,
-      resendToken: _resendToken,
-      onCodeSent: (verificationId, resendToken) {
-        if (!mounted) return;
-        setState(() {
-          _verificationId = verificationId;
-          _resendToken = resendToken;
-          _sending = false;
-          _sendError = null;
-        });
-        _countdownKey.currentState?.restart();
-      },
-      onFailed: (message) {
-        if (!mounted) return;
-        setState(() {
-          _sending = false;
-          _sendError = message;
-        });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      },
-      onAutoVerified: (idToken) {
-        if (!mounted) return;
-        _complete(idToken);
-      },
-    );
+    try {
+      await _repository.loginInitiate(widget.phone, widget.password);
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _countdownKey.currentState?.restart();
+    } catch (e) {
+      if (!mounted) return;
+      final message = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _sending = false;
+        _sendError = message;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   Future<void> _verify() async {
     final code = _otpController.text.trim();
-    if (_verificationId == null) {
+    if (code.length != 4) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _sendError ??
-                'OTP has not been sent yet. Tap Retry to request it again.',
-          ),
-        ),
-      );
-      return;
-    }
-    if (code.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 6-digit OTP')),
+        const SnackBar(content: Text('Enter the 4-digit OTP')),
       );
       return;
     }
     setState(() => _verifying = true);
     try {
-      final idToken = await _phoneAuth.verifyOtp(_verificationId!, code);
-      await _complete(idToken);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
-    } finally {
-      if (mounted) setState(() => _verifying = false);
-    }
-  }
-
-  Future<void> _complete(String idToken) async {
-    if (_completed) return;
-    _completed = true;
-    try {
       final result = await _repository.loginVerify(
         widget.phone,
         widget.password,
-        idToken,
+        code,
       );
       await _localStorage.saveSession(result.token, result.id, result.name);
       final fcmToken = await FirebaseMessaging.instance.getToken();
@@ -139,13 +89,15 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
         (route) => false,
       );
     } catch (e) {
-      _completed = false;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
+    } finally {
+      if (mounted) setState(() => _verifying = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +118,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
                 icon: Icons.sms_outlined,
                 title: 'Verify OTP',
                 subtitle: _sending
-                    ? 'Sending OTP to +91 ${widget.phone}…'
+                    ? 'Resending OTP to +91 ${widget.phone}…'
                     : _sendError != null
                     ? 'Could not send the OTP to +91 ${widget.phone}'
                     : 'Enter the code sent to +91 ${widget.phone}',
@@ -182,7 +134,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextButton.icon(
-                      onPressed: _sending ? null : _sendOtp,
+                      onPressed: _sending ? null : _resendOtp,
                       icon: const Icon(Icons.refresh, color: Colors.red),
                       label: const Text(
                         'Retry',
@@ -198,7 +150,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
                     controller: _otpController,
                     label: 'OTP',
                     keyboardType: TextInputType.number,
-                    maxLength: 6,
+                    maxLength: 4,
                     textAlign: TextAlign.center,
                     letterSpacing: 8,
                     fontSize: 20,
@@ -209,7 +161,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
                       key: _countdownKey,
                       seconds: 60,
                       onExpire: () {},
-                      onResend: _sendOtp,
+                      onResend: _resendOtp,
                     ),
                   const SizedBox(height: 22),
                   SizedBox(

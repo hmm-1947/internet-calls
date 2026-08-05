@@ -12,6 +12,10 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 
+const _bg = Color(0xFF0B0F1A);
+const _pink = Color(0xFFE53950);
+const _dimText = Colors.white54;
+
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -59,6 +63,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   List<Map<String, dynamic>> _threads = UserDataCache().lastThreads ?? [];
+
+  late List<Map<String, dynamic>> _filtered = _applyFilter();
+
   late bool _loading = _threads.isEmpty;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
@@ -66,6 +73,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   String _search = '';
   StreamSubscription? _socketSub;
   Timer? _refreshDebounce;
+  Timer? _searchDebounce;
   String? _token;
 
   @override
@@ -122,7 +130,51 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   void dispose() {
     _socketSub?.cancel();
     _refreshDebounce?.cancel();
+    _searchDebounce?.cancel();
     super.dispose();
+  }
+
+  List<Map<String, dynamic>> _applyFilter() {
+    final query = _search.trim().toLowerCase();
+    return _threads.where((t) {
+      if (_chatFilter == 'archived') {
+        if ((t['is_archived'] ?? false) != true) return false;
+      } else {
+        if ((t['is_archived'] ?? false) == true) return false;
+        if (_chatFilter == 'unread' && (t['unread_count'] ?? 0) == 0) {
+          return false;
+        }
+        if (_chatFilter == 'favorites' && (t['is_pinned'] ?? false) != true) {
+          return false;
+        }
+      }
+      if (query.isEmpty) return true;
+      return '${t['listener_name'] ?? ''}'.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  void _setThreads(List<Map<String, dynamic>> threads) {
+    _threads = threads;
+    _filtered = _applyFilter();
+  }
+
+  void _selectFilter(String filter) {
+    if (_chatFilter == filter) return;
+    setState(() {
+      _chatFilter = filter;
+      _filtered = _applyFilter();
+    });
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || _search == value) return;
+      setState(() {
+        _search = value;
+        _filtered = _applyFilter();
+      });
+    });
   }
 
   Future<void> _load() async {
@@ -138,19 +190,21 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     if (isFirstLoad) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
+      if (token == null) return;
       final threads = await _repository.getChatThreads(
-        token!,
+        token,
         forceRefresh: !isFirstLoad,
       );
+      if (!mounted) return;
       if (dataChanged(_threads, threads)) {
         setState(() {
-          _threads = threads;
+          _setThreads(threads);
           _loading = false;
         });
       } else if (_loading) {
         setState(() => _loading = false);
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     } finally {
       _refreshInFlight = false;
@@ -168,28 +222,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       if (!mounted) return;
       if (!dataChanged(_threads, threads)) return;
       setState(() {
-        _threads = threads;
+        _setThreads(threads);
         _loading = false;
       });
     } catch (_) {}
-  }
-
-  List<Map<String, dynamic>> get _filteredThreads {
-    return _threads.where((t) {
-      if (_chatFilter == 'archived') {
-        if ((t['is_archived'] ?? false) != true) return false;
-      } else {
-        if ((t['is_archived'] ?? false) == true) return false;
-        if (_chatFilter == 'unread' && (t['unread_count'] ?? 0) == 0)
-          return false;
-        if (_chatFilter == 'favorites' && (t['is_pinned'] ?? false) != true)
-          return false;
-      }
-      if (_search.isEmpty) return true;
-      return t['listener_name'].toString().toLowerCase().contains(
-        _search.toLowerCase(),
-      );
-    }).toList();
   }
 
   Future<void> _togglePin(Map<String, dynamic> thread) async {
@@ -271,15 +307,24 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     );
   }
 
+  Future<void> _openThread(Map<String, dynamic> thread) async {
+    await Navigator.of(context).push(
+      fadeRoute(
+        ChatHistoryScreen(
+          listenerId: thread['listener_id'],
+          listenerName: '${thread['listener_name'] ?? ''}',
+          listenerPhotoUrl: thread['photo_url'],
+        ),
+        barrierColor: _bg,
+      ),
+    );
+    _refreshSilently();
+  }
+
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFF0B0F1A);
-    const cardColor = Color(0xFF0B0F1A);
-    const pink = Color(0xFFE53950);
-    const dimText = Colors.white54;
-
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: _bg,
       body: Column(
         children: [
           Padding(
@@ -295,252 +340,239 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   hintText: 'Search chats...',
-                  hintStyle: TextStyle(color: dimText),
-                  prefixIcon: Icon(Icons.search, color: dimText),
+                  hintStyle: TextStyle(color: _dimText),
+                  prefixIcon: Icon(Icons.search, color: _dimText),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(vertical: 14),
                 ),
-                onChanged: (v) => setState(() => _search = v),
+                onChanged: _onSearchChanged,
               ),
             ),
           ),
-
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : ListView(
+                  : CustomScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
-                      children: [
-                        SizedBox(
-                          height: 40,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: EdgeInsets.zero,
-                            children: [
-                              _FilterChip(
-                                label: 'All',
-                                selected: _chatFilter == 'all',
-                                onTap: () {
-                                  setState(() => _chatFilter = 'all');
-                                },
-                                activeColor: pink,
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Unread',
-                                selected: _chatFilter == 'unread',
-                                onTap: () {
-                                  setState(() => _chatFilter = 'unread');
-                                },
-                                activeColor: pink,
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Favorites',
-                                selected: _chatFilter == 'favorites',
-                                onTap: () {
-                                  setState(() => _chatFilter = 'favorites');
-                                },
-                                activeColor: pink,
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Archived',
-                                selected: _chatFilter == 'archived',
-                                onTap: () {
-                                  setState(() => _chatFilter = 'archived');
-                                },
-                                activeColor: pink,
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Group(Beta)',
-                                selected: _chatFilter == 'group',
-                                onTap: () {
-                                  setState(() => _chatFilter = 'group');
-                                },
-                                activeColor: pink,
-                              ),
-                            ],
-                          ),
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                          sliver: SliverToBoxAdapter(child: _filterRow()),
                         ),
-                        const SizedBox(height: 8),
                         if (_chatFilter == 'group')
-                          SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.5,
-                            child: Center(
-                              child: Text(
-                                'Coming soon .........',
-                                style: TextStyle(
-                                  color: pink.withOpacity(0.6),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
+                          _placeholder(
+                            'Coming soon .........',
+                            color: _pink.withValues(alpha: 0.6),
+                            bold: true,
                           )
-                        else if (_filteredThreads.isEmpty)
-                          SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.5,
-                            child: const Center(
-                              child: Text(
-                                'No chats yet',
-                                style: TextStyle(color: dimText),
-                              ),
-                            ),
-                          )
+                        else if (_filtered.isEmpty)
+                          _placeholder('No chats yet')
                         else
-                          ...List.generate(_filteredThreads.length, (index) {
-                            final thread = _filteredThreads[index];
-                            final unread = thread['unread_count'] ?? 0;
-                            return Dismissible(
-                              key: ValueKey(thread['listener_id']),
-                              background: Container(
-                                color: Colors.blueGrey,
-                                alignment: Alignment.centerLeft,
-                                padding: const EdgeInsets.only(left: 20),
-                                child: const Icon(
-                                  Icons.archive,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              secondaryBackground: Container(
-                                color: Colors.blueGrey,
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.only(right: 20),
-                                child: const Icon(
-                                  Icons.archive,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              confirmDismiss: (_) async {
-                                await _toggleArchive(thread);
-                                return false;
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                            sliver: SliverList.builder(
+                              itemCount: _filtered.length,
+                              itemBuilder: (context, index) {
+                                final thread = _filtered[index];
+                                return _ThreadTile(
+                                  key: ValueKey<Object?>(thread['listener_id']),
+                                  thread: thread,
+                                  onArchive: () => _toggleArchive(thread),
+                                  onOpen: () => _openThread(thread),
+                                  onOptions: () => _showThreadOptions(thread),
+                                );
                               },
-                              child: Material(
-                                color: cardColor,
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 6,
-                                  ),
-                                  leading: Stack(
-                                    children: [
-                                      AvatarImage(
-                                        photoUrl: thread['photo_url'],
-                                        radius: 26,
-                                        iconSize: 26,
-                                        backgroundColor: const Color(
-                                          0xFF2A3145,
-                                        ),
-                                      ),
-                                      Positioned(
-                                        right: 0,
-                                        bottom: 0,
-                                        child: PresenceDot(
-                                          presence: PresenceCache().listener(
-                                            thread['listener_id'],
-                                          ),
-                                          fallback: thread['is_online'] == true,
-                                          borderColor: bg,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      if (thread['is_pinned'] == true)
-                                        const Padding(
-                                          padding: EdgeInsets.only(right: 4),
-                                          child: Icon(
-                                            Icons.push_pin,
-                                            size: 14,
-                                            color: dimText,
-                                          ),
-                                        ),
-                                      Expanded(
-                                        child: Text(
-                                          thread['listener_name'],
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                      if (thread['is_muted'] == true)
-                                        const Icon(
-                                          Icons.notifications_off,
-                                          size: 16,
-                                          color: dimText,
-                                        ),
-                                    ],
-                                  ),
-                                  subtitle: Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      thread['last_message'],
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: unread > 0
-                                            ? Colors.white70
-                                            : dimText,
-                                      ),
-                                    ),
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        thread['time_label'] ?? '',
-                                        style: const TextStyle(
-                                          color: dimText,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      if (unread > 0)
-                                        CircleAvatar(
-                                          radius: 10,
-                                          backgroundColor: pink,
-                                          child: Text(
-                                            '$unread',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  onTap: () async {
-                                    await Navigator.of(context).push(
-                                      fadeRoute(
-                                        ChatHistoryScreen(
-                                          listenerId: thread['listener_id'],
-                                          listenerName: thread['listener_name'],
-                                          listenerPhotoUrl: thread['photo_url'],
-                                        ),
-                                        barrierColor: bg,
-                                      ),
-                                    );
-                                    _refreshSilently();
-                                  },
-                                  onLongPress: () => _showThreadOptions(thread),
-                                ),
-                              ),
-                            );
-                          }),
+                            ),
+                          ),
                       ],
                     ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _filterRow() {
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        children: [
+          for (final entry in const {
+            'all': 'All',
+            'unread': 'Unread',
+            'favorites': 'Favorites',
+            'archived': 'Archived',
+            'group': 'Group(Beta)',
+          }.entries) ...[
+            _FilterChip(
+              label: entry.value,
+              selected: _chatFilter == entry.key,
+              onTap: () => _selectFilter(entry.key),
+              activeColor: _pink,
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder(String message, {Color? color, bool bold = false}) {
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: Center(
+        child: Text(
+          message,
+          style: TextStyle(
+            color: color ?? _dimText,
+            fontSize: bold ? 16 : null,
+            fontWeight: bold ? FontWeight.w600 : null,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThreadTile extends StatelessWidget {
+  final Map<String, dynamic> thread;
+  final Future<void> Function() onArchive;
+  final VoidCallback onOpen;
+  final VoidCallback onOptions;
+
+  const _ThreadTile({
+    super.key,
+    required this.thread,
+    required this.onArchive,
+    required this.onOpen,
+    required this.onOptions,
+  });
+
+  static const _archiveBackground = ColoredBox(
+    color: Colors.blueGrey,
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: EdgeInsets.only(left: 20),
+        child: Icon(Icons.archive, color: Colors.white),
+      ),
+    ),
+  );
+
+  static const _archiveSecondaryBackground = ColoredBox(
+    color: Colors.blueGrey,
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: Padding(
+        padding: EdgeInsets.only(right: 20),
+        child: Icon(Icons.archive, color: Colors.white),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = thread['unread_count'] ?? 0;
+    return RepaintBoundary(
+      child: Dismissible(
+        key: ValueKey<Object?>(thread['listener_id']),
+        background: _archiveBackground,
+        secondaryBackground: _archiveSecondaryBackground,
+        confirmDismiss: (_) async {
+          await onArchive();
+          return false;
+        },
+        child: Material(
+          color: _bg,
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 6,
+            ),
+            leading: Stack(
+              children: [
+                AvatarImage(
+                  photoUrl: thread['photo_url'],
+                  radius: 26,
+                  iconSize: 26,
+                  backgroundColor: const Color(0xFF2A3145),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: PresenceDot(
+                    presence: PresenceCache().listener(thread['listener_id']),
+                    fallback: thread['is_online'] == true,
+                    borderColor: _bg,
+                  ),
+                ),
+              ],
+            ),
+            title: Row(
+              children: [
+                if (thread['is_pinned'] == true)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(Icons.push_pin, size: 14, color: _dimText),
+                  ),
+                Expanded(
+                  child: Text(
+                    '${thread['listener_name'] ?? ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                if (thread['is_muted'] == true)
+                  const Icon(
+                    Icons.notifications_off,
+                    size: 16,
+                    color: _dimText,
+                  ),
+              ],
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '${thread['last_message'] ?? ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: unread > 0 ? Colors.white70 : _dimText),
+              ),
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${thread['time_label'] ?? ''}',
+                  style: const TextStyle(color: _dimText, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                if (unread > 0)
+                  CircleAvatar(
+                    radius: 10,
+                    backgroundColor: _pink,
+                    child: Text(
+                      '$unread',
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                  ),
+              ],
+            ),
+            onTap: onOpen,
+            onLongPress: onOptions,
+          ),
+        ),
       ),
     );
   }

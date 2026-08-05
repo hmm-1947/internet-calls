@@ -24,12 +24,14 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   final _socketService = ChatSocketService();
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   String? _token;
-  List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _users = const [];
+
+  List<Map<String, dynamic>> _visibleUsers = const [];
+
   bool _loadingUsers = true;
   String _search = '';
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
-  String _profileName = '';
-  String? _profilePhotoUrl;
+  Timer? _searchDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -52,47 +54,56 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   }
 
   void _handleSocketEvent(Map<String, dynamic> data) {
+    if (!mounted) return;
     final type = data['type'];
-    if (type == 'user_online' || type == 'user_offline') {
-      final userId = data['user_id'];
-      if (userId == null) return;
-      final index = _users.indexWhere((u) => u['id'] == userId);
-      if (index != -1) {
-        setState(() {
-          _users[index]['is_online'] = type == 'user_online';
-        });
-      } else if (type == 'user_online') {
-        _loadUsers();
-      }
+    if (type != 'user_online' && type != 'user_offline') return;
+    final userId = data['user_id'];
+    if (userId == null) return;
+    final index = _users.indexWhere((u) => u['id'] == userId);
+    if (index == -1) {
+      if (type == 'user_online') _loadUsers();
+      return;
     }
+    final online = type == 'user_online';
+    if (_users[index]['is_online'] == online) return;
+    setState(() {
+      _users[index]['is_online'] = online;
+      _recomputeVisible();
+    });
   }
 
-Future<void> _loadProfile() async {
-  if (_token == null) return;
-  try {
-    final me = await _repository.getMe(_token!);
-    if (mounted) {
-      setState(() {
-        _profileName = me['name'] ?? '';
-        _profilePhotoUrl = me['photo_url'];
-      });
-    }
-  } catch (_) {}
-}
+  Future<void> _loadProfile() async {
+    if (_token == null) return;
+    try {
+      await _repository.getMe(_token!);
+    } catch (_) {}
+  }
 
-  List<Map<String, dynamic>> get _visibleUsers {
-    var list = _users.where((u) {
-      if (_search.isEmpty) return true;
-      final name = (u['name'] ?? '').toString().toLowerCase();
-      return name.contains(_search.toLowerCase());
-    }).toList();
+  void _recomputeVisible() {
+    final query = _search.trim().toLowerCase();
+    final list = query.isEmpty
+        ? List<Map<String, dynamic>>.of(_users)
+        : _users
+              .where((u) => '${u['name'] ?? ''}'.toLowerCase().contains(query))
+              .toList();
     list.sort((a, b) {
       final aOnline = a['is_online'] == true;
       final bOnline = b['is_online'] == true;
       if (aOnline == bOnline) return 0;
       return aOnline ? -1 : 1;
     });
-    return list;
+    _visibleUsers = list;
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || _search == value) return;
+      setState(() {
+        _search = value;
+        _recomputeVisible();
+      });
+    });
   }
 
   Future<void> _loadUsers() async {
@@ -102,13 +113,16 @@ Future<void> _loadProfile() async {
       if (mounted) {
         setState(() {
           _users = users;
+          _recomputeVisible();
           _loadingUsers = false;
         });
       }
       AvatarCache.instance.precacheAll(
-        users.map((u) => ApiConstants.resolveMediaUrl(u['photo_url'] as String?)),
+        users.map(
+          (u) => ApiConstants.resolveMediaUrl(u['photo_url'] as String?),
+        ),
       );
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => _loadingUsers = false);
     }
   }
@@ -124,6 +138,7 @@ Future<void> _loadProfile() async {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _socketSub?.cancel();
     super.dispose();
   }
@@ -135,51 +150,65 @@ Future<void> _loadProfile() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
       backgroundColor: bg,
       body: RefreshIndicator(
         color: pink,
         backgroundColor: bg,
         onRefresh: _onRefresh,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          children: [
-            _buildSearchBar(),
-            const SizedBox(height: 20),
-            const Text(
-              'Users',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildSearchBar(),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Users',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            if (_loadingUsers)
-              const Padding(
-                padding: EdgeInsets.only(top: 20),
-                child: Center(child: CircularProgressIndicator(color: pink)),
-              )
-            else if (_visibleUsers.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 20),
-                child: Center(
-                  child: Text('No users found', style: TextStyle(color: dimText)),
+            if (_loadingUsers || _visibleUsers.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 32),
+                  child: Center(
+                    child: _loadingUsers
+                        ? const CircularProgressIndicator(color: pink)
+                        : const Text(
+                            'No users found',
+                            style: TextStyle(color: dimText),
+                          ),
+                  ),
                 ),
               )
             else
-              Column(
-                children: _visibleUsers
-                    .map(
-                      (u) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _buildUserTile(u),
-                      ),
-                    )
-                    .toList(),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                sliver: SliverList.separated(
+                  itemCount: _visibleUsers.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final user = _visibleUsers[index];
+                    return RepaintBoundary(
+                      key: ValueKey<Object?>(user['id']),
+                      child: _buildUserTile(user),
+                    );
+                  },
+                ),
               ),
           ],
         ),
@@ -208,7 +237,7 @@ Future<void> _loadProfile() async {
                 border: InputBorder.none,
                 isCollapsed: true,
               ),
-              onChanged: (v) => setState(() => _search = v),
+              onChanged: _onSearchChanged,
             ),
           ),
         ],
@@ -239,78 +268,85 @@ Future<void> _loadProfile() async {
       onTap: () => _openUserProfile(user),
       borderRadius: BorderRadius.circular(16),
       child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xCC1A1A1A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x0DFFFFFF)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-          AvatarImage(photoUrl: user['photo_url'], radius: 28, iconSize: 28),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: isOnline
-                        ? const Color(0xFF74D8BD)
-                        : Colors.grey.shade600,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF0B0F1A),
-                      width: 2,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xCC1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x0DFFFFFF)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AvatarImage(
+                  photoUrl: user['photo_url'],
+                  radius: 28,
+                  iconSize: 28,
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: isOnline
+                          ? const Color(0xFF74D8BD)
+                          : Colors.grey.shade600,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF0B0F1A),
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user['name'] ?? 'User',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isOnline ? 'Online now' : 'Offline',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isOnline
-                        ? const Color(0xFF74D8BD)
-                        : const Color(0xFFE5BDBE),
-                  ),
-                ),
-                if ((user['bio'] ?? '').toString().trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    user['bio'],
-                    style: const TextStyle(fontSize: 13, color: Colors.white54),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
               ],
             ),
-          ),
-          const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
-        ],
-      ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user['name'] ?? 'User',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isOnline ? 'Online now' : 'Offline',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isOnline
+                          ? const Color(0xFF74D8BD)
+                          : const Color(0xFFE5BDBE),
+                    ),
+                  ),
+                  if ((user['bio'] ?? '').toString().trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      user['bio'],
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.white54,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
+          ],
+        ),
       ),
     );
   }

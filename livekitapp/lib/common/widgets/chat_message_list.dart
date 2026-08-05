@@ -34,21 +34,25 @@ class ChatMessageList extends StatelessWidget {
     return ValueListenableBuilder<List<Map<String, dynamic>>>(
       valueListenable: messages,
       builder: (context, list, _) {
+        final labels = <String, String>{};
+        String labelFor(Object? iso) =>
+            labels.putIfAbsent('$iso', () => chatDateLabel(iso));
+
         return ListView.builder(
           controller: controller,
           reverse: true,
           padding: const EdgeInsets.all(12),
           physics: const AlwaysScrollableScrollPhysics(),
-          cacheExtent: 1200,
+          cacheExtent: 600,
+          addAutomaticKeepAlives: false,
           itemCount: list.length,
           itemBuilder: (context, index) {
             final position = list.length - 1 - index;
             final message = list[position];
             final previous = position > 0 ? list[position - 1] : null;
-            final label = chatDateLabel(message['created_at']);
+            final label = labelFor(message['created_at']);
             final showLabel =
-                previous == null ||
-                chatDateLabel(previous['created_at']) != label;
+                previous == null || labelFor(previous['created_at']) != label;
             return ChatMessageBubble(
               key: ValueKey<String>(chatMessageKey(message)),
               message: message,

@@ -32,8 +32,8 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
     setState(() => _loading = true);
     try {
       // The backend works out from the identifier which account this is and
-      // what the second step should be: phone accounts still need a Firebase
-      // OTP, email accounts are signed in by password alone.
+      // what the second step should be: phone accounts get an SMS OTP sent
+      // right away, email accounts are signed in by password alone.
       final start = await _repository.loginInitiate(
         _identifierController.text.trim(),
         _passwordController.text,

@@ -69,7 +69,7 @@ class ActiveCallHost extends StatelessWidget {
         final barsHeight =
             (showCallBar ? _callBarHeight : 0) +
             (showVoiceBar ? _voiceBarHeight : 0) +
-            MediaQuery.of(context).padding.top;
+            MediaQuery.paddingOf(context).top;
         return Stack(
           fit: StackFit.expand,
           children: [

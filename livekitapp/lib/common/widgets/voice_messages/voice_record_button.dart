@@ -55,8 +55,8 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton> {
     });
     _showOverlay();
     unawaited(
-      Vibration.hasVibrator().then((v) {
-        if (v ?? false) Vibration.vibrate(duration: 30);
+      Vibration.hasVibrator().then((hasVibrator) {
+        if (hasVibrator) Vibration.vibrate(duration: 30);
       }),
     );
     if (!await _recorder.hasPermission()) {
@@ -76,24 +76,32 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton> {
       _path = path;
     });
     widget.onStateChanged?.call(true, Duration.zero, 0);
-    widget.onStateChanged?.call(true, Duration.zero, 0);
-    _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (_startedAt == null || _paused) return;
-      setState(() => _elapsed = DateTime.now().difference(_startedAt!));
-      widget.onStateChanged?.call(true, _elapsed, _amplitude);
-    });
+    _startTicker();
     _ampSub = _recorder
         .onAmplitudeChanged(const Duration(milliseconds: 150))
         .listen((amp) {
+          if (!mounted) return;
           final normalized = ((amp.current + 45) / 45).clamp(0.0, 1.0);
-          setState(() => _amplitude = normalized);
+          _amplitude = normalized;
           widget.onStateChanged?.call(true, _elapsed, _amplitude);
         });
   }
 
+  void _startTicker() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      final startedAt = _startedAt;
+      if (startedAt == null || _paused) return;
+      _elapsed = DateTime.now().difference(startedAt);
+      widget.onStateChanged?.call(true, _elapsed, _amplitude);
+    });
+  }
+
   Future<void> _stop({required bool send}) async {
     _timer?.cancel();
+    _timer = null;
     _ampSub?.cancel();
+    _ampSub = null;
     String? path;
     if (_paused) {
       path = _path;
@@ -125,15 +133,15 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton> {
   Future<void> _togglePause() async {
     if (_paused) {
       await _recorder.resume();
+      if (!mounted) return;
+      _startedAt = DateTime.now().subtract(_elapsed);
       setState(() => _paused = false);
-      _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
-        if (_startedAt == null || _paused) return;
-        setState(() => _elapsed += const Duration(milliseconds: 100));
-        widget.onStateChanged?.call(true, _elapsed, _amplitude);
-      });
+      _startTicker();
     } else {
       await _recorder.pause();
       _timer?.cancel();
+      _timer = null;
+      if (!mounted) return;
       setState(() => _paused = true);
       widget.onStateChanged?.call(true, _elapsed, _amplitude);
     }
@@ -169,7 +177,7 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton> {
   }
 
   Widget _buildOverlayContent() {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     return IgnorePointer(
       ignoring: !_locked,
       child: SizedBox(

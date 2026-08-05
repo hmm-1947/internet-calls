@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
 from app.schemas.schemas import ListenerStatusUpdate
-from app.models.models import CallRating
+from app.models.models import Call, CallRating
 from sqlalchemy import func as sqlfunc
 from datetime import datetime, timedelta, timezone
 from app.schemas.schemas import (
@@ -39,7 +39,8 @@ from app.core.database import get_db
 from app.models.models import AdminNotification, PendingSignup, User, Session as SessionModel
 from app.routers.notifications import create_admin_notification
 from app.utils.email_otp import generate_otp_code, send_otp_email
-from app.utils.firebase_phone import verify_phone_token, normalize_indian_phone
+from app.utils.sms_otp import generate_otp_code as generate_sms_otp_code, send_otp_sms
+from app.utils.phone import normalize_indian_phone
 from app.utils.rate_limit import enforce_rate_limit, rate_limit
 from app.utils.security import hash_password, verify_password, generate_session_token, session_expiry
 from app.utils.audit import record_audit_event
@@ -187,6 +188,16 @@ def _issue_email_otp(db: Session, pending: PendingSignup) -> None:
     send_otp_email(pending.identifier, code)
 
 
+def _issue_phone_otp(db: Session, pending: PendingSignup) -> None:
+    code = generate_sms_otp_code()
+    pending.otp_code = code
+    pending.otp_expires_at = _utcnow() + timedelta(minutes=5)
+    pending.otp_attempts = 0
+    pending.otp_sent_count = (pending.otp_sent_count or 0) + 1
+    db.commit()
+    send_otp_sms(pending.identifier, code)
+
+
 def _issue_signup_token(db: Session, pending: PendingSignup) -> str:
     """Mark the identifier verified and hand out the token for the last step."""
     pending.is_verified = True
@@ -328,8 +339,6 @@ def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_d
         _issue_email_otp(db, pending)
         return {"channel": "email", "identifier": identifier, "otp_sent": True}
 
-    # Firebase sends and verifies the SMS code from the app; we only limit how
-    # often a given number can be put through that flow.
     enforce_rate_limit(
         "signup_otp_send",
         identifier,
@@ -337,7 +346,8 @@ def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_d
         OTP_SEND_WINDOW_SECONDS,
         detail="Too many codes requested for this number. Please wait a few minutes and try again.",
     )
-    return {"channel": "phone", "identifier": identifier, "otp_sent": False}
+    _issue_phone_otp(db, pending)
+    return {"channel": "phone", "identifier": identifier, "otp_sent": True}
 
 
 @router.post(
@@ -345,19 +355,29 @@ def register_initiate(payload: UserRegisterInitiate, db: Session = Depends(get_d
     dependencies=[Depends(rate_limit("register_resend_otp", limit=5, window_seconds=300))],
 )
 def register_resend_otp(payload: UserRegisterResendOtp, db: Session = Depends(get_db)):
-    """Re-send the emailed code. Phone codes are re-sent by Firebase instead."""
+    """Re-send the sign-up verification code, by email or SMS."""
     try:
         channel, identifier = detect_identifier(payload.identifier)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    if channel != "email":
-        raise HTTPException(status_code=400, detail="Phone codes are resent from the app")
 
-    pending = _require_pending(db, identifier, "email")
-    if _taken_message(db, "email", identifier):
-        raise HTTPException(status_code=409, detail=EMAIL_TAKEN_MESSAGE)
+    pending = _require_pending(db, identifier, channel)
+    if _taken_message(db, channel, identifier):
+        raise HTTPException(
+            status_code=409, detail=EMAIL_TAKEN_MESSAGE if channel == "email" else PHONE_TAKEN_MESSAGE
+        )
 
-    _issue_email_otp(db, pending)
+    if channel == "email":
+        _issue_email_otp(db, pending)
+    else:
+        enforce_rate_limit(
+            "signup_otp_send",
+            identifier,
+            MAX_OTP_SENDS,
+            OTP_SEND_WINDOW_SECONDS,
+            detail="Too many codes requested for this number. Please wait a few minutes and try again.",
+        )
+        _issue_phone_otp(db, pending)
     return {"status": "otp_sent"}
 
 
@@ -394,7 +414,7 @@ def register_verify_otp(payload: UserRegisterVerifyEmailOtp, db: Session = Depen
     dependencies=[Depends(rate_limit("register_verify_phone", limit=20, window_seconds=300))],
 )
 def register_verify_phone(payload: UserRegisterVerifyPhone, db: Session = Depends(get_db)):
-    """Step 2 (phone): swap the Firebase token for the sign-up token."""
+    """Step 2 (phone): check the SMS code and hand back the sign-up token."""
     try:
         channel, identifier = detect_identifier(payload.identifier)
     except ValueError as exc:
@@ -404,14 +424,15 @@ def register_verify_phone(payload: UserRegisterVerifyPhone, db: Session = Depend
 
     pending = _require_pending(db, identifier, "phone")
 
-    try:
-        verified_phone = normalize_indian_phone(verify_phone_token(payload.firebase_id_token))
-    except Exception:
-        raise HTTPException(status_code=401, detail="Phone verification failed. Please try again.")
-    if verified_phone != identifier:
-        raise HTTPException(
-            status_code=401, detail="Verified phone number does not match the one you entered"
-        )
+    expires_at = _as_utc(pending.otp_expires_at)
+    if not expires_at or expires_at < _utcnow():
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    if pending.otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
+    if not pending.otp_code or pending.otp_code != (payload.otp_code or "").strip():
+        pending.otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
 
     # Someone may have registered this number while the OTP was in flight.
     if _find_user_by_phone(db, identifier):
@@ -515,6 +536,13 @@ def login_initiate(payload: UserLoginInitiate, db: Session = Depends(get_db)):
             otp_phone = normalize_indian_phone(user.phone)
         except ValueError:
             raise HTTPException(status_code=400, detail="This account has an invalid phone number. Please contact support.")
+        enforce_rate_limit("login_otp_send", otp_phone, MAX_OTP_SENDS, OTP_SEND_WINDOW_SECONDS)
+        code = generate_sms_otp_code()
+        user.reset_otp_code = code
+        user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        user.reset_otp_attempts = 0
+        db.commit()
+        send_otp_sms(otp_phone, code)
         return {"channel": "phone", "status": "credentials_ok", "phone": otp_phone}
 
     token = generate_session_token()
@@ -538,13 +566,19 @@ def login_verify(payload: UserLoginVerify, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    try:
-        firebase_phone = normalize_indian_phone(verify_phone_token(payload.firebase_id_token))
-        user_phone = normalize_indian_phone(user.phone)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Phone verification failed. Please try again.")
-    if firebase_phone != user_phone:
-        raise HTTPException(status_code=401, detail="Verified phone number does not match this account")
+    expires_at = _as_utc(user.reset_otp_expires_at)
+    if not expires_at or expires_at < _utcnow():
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    if user.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
+    if not user.reset_otp_code or user.reset_otp_code != (payload.otp_code or "").strip():
+        user.reset_otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    user.reset_otp_code = None
+    user.reset_otp_expires_at = None
+    user.reset_otp_attempts = 0
 
     token = generate_session_token()
     db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
@@ -653,12 +687,17 @@ def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Sessi
     """Start a password reset for either an email or a phone account."""
     channel, identifier, user = _reset_account(db, payload.identifier)
 
-    if channel == "phone":
-        # Firebase sends this code, exactly as it does when logging in.
-        enforce_rate_limit("reset_otp_send", identifier, MAX_OTP_SENDS, OTP_SEND_WINDOW_SECONDS)
-        return {"channel": "phone", "identifier": identifier, "status": "verify_with_firebase"}
-
     enforce_rate_limit("reset_otp_send", identifier, MAX_OTP_SENDS, OTP_SEND_WINDOW_SECONDS)
+
+    if channel == "phone":
+        otp_code = generate_sms_otp_code()
+        user.reset_otp_code = otp_code
+        user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        user.reset_otp_attempts = 0
+        db.commit()
+        send_otp_sms(identifier, otp_code)
+        return {"channel": "phone", "identifier": identifier, "status": "otp_sent"}
+
     otp_code = generate_otp_code()
     user.reset_otp_code = otp_code
     user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
@@ -672,8 +711,7 @@ def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Sessi
 @router.post("/forgot-password/verify-otp")
 def forgot_password_verify_otp(payload: UserForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
     channel, _identifier, user = _reset_account(db, payload.identifier)
-    if channel != "phone":
-        _check_reset_otp(db, user, payload.otp_code)
+    _check_reset_otp(db, user, payload.otp_code)
     return {"status": "otp_verified"}
 
 
@@ -681,22 +719,7 @@ def forgot_password_verify_otp(payload: UserForgotPasswordVerifyOtp, db: Session
 def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depends(get_db)):
     channel, identifier, user = _reset_account(db, payload.identifier)
 
-    if channel == "phone":
-        # The Firebase token is the proof of ownership here, so it has to be
-        # checked again: verifying it earlier would not stop a caller from
-        # posting straight to this endpoint.
-        if not payload.firebase_id_token:
-            raise HTTPException(status_code=400, detail="Phone verification is required")
-        try:
-            verified_phone = normalize_indian_phone(verify_phone_token(payload.firebase_id_token))
-        except Exception:
-            raise HTTPException(status_code=401, detail="Phone verification failed. Please try again.")
-        if verified_phone != identifier:
-            raise HTTPException(
-                status_code=401, detail="Verified phone number does not match this account"
-            )
-    else:
-        _check_reset_otp(db, user, payload.otp_code)
+    _check_reset_otp(db, user, payload.otp_code)
 
     if verify_password(payload.new_password, user.password_hash):
         raise HTTPException(status_code=400, detail="New password must be different from your current password")
@@ -733,6 +756,20 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
     ).filter(CallRating.listener_id.in_(listener_ids)).group_by(CallRating.listener_id).all()
     ratings_by_listener = {r[0]: (r[1], r[2]) for r in rating_rows}
 
+    # Listeners this user has already called, with the time of the most recent
+    # call. Drives the ordering below: someone the user has talked to before is
+    # far more relevant than a stranger, so those cards are pinned to the top.
+    # Every call counts, including ones that were never answered, because the
+    # intent to reach that listener is what makes them relevant.
+    last_call_rows = db.query(
+        Call.callee_listener_id,
+        sqlfunc.max(Call.created_at),
+    ).filter(
+        Call.caller_user_id == current_user.id,
+        Call.callee_listener_id.in_(listener_ids),
+    ).group_by(Call.callee_listener_id).all()
+    last_call_by_listener = {r[0]: r[1] for r in last_call_rows}
+
     result = []
     for l in listeners:
         avg_rating, rating_count = ratings_by_listener.get(l.id, (None, 0))
@@ -740,6 +777,7 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             tags = json.loads(l.tags) if l.tags else []
         except (TypeError, json.JSONDecodeError):
             tags = []
+        last_call_at = last_call_by_listener.get(l.id)
         result.append({
             "id": l.id, "name": l.name, "is_online": bool(l.is_online) and manager.is_listener_online(l.id),
             "tags": tags,
@@ -748,7 +786,25 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             "photo_url": l.photo_url,
             "age": l.age,
             "occupation": l.occupation,
+            # Null for a listener this user has never called. The client sorts
+            # on the same field so presence changes arriving over the socket
+            # keep the list in this exact order without a refetch.
+            "last_interacted_at": last_call_at.isoformat() if last_call_at else None,
         })
+
+    def _order_key(item):
+        last_call_at = last_call_by_listener.get(item["id"])
+        return (
+            # 1. previously called listeners, whether they are online or not
+            0 if last_call_at else 1,
+            # 2. online before offline, inside each of those two groups
+            0 if item["is_online"] else 1,
+            # 3. most recently called first (0 keeps strangers in id order)
+            -last_call_at.timestamp() if last_call_at else 0,
+            item["id"],
+        )
+
+    result.sort(key=_order_key)
     return result
 
 @router.get("/listener/{listener_id}")
@@ -965,7 +1021,6 @@ def contact_change_request_otp(
         send_otp_email(identifier, code)
         return {"channel": "email", "identifier": identifier, "otp_sent": True}
 
-    # Firebase sends and checks the SMS from the app, exactly as at sign-up.
     enforce_rate_limit(
         "contact_change_otp_send",
         identifier,
@@ -973,8 +1028,11 @@ def contact_change_request_otp(
         OTP_SEND_WINDOW_SECONDS,
         detail="Too many codes requested for this number. Please wait a few minutes and try again.",
     )
+    code = generate_sms_otp_code()
+    current_user.pending_contact_otp_code = code
     db.commit()
-    return {"channel": "phone", "identifier": identifier, "otp_sent": False}
+    send_otp_sms(identifier, code)
+    return {"channel": "phone", "identifier": identifier, "otp_sent": True}
 
 
 @router.post(
@@ -1004,34 +1062,17 @@ def contact_change_verify(
         db.commit()
         raise HTTPException(status_code=400, detail=CONTACT_CHANGE_EXPIRED_MESSAGE)
 
-    if channel == "email":
-        if current_user.pending_contact_otp_attempts >= MAX_OTP_ATTEMPTS:
-            raise HTTPException(
-                status_code=429, detail="Too many attempts. Please request a new OTP."
-            )
-        if (
-            not current_user.pending_contact_otp_code
-            or current_user.pending_contact_otp_code != (payload.otp_code or "").strip()
-        ):
-            current_user.pending_contact_otp_attempts += 1
-            db.commit()
-            raise HTTPException(status_code=400, detail="Invalid OTP")
-    else:
-        if not payload.firebase_id_token:
-            raise HTTPException(status_code=400, detail="Phone verification is required")
-        try:
-            verified_phone = normalize_indian_phone(
-                verify_phone_token(payload.firebase_id_token)
-            )
-        except Exception:
-            raise HTTPException(
-                status_code=401, detail="Phone verification failed. Please try again."
-            )
-        if verified_phone != identifier:
-            raise HTTPException(
-                status_code=401,
-                detail="Verified phone number does not match the one you entered",
-            )
+    if current_user.pending_contact_otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(
+            status_code=429, detail="Too many attempts. Please request a new OTP."
+        )
+    if (
+        not current_user.pending_contact_otp_code
+        or current_user.pending_contact_otp_code != (payload.otp_code or "").strip()
+    ):
+        current_user.pending_contact_otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
 
     # Re-checked here because both can change while the code is in flight, and
     # verifying earlier is no proof the write is still allowed.

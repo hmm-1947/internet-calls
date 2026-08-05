@@ -26,6 +26,8 @@ Widget buildGiftIcon(String? icon, {double size = 34}) {
         width: size,
         height: size,
         fit: BoxFit.cover,
+        cacheWidth: (size * 3).round(),
+        cacheHeight: (size * 3).round(),
         loadingBuilder: (ctx, child, progress) {
           if (progress == null) return child;
           return SizedBox(
@@ -221,7 +223,7 @@ class _GiftSheetState extends State<GiftSheet> {
             children: widget.gifts
                 .map(
                   (g) => SizedBox(
-                    width: (MediaQuery.of(context).size.width - 40 - 20) / 3,
+                    width: (MediaQuery.sizeOf(context).width - 40 - 20) / 3,
                     child: Column(
                       children: [
                           Container(

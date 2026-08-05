@@ -47,7 +47,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
   EventsListener<RoomEvent>? _roomListener;
   String _status = 'Connecting...';
   bool _speakerOn = false;
-  double _remoteAudioLevel = 0;
+  final ValueNotifier<double> _remoteAudioLevel = ValueNotifier<double>(0);
   ConnectionQuality _connectionQuality = ConnectionQuality.unknown;
   StreamSubscription? _fcmSubscription;
   bool _isEnding = false;
@@ -57,7 +57,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
   VideoTrack? _remoteVideoTrack;
   bool _remoteVideoMuted = false;
   Timer? _durationTimer;
-  int _callDurationSeconds = 0;
+  final ValueNotifier<int> _callDurationSeconds = ValueNotifier<int>(0);
   StreamSubscription? _giftSub;
   Timer? _audioLevelTimer;
   bool _foregroundServiceStarted = false;
@@ -150,19 +150,31 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     });
   }
 
+  void _setRemoteAudioLevel(double level) {
+    if (!mounted || _isEnding) return;
+    final clamped = level.clamp(0.0, 1.0);
+    if ((clamped - _remoteAudioLevel.value).abs() < 0.01) return;
+    _remoteAudioLevel.value = clamped;
+  }
+
+  void _startAudioLevelPolling(Room room) {
+    if (widget.isVideo) return;
+    _audioLevelTimer?.cancel();
+    _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted || _isEnding) return;
+      if (room.remoteParticipants.isEmpty) return;
+      _setRemoteAudioLevel(room.remoteParticipants.values.first.audioLevel);
+    });
+  }
+
   EventsListener<RoomEvent> _bindRoomEvents(Room room) {
     final roomListener = room.createListener();
     roomListener.on<SpeakingChangedEvent>((event) {
-      if (event.participant is RemoteParticipant && mounted) {
-        setState(() => _remoteAudioLevel = event.participant.audioLevel);
+      if (event.participant is RemoteParticipant) {
+        _setRemoteAudioLevel(event.participant.audioLevel);
       }
     });
-    _audioLevelTimer?.cancel();
-    _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (!mounted || room.remoteParticipants.isEmpty) return;
-      final level = room.remoteParticipants.values.first.audioLevel;
-      setState(() => _remoteAudioLevel = level);
-    });
+    _startAudioLevelPolling(room);
     roomListener.on<ParticipantConnectionQualityUpdatedEvent>((event) {
       if (event.participant is LocalParticipant && mounted) {
         setState(() => _connectionQuality = event.connectionQuality);
@@ -352,7 +364,9 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
       VolumeController.instance.showSystemUI = false;
       VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
       if (widget.callId != null) {
-        await CallkitService.instance.setCallConnected(widget.callId.toString());
+        await CallkitService.instance.setCallConnected(
+          widget.callId.toString(),
+        );
       }
 
       if (_isEnding || !mounted) {
@@ -456,13 +470,13 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
 
   void _startDurationTimer({int seedSeconds = 0}) {
     if (_durationTimer != null || _isEnding) return;
-    _callDurationSeconds = seedSeconds;
-    if (mounted) setState(() {});
-    ActiveCallManager.instance.updateDuration(_callDurationSeconds);
+    _callDurationSeconds.value = seedSeconds;
+    ActiveCallManager.instance.updateDuration(seedSeconds);
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() => _callDurationSeconds++);
-      ActiveCallManager.instance.updateDuration(_callDurationSeconds);
+      final next = _callDurationSeconds.value + 1;
+      _callDurationSeconds.value = next;
+      ActiveCallManager.instance.updateDuration(next);
     });
   }
 
@@ -470,6 +484,14 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     final m = (seconds ~/ 60).toString().padLeft(2, '0');
     final s = (seconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+
+  Widget _durationText(TextStyle style) {
+    return ValueListenableBuilder<int>(
+      valueListenable: _callDurationSeconds,
+      builder: (context, seconds, _) =>
+          Text(_formatDuration(seconds), style: style),
+    );
   }
 
   Future<void> _hangUp({bool notifyBackend = true}) async {
@@ -480,7 +502,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     }
     _roomListener?.dispose();
     _roomListener = null;
-_room?.disconnect();
+    _room?.disconnect();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
     _remoteVideoPoll?.cancel();
@@ -515,13 +537,15 @@ _room?.disconnect();
     } else {
       LockscreenService.instance.hideOverLockscreen();
     }
-_fcmSubscription?.cancel();
+    _fcmSubscription?.cancel();
     _giftSub?.cancel();
     _roomListener?.dispose();
     _room?.disconnect();
     _durationTimer?.cancel();
     _audioLevelTimer?.cancel();
     _remoteVideoPoll?.cancel();
+    _remoteAudioLevel.dispose();
+    _callDurationSeconds.dispose();
     ProximityService.instance.disable();
     CallForegroundService.instance.stop();
     super.dispose();
@@ -600,12 +624,17 @@ _fcmSubscription?.cancel();
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            _status.isEmpty ? _formatDuration(_callDurationSeconds) : _status,
-            style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
-          ),
+          if (_status.isEmpty)
+            _durationText(
+              const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+            )
+          else
+            Text(
+              _status,
+              style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+            ),
           const Spacer(),
-      PulsingAvatarRing(
+          PulsingAvatarRing(
             audioLevel: _remoteAudioLevel,
             showVideo: false,
             videoTrack: _remoteVideoTrack,
@@ -682,7 +711,7 @@ _fcmSubscription?.cancel();
         Positioned.fill(
           child: showRemoteVideo
               ? VideoTrackRenderer(_remoteVideoTrack!)
-           : Container(
+              : Container(
                   color: const Color(0xFF0B0B0B),
                   child: Center(
                     child: AvatarImage(
@@ -742,12 +771,8 @@ _fcmSubscription?.cancel();
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _formatDuration(_callDurationSeconds),
-                        style: const TextStyle(
-                          color: Color(0xFFE5BDBE),
-                          fontSize: 15,
-                        ),
+                      _durationText(
+                        const TextStyle(color: Color(0xFFE5BDBE), fontSize: 15),
                       ),
                     ],
                   ),

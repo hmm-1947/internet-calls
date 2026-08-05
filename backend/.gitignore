@@ -6,3 +6,8 @@ __pycache__/
 .env
 app/venv/
 admin_panel/config.js
+profile_photos/
+ringtones/
+gift_icons/
+landing/
+special_offers/

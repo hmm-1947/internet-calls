@@ -84,7 +84,7 @@ class _CrownNavBarState extends State<CrownNavBar> {
       );
     }
 
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     final barHeight = 78 + bottomInset;
     // How far the crown button pokes above the bar. Anything drawn above the
     // bar's own box is not hit-testable by default, so this is handled by
@@ -212,6 +212,12 @@ class _CrownNavBarState extends State<CrownNavBar> {
                               width: widget.crownSize,
                               height: widget.crownSize,
                               fit: BoxFit.cover,
+                              cacheWidth:
+                                  (widget.crownSize *
+                                          MediaQuery.devicePixelRatioOf(
+                                            context,
+                                          ))
+                                      .round(),
                             ),
                           )
                         : Icon(
@@ -227,11 +233,13 @@ class _CrownNavBarState extends State<CrownNavBar> {
       ),
     );
 
-    if (overhang == 0) return content;
+    if (overhang == 0) return RepaintBoundary(child: content);
 
     // Reports only `barHeight` to the Scaffold (so the body's bottom padding is
     // unchanged) while painting and hit-testing the crown above it.
-    return _OverflowHitTestBox(overflow: overhang, child: content);
+    return RepaintBoundary(
+      child: _OverflowHitTestBox(overflow: overhang, child: content),
+    );
   }
 }
 
@@ -245,7 +253,7 @@ class _OverflowHitTestBox extends SingleChildRenderObjectWidget {
   final double overflow;
 
   const _OverflowHitTestBox({required this.overflow, required Widget child})
-      : super(child: child);
+    : super(child: child);
 
   @override
   _RenderOverflowHitTestBox createRenderObject(BuildContext context) =>

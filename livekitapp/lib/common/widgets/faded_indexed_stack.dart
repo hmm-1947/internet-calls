@@ -17,19 +17,37 @@ class FadedIndexedStack extends StatefulWidget {
 }
 
 class _FadedIndexedStackState extends State<FadedIndexedStack> {
+  final Set<int> _visited = <int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _visited.add(widget.index);
+  }
+
+  @override
+  void didUpdateWidget(FadedIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _visited.add(widget.index);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
         for (var i = 0; i < widget.children.length; i++)
-          Offstage(
-            offstage: widget.index != i,
-            child: AnimatedOpacity(
-              opacity: widget.index == i ? 1 : 0,
-              duration: widget.duration,
-              child: widget.children[i],
+          if (_visited.contains(i))
+            Offstage(
+              offstage: widget.index != i,
+              child: AnimatedOpacity(
+                opacity: widget.index == i ? 1 : 0,
+                duration: widget.duration,
+                child: TickerMode(
+                  enabled: widget.index == i,
+                  child: widget.children[i],
+                ),
+              ),
             ),
-          ),
       ],
     );
   }

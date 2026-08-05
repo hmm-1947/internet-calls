@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
-import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/common/widgets/avatar_image.dart';
 
 String _fmtDateTime(String iso) {
-  final dt = DateTime.parse(iso).toLocal();
+  final dt = (DateTime.tryParse(iso) ?? DateTime.now()).toLocal();
   final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
   final m = dt.minute.toString().padLeft(2, '0');
   final ampm = dt.hour >= 12 ? 'PM' : 'AM';
@@ -37,6 +39,7 @@ Color _statusColor(String status, Color pink) {
 }
 
 String _statusLabel(String status) {
+  if (status.isEmpty) return '';
   switch (status) {
     case 'ended':
       return 'Completed';
@@ -97,40 +100,60 @@ class CallHistoryScreen extends StatefulWidget {
 class _CallHistoryScreenState extends State<CallHistoryScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
-  List<Map<String, dynamic>> _calls = [];
-  int _profileCoins = 0;
+  List<Map<String, dynamic>> _calls = const [];
+  List<Map<String, dynamic>> _filteredCalls = const [];
   bool _loading = true;
   bool _refreshInFlight = false;
   DateTime? _lastRefreshAt;
   String _search = '';
   String _filter = 'all';
+  Timer? _searchDebounce;
 
-  List<Map<String, dynamic>> get _filteredCalls {
-    var calls = _calls;
-    if (_filter == 'accepted') {
-      calls = calls.where((c) => c['status'] == 'ended').toList();
-    } else if (_filter == 'cancelled') {
-      calls = calls.where((c) => c['status'] == 'cancelled').toList();
-    } else if (_filter == 'rejected') {
-      calls = calls.where((c) => c['status'] == 'rejected').toList();
-    } else if (_filter == 'missed') {
-      calls = calls.where((c) => c['status'] == 'missed').toList();
-    }
-    if (_search.isEmpty) return calls;
-    return calls
-        .where(
-          (c) => (c['listener_name'] ?? '').toString().toLowerCase().contains(
-            _search.toLowerCase(),
-          ),
-        )
-        .toList();
+  List<Map<String, dynamic>> _applyFilter() {
+    final query = _search.trim().toLowerCase();
+    const statusOf = <String, String>{
+      'accepted': 'ended',
+      'cancelled': 'cancelled',
+      'rejected': 'rejected',
+      'missed': 'missed',
+    };
+    final status = statusOf[_filter];
+    return _calls.where((c) {
+      if (status != null && c['status'] != status) return false;
+      if (query.isEmpty) return true;
+      return '${c['listener_name'] ?? ''}'.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  void _setFilter(String filter) {
+    if (_filter == filter) return;
+    setState(() {
+      _filter = filter;
+      _filteredCalls = _applyFilter();
+    });
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || _search == value) return;
+      setState(() {
+        _search = value;
+        _filteredCalls = _applyFilter();
+      });
+    });
   }
 
   @override
   void initState() {
     super.initState();
     _load();
-    _loadCoins();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -146,27 +169,23 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     if (isFirstLoad) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
-      final calls = await _repository.getCallHistory(token!);
+      if (token == null) return;
+      final calls = await _repository.getCallHistory(token);
+      if (!mounted) return;
       if (dataChanged(_calls, calls)) {
         setState(() {
           _calls = calls;
+          _filteredCalls = _applyFilter();
           _loading = false;
         });
       } else if (_loading) {
         setState(() => _loading = false);
       }
-    } catch (e) {
-      setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     } finally {
       _refreshInFlight = false;
     }
-  }
-
-  Future<void> _loadCoins() async {
-    final token = await _localStorage.getToken();
-    if (token == null) return;
-    final me = await _repository.getMe(token);
-    if (mounted) setState(() => _profileCoins = me['coins'] ?? 0);
   }
 
   @override
@@ -197,7 +216,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(vertical: 14),
                 ),
-                onChanged: (v) => setState(() => _search = v),
+                onChanged: _onSearchChanged,
               ),
             ),
           ),
@@ -212,35 +231,35 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 _CallFilterChip(
                   label: 'All',
                   selected: _filter == 'all',
-                  onTap: () => setState(() => _filter = 'all'),
+                  onTap: () => _setFilter('all'),
                   activeColor: pink,
                 ),
                 const SizedBox(width: 8),
                 _CallFilterChip(
                   label: 'Accepted',
                   selected: _filter == 'accepted',
-                  onTap: () => setState(() => _filter = 'accepted'),
+                  onTap: () => _setFilter('accepted'),
                   activeColor: pink,
                 ),
                 const SizedBox(width: 8),
                 _CallFilterChip(
                   label: 'Cancelled',
                   selected: _filter == 'cancelled',
-                  onTap: () => setState(() => _filter = 'cancelled'),
+                  onTap: () => _setFilter('cancelled'),
                   activeColor: pink,
                 ),
                 const SizedBox(width: 8),
                 _CallFilterChip(
                   label: 'Rejected',
                   selected: _filter == 'rejected',
-                  onTap: () => setState(() => _filter = 'rejected'),
+                  onTap: () => _setFilter('rejected'),
                   activeColor: pink,
                 ),
                 const SizedBox(width: 8),
                 _CallFilterChip(
                   label: 'Missed',
                   selected: _filter == 'missed',
-                  onTap: () => setState(() => _filter = 'missed'),
+                  onTap: () => _setFilter('missed'),
                   activeColor: pink,
                 ),
               ],
@@ -258,7 +277,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       children: [
                         SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.7,
+                          height: MediaQuery.sizeOf(context).height * 0.7,
                           child: const Center(
                             child: Text(
                               'No calls yet',
@@ -268,92 +287,20 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                         ),
                       ],
                     )
-                  : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: _filteredCalls.length,
-                      itemBuilder: (context, index) {
-                        final call = _filteredCalls[index];
-                        final status = call['status'] as String;
-                        final callType = call['call_type'] as String;
-                        final photoUrl = ApiConstants.resolveMediaUrl(
-                          call['other_party_photo_url'],
-                        );
-                        return LayoutBuilder(
-                          builder: (context, constraints) {
-                            // ListTile asserts when the trailing widget takes up
-                            // the whole tile, which a very narrow row does (split
-                            // screen, or a frame while the window is resizing), so
-                            // the timestamp is dropped rather than crashing.
-                            final showTimestamp = constraints.maxWidth >= 220;
-                            return ListTile(
-                              leading: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 24,
-                                    backgroundColor: const Color(0xFF2A3145),
-                                    backgroundImage: photoUrl.isNotEmpty
-                                        ? NetworkImage(photoUrl)
-                                        : null,
-                                    child: photoUrl.isEmpty
-                                        ? const Icon(
-                                            Icons.person,
-                                            color: Colors.white54,
-                                          )
-                                        : null,
-                                  ),
-                                  Positioned(
-                                    bottom: -2,
-                                    right: -2,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(3),
-                                      decoration: BoxDecoration(
-                                        color: bg,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        callType == 'video'
-                                            ? Icons.videocam
-                                            : Icons.call,
-                                        size: 12,
-                                        color: pink,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final showTimestamp = constraints.maxWidth >= 220;
+                        return ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: _filteredCalls.length,
+                          itemExtent: 72,
+                          itemBuilder: (context, index) {
+                            final call = _filteredCalls[index];
+                            return RepaintBoundary(
+                              child: _CallHistoryTile(
+                                call: call,
+                                showTimestamp: showTimestamp,
                               ),
-                              title: Text(
-                                call['listener_name'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Row(
-                                children: [
-                                  Icon(
-                                    _statusIcon(status, callType),
-                                    size: 14,
-                                    color: _statusColor(status, pink),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    status == 'ended'
-                                        ? _fmtDuration(call['duration_seconds'])
-                                        : _statusLabel(status),
-                                    style: const TextStyle(color: dimText),
-                                  ),
-                                ],
-                              ),
-                              trailing: showTimestamp
-                                  ? Text(
-                                      _fmtDateTime(call['created_at']),
-                                      style: const TextStyle(
-                                        color: dimText,
-                                        fontSize: 12,
-                                      ),
-                                    )
-                                  : null,
                             );
                           },
                         );
@@ -363,6 +310,83 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CallHistoryTile extends StatelessWidget {
+  final Map<String, dynamic> call;
+  final bool showTimestamp;
+
+  const _CallHistoryTile({required this.call, required this.showTimestamp});
+
+  static const _bg = Color(0xFF0B0F1A);
+  static const _pink = Color(0xFFE53950);
+  static const _dimText = Colors.white54;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = '${call['status'] ?? ''}';
+    final callType = '${call['call_type'] ?? ''}';
+    return ListTile(
+      leading: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AvatarImage(
+            photoUrl: call['other_party_photo_url'] as String?,
+            radius: 24,
+            iconSize: 24,
+            backgroundColor: const Color(0xFF2A3145),
+          ),
+          Positioned(
+            bottom: -2,
+            right: -2,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: const BoxDecoration(
+                color: _bg,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                callType == 'video' ? Icons.videocam : Icons.call,
+                size: 12,
+                color: _pink,
+              ),
+            ),
+          ),
+        ],
+      ),
+      title: Text(
+        '${call['listener_name'] ?? ''}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Row(
+        children: [
+          Icon(
+            _statusIcon(status, callType),
+            size: 14,
+            color: _statusColor(status, _pink),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            status == 'ended'
+                ? _fmtDuration((call['duration_seconds'] ?? 0) as int)
+                : _statusLabel(status),
+            style: const TextStyle(color: _dimText),
+          ),
+        ],
+      ),
+      trailing: showTimestamp
+          ? Text(
+              _fmtDateTime('${call['created_at']}'),
+              style: const TextStyle(color: _dimText, fontSize: 12),
+            )
+          : null,
     );
   }
 }

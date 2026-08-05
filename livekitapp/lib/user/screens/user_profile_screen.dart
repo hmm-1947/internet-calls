@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/screens/change_password_screen.dart';
 import 'package:livekitapp/common/screens/legal_document_screen.dart';
@@ -412,14 +411,14 @@ Future<void> refresh() async {
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
                   SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.7,
+                    height: MediaQuery.sizeOf(context).height * 0.7,
                     child: const Center(child: CircularProgressIndicator()),
                   ),
                 ],
               )
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).padding.bottom + 90),
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.paddingOf(context).bottom + 90),
                 children: [
                   Center(
                     child: Container(

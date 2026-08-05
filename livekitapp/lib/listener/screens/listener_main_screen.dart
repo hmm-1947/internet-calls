@@ -70,7 +70,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     final navBarHeight = 78 + bottomInset;
     return Scaffold(
       backgroundColor: Colors.black,

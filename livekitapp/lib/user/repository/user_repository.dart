@@ -139,7 +139,7 @@ class UserRepository {
     return data['signup_token'] as String;
   }
 
-  /// Mails a fresh sign-up code. Phone codes are resent through Firebase.
+  /// Resends the sign-up verification code, by email or SMS.
   Future<void> registerResendOtp(String identifier) async {
     final response = await _apiClient.post(ApiConstants.userRegisterResendOtp, {
       'identifier': identifier,
@@ -150,14 +150,14 @@ class UserRepository {
     }
   }
 
-  /// Sign-up step 2 (phone): exchange the Firebase token for the sign-up token.
+  /// Sign-up step 2 (phone): exchange the SMS code for the sign-up token.
   Future<String> registerVerifyPhone(
     String identifier,
-    String firebaseIdToken,
+    String otpCode,
   ) async {
     final response = await _apiClient.post(
       ApiConstants.userRegisterVerifyPhone,
-      {'identifier': identifier, 'firebase_id_token': firebaseIdToken},
+      {'identifier': identifier, 'otp_code': otpCode},
     );
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
@@ -222,12 +222,12 @@ class UserRepository {
   Future<AuthResponse> loginVerify(
     String phone,
     String password,
-    String firebaseIdToken,
+    String otpCode,
   ) async {
     final response = await _apiClient.post(ApiConstants.userLoginVerify, {
       'phone': phone,
       'password': password,
-      'firebase_id_token': firebaseIdToken,
+      'otp_code': otpCode,
     });
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
@@ -236,8 +236,8 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
-  /// Starts a password reset. Email accounts get a mailed code; phone accounts
-  /// are told to verify through Firebase instead.
+  /// Starts a password reset. Both email and phone accounts get an OTP sent
+  /// to them, by mail or SMS respectively.
   Future<AuthChannel> forgotPasswordRequestOtp(String identifier) async {
     final response = await _apiClient.post(
       ApiConstants.userForgotPasswordRequestOtp,
@@ -261,18 +261,16 @@ class UserRepository {
     }
   }
 
-  /// Finishes the reset with whichever proof the channel uses: the mailed
-  /// [otpCode] for email accounts, or [firebaseIdToken] for phone accounts.
+  /// Finishes the reset with the OTP sent to the identifier (mailed for
+  /// email accounts, texted for phone accounts).
   Future<void> forgotPasswordReset(
     String identifier,
     String newPassword, {
     String? otpCode,
-    String? firebaseIdToken,
   }) async {
     final response = await _apiClient.post(ApiConstants.userForgotPasswordReset, {
       'identifier': identifier,
       'otp_code': otpCode,
-      'firebase_id_token': firebaseIdToken,
       'new_password': newPassword,
     });
     final data = jsonDecode(response.body);
@@ -365,6 +363,10 @@ class UserRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Call failed');
     }
+    // The listener is now someone the user has called, which changes where
+    // their card sits on the home screen. Drop the cached catalogue so the
+    // next read refetches with the updated `last_interacted_at`.
+    UserDataCache().invalidateListeners();
     return data;
   }
 
@@ -730,9 +732,9 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     return Map<String, dynamic>.from(data);
   }
 
-  /// Step 1 of adding or changing the registered email / phone number. Email
-  /// codes are mailed by the backend; phone codes are sent through Firebase,
-  /// which is why the channel comes back to the caller.
+  /// Step 1 of adding or changing the registered email / phone number. Both
+  /// channels send an OTP (mail or SMS), which is why the channel comes back
+  /// to the caller.
   Future<AuthChannel> requestContactChangeOtp(
     String token,
     String identifier,
@@ -748,17 +750,15 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
   }
 
   /// Step 2: prove the new email/phone is reachable and save it on the
-  /// account. Email changes pass [otpCode], phone changes [firebaseIdToken].
+  /// account, using the OTP sent to it.
   Future<Map<String, dynamic>> verifyContactChange(
     String token,
     String identifier, {
     String? otpCode,
-    String? firebaseIdToken,
   }) async {
     final response = await _apiClient.post(ApiConstants.userContactVerify, {
       'identifier': identifier,
       'otp_code': otpCode,
-      'firebase_id_token': firebaseIdToken,
     }, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {

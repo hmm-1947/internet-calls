@@ -94,10 +94,10 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
 
     setState(() => _loading = true);
     try {
-      // Starts verification: the backend mails the code for an email, or
-      // clears the number for the Firebase SMS on the next screen. Either way
-      // it refuses up front if the identifier already has an account, so no
-      // code is ever sent to a registered email or phone.
+      // Starts verification: the backend sends the code, mailed for an email
+      // or texted for a phone number. Either way it refuses up front if the
+      // identifier already has an account, so no code is ever sent to a
+      // registered email or phone.
       final start = await _repository.registerInitiate(
         _normalizedIdentifier,
         _password,
