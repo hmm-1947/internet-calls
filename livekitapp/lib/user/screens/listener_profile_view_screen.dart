@@ -188,42 +188,55 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                 children: [
-                  Center(
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 96,
-                          height: 96,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _AppColors.brandRed,
-                              width: 2,
-                            ),
-                          ),
-                          child: AvatarImage(photoUrl: _photoUrl, radius: 44, iconSize: 44),
-                        ),
-                        Positioned(
-                          right: 2,
-                          bottom: 4,
-                          child: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: _isOnline
-                                  ? _AppColors.online
-                                  : _AppColors.offline,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: _AppColors.bg,
-                                width: 2,
+                  SizedBox(
+                    height: 320,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final screenWidth = MediaQuery.sizeOf(context).width;
+                        return OverflowBox(
+                          minWidth: screenWidth,
+                          maxWidth: screenWidth,
+                          minHeight: 320,
+                          maxHeight: 320,
+                          child: Stack(
+                            children: [
+                              HeroProfileImage(photoUrl: _photoUrl, height: 320),
+                              Positioned(
+                                left: 20,
+                                bottom: 20,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: _isOnline
+                                            ? _AppColors.online
+                                            : _AppColors.offline,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: _AppColors.bg,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _isOnline ? 'ONLINE' : 'OFFLINE',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 12),
