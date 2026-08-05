@@ -361,60 +361,85 @@ Future<void> _pickAndUploadPhoto() async {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                 children: [
-                  Center(
-                    child: GestureDetector(
-                      onTap: _editing && !_uploadingPhoto ? _pickAndUploadPhoto : null,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: 96,
-                            height: 96,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: _AppColors.brandRed,
-                                width: 2,
-                              ),
-                            ),
-                            child: _uploadingPhoto
-                                ? const CircularProgressIndicator()
-                                : AvatarImage(photoUrl: _photoUrl, radius: 44, iconSize: 44),
-                          ),
-                          Positioned(
-                            right: 2,
-                            bottom: 4,
-                            child: Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: _isOnline ? _AppColors.online : _AppColors.textMuted,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: _AppColors.bg,
-                                  width: 2,
+                  SizedBox(
+                    height: 320,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final screenWidth = MediaQuery.sizeOf(context).width;
+                        return OverflowBox(
+                          minWidth: screenWidth,
+                          maxWidth: screenWidth,
+                          minHeight: 320,
+                          maxHeight: 320,
+                          child: GestureDetector(
+                            onTap: _editing && !_uploadingPhoto ? _pickAndUploadPhoto : null,
+                            child: Stack(
+                              children: [
+                                HeroProfileImage(photoUrl: _photoUrl, height: 320),
+                                if (_uploadingPhoto)
+                                  Positioned.fill(
+                                    child: ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(
+                                        bottom: Radius.circular(28),
+                                      ),
+                                      child: Container(
+                                        color: Colors.black45,
+                                        alignment: Alignment.center,
+                                        child: const CircularProgressIndicator(),
+                                      ),
+                                    ),
+                                  ),
+                                Positioned(
+                                  left: 20,
+                                  bottom: 20,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: _isOnline
+                                              ? _AppColors.online
+                                              : _AppColors.textMuted,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: _AppColors.bg,
+                                            width: 2,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        _isOnline ? 'ONLINE' : 'OFFLINE',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                                if (_editing)
+                                  Positioned(
+                                    right: 20,
+                                    bottom: 20,
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: const BoxDecoration(
+                                        color: _AppColors.brandRed,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-
-                          if (_editing)
-                            Positioned(
-                              right: -4,
-                              top: -4,
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: const BoxDecoration(
-                                  color: _AppColors.brandRed,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
-                              ),
-                            ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 12),

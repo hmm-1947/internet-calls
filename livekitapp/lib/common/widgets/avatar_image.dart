@@ -108,3 +108,63 @@ class AvatarImage extends StatelessWidget {
     );
   }
 }
+
+/// Full-bleed rectangular hero image for edit-profile screens: a tall photo
+/// with rounded bottom corners, matching the profile-view screens, as
+/// opposed to [AvatarImage]'s small circular avatar.
+class HeroProfileImage extends StatelessWidget {
+  final String? photoUrl;
+  final double height;
+  final Color backgroundColor;
+  final IconData fallbackIcon;
+  final double fallbackIconSize;
+  final BorderRadius borderRadius;
+
+  const HeroProfileImage({
+    super.key,
+    required this.photoUrl,
+    this.height = 320,
+    this.backgroundColor = const Color(0xFF2A2A2A),
+    this.fallbackIcon = Icons.person,
+    this.fallbackIconSize = 72,
+    this.borderRadius = const BorderRadius.vertical(
+      bottom: Radius.circular(28),
+    ),
+  });
+
+  Widget _fallback() => Container(
+    color: backgroundColor,
+    alignment: Alignment.center,
+    child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+  );
+
+  Widget _image(ImageProvider provider) => Image(
+    image: provider,
+    fit: BoxFit.cover,
+    errorBuilder: (_, _, _) => _fallback(),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child;
+    final path = photoUrl;
+    if (path != null && path.isNotEmpty && !path.startsWith('http')) {
+      final filePath = path.startsWith('file://')
+          ? Uri.parse(path).toFilePath()
+          : path;
+      if (_FileExistsCache.exists(filePath)) {
+        child = _image(FileImage(File(filePath)));
+      } else {
+        child = _fallback();
+      }
+    } else {
+      final resolved = ApiConstants.resolveMediaUrl(photoUrl);
+      child = resolved.isEmpty ? _fallback() : _image(NetworkImage(resolved));
+    }
+
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: SizedBox(width: double.infinity, height: height, child: child),
+    );
+  }
+}
