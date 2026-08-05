@@ -154,8 +154,13 @@ class HeroProfileImage extends StatelessWidget {
           : path;
       if (_FileExistsCache.exists(filePath)) {
         child = _image(FileImage(File(filePath)));
-      } else {
+      } else if (AvatarImage._isDeviceFilePath(path)) {
+        // A cached file the OS has since evicted. Falling through would
+        // prefix the API base url onto a filesystem path and request a 404.
         child = _fallback();
+      } else {
+        final resolved = ApiConstants.resolveMediaUrl(photoUrl);
+        child = resolved.isEmpty ? _fallback() : _image(NetworkImage(resolved));
       }
     } else {
       final resolved = ApiConstants.resolveMediaUrl(photoUrl);
