@@ -13,8 +13,10 @@ class ApiConstants {
   static const String userLoginInitiate = '/user/login/initiate';
   static const String userLoginVerify = '/user/login/verify';
   static const String userSessionCheck = '/user/session/check';
-  static const String userForgotPasswordRequestOtp = '/user/forgot-password/request-otp';
-  static const String userForgotPasswordVerifyOtp = '/user/forgot-password/verify-otp';
+  static const String userForgotPasswordRequestOtp =
+      '/user/forgot-password/request-otp';
+  static const String userForgotPasswordVerifyOtp =
+      '/user/forgot-password/verify-otp';
   static const String userForgotPasswordReset = '/user/forgot-password/reset';
   static const String userLogout = '/user/logout';
   static const String userDeleteAccount = '/user/delete-account';
@@ -45,13 +47,13 @@ class ApiConstants {
   static const String listenerWallet = '/listener/wallet';
   static const String listenerWithdrawals = '/listener/withdrawals';
 
-static const String listenerProfile = '/listener/profile';
+  static const String listenerProfile = '/listener/profile';
   static const String listenerPhoto = '/listener/photo';
   static const String listenerUsers = '/listener/users';
   static String listenerUserProfile(int userId) => '/listener/user/$userId';
   static const String listenerReviews = '/call/listener/reviews';
-  static String userListenerProfile(int listenerId) => '/user/listener/$listenerId';
-
+  static String userListenerProfile(int listenerId) =>
+      '/user/listener/$listenerId';
 
   static String callStatus(int callId) => '/call/$callId/status';
 
@@ -91,7 +93,7 @@ static const String listenerProfile = '/listener/profile';
   static const String listenerMarkDelivered = '/chat/listener/delivered';
 
   static const String userMe = '/user/me';
-static const String userBio = '/user/bio';
+  static const String userBio = '/user/bio';
   static const String userProfile = '/user/profile';
   static const String userContactRequestOtp = '/user/contact/request-otp';
   static const String userContactVerify = '/user/contact/verify';
@@ -102,8 +104,10 @@ static const String userBio = '/user/bio';
   static const String giftSend = '/gift/send';
 
   static const String listenerNoteSave = '/listener/notes';
-  static String listenerNoteByCall(int callId) => '/listener/notes/by-call/$callId';
-  static String listenerNoteByUser(int userId) => '/listener/notes/by-user/$userId';
+  static String listenerNoteByCall(int callId) =>
+      '/listener/notes/by-call/$callId';
+  static String listenerNoteByUser(int userId) =>
+      '/listener/notes/by-user/$userId';
 
   static const String billingPlans = '/billing/plans';
   static String billingPurchase(int planId) => '/billing/purchase/$planId';
@@ -117,7 +121,6 @@ static const String userBio = '/user/bio';
   static const String specialOffers = '/special-offers';
 
   static const String weeklyChallengeProgress = '/weekly-challenge/progress';
-
 
   static String resolveMediaUrl(String? path) {
     if (path == null || path.isEmpty) return '';
