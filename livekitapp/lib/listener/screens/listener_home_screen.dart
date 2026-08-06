@@ -4,7 +4,9 @@ import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/user_profile_view_screen.dart';
@@ -16,47 +18,77 @@ class ListenerHomeScreen extends StatefulWidget {
   const ListenerHomeScreen({super.key, this.onRefresh});
 
   @override
-  State<ListenerHomeScreen> createState() => _ListenerHomeScreenState();
+  State<ListenerHomeScreen> createState() => ListenerHomeScreenState();
 }
 
-class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
+class ListenerHomeScreenState extends State<ListenerHomeScreen>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
   final _socketService = ChatSocketService();
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   String? _token;
-  List<Map<String, dynamic>> _users = const [];
+  late List<Map<String, dynamic>> _users = _seedUsers();
 
-  List<Map<String, dynamic>> _visibleUsers = const [];
+  late List<Map<String, dynamic>> _visibleUsers = _sortedFiltered();
 
-  bool _loadingUsers = true;
+  late bool _loadingUsers = _users.isEmpty;
+  bool _refreshInFlight = false;
   String _search = '';
   Timer? _searchDebounce;
 
   @override
+  bool get wantKeepAlive => true;
+
+  static List<Map<String, dynamic>> _seedUsers() {
+    final cached = ListenerDataCache().lastUsers;
+    if (cached == null) return <Map<String, dynamic>>[];
+    return cached.map((u) => Map<String, dynamic>.of(u)).toList();
+  }
+
+  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _precacheAvatars(_users);
     _initStatus();
   }
 
-  Future<void> _initStatus() async {
-    await Permission.microphone.request();
-    _token = await _localStorage.getToken();
-    if (_token == null) return;
-    // Connect first: the socket handshake is what publishes presence, and the
-    // server already announces the listener as online when their stored
-    // availability switch is on. Echoing /me back through POST /status made the
-    // app overwrite that switch with whatever transient value it just read.
-    _socketService.connect(_token!, 'listener');
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
     _socketService.ensureConnected();
-    _socketSub = _socketService.stream.listen(_handleSocketEvent);
     _loadUsers();
-    _loadProfile();
+  }
+
+  Future<void> refresh() async {
+    _socketService.ensureConnected();
+    await _loadUsers();
+  }
+
+  Future<void> _initStatus() async {
+    _token = await _localStorage.getToken();
+    if (_token != null) {
+      // Connect first: the socket handshake is what publishes presence, and the
+      // server already announces the listener as online when their stored
+      // availability switch is on. Echoing /me back through POST /status made the
+      // app overwrite that switch with whatever transient value it just read.
+      _socketService.connect(_token!, 'listener');
+      _socketService.ensureConnected();
+      _socketSub = _socketService.stream.listen(_handleSocketEvent);
+      _loadUsers();
+      _loadProfile();
+    }
+    await Permission.microphone.request();
   }
 
   void _handleSocketEvent(Map<String, dynamic> data) {
     if (!mounted) return;
     final type = data['type'];
+    if (type == 'socket_connected') {
+      _loadUsers();
+      return;
+    }
     if (type != 'user_online' && type != 'user_offline') return;
     final userId = data['user_id'];
     if (userId == null) return;
@@ -80,7 +112,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
     } catch (_) {}
   }
 
-  void _recomputeVisible() {
+  List<Map<String, dynamic>> _sortedFiltered() {
     final query = _search.trim().toLowerCase();
     final list = query.isEmpty
         ? List<Map<String, dynamic>>.of(_users)
@@ -93,7 +125,18 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
       if (aOnline == bOnline) return 0;
       return aOnline ? -1 : 1;
     });
-    _visibleUsers = list;
+    return list;
+  }
+
+  void _recomputeVisible() {
+    _visibleUsers = _sortedFiltered();
+  }
+
+  void _precacheAvatars(List<Map<String, dynamic>> users) {
+    if (users.isEmpty) return;
+    AvatarCache.instance.precacheAll(
+      users.map((u) => ApiConstants.resolveMediaUrl(u['photo_url'] as String?)),
+    );
   }
 
   void _onSearchChanged(String value) {
@@ -108,23 +151,27 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
   }
 
   Future<void> _loadUsers() async {
-    if (_token == null) return;
+    final token = _token ??= await _localStorage.getToken();
+    if (token == null || _refreshInFlight) return;
+    _refreshInFlight = true;
     try {
-      final users = await _repository.getUsers(_token!, forceRefresh: true);
+      final users = await _repository.getUsers(token, forceRefresh: true);
       if (mounted) {
-        setState(() {
-          _users = users;
-          _recomputeVisible();
-          _loadingUsers = false;
-        });
+        if (dataChanged(_users, users)) {
+          setState(() {
+            _users = users.map((u) => Map<String, dynamic>.of(u)).toList();
+            _recomputeVisible();
+            _loadingUsers = false;
+          });
+        } else if (_loadingUsers) {
+          setState(() => _loadingUsers = false);
+        }
       }
-      AvatarCache.instance.precacheAll(
-        users.map(
-          (u) => ApiConstants.resolveMediaUrl(u['photo_url'] as String?),
-        ),
-      );
+      _precacheAvatars(users);
     } catch (_) {
-      if (mounted) setState(() => _loadingUsers = false);
+      if (mounted && _loadingUsers) setState(() => _loadingUsers = false);
+    } finally {
+      _refreshInFlight = false;
     }
   }
 
@@ -139,6 +186,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _socketSub?.cancel();
     super.dispose();
@@ -150,6 +198,7 @@ class _ListenerHomeScreenState extends State<ListenerHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: bg,
       body: RefreshIndicator(

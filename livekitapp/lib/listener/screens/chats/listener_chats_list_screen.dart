@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/chat_thread_subtitle.dart';
 import 'package:livekitapp/common/widgets/presence_dot.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/presence_cache.dart';
+import 'package:livekitapp/core/network/typing_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -65,15 +67,26 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
     if (type == 'chat_message' ||
         type == 'read_receipt' ||
         type == 'message_status') {
+      final senderId = data['user_id'];
+      if (type == 'chat_message' && senderId is int) {
+        TypingCache().setUserTyping(senderId, false);
+      }
       _refreshDebounce?.cancel();
       _refreshDebounce = Timer(
         const Duration(milliseconds: 400),
         _refreshSilently,
       );
+    } else if (type == 'typing') {
+      final userId = data['user_id'];
+      if (userId is! int) return;
+      TypingCache().setUserTyping(userId, data['is_typing'] == true);
+    } else if (type == 'socket_disconnected') {
+      TypingCache().clear();
     } else if (type == 'user_online' || type == 'user_offline') {
       final userId = data['user_id'];
       if (userId is! int) return;
       final online = type == 'user_online';
+      if (!online) TypingCache().setUserTyping(userId, false);
       PresenceCache().setUserOnline(userId, online);
       final index = _threads.indexWhere((t) => t['user_id'] == userId);
       if (index != -1) _threads[index]['is_online'] = online;
@@ -521,11 +534,12 @@ class _ThreadTile extends StatelessWidget {
                   ),
               ],
             ),
-            subtitle: Text(
-              '${thread['last_message'] ?? ''}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _dimText),
+            subtitle: ChatThreadSubtitle(
+              typing: TypingCache().user(thread['user_id']),
+              draftKey: 'listener:${thread['user_id']}',
+              lastMessage: '${thread['last_message'] ?? ''}',
+              color: _dimText,
+              accentColor: _pink,
             ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,

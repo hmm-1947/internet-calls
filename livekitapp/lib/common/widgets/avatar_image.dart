@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
 class _FileExistsCache {
-  static const _missTtlMs = 5000;
+  static const _missTtlMs = 30000;
   static const _maxEntries = 512;
 
   static final Set<String> _hits = <String>{};
@@ -38,7 +39,7 @@ class _FileExistsCache {
   }
 }
 
-class AvatarImage extends StatelessWidget {
+class AvatarImage extends StatefulWidget {
   final String? photoUrl;
   final double radius;
   final Color backgroundColor;
@@ -64,14 +65,83 @@ class AvatarImage extends StatelessWidget {
       path.startsWith('/private/') ||
       path.contains('/cache/');
 
+  @override
+  State<AvatarImage> createState() => _AvatarImageState();
+}
+
+class _AvatarImageState extends State<AvatarImage> {
+  String? _filePath;
+  String? _remoteUrl;
+  bool _fileFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(AvatarImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoUrl != widget.photoUrl) _resolve();
+  }
+
+  void _resolve() {
+    _filePath = null;
+    _remoteUrl = null;
+    _fileFailed = false;
+    final path = widget.photoUrl;
+    if (path != null && path.isNotEmpty && !path.startsWith('http')) {
+      final filePath = path.startsWith('file://')
+          ? Uri.parse(path).toFilePath()
+          : path;
+      if (_FileExistsCache.exists(filePath)) {
+        _filePath = filePath;
+        return;
+      }
+      if (AvatarImage._isDeviceFilePath(path)) return;
+    }
+    final resolved = ApiConstants.resolveMediaUrl(widget.photoUrl);
+    if (resolved.isEmpty) return;
+    _remoteUrl = resolved;
+    final cached = AvatarCache.instance.localPathSync(resolved);
+    if (cached != null) {
+      _filePath = cached;
+      return;
+    }
+    AvatarCache.instance.ensureCached(resolved);
+  }
+
+  void _onFileError(String filePath) {
+    _FileExistsCache.evict(filePath);
+    final url = _remoteUrl;
+    if (url != null) AvatarCache.instance.invalidate(url);
+    if (!mounted || _fileFailed) return;
+    setState(() {
+      _fileFailed = true;
+      _filePath = null;
+    });
+  }
+
+  Future<void> _recoverFromDisk(String url) async {
+    if (_fileFailed) return;
+    final path = await AvatarCache.instance.ensureCached(url);
+    if (path == null || !mounted || _remoteUrl != url) return;
+    setState(() => _filePath = path);
+  }
+
   Widget _fallback() => CircleAvatar(
-    radius: radius,
-    backgroundColor: backgroundColor,
-    child: Icon(fallbackIcon, color: Colors.white54, size: iconSize),
+    radius: widget.radius,
+    backgroundColor: widget.backgroundColor,
+    child: Icon(
+      widget.fallbackIcon,
+      color: Colors.white54,
+      size: widget.iconSize,
+    ),
   );
 
-  ImageProvider _sized(ImageProvider provider, BuildContext context) {
-    final pixels = (radius * 2 * MediaQuery.devicePixelRatioOf(context))
+  ImageProvider _sized(ImageProvider provider) {
+    final pixels = (widget.radius * 2 * MediaQuery.devicePixelRatioOf(context))
         .round()
         .clamp(1, 2048);
     return ResizeImage(provider, width: pixels, allowUpscaling: false);
@@ -79,32 +149,22 @@ class AvatarImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final path = photoUrl;
-    if (path != null && path.isNotEmpty && !path.startsWith('http')) {
-      final filePath = path.startsWith('file://')
-          ? Uri.parse(path).toFilePath()
-          : path;
-      if (_FileExistsCache.exists(filePath)) {
-        return CircleAvatar(
-          radius: radius,
-          backgroundColor: backgroundColor,
-          backgroundImage: _sized(FileImage(File(filePath)), context),
-          onBackgroundImageError: (_, _) => _FileExistsCache.evict(filePath),
-        );
-      }
-      // A cached file the OS has since evicted. Falling through would prefix
-      // the API base url onto a filesystem path and request a 404.
-      if (_isDeviceFilePath(path)) return _fallback();
+    final filePath = _filePath;
+    if (filePath != null) {
+      return CircleAvatar(
+        radius: widget.radius,
+        backgroundColor: widget.backgroundColor,
+        backgroundImage: _sized(FileImage(File(filePath))),
+        onBackgroundImageError: (_, _) => _onFileError(filePath),
+      );
     }
-    final resolved = ApiConstants.resolveMediaUrl(photoUrl);
-    if (resolved.isEmpty) {
-      return _fallback();
-    }
+    final remoteUrl = _remoteUrl;
+    if (remoteUrl == null) return _fallback();
     return CircleAvatar(
-      radius: radius,
-      backgroundColor: backgroundColor,
-      backgroundImage: _sized(NetworkImage(resolved), context),
-      onBackgroundImageError: (_, _) {},
+      radius: widget.radius,
+      backgroundColor: widget.backgroundColor,
+      backgroundImage: _sized(NetworkImage(remoteUrl)),
+      onBackgroundImageError: (_, _) => _recoverFromDisk(remoteUrl),
     );
   }
 }
@@ -144,6 +204,14 @@ class HeroProfileImage extends StatelessWidget {
     errorBuilder: (_, _, _) => _fallback(),
   );
 
+  Widget _remote(String resolved) {
+    if (resolved.isEmpty) return _fallback();
+    final cached = AvatarCache.instance.localPathSync(resolved);
+    if (cached != null) return _image(FileImage(File(cached)));
+    AvatarCache.instance.ensureCached(resolved);
+    return _image(NetworkImage(resolved));
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget child;
@@ -159,12 +227,10 @@ class HeroProfileImage extends StatelessWidget {
         // prefix the API base url onto a filesystem path and request a 404.
         child = _fallback();
       } else {
-        final resolved = ApiConstants.resolveMediaUrl(photoUrl);
-        child = resolved.isEmpty ? _fallback() : _image(NetworkImage(resolved));
+        child = _remote(ApiConstants.resolveMediaUrl(photoUrl));
       }
     } else {
-      final resolved = ApiConstants.resolveMediaUrl(photoUrl);
-      child = resolved.isEmpty ? _fallback() : _image(NetworkImage(resolved));
+      child = _remote(ApiConstants.resolveMediaUrl(photoUrl));
     }
 
     return ClipRRect(

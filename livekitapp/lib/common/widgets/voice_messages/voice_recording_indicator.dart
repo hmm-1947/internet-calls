@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 class VoiceRecordingIndicator extends StatefulWidget {
   final ValueListenable<Duration> elapsed;
   final ValueListenable<double> amplitude;
+  final ValueListenable<bool>? paused;
+  final VoidCallback? onTogglePause;
 
   const VoiceRecordingIndicator({
     super.key,
     required this.elapsed,
     required this.amplitude,
+    this.paused,
+    this.onTogglePause,
   });
 
   @override
@@ -33,25 +37,44 @@ class _VoiceRecordingIndicatorState extends State<VoiceRecordingIndicator>
   void initState() {
     super.initState();
     widget.amplitude.addListener(_onAmplitude);
+    widget.paused?.addListener(_onPausedChanged);
   }
 
   @override
   void didUpdateWidget(covariant VoiceRecordingIndicator oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (identical(oldWidget.amplitude, widget.amplitude)) return;
-    oldWidget.amplitude.removeListener(_onAmplitude);
-    widget.amplitude.addListener(_onAmplitude);
+    if (!identical(oldWidget.amplitude, widget.amplitude)) {
+      oldWidget.amplitude.removeListener(_onAmplitude);
+      widget.amplitude.addListener(_onAmplitude);
+    }
+    if (!identical(oldWidget.paused, widget.paused)) {
+      oldWidget.paused?.removeListener(_onPausedChanged);
+      widget.paused?.addListener(_onPausedChanged);
+    }
   }
 
   void _onAmplitude() {
+    if (widget.paused?.value == true) return;
     _levels.add(widget.amplitude.value);
     if (_levels.length > _maxBars) _levels.removeAt(0);
     _revision.value++;
   }
 
+  void _onPausedChanged() {
+    final paused = widget.paused?.value == true;
+    if (paused) {
+      _blink.stop();
+      _blink.value = 1;
+    } else if (!_blink.isAnimating) {
+      _blink.repeat(reverse: true);
+    }
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     widget.amplitude.removeListener(_onAmplitude);
+    widget.paused?.removeListener(_onPausedChanged);
     _blink.dispose();
     _revision.dispose();
     super.dispose();
@@ -63,35 +86,78 @@ class _VoiceRecordingIndicatorState extends State<VoiceRecordingIndicator>
     return '$m:$s';
   }
 
+  Widget _statusIcon(bool paused) {
+    final icon = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      transitionBuilder: (child, animation) => ScaleTransition(
+        scale: animation,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: Icon(
+        paused ? Icons.play_arrow_rounded : Icons.fiber_manual_record,
+        key: ValueKey<bool>(paused),
+        color: paused ? Colors.white : Colors.red,
+        size: paused ? 20 : 16,
+      ),
+    );
+    final content = paused ? icon : FadeTransition(opacity: _blink, child: icon);
+    final toggle = widget.onTogglePause;
+    if (toggle == null) {
+      return SizedBox(width: 22, height: 22, child: Center(child: content));
+    }
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(onTap: toggle, child: Center(child: content)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final paused = widget.paused?.value == true;
     return Row(
       children: [
-        FadeTransition(
-          opacity: _blink,
-          child: const Icon(
-            Icons.fiber_manual_record,
-            color: Colors.red,
-            size: 16,
-          ),
-        ),
+        _statusIcon(paused),
         const SizedBox(width: 8),
         ValueListenableBuilder<Duration>(
           valueListenable: widget.elapsed,
           builder: (context, elapsed, _) => Text(
             _fmt(elapsed),
-            style: const TextStyle(
-              fontFeatures: [FontFeature.tabularFigures()],
+            style: TextStyle(
+              color: paused ? Colors.white54 : null,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          child: paused
+              ? const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Text(
+                    'Paused',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
         const SizedBox(width: 12),
         Expanded(
-          child: RepaintBoundary(
-            child: CustomPaint(
-              painter: _SpectrumPainter(_levels, _revision),
-              size: const Size(double.infinity, 24),
-              child: const SizedBox(height: 24),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: paused ? 0.35 : 1,
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: _SpectrumPainter(_levels, _revision),
+                size: const Size(double.infinity, 24),
+                child: const SizedBox(height: 24),
+              ),
             ),
           ),
         ),

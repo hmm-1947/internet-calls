@@ -9,6 +9,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
+import 'package:livekitapp/common/widgets/keep_alive_page.dart';
 import 'package:livekitapp/common/widgets/listener_home_header.dart';
 
 class ListenerMainScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class ListenerMainScreen extends StatefulWidget {
 class _ListenerMainScreenState extends State<ListenerMainScreen> {
   int _index = 0;
   final _settingsKey = GlobalKey<ListenerSettingsScreenState>();
+  final _homeKey = GlobalKey<ListenerHomeScreenState>();
   final _weeklyChallengeRepository = WeeklyChallengeRepository();
   final _localStorage = LocalStorage();
   bool _weeklyChallengeActive = false;
@@ -29,7 +31,10 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   );
 
   late final List<Widget> _screens = [
-    ListenerHomeScreen(onRefresh: _refreshWeeklyChallengeStatus),
+    ListenerHomeScreen(
+      key: _homeKey,
+      onRefresh: _refreshWeeklyChallengeStatus,
+    ),
     const ListenerChatsListScreen(),
     const ListenerCallHistoryScreen(),
     ListenerSettingsScreen(key: _settingsKey),
@@ -79,6 +84,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
       _settingsKey.currentState?.refresh();
     }
     if (i == 0) {
+      _homeKey.currentState?.refresh();
       _refreshWeeklyChallengeStatus();
     }
   }
@@ -113,7 +119,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
                   onPageChanged: _onPageChanged,
                   children: [
                     for (final screen in _screens)
-                      RepaintBoundary(child: screen),
+                      KeepAlivePage(child: RepaintBoundary(child: screen)),
                   ],
                 ),
 

@@ -6,12 +6,14 @@ import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/chat_composer.dart';
 import 'package:livekitapp/common/widgets/chat_message_list.dart';
+import 'package:livekitapp/common/widgets/typing_indicator.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/presence_cache.dart';
+import 'package:livekitapp/core/network/typing_cache.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/core/network/voice_note_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -61,7 +63,6 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
 
   late final ValueNotifier<List<Map<String, dynamic>>> _messages;
   late final ValueNotifier<bool> _favorite;
-  final _typing = ValueNotifier<bool>(false);
   final _atBottom = ValueNotifier<bool>(true);
 
   String? _token;
@@ -91,10 +92,16 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
   void didPopNext() => VoiceMessagePlayer.instance.setVisibleChat(_chatKey);
 
   @override
-  void didPushNext() => VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
+  void didPushNext() {
+    VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
+    _stopTyping();
+  }
 
   @override
-  void didPop() => VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
+  void didPop() {
+    VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
+    _stopTyping();
+  }
 
   @override
   void initState() {
@@ -114,6 +121,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
 
   @override
   void dispose() {
+    _stopTyping();
     ChatNotificationService.instance.clearVisibleConversation(widget.userId);
     voiceChatRouteObserver.unsubscribe(this);
     VoiceMessagePlayer.instance.clearVisibleChat(_chatKey);
@@ -124,14 +132,17 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     _scrollController.dispose();
     _messages.dispose();
     _favorite.dispose();
-    _typing.dispose();
     _atBottom.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
+    if (state != AppLifecycleState.resumed) {
+      _stopTyping();
+      _setPeerTyping(false);
+      return;
+    }
     _refreshMessages();
     _refreshThread();
   }
@@ -342,6 +353,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     switch (type) {
       case 'chat_message':
         if (data['user_id'] != widget.userId) return;
+        if (data['sender_type'] == 'user') _setPeerTyping(false);
         _merge([data]);
         _chatStorage.upsertMessage(
           widget.userId,
@@ -358,12 +370,14 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
         return;
       case 'typing':
         if (data['user_id'] != widget.userId) return;
-        _typing.value = data['is_typing'] == true;
+        _setPeerTyping(data['is_typing'] == true);
         return;
       case 'user_online':
       case 'user_offline':
         if (data['user_id'] != widget.userId) return;
-        PresenceCache().setUserOnline(widget.userId, type == 'user_online');
+        final online = type == 'user_online';
+        if (!online) _setPeerTyping(false);
+        PresenceCache().setUserOnline(widget.userId, online);
         return;
       case 'message_status':
         final clientId = data['client_id'];
@@ -396,7 +410,11 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
         _chatStorage.markReadByClientIds(widget.userId, clientIds);
         return;
       case 'socket_connected':
+        _setPeerTyping(false);
         _refreshMessages();
+        return;
+      case 'socket_disconnected':
+        _resetTypingState();
         return;
       case 'message_edited':
         _merge([data]);
@@ -410,7 +428,14 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     }
   }
 
-  void _emitTyping() {
+  void _setPeerTyping(bool typing) =>
+      TypingCache().setUserTyping(widget.userId, typing);
+
+  void _emitTyping(String text) {
+    if (text.trim().isEmpty) {
+      _stopTyping();
+      return;
+    }
     final now = DateTime.now();
     final last = _lastTypingSentAt;
     if (last == null || now.difference(last) >= const Duration(seconds: 1)) {
@@ -418,15 +443,28 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
       ChatSocketService().sendTyping(userId: widget.userId, isTyping: true);
     }
     _typingSendTimer?.cancel();
-    _typingSendTimer = Timer(const Duration(seconds: 2), () {
-      _lastTypingSentAt = null;
-      ChatSocketService().sendTyping(userId: widget.userId, isTyping: false);
-    });
+    _typingSendTimer = Timer(const Duration(seconds: 2), _stopTyping);
+  }
+
+  void _stopTyping() {
+    _typingSendTimer?.cancel();
+    _typingSendTimer = null;
+    if (_lastTypingSentAt == null) return;
+    _lastTypingSentAt = null;
+    ChatSocketService().sendTyping(userId: widget.userId, isTyping: false);
+  }
+
+  void _resetTypingState() {
+    _typingSendTimer?.cancel();
+    _typingSendTimer = null;
+    _lastTypingSentAt = null;
+    TypingCache().clear();
   }
 
   Future<void> _sendText(String text) async {
     final token = _token;
     if (token == null) return;
+    _stopTyping();
     final clientId = const Uuid().v4();
     _merge([
       {
@@ -557,21 +595,22 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     return SizedBox(
       height: 16,
       child: ValueListenableBuilder<bool>(
-        valueListenable: _typing,
+        valueListenable: TypingCache().user(widget.userId),
         builder: (context, typing, _) {
           return ValueListenableBuilder<bool?>(
             valueListenable: PresenceCache().user(widget.userId),
             builder: (context, online, _) {
-              if (!typing && online == null) return const SizedBox.shrink();
-              final label = typing
-                  ? 'typing...'
-                  : (online == true ? 'Online' : 'Offline');
+              if (typing) {
+                return const Align(
+                  alignment: Alignment.centerLeft,
+                  child: TypingIndicator(color: _pink),
+                );
+              }
+              if (online == null) return const SizedBox.shrink();
               return Text(
-                label,
+                online == true ? 'Online' : 'Offline',
                 style: TextStyle(
-                  color: typing
-                      ? _pink
-                      : (online == true ? _green : Colors.white54),
+                  color: online == true ? _green : Colors.white54,
                   fontSize: 12,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -721,6 +760,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
             onSendText: _sendText,
             onSendVoice: _sendVoice,
             onTextChanged: _emitTyping,
+            draftKey: _chatKey,
             accentColor: _pink,
             backgroundColor: _bg,
           ),

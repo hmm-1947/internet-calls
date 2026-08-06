@@ -8,11 +8,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/api_client.dart';
+import 'package:livekitapp/core/network/chat_draft_cache.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
@@ -177,10 +179,11 @@ Future<void> flushPendingChatTarget({int attempt = 0}) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
-  PaintingBinding.instance.imageCache.maximumSize = 200;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 160 << 20;
+  PaintingBinding.instance.imageCache.maximumSize = 800;
 
   await dotenv.load(fileName: ".env");
+  await AvatarCache.instance.init();
   FlavorConfig.set(AppFlavor.user);
   LockscreenService.instance.init();
   ActiveCallManager.instance.init();
@@ -210,6 +213,7 @@ void main() async {
   // call path if the plugin ever fails to come up.
   unawaited(_initChatNotifications());
 
+  await ChatDraftCache().restore();
   await UserDataCache().restore();
   runApp(const UserApp());
   _registerFcmToken();

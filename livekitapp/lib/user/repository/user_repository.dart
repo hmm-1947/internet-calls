@@ -585,9 +585,17 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     return threads;
   }
 
-  Future<List<Map<String, dynamic>>> getCallHistory(String token) async {
+  /// One page of call logs, newest first. [beforeId] is the id of the oldest
+  /// row already held, so the server only sends what is missing.
+  Future<List<Map<String, dynamic>>> getCallHistory(
+    String token, {
+    int? beforeId,
+    int limit = 25,
+  }) async {
+    var path = '${ApiConstants.userCallHistory}?limit=$limit';
+    if (beforeId != null) path = '$path&before_id=$beforeId';
     final response = await _apiClient.get(
-      ApiConstants.userCallHistory,
+      path,
       token: token,
     );
     final data = jsonDecode(response.body);

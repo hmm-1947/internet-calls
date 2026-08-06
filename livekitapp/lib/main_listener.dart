@@ -11,6 +11,7 @@ import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/api_client.dart';
+import 'package:livekitapp/core/network/chat_draft_cache.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -22,6 +23,7 @@ import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
@@ -170,8 +172,8 @@ Future<void> _cacheAndAckChatMessage(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
-  PaintingBinding.instance.imageCache.maximumSize = 200;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 160 << 20;
+  PaintingBinding.instance.imageCache.maximumSize = 800;
 
   await dotenv.load(fileName: ".env");
   final isolateName = Isolate.current.debugName;
@@ -234,6 +236,8 @@ void main() async {
   // callkit path if the plugin ever fails to come up.
   unawaited(_initChatNotifications());
 
+  await AvatarCache.instance.init();
+  await ChatDraftCache().restore();
   await ListenerDataCache().restore();
   runApp(const ListenerApp());
   _registerFcmToken();

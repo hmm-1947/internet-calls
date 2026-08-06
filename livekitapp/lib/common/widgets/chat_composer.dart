@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicator.dart';
+import 'package:livekitapp/core/network/chat_draft_cache.dart';
 
 /// The message input row of a chat screen.
 ///
@@ -23,7 +24,10 @@ class ChatComposer extends StatefulWidget {
   final void Function(String filePath, int durationSeconds) onSendVoice;
 
   /// Called on every text change so the screen can emit typing events.
-  final VoidCallback? onTextChanged;
+  final ValueChanged<String>? onTextChanged;
+
+  /// Identifies the conversation whose unsent text is kept as a draft.
+  final String? draftKey;
 
   /// Optional hard limit on the message length (user side caps at 100).
   final int? maxLength;
@@ -39,6 +43,7 @@ class ChatComposer extends StatefulWidget {
     required this.onSendText,
     required this.onSendVoice,
     this.onTextChanged,
+    this.draftKey,
     this.maxLength,
     this.tooLongMessage,
     this.accentColor = const Color(0xFFE53950),
@@ -57,21 +62,40 @@ class _ChatComposerState extends State<ChatComposer> {
   bool _isLocked = false;
   final _recordElapsed = ValueNotifier<Duration>(Duration.zero);
   final _recordAmplitude = ValueNotifier<double>(0);
+  final _recordPaused = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
+    _restoreDraft();
     _controller.addListener(_onChanged);
     ActiveCallManager.instance.current.addListener(_onActiveCallChanged);
+  }
+
+  void _restoreDraft() {
+    final stored = ChatDraftCache().read(widget.draftKey);
+    if (stored == null || stored.isEmpty) return;
+    final limit = widget.maxLength;
+    final draft = limit != null && stored.length > limit
+        ? stored.substring(0, limit)
+        : stored;
+    _controller.value = TextEditingValue(
+      text: draft,
+      selection: TextSelection.collapsed(offset: draft.length),
+    );
+    _hasText = draft.trim().isNotEmpty;
   }
 
   @override
   void dispose() {
     ActiveCallManager.instance.current.removeListener(_onActiveCallChanged);
     _controller.removeListener(_onChanged);
+    ChatDraftCache().write(widget.draftKey, _controller.text);
+    ChatDraftCache().flushNow();
     _controller.dispose();
     _recordElapsed.dispose();
     _recordAmplitude.dispose();
+    _recordPaused.dispose();
     super.dispose();
   }
 
@@ -90,12 +114,29 @@ class _ChatComposerState extends State<ChatComposer> {
     );
   }
 
+  /// Shown for a tap on the mic and for a clip released under a second: both
+  /// produce nothing, so the gesture is spelled out instead.
+  void _warnHoldToRecord() {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        const SnackBar(
+          duration: Duration(milliseconds: 1600),
+          content: Text(
+            'Hold the mic to record. Slide up to lock, left to cancel.',
+          ),
+        ),
+      );
+  }
+
   void _onChanged() {
-    final hasText = _controller.text.trim().isNotEmpty;
+    final text = _controller.text;
+    final hasText = text.trim().isNotEmpty;
     // Only the send/record button depends on this, so repaint just the composer
     // and only when the flag actually flips.
     if (hasText != _hasText) setState(() => _hasText = hasText);
-    widget.onTextChanged?.call();
+    ChatDraftCache().write(widget.draftKey, text);
+    widget.onTextChanged?.call(text);
   }
 
   void _submit() {
@@ -112,6 +153,7 @@ class _ChatComposerState extends State<ChatComposer> {
       return;
     }
     _controller.clear();
+    ChatDraftCache().clear(widget.draftKey);
     widget.onSendText(text);
   }
 
@@ -123,7 +165,48 @@ class _ChatComposerState extends State<ChatComposer> {
     _recordElapsed.value = elapsed;
     _recordAmplitude.value = amplitude;
     if (recording == _isRecording) return;
+    if (!recording) _recordPaused.value = false;
     setState(() => _isRecording = recording);
+  }
+
+  Widget _lockedControls() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          IconButton(
+            tooltip: 'Delete recording',
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: () => VoiceRecordButton.currentState?.triggerCancel(),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _recordPaused,
+            builder: (context, paused, _) => IconButton(
+              tooltip: paused ? 'Resume recording' : 'Pause recording',
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: Icon(
+                  paused ? Icons.play_arrow : Icons.pause,
+                  key: ValueKey<bool>(paused),
+                  color: widget.accentColor,
+                ),
+              ),
+              onPressed: () => VoiceRecordButton.currentState?.triggerPause(),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Send voice message',
+            icon: Icon(Icons.send, color: widget.accentColor),
+            onPressed: () => VoiceRecordButton.currentState?.triggerSend(),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -156,6 +239,11 @@ class _ChatComposerState extends State<ChatComposer> {
                       ? VoiceRecordingIndicator(
                           elapsed: _recordElapsed,
                           amplitude: _recordAmplitude,
+                          paused: _recordPaused,
+                          onTogglePause: _isLocked
+                              ? () => VoiceRecordButton.currentState
+                                    ?.triggerPause()
+                              : null,
                         )
                       : TextField(
                           controller: _controller,
@@ -217,6 +305,9 @@ class _ChatComposerState extends State<ChatComposer> {
                               onStateChanged: _onVoiceStateChanged,
                               onLockChanged: (locked) =>
                                   setState(() => _isLocked = locked),
+                              onPauseChanged: (paused) =>
+                                  _recordPaused.value = paused,
+                              onTooShort: _warnHoldToRecord,
                               idleColor: widget.accentColor,
                             );
                           },
@@ -225,30 +316,12 @@ class _ChatComposerState extends State<ChatComposer> {
               ),
             ],
           ),
-          if (_isLocked)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () =>
-                        VoiceRecordButton.currentState?.triggerCancel(),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.pause, color: Colors.blue),
-                    onPressed: () =>
-                        VoiceRecordButton.currentState?.triggerPause(),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.send, color: Colors.blue),
-                    onPressed: () =>
-                        VoiceRecordButton.currentState?.triggerSend(),
-                  ),
-                ],
-              ),
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _isLocked ? _lockedControls() : const SizedBox(width: 1),
+          ),
         ],
       ),
     );
