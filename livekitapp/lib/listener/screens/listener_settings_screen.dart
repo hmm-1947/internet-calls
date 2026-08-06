@@ -112,13 +112,24 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _seedFromCache();
     refresh();
+  }
+
+  void _seedFromCache() {
+    final cached = ListenerDataCache().lastMe;
+    if (cached == null) return;
+    _name = cached['name'] ?? '';
+    _phone = cached['phone']?.toString() ?? '';
+    _photoUrl = cached['photo_url'];
+    if (cached['is_online'] is bool) _statusOnline = cached['is_online'];
   }
 
 Future<void> refresh() async {
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!, forceRefresh: true);
+      if (!mounted) return;
       setState(() {
         _name = data['name'] ?? '';
         _phone = data['phone']?.toString() ?? '';

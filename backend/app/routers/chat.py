@@ -689,6 +689,7 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
         user.is_online = True
         db.commit()
     await manager.broadcast_to_all_listeners({"type": "user_online", "user_id": user_id})
+    typing_targets: set[int] = set()
     try:
         while True:
             try:
@@ -696,8 +697,11 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
             except asyncio.TimeoutError:
                 await websocket.send_json({"type": "ping"})
                 continue
-            await _handle_user_ws_event(raw, user_id, db)
+            await _handle_user_ws_event(raw, user_id, db, typing_targets)
     except Exception:
+        for target_listener_id in typing_targets:
+            await manager.send_to_listener(target_listener_id, {"type": "typing", "user_id": user_id, "is_typing": False})
+        typing_targets.clear()
         await manager.disconnect_user(user_id, websocket)
         await _finalize_active_calls_for_user(user_id, db)
         if manager.is_user_online(user_id):
@@ -710,11 +714,19 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
             db.commit()
         await manager.broadcast_to_all_listeners({"type": "user_offline", "user_id": user_id})
 
-async def _handle_user_ws_event(raw: dict, user_id: int, db: Session):
+async def _handle_user_ws_event(raw: dict, user_id: int, db: Session, typing_targets: set | None = None):
     etype = raw.get("type")
     if etype == "typing":
         listener_id = raw.get("listener_id")
-        await manager.send_to_listener(listener_id, {"type": "typing", "user_id": user_id, "is_typing": raw.get("is_typing", False)})
+        if listener_id is None:
+            return
+        is_typing = bool(raw.get("is_typing", False))
+        if typing_targets is not None:
+            if is_typing:
+                typing_targets.add(listener_id)
+            else:
+                typing_targets.discard(listener_id)
+        await manager.send_to_listener(listener_id, {"type": "typing", "user_id": user_id, "is_typing": is_typing})
     elif etype == "ping":
         pass
 
@@ -758,6 +770,7 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
         gt.notified = True
     if pending_gifts:
         db.commit()
+    typing_targets: set[int] = set()
     try:
         while True:
             try:
@@ -765,8 +778,11 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
             except asyncio.TimeoutError:
                 await websocket.send_json({"type": "ping"})
                 continue
-            await _handle_listener_ws_event(raw, listener_id, db)
+            await _handle_listener_ws_event(raw, listener_id, db, typing_targets)
     except Exception:
+        for target_user_id in typing_targets:
+            await manager.send_to_user(target_user_id, {"type": "typing", "listener_id": listener_id, "is_typing": False})
+        typing_targets.clear()
         await manager.disconnect_listener(listener_id, websocket)
         await _finalize_active_calls_for_listener(listener_id, db)
         if manager.is_listener_online(listener_id):
@@ -786,10 +802,18 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
 
 
 
-async def _handle_listener_ws_event(raw: dict, listener_id: int, db: Session):
+async def _handle_listener_ws_event(raw: dict, listener_id: int, db: Session, typing_targets: set | None = None):
     etype = raw.get("type")
     if etype == "typing":
         user_id = raw.get("user_id")
-        await manager.send_to_user(user_id, {"type": "typing", "listener_id": listener_id, "is_typing": raw.get("is_typing", False)})
+        if user_id is None:
+            return
+        is_typing = bool(raw.get("is_typing", False))
+        if typing_targets is not None:
+            if is_typing:
+                typing_targets.add(user_id)
+            else:
+                typing_targets.discard(user_id)
+        await manager.send_to_user(user_id, {"type": "typing", "listener_id": listener_id, "is_typing": is_typing})
     elif etype == "ping":
         pass

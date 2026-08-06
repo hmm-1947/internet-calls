@@ -4,6 +4,7 @@ import 'package:livekitapp/common/widgets/home_header.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/main_user.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
+import 'package:livekitapp/common/widgets/keep_alive_page.dart';
 import 'package:livekitapp/user/screens/user_home_screen.dart';
 import 'package:livekitapp/user/screens/chats_list_screen.dart';
 import 'package:livekitapp/user/screens/user_settings_screen.dart';
@@ -89,7 +90,8 @@ class _UserMainScreenState extends State<UserMainScreen> {
               physics: const ClampingScrollPhysics(),
               onPageChanged: _onPageChanged,
               children: [
-                for (final screen in _screens) RepaintBoundary(child: screen),
+                for (final screen in _screens)
+                  KeepAlivePage(child: RepaintBoundary(child: screen)),
               ],
             ),
           ),

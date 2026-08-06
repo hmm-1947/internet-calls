@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/chat_thread_subtitle.dart';
 import 'package:livekitapp/common/widgets/presence_dot.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/presence_cache.dart';
+import 'package:livekitapp/core/network/typing_cache.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
@@ -108,15 +110,26 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     if (type == 'chat_message' ||
         type == 'read_receipt' ||
         type == 'message_status') {
+      final listenerId = data['listener_id'];
+      if (type == 'chat_message' && listenerId is int) {
+        TypingCache().setListenerTyping(listenerId, false);
+      }
       _refreshDebounce?.cancel();
       _refreshDebounce = Timer(
         const Duration(milliseconds: 400),
         _refreshSilently,
       );
+    } else if (type == 'typing') {
+      final listenerId = data['listener_id'];
+      if (listenerId is! int) return;
+      TypingCache().setListenerTyping(listenerId, data['is_typing'] == true);
+    } else if (type == 'socket_disconnected') {
+      TypingCache().clear();
     } else if (type == 'listener_online' || type == 'listener_offline') {
       final listenerId = data['listener_id'];
       if (listenerId is! int) return;
       final online = type == 'listener_online';
+      if (!online) TypingCache().setListenerTyping(listenerId, false);
       PresenceCache().setListenerOnline(listenerId, online);
       final index = _threads.indexWhere((t) => t['listener_id'] == listenerId);
       if (index != -1) _threads[index]['is_online'] = online;
@@ -541,11 +554,12 @@ class _ThreadTile extends StatelessWidget {
             ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '${thread['last_message'] ?? ''}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: unread > 0 ? Colors.white70 : _dimText),
+              child: ChatThreadSubtitle(
+                typing: TypingCache().listener(thread['listener_id']),
+                draftKey: 'user:${thread['listener_id']}',
+                lastMessage: '${thread['last_message'] ?? ''}',
+                color: unread > 0 ? Colors.white70 : _dimText,
+                accentColor: _pink,
               ),
             ),
             trailing: Column(

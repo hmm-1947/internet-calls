@@ -5,23 +5,10 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/common/utils/call_log_format.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 
 const _kCallHistoryCacheKey = 'listener_call_history_snapshot';
-
-String _fmtDateTime(String iso) {
-  final dt = (DateTime.tryParse(iso) ?? DateTime.now()).toLocal();
-  final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-  final m = dt.minute.toString().padLeft(2, '0');
-  final ampm = dt.hour >= 12 ? 'PM' : 'AM';
-  return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} • $h:$m $ampm';
-}
-
-String _fmtDuration(int seconds) {
-  final m = seconds ~/ 60;
-  final s = seconds % 60;
-  return '${m}m ${s}s';
-}
 
 IconData _statusIcon(String status, String callType) {
   if (status == 'ended') {
@@ -102,13 +89,23 @@ class ListenerCallHistoryScreen extends StatefulWidget {
 }
 
 class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
+  /// Rows per request. The list only asks for the next page once the user is
+  /// close to the bottom, so opening the tab costs a single small response.
+  static const _pageSize = 25;
+
+  /// How much of the paged history is kept on disk for the next cold start.
+  static const _cacheLimit = 60;
+
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
+  final _scrollController = ScrollController();
   List<Map<String, dynamic>> _calls = const [];
   List<Map<String, dynamic>> _filteredCalls = const [];
   String _filter = 'all';
   bool _loading = true;
   bool _refreshInFlight = false;
+  bool _loadingMore = false;
+  bool _hasMore = true;
   DateTime? _lastRefreshAt;
   String _search = '';
   Timer? _searchDebounce;
@@ -116,6 +113,7 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadFromCache();
     _load();
   }
@@ -123,13 +121,46 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 300) _loadMore();
+  }
+
+  /// A filter or a search can hide most of what is loaded. When too little is
+  /// left to scroll, the next page is pulled in so the user is not looking at an
+  /// empty list while matching rows still sit on the server.
+  void _fillViewport() {
+    if (_filteredCalls.length < 12) _loadMore();
+  }
+
+  int? _oldestLoadedId() {
+    for (final call in _calls.reversed) {
+      final id = call['id'];
+      if (id is int) return id;
+    }
+    return null;
+  }
+
+  void _cacheCalls() {
+    HomeCache().setJson(
+      _kCallHistoryCacheKey,
+      _calls.take(_cacheLimit).toList(),
+    );
   }
 
   Future<void> _loadFromCache() async {
     final cached = await HomeCache().getJson(_kCallHistoryCacheKey);
     if (!mounted || cached is! List || _calls.isNotEmpty) return;
-    final calls = cached.whereType<Map>().map((c) => Map<String, dynamic>.from(c)).toList();
+    final calls = cached
+        .whereType<Map>()
+        .map((c) => Map<String, dynamic>.from(c))
+        .toList();
     if (calls.isEmpty) return;
     setState(() {
       _calls = calls;
@@ -154,6 +185,7 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
       _filter = filter;
       _filteredCalls = _applyFilter();
     });
+    _fillViewport();
   }
 
   void _onSearchChanged(String value) {
@@ -164,9 +196,12 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
         _search = value;
         _filteredCalls = _applyFilter();
       });
+      _fillViewport();
     });
   }
 
+  /// Reloads the newest page and resets pagination, which is what both the first
+  /// paint and pull-to-refresh need.
   Future<void> _load() async {
     if (_refreshInFlight) return;
     final now = DateTime.now();
@@ -181,15 +216,16 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
     try {
       final token = await _localStorage.getToken();
       if (token == null) return;
-      final calls = await _repository.getCallHistory(token);
-      HomeCache().setJson(_kCallHistoryCacheKey, calls);
+      final calls = await _repository.getCallHistory(token, limit: _pageSize);
       if (!mounted) return;
+      _hasMore = calls.length == _pageSize;
       if (dataChanged(_calls, calls)) {
         setState(() {
           _calls = calls;
           _filteredCalls = _applyFilter();
           _loading = false;
         });
+        _cacheCalls();
       } else if (_loading) {
         setState(() => _loading = false);
       }
@@ -198,6 +234,43 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
     } finally {
       _refreshInFlight = false;
     }
+    if (mounted) _fillViewport();
+  }
+
+  /// Appends the page older than everything held. Ids already present are
+  /// skipped, so a call created between two requests cannot duplicate a row.
+  Future<void> _loadMore() async {
+    if (_loadingMore || _refreshInFlight || !_hasMore || _loading) return;
+    final beforeId = _oldestLoadedId();
+    if (beforeId == null) return;
+    _loadingMore = true;
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      final older = await _repository.getCallHistory(
+        token,
+        beforeId: beforeId,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      _hasMore = older.length == _pageSize;
+      final knownIds = _calls.map((c) => c['id']).toSet();
+      final fresh = older.where((c) => !knownIds.contains(c['id'])).toList();
+      if (fresh.isEmpty) {
+        setState(() {});
+        return;
+      }
+      setState(() {
+        _calls = [..._calls, ...fresh];
+        _filteredCalls = _applyFilter();
+      });
+      _cacheCalls();
+    } catch (_) {
+      // Leave _hasMore alone: scrolling again retries.
+    } finally {
+      _loadingMore = false;
+    }
+    if (mounted) _fillViewport();
   }
 
   @override
@@ -266,26 +339,41 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _filteredCalls.isEmpty
                   ? ListView(
+                      controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
                       children: [
                         SizedBox(
                           height: MediaQuery.sizeOf(context).height * 0.7,
-                          child: const Center(
-                            child: Text(
-                              'No calls yet',
-                              style: TextStyle(color: dimText),
-                            ),
+                          child: Center(
+                            child: _hasMore
+                                ? const CircularProgressIndicator()
+                                : const Text(
+                                    'No calls yet',
+                                    style: TextStyle(color: dimText),
+                                  ),
                           ),
                         ),
                       ],
                     )
                   : ListView.builder(
+                      controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: _filteredCalls.length,
+                      itemCount: _filteredCalls.length + (_hasMore ? 1 : 0),
                       itemExtent: 72,
-                      itemBuilder: (context, index) => RepaintBoundary(
-                        child: _CallHistoryTile(call: _filteredCalls[index]),
-                      ),
+                      itemBuilder: (context, index) {
+                        if (index >= _filteredCalls.length) {
+                          return const Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        }
+                        return RepaintBoundary(
+                          child: _CallHistoryTile(call: _filteredCalls[index]),
+                        );
+                      },
                     ),
             ),
           ),
@@ -355,14 +443,14 @@ class _CallHistoryTile extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             status == 'ended'
-                ? _fmtDuration((call['duration_seconds'] ?? 0) as int)
+                ? fmtCallDuration((call['duration_seconds'] ?? 0) as int)
                 : _statusLabel(status),
             style: const TextStyle(color: _dimText),
           ),
         ],
       ),
       trailing: Text(
-        _fmtDateTime('${call['created_at']}'),
+        fmtCallDateTime('${call['created_at']}'),
         style: const TextStyle(color: _dimText, fontSize: 12),
       ),
     );

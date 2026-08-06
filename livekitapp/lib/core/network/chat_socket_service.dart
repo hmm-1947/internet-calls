@@ -135,11 +135,13 @@ class ChatSocketService {
   }
 
   void _scheduleReconnect() {
+    final wasConnected = _connected;
     _connected = false;
     _opening = false;
     _channel = null;
     _pingTimer?.cancel();
     _reconnectTimer?.cancel();
+    if (wasConnected) _controller?.add({'type': 'socket_disconnected'});
     if (_manuallyDisconnected) return;
     _failedAttempts++;
     final backoffSeconds = _backoffSecondsFor(_failedAttempts);

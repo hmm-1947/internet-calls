@@ -466,8 +466,12 @@ async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/user/history", response_model=list[CallHistoryOut])
-def user_call_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    calls = db.query(Call).filter(Call.caller_user_id == current_user.id).order_by(Call.created_at.desc()).all()
+def user_call_history(before_id: int | None = None, limit: int = 25, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    limit = max(1, min(limit, 100))
+    query = db.query(Call).filter(Call.caller_user_id == current_user.id)
+    if before_id is not None:
+        query = query.filter(Call.id < before_id)
+    calls = query.order_by(Call.id.desc()).limit(limit).all()
     listener_ids = {c.callee_listener_id for c in calls if c.callee_listener_id}
     listeners_by_id = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids)).all()}
     result = []
@@ -483,8 +487,12 @@ def user_call_history(db: Session = Depends(get_db), current_user: User = Depend
     return result
 
 @router.get("/listener/history", response_model=list[CallHistoryOut])
-def listener_call_history(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
-    calls = db.query(Call).filter(Call.callee_listener_id == current_listener.id).order_by(Call.created_at.desc()).all()
+def listener_call_history(before_id: int | None = None, limit: int = 25, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    limit = max(1, min(limit, 100))
+    query = db.query(Call).filter(Call.callee_listener_id == current_listener.id)
+    if before_id is not None:
+        query = query.filter(Call.id < before_id)
+    calls = query.order_by(Call.id.desc()).limit(limit).all()
     user_ids = {c.caller_user_id for c in calls if c.caller_user_id}
     users_by_id = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
     result = []

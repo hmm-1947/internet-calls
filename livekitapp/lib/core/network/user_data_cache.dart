@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:livekitapp/core/network/chat_draft_cache.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/presence_cache.dart';
+import 'package:livekitapp/core/network/typing_cache.dart';
 
 /// Last known coin balance, or `null` while it has never been loaded.
 ///
@@ -155,7 +157,9 @@ class UserDataCache {
     _threadsFetchedAt = null;
     userCoinsNotifier.value = null;
     ChatMessageCache().clear();
+    ChatDraftCache().clearAll();
     PresenceCache().clear();
+    TypingCache().clear();
     HomeCache().clear(_meSnapshotKey);
     HomeCache().clear(_threadsSnapshotKey);
   }

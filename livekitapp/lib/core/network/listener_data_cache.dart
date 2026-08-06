@@ -1,6 +1,8 @@
+import 'package:livekitapp/core/network/chat_draft_cache.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/presence_cache.dart';
+import 'package:livekitapp/core/network/typing_cache.dart';
 
 /// Process-wide cache for the listener-side data that almost every screen
 /// needs: the profile (`me`), the wallet, the user catalogue and the chat
@@ -19,6 +21,7 @@ class ListenerDataCache {
 
   static const _meSnapshotKey = 'listener_me_snapshot';
   static const _threadsSnapshotKey = 'listener_threads_snapshot';
+  static const _usersSnapshotKey = 'listener_users_snapshot';
 
   Map<String, dynamic>? _me;
   DateTime? _meFetchedAt;
@@ -92,6 +95,16 @@ class ListenerDataCache {
           PresenceCache().seedFromListenerThreads(_threads!);
         }
       }
+      if (_users == null) {
+        final users = await HomeCache().getJson(_usersSnapshotKey);
+        if (users is List) {
+          _users = users
+              .whereType<Map>()
+              .map((u) => Map<String, dynamic>.from(u))
+              .toList();
+          PresenceCache().seedFromUserCatalogue(_users!);
+        }
+      }
     } catch (_) {
       // A corrupt snapshot must never block start-up.
     }
@@ -107,6 +120,7 @@ class ListenerDataCache {
     _users = data;
     _usersFetchedAt = DateTime.now();
     PresenceCache().seedFromUserCatalogue(data);
+    HomeCache().setJson(_usersSnapshotKey, data);
   }
 
   void setThreads(List<Map<String, dynamic>> data) {
@@ -141,8 +155,11 @@ class ListenerDataCache {
     _wallet = null;
     _walletFetchedAt = null;
     ChatMessageCache().clear();
+    ChatDraftCache().clearAll();
     PresenceCache().clear();
+    TypingCache().clear();
     HomeCache().clear(_meSnapshotKey);
     HomeCache().clear(_threadsSnapshotKey);
+    HomeCache().clear(_usersSnapshotKey);
   }
 }
