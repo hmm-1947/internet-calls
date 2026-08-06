@@ -792,14 +792,6 @@ class UserHomeScreenState extends State<UserHomeScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Special Offers',
-          style: TextStyle(
-            fontSize: 16,
-            color: _AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
         const SizedBox(height: 16),
         SizedBox(
           height: 120,
