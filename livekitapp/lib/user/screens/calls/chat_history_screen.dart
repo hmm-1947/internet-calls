@@ -54,6 +54,11 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   final _pendingReadIds = <int>{};
   final _pendingReadClientIds = <String>{};
 
+  /// Keys of gift messages that arrived via the socket while this screen was
+  /// already open. These are shown as separate bubbles instead of being
+  /// stacked — only gifts already present when the chat loaded are stacked.
+  final _liveMessageKeys = <String>{};
+
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   final _chatStorage = ChatStorage();
@@ -401,6 +406,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     switch (type) {
       case 'chat_message':
         if (data['listener_id'] != widget.listenerId) return;
+        _liveMessageKeys.add(chatMessageKey(data));
         _merge([data]);
         _chatStorage.upsertMessage(
           widget.listenerId,
@@ -867,6 +873,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                   giftCoins: (message) => (message['gift_coins'] ?? 0) as int,
                   otherPartyName: widget.listenerName,
                   chatKey: _chatKey,
+                  liveMessageKeys: _liveMessageKeys,
                 ),
                 Positioned(
                   right: 16,

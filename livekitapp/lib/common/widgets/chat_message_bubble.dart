@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
+import 'package:livekitapp/common/utils/gift_stack.dart';
 import 'package:livekitapp/common/widgets/gift_message_bubble.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_message_bubble.dart';
 
@@ -128,6 +129,7 @@ class ChatMessageBubble extends StatelessWidget {
           coins: giftCoins,
           isMe: isMe,
           sentDuringCall: message['call_id'] != null,
+          stackCount: (message[giftStackCountKey] as int?) ?? 1,
         );
       case 'audio':
         return VoiceMessageBubble(

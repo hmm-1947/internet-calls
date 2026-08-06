@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
+import 'package:livekitapp/common/utils/gift_stack.dart';
 import 'package:livekitapp/common/widgets/chat_message_bubble.dart';
 
 class ChatMessageList extends StatelessWidget {
@@ -18,6 +19,12 @@ class ChatMessageList extends StatelessWidget {
   /// to and the minimized bar can stay hidden while that chat is on screen.
   final String chatKey;
 
+  /// Keys (see [chatMessageKey]) of gift messages that arrived, or were sent,
+  /// while this screen was already open and watching the socket live. These
+  /// are never collapsed into a stack — only gifts that were already present
+  /// when the chat was loaded are. See [collapseGiftStacks].
+  final Set<String> liveMessageKeys;
+
   const ChatMessageList({
     super.key,
     required this.messages,
@@ -27,13 +34,15 @@ class ChatMessageList extends StatelessWidget {
     this.bubbleMinWidth = 70,
     this.otherPartyName = '',
     this.chatKey = '',
+    this.liveMessageKeys = const {},
   });
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<List<Map<String, dynamic>>>(
       valueListenable: messages,
-      builder: (context, list, _) {
+      builder: (context, rawList, _) {
+        final list = collapseGiftStacks(rawList, liveMessageKeys);
         final labels = <String, String>{};
         String labelFor(Object? iso) =>
             labels.putIfAbsent('$iso', () => chatDateLabel(iso));
@@ -69,3 +78,4 @@ class ChatMessageList extends StatelessWidget {
     );
   }
 }
+

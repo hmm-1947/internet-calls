@@ -52,6 +52,11 @@ class GiftMessageBubble extends StatelessWidget {
   final bool isMe;
   final bool sentDuringCall;
 
+  /// How many identical, consecutive gifts this single bubble represents.
+  /// 1 (the default) means "just this one gift" and no multiplier is shown.
+  /// [coins] always stays the value of a single gift — it is never summed.
+  final int stackCount;
+
   const GiftMessageBubble({
     super.key,
     required this.giftIcon,
@@ -59,6 +64,7 @@ class GiftMessageBubble extends StatelessWidget {
     required this.coins,
     required this.isMe,
     this.sentDuringCall = false,
+    this.stackCount = 1,
   });
 
   @override
@@ -73,13 +79,39 @@ class GiftMessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              isMe ? 'You sent a gift' : 'Gift received',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isMe ? 'You sent a gift' : 'Gift received',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (stackCount > 1) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53950),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'x$stackCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 2),
             Text(
@@ -104,6 +136,15 @@ class GiftMessageBubble extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (stackCount > 1)
+                  Text(
+                    '  •  sent $stackCount times',
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
               ],
             ),
             if (sentDuringCall) ...[
