@@ -3,6 +3,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/call_end_coin_animation.dart';
 
 String _fmtDuration(int seconds) {
   final m = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -159,6 +160,10 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
 
   @override
   void dispose() {
+    final coins = _summary?['coins_deducted'];
+    if (coins is int) {
+      triggerCallEndCoinAnimation(coins);
+    }
     _reviewController.dispose();
     super.dispose();
   }

@@ -4,11 +4,15 @@ class HomeHeader extends StatelessWidget {
   final int? coins;
   final String title;
   final bool isHome;
+  final Key? originKey;
+  final Key? coinKey;
   const HomeHeader({
     super.key,
     required this.coins,
     required this.title,
     this.isHome = false,
+    this.originKey,
+    this.coinKey,
   });
 
   @override
@@ -20,21 +24,25 @@ class HomeHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          isHome
-              ? Image.asset(
-                  'assets/images/banner.png',
-                  height: 32,
-                  fit: BoxFit.contain,
-                )
-              : Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+          KeyedSubtree(
+            key: originKey,
+            child: isHome
+                ? Image.asset(
+                    'assets/images/banner.png',
+                    height: 32,
+                    fit: BoxFit.contain,
+                  )
+                : Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
+          ),
           Container(
+            key: coinKey,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
               color: const Color(0x1AFFFFFF),

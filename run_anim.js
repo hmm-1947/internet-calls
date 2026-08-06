@@ -1,0 +1,1 @@
+const fs=require("fs");const b=fs.readFileSync("D:/Projects/internet-calls/anim_full.b64","utf8").trim();const c=Buffer.from(b,"base64").toString("utf8");fs.writeFileSync("D:/Projects/internet-calls/livekitapp/lib/common/widgets/call_end_coin_animation.dart",c,"utf8");console.log("written",c.length);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
+import 'package:livekitapp/common/widgets/call_end_coin_animation_overlay.dart';
 import 'package:livekitapp/common/widgets/home_header.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/main_user.dart';
@@ -21,6 +22,8 @@ class _UserMainScreenState extends State<UserMainScreen> {
   int _index = 0;
   final _profileKey = GlobalKey<UserProfileScreenState>();
   final _homeKey = GlobalKey<UserHomeScreenState>();
+  final _headerOriginKey = GlobalKey();
+  final _headerCoinKey = GlobalKey();
   late final PageController _pageController = PageController(
     initialPage: _index,
   );
@@ -67,30 +70,43 @@ class _UserMainScreenState extends State<UserMainScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F1A2E),
       extendBody: true,
-      body: Column(
+      body: Stack(
         children: [
-          Container(
-            color: Colors.black,
-            child: SafeArea(
-              bottom: false,
-              child: ValueListenableBuilder<int?>(
-                valueListenable: userCoinsNotifier,
-                builder: (context, coins, _) => HomeHeader(
-                  coins: coins,
-                  title: _titles[_index],
-                  isHome: _index == 0,
+          Column(
+            children: [
+              Container(
+                color: Colors.black,
+                child: SafeArea(
+                  bottom: false,
+                  child: ValueListenableBuilder<int?>(
+                    valueListenable: userCoinsNotifier,
+                    builder: (context, coins, _) => HomeHeader(
+                      coins: coins,
+                      title: _titles[_index],
+                      isHome: _index == 0,
+                      originKey: _headerOriginKey,
+                      coinKey: _headerCoinKey,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const ClampingScrollPhysics(),
+                  onPageChanged: _onPageChanged,
+                  children: [
+                    for (final screen in _screens)
+                      RepaintBoundary(child: screen),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const ClampingScrollPhysics(),
-              onPageChanged: _onPageChanged,
-              children: [
-                for (final screen in _screens) RepaintBoundary(child: screen),
-              ],
+          Positioned.fill(
+            child: CallEndCoinAnimationOverlay(
+              originKey: _headerOriginKey,
+              coinKey: _headerCoinKey,
             ),
           ),
         ],
