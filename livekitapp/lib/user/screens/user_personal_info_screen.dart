@@ -354,6 +354,18 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
   }
 
   Future<void> _load() async {
+    final cached = UserDataCache().lastMe;
+    if (cached != null && _loading) {
+      _applyProfile(cached);
+      _setFieldText(_displayNameController, _name);
+      _setFieldText(_usernameController, _username);
+      _setFieldText(_bioController, _bio);
+      setState(() {
+        _photoUrl = cached['photo_url'];
+        _loading = false;
+      });
+      _startTicker();
+    }
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!, forceRefresh: true);

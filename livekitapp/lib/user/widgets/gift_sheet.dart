@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
+import 'package:livekitapp/common/widgets/gift_success_popup.dart';
 
 IconData giftIconFor(String? icon) {
   switch (icon) {
@@ -81,14 +82,14 @@ Future<void> showGiftSheet(
       PageRouteBuilder(
         opaque: false,
         barrierColor: Colors.black54,
-        pageBuilder: (ctx, anim, __) => GiftSheet(
+        pageBuilder: (ctx, anim, _) => GiftSheet(
           balance: coins,
           gifts: gifts,
           listenerId: listenerId,
           callId: callId,
           fromTop: true,
         ),
-        transitionsBuilder: (ctx, animation, __, child) {
+        transitionsBuilder: (ctx, animation, _, child) {
           final offset = Tween<Offset>(
             begin: const Offset(0, -1),
             end: Offset.zero,
@@ -166,11 +167,17 @@ class _GiftSheetState extends State<GiftSheet> {
       );
       final sentCoins = result['gift_coins'] ?? cost;
       final giftName = result['gift_name'] ?? gift['name'];
-      if (mounted) Navigator.of(context).pop();
-      setState(() => _balance = result['coins'] ?? _balance);
+      final giftIcon = result['gift_icon'] ?? gift['icon'];
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sent $giftName for $sentCoins coins')),
+        final rootContext = Navigator.of(context, rootNavigator: true).context;
+        Navigator.of(context).pop();
+        setState(() => _balance = result['coins'] ?? _balance);
+        GiftSuccessPopup.show(
+          // ignore: use_build_context_synchronously
+          rootContext,
+          giftIcon: giftIcon as String?,
+          giftName: giftName as String,
+          coins: sentCoins as int,
         );
       }
     } catch (e) {

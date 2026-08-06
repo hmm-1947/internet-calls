@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+
+const _kCallHistoryCacheKey = 'listener_call_history_snapshot';
 
 String _fmtDateTime(String iso) {
   final dt = (DateTime.tryParse(iso) ?? DateTime.now()).toLocal();
@@ -113,6 +116,7 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _loadFromCache();
     _load();
   }
 
@@ -120,6 +124,18 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadFromCache() async {
+    final cached = await HomeCache().getJson(_kCallHistoryCacheKey);
+    if (!mounted || cached is! List || _calls.isNotEmpty) return;
+    final calls = cached.whereType<Map>().map((c) => Map<String, dynamic>.from(c)).toList();
+    if (calls.isEmpty) return;
+    setState(() {
+      _calls = calls;
+      _filteredCalls = _applyFilter();
+      _loading = false;
+    });
   }
 
   List<Map<String, dynamic>> _applyFilter() {
@@ -166,6 +182,7 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
       final token = await _localStorage.getToken();
       if (token == null) return;
       final calls = await _repository.getCallHistory(token);
+      HomeCache().setJson(_kCallHistoryCacheKey, calls);
       if (!mounted) return;
       if (dataChanged(_calls, calls)) {
         setState(() {

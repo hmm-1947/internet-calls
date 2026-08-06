@@ -827,16 +827,19 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                     )
                   : const SizedBox.shrink(),
             ),
-          if (!isNarrow)
-            IconButton(
-              style: iconButtonStyle,
-              icon: const Icon(Icons.card_giftcard, color: Colors.white),
-              onPressed: () => showGiftSheet(
-                context,
-                listenerId: widget.listenerId,
-                fromTop: true,
-              ),
+          IconButton(
+            style: iconButtonStyle,
+            icon: Icon(
+              Icons.card_giftcard,
+              color: Colors.white,
+              size: isNarrow ? 20 : 24,
             ),
+            onPressed: () => showGiftSheet(
+              context,
+              listenerId: widget.listenerId,
+              fromTop: true,
+            ),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: _favorite,
             builder: (context, favorite, _) => IconButton(
