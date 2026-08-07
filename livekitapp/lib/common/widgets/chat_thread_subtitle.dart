@@ -15,6 +15,8 @@ class ChatThreadSubtitle extends StatelessWidget {
   final String lastMessage;
   final Color color;
   final Color accentColor;
+  final String? messageType;
+  final String? callStatus;
 
   const ChatThreadSubtitle({
     super.key,
@@ -23,6 +25,8 @@ class ChatThreadSubtitle extends StatelessWidget {
     required this.lastMessage,
     required this.color,
     required this.accentColor,
+    this.messageType,
+    this.callStatus,
   });
 
   @override
@@ -41,11 +45,30 @@ class ChatThreadSubtitle extends StatelessWidget {
           builder: (context, _, __) {
             final draft = ChatDraftCache().read(draftKey)?.trim();
             if (draft == null || draft.isEmpty) {
-              return Text(
-                lastMessage,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: color),
+              final isMissedCall = messageType == 'call' &&
+                  (callStatus == 'missed' || callStatus == 'declined');
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (messageType == 'call') ...[
+                    Icon(
+                      Icons.call,
+                      size: 14,
+                      color: isMissedCall ? accentColor : color,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Flexible(
+                    child: Text(
+                      lastMessage,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isMissedCall ? accentColor : color,
+                      ),
+                    ),
+                  ),
+                ],
               );
             }
             return Text.rich(

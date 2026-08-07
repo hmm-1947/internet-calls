@@ -14,8 +14,9 @@ from app.core.config import settings
 from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
     CoinTransaction, CallRating, Session as SessionModel, AdminUser, AuditLog,
-    GiftTransaction, ListenerCoinTransaction, ChatSettings,
+    GiftTransaction, ListenerCoinTransaction, ChatSettings, ReservedUsername,
 )
+from datetime import timedelta
 from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate
 from app.utils.security import hash_password
 from app.utils.uploads import read_and_validate_image, write_file
@@ -90,7 +91,11 @@ async def admin_ws(websocket: WebSocket, token: str = Query(...)):
 def _assert_listener_name_available(db: Session, name: str, exclude_id: Optional[int] = None) -> None:
     """Users pick a listener by name, so two "Priya" rows are indistinguishable
     in the app. Matched case-insensitively, so "priya" collides with "Priya".
-    `exclude_id` keeps a rename from clashing with the listener's own row."""
+    `exclude_id` keeps a rename from clashing with the listener's own row.
+
+    Also blocks a name that collides with an existing user's username, since
+    listeners and users share the same namespace app-side.
+    """
     q = db.query(Listener).filter(func.lower(Listener.name) == name.lower())
     if exclude_id is not None:
         q = q.filter(Listener.id != exclude_id)
@@ -100,6 +105,45 @@ def _assert_listener_name_available(db: Session, name: str, exclude_id: Optional
             status_code=400,
             detail=f'A listener named "{duplicate.name}" already exists. Please use a different name.',
         )
+
+    user_match = db.query(User).filter(func.lower(User.username) == name.lower()).first()
+    if user_match:
+        raise HTTPException(
+            status_code=400,
+            detail=f'There is already a user with the username "{user_match.username}". Please use a different name.',
+        )
+
+
+def _reserved_username_warning(db: Session, name: str) -> Optional[dict]:
+    """If `name` is currently sitting in another user's 45-day username
+    reservation window, returns the confirmation payload the admin panel
+    shows before letting the admin proceed anyway. Admin listener creation
+    is exempt from the reservation itself - this is a heads-up only."""
+    cleaned = name.strip().lower()
+    reservation = (
+        db.query(ReservedUsername)
+        .filter(
+            func.lower(ReservedUsername.username) == cleaned,
+            ReservedUsername.released_at > datetime.now(timezone.utc),
+        )
+        .order_by(ReservedUsername.released_at.desc())
+        .first()
+    )
+    if not reservation:
+        return None
+    remaining = reservation.released_at - datetime.now(timezone.utc)
+    remaining_days = max(1, (remaining.days + (1 if remaining.seconds else 0)))
+    owner = db.query(User).filter(User.id == reservation.reserved_by_user_id).first()
+    return {
+        "username": cleaned,
+        "changed_to": owner.username if owner else None,
+        "remaining_days": remaining_days,
+        "message": (
+            f'The username "{cleaned}" was being used by a user who changed to '
+            f'"{owner.username if owner else "a different username"}", and is still in its '
+            f'{remaining_days}-day reservation period. Continue anyway?'
+        ),
+    }
 
 
 @router.post("/listeners")
@@ -116,6 +160,11 @@ def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=De
         raise HTTPException(status_code=400, detail=f'Phone already registered to "{existing.name}"')
 
     _assert_listener_name_available(db, name)
+
+    if not payload.confirm_reserved_username:
+        warning = _reserved_username_warning(db, name)
+        if warning:
+            raise HTTPException(status_code=409, detail={"reserved_username_warning": warning})
 
     listener = Listener(
         name=name,

@@ -462,6 +462,7 @@ class ListenerCreate(BaseModel):
     name: str
     phone: str
     password: str
+    confirm_reserved_username: bool = False
 
 class AuthResponse(BaseModel):
     token: str
@@ -529,6 +530,9 @@ class ChatMessageOut(BaseModel):
     gift_icon: Optional[str] = None
     gift_coins: Optional[int] = None
     call_id: Optional[int] = None
+    call_type: Optional[str] = None
+    call_status: Optional[str] = None
+    call_duration_seconds: Optional[int] = None
     status: str
     is_read: bool
     delivered_at: Optional[datetime] = None
@@ -547,6 +551,10 @@ class ChatThreadOut(BaseModel):
     listener_name: str
     last_message: str
     last_message_at: datetime
+    last_message_type: str = "text"
+    last_call_type: Optional[str] = None
+    last_call_status: Optional[str] = None
+    last_call_duration_seconds: Optional[int] = None
     unread_count: int
     is_pinned: bool = False
     is_archived: bool = False

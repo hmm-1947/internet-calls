@@ -9,6 +9,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
+import 'package:livekitapp/common/widgets/auto_hide_nav_bar.dart';
 import 'package:livekitapp/common/widgets/keep_alive_page.dart';
 import 'package:livekitapp/common/widgets/listener_home_header.dart';
 
@@ -21,6 +22,7 @@ class ListenerMainScreen extends StatefulWidget {
 
 class _ListenerMainScreenState extends State<ListenerMainScreen> {
   int _index = 0;
+  bool _navBarVisible = true;
   final _settingsKey = GlobalKey<ListenerSettingsScreenState>();
   final _homeKey = GlobalKey<ListenerHomeScreenState>();
   final _weeklyChallengeRepository = WeeklyChallengeRepository();
@@ -29,6 +31,29 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   late final PageController _pageController = PageController(
     initialPage: _index,
   );
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    if (metrics.axis != Axis.vertical) return false;
+    if (!metrics.hasContentDimensions ||
+        metrics.maxScrollExtent <= metrics.minScrollExtent) {
+      return false;
+    }
+    if (notification is ScrollUpdateNotification) {
+      if (metrics.pixels <= metrics.minScrollExtent) {
+        if (!_navBarVisible) setState(() => _navBarVisible = true);
+        return false;
+      }
+      final delta = notification.scrollDelta ?? 0;
+      if (delta.abs() < 1) return false;
+      if (delta > 0 && _navBarVisible) {
+        setState(() => _navBarVisible = false);
+      } else if (delta < 0 && !_navBarVisible) {
+        setState(() => _navBarVisible = true);
+      }
+    }
+    return false;
+  }
 
   late final List<Widget> _screens = [
     ListenerHomeScreen(
@@ -113,14 +138,17 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
           Expanded(
             child: Stack(
               children: [
-                PageView(
-                  controller: _pageController,
-                  physics: const ClampingScrollPhysics(),
-                  onPageChanged: _onPageChanged,
-                  children: [
-                    for (final screen in _screens)
-                      KeepAlivePage(child: RepaintBoundary(child: screen)),
-                  ],
+                NotificationListener<ScrollNotification>(
+                  onNotification: _onScrollNotification,
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const ClampingScrollPhysics(),
+                    onPageChanged: _onPageChanged,
+                    children: [
+                      for (final screen in _screens)
+                        KeepAlivePage(child: RepaintBoundary(child: screen)),
+                    ],
+                  ),
                 ),
 
                 if (_index == 0 && _weeklyChallengeActive)
@@ -142,39 +170,42 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
         ],
       ),
 
-      bottomNavigationBar: CrownNavBar(
-        selectedIndex: _index,
-        onDestinationSelected: _onTabSelected,
-        onCrownTap: () {},
-        showCrown: false,
-        labels: const ['Home', 'Chat', 'Calls', 'Settings'],
-        icons: [
-          const Icon(Icons.grid_view_rounded),
-          ValueListenableBuilder<int>(
-            valueListenable: chatMessageNotifier,
-            builder: (context, count, _) => Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.chat_bubble_outline),
-                if (count > 0)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
+      bottomNavigationBar: AutoHideNavBar(
+        visible: _navBarVisible,
+        child: CrownNavBar(
+          selectedIndex: _index,
+          onDestinationSelected: _onTabSelected,
+          onCrownTap: () {},
+          showCrown: false,
+          labels: const ['Home', 'Chat', 'Calls', 'Settings'],
+          icons: [
+            const Icon(Icons.grid_view_rounded),
+            ValueListenableBuilder<int>(
+              valueListenable: chatMessageNotifier,
+              builder: (context, count, _) => Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.chat_bubble_outline),
+                  if (count > 0)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.call_outlined),
-          const Icon(Icons.settings_outlined),
-        ],
+            const Icon(Icons.call_outlined),
+            const Icon(Icons.settings_outlined),
+          ],
+        ),
       ),
     );
   }

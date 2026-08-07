@@ -1005,27 +1005,7 @@ class _ListenerCard extends StatelessWidget {
         ),
         if (tags.isNotEmpty) ...[
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final tag in tags.take(3))
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _AppColors.brandRed.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '$tag',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
-                  ),
-                ),
-            ],
-          ),
+          _CyclingTagsRow(tags: tags),
         ],
       ],
     );
@@ -1084,6 +1064,77 @@ class _ListenerCard extends StatelessWidget {
         ),
         child: const Icon(Icons.call, color: Colors.white, size: 18),
       ),
+    );
+  }
+}
+
+class _CyclingTagsRow extends StatefulWidget {
+  final List<dynamic> tags;
+
+  const _CyclingTagsRow({required this.tags});
+
+  @override
+  State<_CyclingTagsRow> createState() => _CyclingTagsRowState();
+}
+
+class _CyclingTagsRowState extends State<_CyclingTagsRow> {
+  static const _pageSize = 2;
+  Timer? _timer;
+  int _page = 0;
+
+  int get _pageCount => (widget.tags.length / _pageSize).ceil();
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeStartTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CyclingTagsRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tags != widget.tags) {
+      _page = 0;
+      _timer?.cancel();
+      _maybeStartTimer();
+    }
+  }
+
+  void _maybeStartTimer() {
+    if (_pageCount <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted) return;
+      setState(() => _page = (_page + 1) % _pageCount);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final start = _page * _pageSize;
+    final visible = widget.tags.skip(start).take(_pageSize);
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: [
+        for (final tag in visible)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _AppColors.brandRed.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$tag',
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
+            ),
+          ),
+      ],
     );
   }
 }

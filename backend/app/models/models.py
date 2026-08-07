@@ -169,6 +169,11 @@ class ChatMessage(Base):
     gift_icon = Column(String, nullable=True)
     gift_coins = Column(Integer, nullable=True)  # full gift cost paid by the sender
     call_id = Column(Integer, nullable=True)  # set when the gift/message was sent during an active call
+    # Populated only when message_type == "call": denormalized so the chat
+    # list/history can render a call-log row without a join back to `calls`.
+    call_type = Column(String, nullable=True)  # "audio" | "video"
+    call_status = Column(String, nullable=True)  # "completed" | "missed" | "declined" | "cancelled"
+    call_duration_seconds = Column(Integer, nullable=True)
     status = Column(String, default="sent")
     is_read = Column(Boolean, default=False)
     delivered_at = Column(DateTime(timezone=True), nullable=True)
@@ -475,3 +480,24 @@ class PendingSignup(Base):
     signup_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ReservedUsername(Base):
+    """Holds a username a user has moved away from so nobody else can claim it
+    for a cool-down period after the change.
+
+    A row is inserted whenever `User.username` is changed away from a value,
+    with `released_at` set 45 days out. Availability checks treat the
+    username as taken until `released_at` passes, after which the row is
+    just stale data that can be ignored or purged.
+    """
+
+    __tablename__ = "reserved_usernames"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Lower-cased, matching how `User.username` is stored.
+    username = Column(String, nullable=False, index=True)
+    reserved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    released_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

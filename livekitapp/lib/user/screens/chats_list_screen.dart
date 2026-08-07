@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/chat_message_bubble.dart';
 import 'package:livekitapp/common/widgets/chat_thread_subtitle.dart';
 import 'package:livekitapp/common/widgets/presence_dot.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
@@ -17,6 +18,22 @@ import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 const _bg = Color(0xFF0B0F1A);
 const _pink = Color(0xFFE53950);
 const _dimText = Colors.white54;
+
+/// Time for a thread's last message, shown on the right of the chat row:
+/// the clock time if it was today, `Yesterday` if it was yesterday, else a
+/// short date.
+String _threadTimeLabel(Object? iso) {
+  if (iso == null) return '';
+  final date = chatMessageTime(iso);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(date.year, date.month, date.day);
+  final diff = today.difference(day).inDays;
+  if (diff == 0) return clockLabel(iso);
+  if (diff == 1) return 'Yesterday';
+  return '${date.day.toString().padLeft(2, '0')}/'
+      '${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
 
 class _FilterChip extends StatelessWidget {
   final String label;
@@ -383,7 +400,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                           _placeholder('No chats yet')
                         else
                           SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                            padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
                             sliver: SliverList.builder(
                               itemCount: _filtered.length,
                               itemBuilder: (context, index) {
@@ -560,6 +577,8 @@ class _ThreadTile extends StatelessWidget {
                 lastMessage: '${thread['last_message'] ?? ''}',
                 color: unread > 0 ? Colors.white70 : _dimText,
                 accentColor: _pink,
+                messageType: thread['last_message_type'] as String?,
+                callStatus: thread['last_call_status'] as String?,
               ),
             ),
             trailing: Column(
@@ -567,7 +586,7 @@ class _ThreadTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${thread['time_label'] ?? ''}',
+                  _threadTimeLabel(thread['last_message_at']),
                   style: const TextStyle(color: _dimText, fontSize: 12),
                 ),
                 const SizedBox(height: 6),

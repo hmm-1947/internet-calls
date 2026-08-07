@@ -139,6 +139,9 @@ def _msg_dict(msg):
         "gift_icon": msg.gift_icon,
         "gift_coins": msg.gift_coins,
         "call_id": msg.call_id,
+        "call_type": msg.call_type,
+        "call_status": msg.call_status,
+        "call_duration_seconds": msg.call_duration_seconds,
         "status": msg.status,
         "is_read": msg.is_read,
         "delivered_at": msg.delivered_at.isoformat() if msg.delivered_at else None,
@@ -162,6 +165,60 @@ def _undelivered_summary_payload(db: Session, user_id: int, listener_id: int, se
         {"id": m.id, "client_id": m.client_id, "message": m.message}
         for m in undelivered
     ]
+
+
+CALL_LOG_PREVIEWS = {
+    ("audio", "completed"): "📞 Voice call",
+    ("video", "completed"): "📹 Video call",
+    ("audio", "missed"): "📞 Missed voice call",
+    ("video", "missed"): "📹 Missed video call",
+    ("audio", "declined"): "📞 Voice call declined",
+    ("video", "declined"): "📹 Video call declined",
+    ("audio", "cancelled"): "📞 Voice call",
+    ("video", "cancelled"): "📹 Video call",
+}
+
+
+async def record_call_message(
+    db: Session,
+    *,
+    user_id: int,
+    listener_id: int,
+    call_id: int,
+    call_type: str,
+    call_status: str,
+    duration_seconds: int = 0,
+):
+    """Appends a WhatsApp-style call-log entry to the chat between this user
+    and listener, so a call — regardless of how it ended — shows up inline in
+    the conversation on both sides, the same way a text or voice message does.
+
+    `call_status` is one of "completed" (the call connected), "missed" (never
+    answered), "declined" (listener rejected it), or "cancelled" (the caller
+    hung up before it was answered). The caller (the user) is always
+    `sender_type`, since only users initiate calls in this app.
+    """
+    preview = CALL_LOG_PREVIEWS.get((call_type, call_status), "📞 Call")
+    msg = ChatMessage(
+        user_id=user_id,
+        listener_id=listener_id,
+        sender_type="user",
+        message=preview,
+        message_type="call",
+        call_id=call_id,
+        call_type=call_type,
+        call_status=call_status,
+        call_duration_seconds=duration_seconds,
+        status="delivered",
+        delivered_at=datetime.now(timezone.utc),
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    payload = _msg_dict(msg)
+    await manager.send_to_user(user_id, payload)
+    await manager.send_to_listener(listener_id, payload)
+    return msg
 
 @router.post("/user/send", response_model=ChatMessageOut)
 async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -265,7 +322,7 @@ async def user_send_voice(
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if listener.fcm_token:
         try:
-            send_chat_message(listener.fcm_token, current_user.name, "🎤 Voice message", current_user.id, listener.id, "user")
+            send_chat_message(listener.fcm_token, current_user.name, "🎤 Voice message", current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of voice message: {e}")
     return msg
@@ -303,7 +360,7 @@ async def listener_send_voice(
     await manager.send_to_listener(current_listener.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if user.fcm_token:
         try:
-            send_chat_message(user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener")
+            send_chat_message(user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of voice message: {e}")
     return msg
@@ -556,6 +613,19 @@ def update_listener_chat_settings(payload: ChatSettingsUpdate, db: Session = Dep
     db.commit()
     return {"status": "ok"}
 
+def _thread_preview(msg: ChatMessage) -> str:
+    """Text shown in the chats list for a thread's last message. `message` is
+    blank for voice notes and empty gifts/calls store their own preview
+    text, so this fills in a readable stand-in instead of a blank line."""
+    if msg.message_type == "audio":
+        return "🎤 Voice message"
+    if msg.message_type == "gift":
+        return f"🎁 {msg.gift_name}" if msg.gift_name else "🎁 Gift"
+    if msg.message and msg.message.strip():
+        return msg.message
+    return msg.message
+
+
 @router.get("/user/threads", response_model=list[ChatThreadOut])
 def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     listener_ids = [r[0] for r in db.query(ChatMessage.listener_id).filter(ChatMessage.user_id == current_user.id).distinct().all()]
@@ -598,7 +668,11 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
         settings = settings_by_listener.get(lid)
         result.append(ChatThreadOut(
             user_id=current_user.id, user_name=current_user.name, listener_id=lid, listener_name=listener.name,
-            last_message=last.message, last_message_at=last.created_at, unread_count=unread_by_listener.get(lid, 0),
+            last_message=_thread_preview(last), last_message_at=last.created_at,
+            last_message_type=last.message_type or "text",
+            last_call_type=last.call_type, last_call_status=last.call_status,
+            last_call_duration_seconds=last.call_duration_seconds,
+            unread_count=unread_by_listener.get(lid, 0),
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
@@ -652,7 +726,11 @@ def listener_get_threads(db: Session = Depends(get_db), current_listener: Listen
         settings = settings_by_user.get(uid)
         result.append(ChatThreadOut(
             user_id=uid, user_name=user.name, listener_id=current_listener.id, listener_name=current_listener.name,
-            last_message=last.message, last_message_at=last.created_at, unread_count=unread_by_user.get(uid, 0),
+            last_message=_thread_preview(last), last_message_at=last.created_at,
+            last_message_type=last.message_type or "text",
+            last_call_type=last.call_type, last_call_status=last.call_status,
+            last_call_duration_seconds=last.call_duration_seconds,
+            unread_count=unread_by_user.get(uid, 0),
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,

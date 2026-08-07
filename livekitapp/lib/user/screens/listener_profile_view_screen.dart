@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
@@ -67,8 +70,17 @@ String _memberSinceYear(String? createdAt) {
 
 class ListenerProfileViewScreen extends StatefulWidget {
   final int listenerId;
+  final String? initialName;
+  final String? initialPhotoUrl;
+  final bool? initialIsOnline;
 
-  const ListenerProfileViewScreen({super.key, required this.listenerId});
+  const ListenerProfileViewScreen({
+    super.key,
+    required this.listenerId,
+    this.initialName,
+    this.initialPhotoUrl,
+    this.initialIsOnline,
+  });
 
   @override
   State<ListenerProfileViewScreen> createState() =>
@@ -80,8 +92,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   final _localStorage = LocalStorage();
   bool _loading = true;
   String? _error;
-  String _name = '';
-  bool _isOnline = false;
+  late String _name = widget.initialName ?? '';
+  late bool _isOnline = widget.initialIsOnline ?? false;
   String _about = '';
   List<String> _tags = [];
   List<String> _languages = [];
@@ -90,12 +102,39 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   double? _avgRating;
   int _ratingCount = 0;
   String? _createdAt;
-  String? _photoUrl;
+  late String? _photoUrl = widget.initialPhotoUrl;
 
   @override
   void initState() {
     super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _hydrateFromCache();
     _load();
+  }
+
+  String get _cacheKey => 'listener_profile_${widget.listenerId}';
+
+  Future<void> _hydrateFromCache() async {
+    final cached = await HomeCache().getJson(_cacheKey);
+    if (cached == null || !mounted) return;
+    final map = Map<String, dynamic>.from(cached as Map);
+    setState(() {
+      _name = map['name'] ?? '';
+      _isOnline = map['is_online'] == true;
+      _about = map['about'] ?? '';
+      _tags = List<String>.from(map['tags'] ?? []);
+      _languages = List<String>.from(map['languages'] ?? []);
+      _age = map['age'];
+      _occupation = map['occupation'] ?? '';
+      _avgRating = (map['avg_rating'] as num?)?.toDouble();
+      _ratingCount = map['rating_count'] ?? 0;
+      _createdAt = map['created_at'];
+      _photoUrl = map['photo_url'];
+      _loading = false;
+    });
   }
 
     Future<void> _load() async {
@@ -125,6 +164,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         'created_at': data['created_at'],
         'photo_url': data['photo_url'],
       };
+      unawaited(HomeCache().setJson(_cacheKey, newSnapshot));
       final oldSnapshot = {
         'name': _name,
         'is_online': _isOnline,
@@ -166,6 +206,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final showSpinner = _loading && _name.isEmpty;
     return Scaffold(
       backgroundColor: _AppColors.bg,
       appBar: AppBar(
@@ -173,7 +214,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         elevation: 0,
         title: const Text('Profile'),
       ),
-      body: _loading
+      body: showSpinner
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(

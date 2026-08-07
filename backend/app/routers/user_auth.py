@@ -36,7 +36,7 @@ from app.schemas.schemas import (
     validate_username,
 )
 from app.core.database import get_db
-from app.models.models import AdminNotification, PendingSignup, User, Session as SessionModel
+from app.models.models import AdminNotification, PendingSignup, User, Session as SessionModel, ReservedUsername
 from app.routers.notifications import create_admin_notification
 from app.utils.email_otp import generate_otp_code, send_otp_email
 from app.utils.sms_otp import generate_otp_code as generate_sms_otp_code, send_otp_sms
@@ -74,6 +74,9 @@ CONTACT_CHANGE_COOLDOWN = timedelta(hours=24)
 # How long a code emailed for an email change stays valid. Phone changes get
 # the same window to finish the Firebase flow.
 CONTACT_OTP_TTL_MINUTES = 10
+# How long a username stays reserved (unavailable to anyone else) after the
+# user who held it changes to a different one.
+USERNAME_RESERVATION_DAYS = 45
 
 
 def _find_user_by_phone(db: Session, phone: str):
@@ -103,14 +106,29 @@ def _is_username_taken(db: Session, username: str, exclude_user_id: Optional[int
     """Case-insensitive check so "Riya" and "riya" cannot both exist.
 
     `exclude_user_id` keeps a user's own handle from counting as taken when
-    they re-save it from the edit profile screen.
+    they re-save it from the edit profile screen. Also treats a username as
+    taken while it is under an active 45-day reservation from a previous
+    owner, unless the reservation belongs to `exclude_user_id` themself.
     """
-    query = db.query(User.id).filter(
-        sqlfunc.lower(User.username) == username.strip().lower()
-    )
+    cleaned = username.strip().lower()
+    query = db.query(User.id).filter(sqlfunc.lower(User.username) == cleaned)
     if exclude_user_id is not None:
         query = query.filter(User.id != exclude_user_id)
-    return query.first() is not None
+    if query.first() is not None:
+        return True
+
+    if db.query(Listener.id).filter(sqlfunc.lower(Listener.name) == cleaned).first() is not None:
+        return True
+
+    reservation_query = db.query(ReservedUsername.id).filter(
+        sqlfunc.lower(ReservedUsername.username) == cleaned,
+        ReservedUsername.released_at > _utcnow(),
+    )
+    if exclude_user_id is not None:
+        reservation_query = reservation_query.filter(
+            ReservedUsername.reserved_by_user_id != exclude_user_id
+        )
+    return reservation_query.first() is not None
 
 
 def _taken_message(db: Session, channel: str, identifier: str):
@@ -922,6 +940,14 @@ def update_profile(
             )
             if _is_username_taken(db, username, exclude_user_id=current_user.id):
                 raise HTTPException(status_code=409, detail=USERNAME_TAKEN_MESSAGE)
+            if current_user.username:
+                db.add(
+                    ReservedUsername(
+                        username=current_user.username.lower(),
+                        reserved_by_user_id=current_user.id,
+                        released_at=_utcnow() + timedelta(days=USERNAME_RESERVATION_DAYS),
+                    )
+                )
             current_user.username = username.lower()
             current_user.username_changed_at = _utcnow()
 

@@ -681,8 +681,11 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   void _openProfile() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            ListenerProfileViewScreen(listenerId: widget.listenerId),
+        builder: (_) => ListenerProfileViewScreen(
+          listenerId: widget.listenerId,
+          initialName: widget.listenerName,
+          initialPhotoUrl: widget.listenerPhotoUrl,
+        ),
       ),
     );
   }

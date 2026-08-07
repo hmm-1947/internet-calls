@@ -247,7 +247,12 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  12,
+                  20,
+                  20 + 78 + MediaQuery.paddingOf(context).bottom,
+                ),
                 sliver: SliverList.separated(
                   itemCount: _visibleUsers.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),

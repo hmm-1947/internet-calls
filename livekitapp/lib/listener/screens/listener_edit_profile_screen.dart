@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -214,6 +215,13 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
+    final parsedAge = int.tryParse(_ageController.text.trim());
+    if (parsedAge != null && (parsedAge < 1 || parsedAge > 100)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Age must be between 1 and 100')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       final token = await _localStorage.getToken();
@@ -222,14 +230,14 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
         about: _aboutController.text.trim(),
         tags: _editTags,
         languages: _editLanguages,
-        age: int.tryParse(_ageController.text.trim()),
+        age: parsedAge,
         occupation: _occupationController.text.trim(),
       );
       setState(() {
         _about = _aboutController.text.trim();
         _tags = List.from(_editTags);
         _languages = List.from(_editLanguages);
-        _age = int.tryParse(_ageController.text.trim());
+        _age = parsedAge;
         _occupation = _occupationController.text.trim();
         _editing = false;
         _saving = false;
@@ -247,16 +255,34 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
   Widget _tagInputRow(
     TextEditingController controller,
     List<String> list,
-    String hint,
-  ) {
+    String hint, {
+    int? maxCount,
+    int? maxChars,
+  }) {
+    final atLimit = maxCount != null && list.length >= maxCount;
+    void addFromController() {
+      var t = controller.text.trim();
+      if (t.isEmpty) return;
+      if (maxChars != null && t.length > maxChars) {
+        t = t.substring(0, maxChars);
+      }
+      setState(() {
+        list.add(t);
+        controller.clear();
+      });
+    }
+
     return Row(
       children: [
         Expanded(
           child: TextField(
             controller: controller,
+            enabled: !atLimit,
+            maxLength: maxChars,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: hint,
+              counterText: '',
+              hintText: atLimit ? 'Limit reached' : hint,
               hintStyle: const TextStyle(color: Colors.white38),
               filled: true,
               fillColor: _AppColors.cardBg,
@@ -269,27 +295,13 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                 vertical: 10,
               ),
             ),
-            onSubmitted: (v) {
-              final t = v.trim();
-              if (t.isEmpty) return;
-              setState(() {
-                list.add(t);
-                controller.clear();
-              });
-            },
+            onSubmitted: atLimit ? null : (_) => addFromController(),
           ),
         ),
         const SizedBox(width: 8),
         IconButton(
           icon: const Icon(Icons.add_circle, color: _AppColors.brandRed),
-          onPressed: () {
-            final t = controller.text.trim();
-            if (t.isEmpty) return;
-            setState(() {
-              list.add(t);
-              controller.clear();
-            });
-          },
+          onPressed: atLimit ? null : addFromController,
         ),
       ],
     );
@@ -568,8 +580,13 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                               child: TextField(
                                 controller: _ageController,
                                 keyboardType: TextInputType.number,
+                                maxLength: 3,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
                                 style: const TextStyle(color: Colors.white),
                                 decoration: InputDecoration(
+                                  counterText: '',
                                   hintText: 'Age',
                                   hintStyle: const TextStyle(
                                     color: Colors.white38,
@@ -592,8 +609,10 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                               flex: 2,
                               child: TextField(
                                 controller: _occupationController,
+                                maxLength: 20,
                                 style: const TextStyle(color: Colors.white),
                                 decoration: InputDecoration(
+                                  counterText: '',
                                   hintText: 'Occupation',
                                   hintStyle: const TextStyle(
                                     color: Colors.white38,
@@ -643,6 +662,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                         ? TextField(
                             controller: _aboutController,
                             maxLines: 4,
+                            maxLength: 100,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
                               border: InputBorder.none,
@@ -674,7 +694,13 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                           .toList(),
                     ),
                     const SizedBox(height: 8),
-                    _tagInputRow(_tagController, _editTags, 'Add a topic'),
+                    _tagInputRow(
+                      _tagController,
+                      _editTags,
+                      'Add a topic',
+                      maxCount: 5,
+                      maxChars: 10,
+                    ),
                   ] else
                     Wrap(
                       spacing: 8,
@@ -708,6 +734,8 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       _languageController,
                       _editLanguages,
                       'Add a language',
+                      maxCount: 10,
+                      maxChars: 10,
                     ),
                   ] else
                     Text(

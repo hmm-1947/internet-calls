@@ -4,6 +4,7 @@ import 'package:livekitapp/common/widgets/home_header.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/main_user.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
+import 'package:livekitapp/common/widgets/auto_hide_nav_bar.dart';
 import 'package:livekitapp/common/widgets/keep_alive_page.dart';
 import 'package:livekitapp/user/screens/user_home_screen.dart';
 import 'package:livekitapp/user/screens/chats_list_screen.dart';
@@ -20,11 +21,31 @@ class UserMainScreen extends StatefulWidget {
 
 class _UserMainScreenState extends State<UserMainScreen> {
   int _index = 0;
+  bool _navBarVisible = true;
   final _profileKey = GlobalKey<UserProfileScreenState>();
   final _homeKey = GlobalKey<UserHomeScreenState>();
   late final PageController _pageController = PageController(
     initialPage: _index,
   );
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    if (metrics.axis != Axis.vertical) return false;
+    if (!metrics.hasContentDimensions ||
+        metrics.maxScrollExtent <= metrics.minScrollExtent) {
+      return false;
+    }
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      if (delta.abs() < 1) return false;
+      if (delta > 0 && _navBarVisible) {
+        setState(() => _navBarVisible = false);
+      } else if (delta < 0 && !_navBarVisible) {
+        setState(() => _navBarVisible = true);
+      }
+    }
+    return false;
+  }
 
   late final List<Widget> _screens = [
     UserHomeScreen(key: _homeKey),
@@ -85,54 +106,60 @@ class _UserMainScreenState extends State<UserMainScreen> {
             ),
           ),
           Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const ClampingScrollPhysics(),
-              onPageChanged: _onPageChanged,
-              children: [
-                for (final screen in _screens)
-                  KeepAlivePage(child: RepaintBoundary(child: screen)),
-              ],
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _onScrollNotification,
+              child: PageView(
+                controller: _pageController,
+                physics: const ClampingScrollPhysics(),
+                onPageChanged: _onPageChanged,
+                children: [
+                  for (final screen in _screens)
+                    KeepAlivePage(child: RepaintBoundary(child: screen)),
+                ],
+              ),
             ),
           ),
         ],
       ),
-      bottomNavigationBar: CrownNavBar(
-        selectedIndex: _index,
-        onDestinationSelected: _onTabSelected,
-        crownImageAsset: 'assets/images/rupee_icon.png',
-        crownSize: 85,
-        onCrownTap: () {
-          Navigator.of(context).push(fadeRoute(const UpgradeScreen()));
-        },
-        labels: const ['Home', 'Chat', 'Calls', 'Profile'],
-        icons: [
-          const Icon(Icons.grid_view_rounded),
-          ValueListenableBuilder<bool>(
-            valueListenable: userChatDotNotifier,
-            builder: (context, hasDot, _) => Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.chat_bubble_outline),
-                if (hasDot)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
+      bottomNavigationBar: AutoHideNavBar(
+        visible: _navBarVisible,
+        child: CrownNavBar(
+          selectedIndex: _index,
+          onDestinationSelected: _onTabSelected,
+          crownImageAsset: 'assets/images/rupee_icon.png',
+          crownSize: 85,
+          onCrownTap: () {
+            Navigator.of(context).push(fadeRoute(const UpgradeScreen()));
+          },
+          labels: const ['Home', 'Chat', 'Calls', 'Profile'],
+          icons: [
+            const Icon(Icons.grid_view_rounded),
+            ValueListenableBuilder<bool>(
+              valueListenable: userChatDotNotifier,
+              builder: (context, hasDot, _) => Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.chat_bubble_outline),
+                  if (hasDot)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.call_outlined),
-          const Icon(Icons.settings_outlined),
-        ],
+            const Icon(Icons.call_outlined),
+            const Icon(Icons.settings_outlined),
+          ],
+        ),
       ),
     );
   }

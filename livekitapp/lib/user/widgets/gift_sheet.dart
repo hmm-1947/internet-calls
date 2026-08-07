@@ -155,6 +155,28 @@ class _GiftSheetState extends State<GiftSheet> {
       );
       return;
     }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141821),
+        title: const Text('Send Gift?', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Send ${gift['name']} for $cost coins?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     if (_sending) return;
     setState(() => _sending = true);
     try {

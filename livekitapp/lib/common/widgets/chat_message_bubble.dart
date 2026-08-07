@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/utils/gift_stack.dart';
+import 'package:livekitapp/common/widgets/call_event_bubble.dart';
 import 'package:livekitapp/common/widgets/gift_message_bubble.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_message_bubble.dart';
 
@@ -37,7 +38,8 @@ String chatDateLabel(Object? iso) {
       '${date.month.toString().padLeft(2, '0')}/${date.year}';
 }
 
-String _clockLabel(Object? iso) {
+/// `h:mm AM/PM` clock label for a message timestamp.
+String clockLabel(Object? iso) {
   final local = chatMessageTime(iso);
   final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
   final minute = local.minute.toString().padLeft(2, '0');
@@ -151,6 +153,29 @@ class ChatMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message['message_type'] == 'call' && message['is_deleted'] != true) {
+      final callBubble = CallEventBubble(message: message, isMe: isMe);
+      final callLabel = dateLabel;
+      if (callLabel == null) return callBubble;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: _bubbleIn,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              callLabel,
+              style: const TextStyle(fontSize: 12, color: Colors.white54),
+            ),
+          ),
+          callBubble,
+        ],
+      );
+    }
     final bubble = Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -174,7 +199,7 @@ class ChatMessageBubble extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _clockLabel(message['created_at']),
+                    clockLabel(message['created_at']),
                     style: const TextStyle(color: Colors.white54, fontSize: 11),
                   ),
                   if (isMe) const SizedBox(width: 4),

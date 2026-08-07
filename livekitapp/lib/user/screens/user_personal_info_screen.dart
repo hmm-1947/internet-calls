@@ -889,6 +889,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                 TextField(
                   controller: _bioController,
                   maxLines: 4,
+                  maxLength: 100,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
                     filled: true,

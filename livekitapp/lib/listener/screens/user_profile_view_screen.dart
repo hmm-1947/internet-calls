@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
@@ -74,6 +77,24 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
   @override
   void initState() {
     super.initState();
+    _init();
+  }
+
+  String get _cacheKey => 'user_profile_${widget.userId}';
+
+  Future<void> _init() async {
+    final cached = await HomeCache().getJson(_cacheKey);
+    if (cached != null && mounted) {
+      final map = Map<String, dynamic>.from(cached as Map);
+      setState(() {
+        _name = map['name'] ?? _name;
+        _username = map['username'] ?? '';
+        _bio = (map['bio'] ?? '').toString();
+        _photoUrl = map['photo_url'] ?? _photoUrl;
+        _isOnline = map['is_online'] == true;
+        _loading = false;
+      });
+    }
     _load();
   }
 
@@ -82,6 +103,15 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
       final token = await _localStorage.getToken();
       final data = await _repository.getUserProfile(token!, widget.userId);
       if (!mounted) return;
+      unawaited(
+        HomeCache().setJson(_cacheKey, {
+          'name': data['name'] ?? '',
+          'username': data['username'] ?? '',
+          'bio': (data['bio'] ?? '').toString(),
+          'photo_url': data['photo_url'],
+          'is_online': data['is_online'] == true,
+        }),
+      );
       setState(() {
         _name = data['name'] ?? _name;
         _username = data['username'] ?? '';

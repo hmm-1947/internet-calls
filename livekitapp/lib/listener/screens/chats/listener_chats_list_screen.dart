@@ -540,6 +540,8 @@ class _ThreadTile extends StatelessWidget {
               lastMessage: '${thread['last_message'] ?? ''}',
               color: _dimText,
               accentColor: _pink,
+              messageType: thread['last_message_type'] as String?,
+              callStatus: thread['last_call_status'] as String?,
             ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,

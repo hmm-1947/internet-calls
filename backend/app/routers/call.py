@@ -197,6 +197,15 @@ async def accept_call(call_id: int, db: Session = Depends(get_db), current_liste
     if datetime.now(timezone.utc) - call.created_at.replace(tzinfo=timezone.utc) > RINGING_TIMEOUT:
         call.status = "missed"
         db.commit()
+        from app.routers.chat import record_call_message
+        await record_call_message(
+            db,
+            user_id=call.caller_user_id,
+            listener_id=call.callee_listener_id,
+            call_id=call.id,
+            call_type=call.call_type,
+            call_status="missed",
+        )
         raise HTTPException(status_code=408, detail="Call timed out")
     call.status = "accepted"
     db.commit()
@@ -272,6 +281,15 @@ async def reject_call(call_id: int, db: Session = Depends(get_db), current_liste
     call.status = "rejected"
     db.commit()
     delete_room_background(call.room_name)
+    from app.routers.chat import record_call_message
+    await record_call_message(
+        db,
+        user_id=call.caller_user_id,
+        listener_id=call.callee_listener_id,
+        call_id=call.id,
+        call_type=call.call_type,
+        call_status="declined",
+    )
     user = db.query(User).filter(User.id == call.caller_user_id).first()
 
     if user and user.fcm_token:
@@ -292,6 +310,15 @@ async def cancel_call(call_id: int, db: Session = Depends(get_db), current_user:
     call.status = "cancelled"
     db.commit()
     delete_room_background(call.room_name)
+    from app.routers.chat import record_call_message
+    await record_call_message(
+        db,
+        user_id=call.caller_user_id,
+        listener_id=call.callee_listener_id,
+        call_id=call.id,
+        call_type=call.call_type,
+        call_status="cancelled",
+    )
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     if listener and listener.fcm_token:
         try:
@@ -313,6 +340,15 @@ async def timeout_call(call_id: int, db: Session = Depends(get_db), current_user
     call.status = "missed"
     db.commit()
     delete_room_background(call.room_name)
+    from app.routers.chat import record_call_message
+    await record_call_message(
+        db,
+        user_id=call.caller_user_id,
+        listener_id=call.callee_listener_id,
+        call_id=call.id,
+        call_type=call.call_type,
+        call_status="missed",
+    )
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     if listener and listener.fcm_token:
         try:
@@ -355,6 +391,7 @@ async def finalize_abandoned_call(
         return False
     db.refresh(call)
 
+    duration = 0
     if call.connected_at:
         duration = _compute_call_duration(call, override_seconds=override_seconds)
         await _finalize_call_billing(db, call, duration)
@@ -362,6 +399,17 @@ async def finalize_abandoned_call(
 
     if claimed == 0:
         return False
+
+    from app.routers.chat import record_call_message
+    await record_call_message(
+        db,
+        user_id=call.caller_user_id,
+        listener_id=call.callee_listener_id,
+        call_id=call.id,
+        call_type=call.call_type,
+        call_status="completed" if call.connected_at else "missed",
+        duration_seconds=duration,
+    )
 
     if stop_egress:
         recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()
