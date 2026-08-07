@@ -22,7 +22,7 @@
     <application
         android:label="livekitapp"
         android:usesCleartextTraffic="true"
-        android:name="com.example.livekitapp.MainApplication"
+        android:name="com.lailanow.MainApplication"
         android:icon="@mipmap/ic_launcher">
         <service
             android:name="com.hiennv.flutter_callkit_incoming.CallkitNotificationService"

@@ -1,4 +1,4 @@
-package com.example.livekitapp
+package com.lailanow
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

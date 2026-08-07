@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.livekitapp"
+    namespace = "com.lailanow"
     buildTypes {
         getByName("debug") {}
     }
@@ -35,13 +35,13 @@ android {
     productFlavors {
         create("user") {
             dimension = "app"
-            applicationId = "com.example.livekitapp.user"
-            resValue("string", "app_name", "LiveKit User")
+            applicationId = "com.lailanow.user"
+            resValue("string", "app_name", "LailaNow User")
         }
         create("listener") {
             dimension = "app"
-            applicationId = "com.example.livekitapp.listener"
-            resValue("string", "app_name", "LiveKit Listener")
+            applicationId = "com.lailanow.listener"
+            resValue("string", "app_name", "LailaNow Listener")
         }
     }
 

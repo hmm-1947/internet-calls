@@ -130,7 +130,8 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
 
   Future<void> _submit() async {
     setState(() => _showErrors = true);
-    final error = usernameFormatError(_username) ??
+    final error =
+        usernameFormatError(_username) ??
         (_usernameAvailable == false
             ? (_usernameMessage ?? 'This username is already taken')
             : null) ??

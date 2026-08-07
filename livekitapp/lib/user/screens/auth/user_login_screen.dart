@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
+import 'package:livekitapp/common/widgets/onboarding_screen.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_register_screen.dart';
@@ -160,7 +161,12 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).push(
-                    fadeRoute(const UserRegisterScreen()),
+                    fadeRoute(
+                      OnboardingScreen(
+                        accentColor: Colors.red,
+                        nextScreenBuilder: (_) => const UserRegisterScreen(),
+                      ),
+                    ),
                   );
                 },
                 child: const Text(

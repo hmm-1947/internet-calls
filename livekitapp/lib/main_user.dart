@@ -19,6 +19,7 @@ import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
+import 'package:livekitapp/common/widgets/onboarding_screen.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
