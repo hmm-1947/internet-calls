@@ -169,16 +169,25 @@ class VoiceMessagePlayer {
       activeTrack.value?.messageKey == messageKey;
 
   /// Called by a chat screen when it becomes the visible route.
+  ///
+  /// Deferred to after the current frame: `RouteAware.didPush`/`didPopNext`
+  /// can fire while the pushing widget's build is still in progress, and
+  /// writing here directly would notify `ActiveCallHost`'s `ListenableBuilder`
+  /// (an ancestor) mid-build.
   void setVisibleChat(String chatKey) {
     if (chatKey.isEmpty) return;
-    visibleChatKey.value = chatKey;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      visibleChatKey.value = chatKey;
+    });
   }
 
   /// Called by a chat screen when it is popped or covered. Guarded on the key so
   /// a screen leaving cannot clear the registration of the screen that
   /// replaced it.
   void clearVisibleChat(String chatKey) {
-    if (visibleChatKey.value == chatKey) visibleChatKey.value = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (visibleChatKey.value == chatKey) visibleChatKey.value = null;
+    });
   }
 
   /// Whether the minimized bar should be showing: something is loaded and its

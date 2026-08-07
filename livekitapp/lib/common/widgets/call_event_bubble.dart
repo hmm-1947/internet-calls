@@ -39,19 +39,24 @@ class CallEventBubble extends StatelessWidget {
     final isMissed = status == 'missed' || status == 'declined';
 
     final icon = isVideo ? Icons.videocam : Icons.call;
-    final color = isMissed ? const Color(0xFFE53950) : Colors.white70;
+    final iconColor = Colors.white70;
+    final textColor = isMissed ? const Color(0xFFE53950) : Colors.white70;
     final time = _callClockLabel(message['created_at']);
 
     String label;
     switch (status) {
       case 'missed':
-        label = isMe ? 'No answer' : 'Missed ${isVideo ? 'video' : 'voice'} call';
+        label = isMe
+            ? 'No answer'
+            : 'Missed ${isVideo ? 'video' : 'voice'} call';
         break;
       case 'declined':
         label = isMe ? 'Call declined' : 'You declined this call';
         break;
       case 'cancelled':
-        label = isMe ? 'Call cancelled' : 'Missed ${isVideo ? 'video' : 'voice'} call';
+        label = isMe
+            ? 'Call cancelled'
+            : 'Missed ${isVideo ? 'video' : 'voice'} call';
         break;
       case 'completed':
         label = '${isVideo ? 'Video' : 'Voice'} call';
@@ -75,12 +80,9 @@ class CallEventBubble extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: color),
+              Icon(icon, size: 16, color: iconColor),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(color: color, fontSize: 13),
-              ),
+              Text(label, style: TextStyle(color: textColor, fontSize: 13)),
               if (status == 'completed' && duration > 0) ...[
                 const SizedBox(width: 6),
                 Text(

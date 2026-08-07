@@ -54,7 +54,7 @@ class ChatThreadSubtitle extends StatelessWidget {
                     Icon(
                       Icons.call,
                       size: 14,
-                      color: isMissedCall ? accentColor : color,
+                      color: color,
                     ),
                     const SizedBox(width: 4),
                   ],
