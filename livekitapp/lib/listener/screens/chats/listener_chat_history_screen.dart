@@ -263,10 +263,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     final token = _token;
     if (token == null) return;
     try {
-      final threads = await _repository.getChatThreads(
-        token,
-        forceRefresh: true,
-      );
+      final threads = await _repository.getChatThreads(token);
       if (!mounted) return;
       final thread = threads.firstWhere(
         (t) => t['user_id'] == widget.userId,
@@ -485,6 +482,24 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
       },
     ]);
     _jumpToLatest();
+    await _chatStorage.upsertMessage(
+      widget.userId,
+      LocalChatMessage(
+        clientId: clientId,
+        otherId: widget.userId,
+        senderType: 'listener',
+        message: text,
+        status: 'sending',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+    await _chatStorage.addPending(
+      PendingMessage(
+        clientId: clientId,
+        otherId: widget.userId,
+        message: text,
+      ),
+    );
     await _retrySend(clientId, text);
   }
 
@@ -551,6 +566,17 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
       if (!mounted) return;
       _merge([sent]);
     } catch (_) {
+      await _chatStorage.upsertMessage(
+        widget.userId,
+        LocalChatMessage(
+          clientId: clientId,
+          otherId: widget.userId,
+          senderType: 'listener',
+          message: text,
+          status: 'failed',
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
       await _chatStorage.addPending(
         PendingMessage(
           clientId: clientId,

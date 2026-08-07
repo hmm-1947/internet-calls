@@ -287,7 +287,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     final token = _token;
     if (token == null) return;
     try {
-      final me = await _repository.getMe(token, forceRefresh: true);
+      final me = await _repository.getMe(token);
       if (!mounted) return;
       _chatMessageCoinCost = me['chat_message_coin_cost'] ?? 0;
       _videoCallAvailable.value =
@@ -300,10 +300,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     final token = _token;
     if (token == null) return;
     try {
-      final threads = await _repository.getChatThreads(
-        token,
-        forceRefresh: true,
-      );
+      final threads = await _repository.getChatThreads(token);
       if (!mounted) return;
       final thread = threads.firstWhere(
         (t) => t['listener_id'] == widget.listenerId,
@@ -314,14 +311,23 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     } catch (_) {}
   }
 
+  static final _presenceFetchedAt = <int, DateTime>{};
+  static const _presenceTtl = Duration(seconds: 20);
+
   Future<void> _refreshPresence() async {
     final token = _token;
     if (token == null) return;
+    final lastFetch = _presenceFetchedAt[widget.listenerId];
+    if (lastFetch != null &&
+        DateTime.now().difference(lastFetch) < _presenceTtl) {
+      return;
+    }
     try {
       final profile = await _repository.getListenerProfile(
         token,
         widget.listenerId,
       );
+      _presenceFetchedAt[widget.listenerId] = DateTime.now();
       PresenceCache().setListenerOnline(
         widget.listenerId,
         profile['is_online'] == true,
@@ -562,6 +568,24 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       },
     ]);
     _jumpToLatest();
+    await _chatStorage.upsertMessage(
+      widget.listenerId,
+      LocalChatMessage(
+        clientId: clientId,
+        otherId: widget.listenerId,
+        senderType: 'user',
+        message: text,
+        status: 'sending',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+    await _chatStorage.addPending(
+      PendingMessage(
+        clientId: clientId,
+        otherId: widget.listenerId,
+        message: text,
+      ),
+    );
     await _retrySend(clientId, text);
   }
 
@@ -640,6 +664,17 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       _showInsufficientCoins();
       _refreshProfile();
     } catch (_) {
+      await _chatStorage.upsertMessage(
+        widget.listenerId,
+        LocalChatMessage(
+          clientId: clientId,
+          otherId: widget.listenerId,
+          senderType: 'user',
+          message: text,
+          status: 'failed',
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
       await _chatStorage.addPending(
         PendingMessage(
           clientId: clientId,

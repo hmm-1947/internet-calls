@@ -150,7 +150,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _loadFromCache();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await _loadFromCache();
     _load();
   }
 

@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/chat_message_bubble.dart';
 import 'package:livekitapp/common/widgets/chat_thread_subtitle.dart';
 import 'package:livekitapp/common/widgets/presence_dot.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/presence_cache.dart';
@@ -102,6 +104,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   }
 
   Future<void> _init() async {
+    _precacheAvatars(_threads);
     _token = await _localStorage.getToken();
     if (_token != null) {
       ChatSocketService().connect(_token!, 'user');
@@ -186,6 +189,16 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   void _setThreads(List<Map<String, dynamic>> threads) {
     _threads = threads;
     _filtered = _applyFilter();
+    _precacheAvatars(threads);
+  }
+
+  void _precacheAvatars(List<Map<String, dynamic>> threads) {
+    if (threads.isEmpty) return;
+    AvatarCache.instance.precacheAll(
+      threads.map(
+        (t) => ApiConstants.resolveMediaUrl(t['photo_url'] as String?),
+      ),
+    );
   }
 
   void _selectFilter(String filter) {
