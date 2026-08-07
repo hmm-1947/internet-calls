@@ -441,17 +441,27 @@ class _CallHistoryTile extends StatelessWidget {
             color: _statusColor(status, _pink),
           ),
           const SizedBox(width: 4),
-          Text(
-            status == 'ended'
-                ? fmtCallDuration((call['duration_seconds'] ?? 0) as int)
-                : _statusLabel(status),
-            style: const TextStyle(color: _dimText),
+          Flexible(
+            child: Text(
+              status == 'ended'
+                  ? fmtCallDuration((call['duration_seconds'] ?? 0) as int)
+                  : _statusLabel(status),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _dimText),
+            ),
           ),
         ],
       ),
-      trailing: Text(
-        fmtCallDateTime('${call['created_at']}'),
-        style: const TextStyle(color: _dimText, fontSize: 12),
+      trailing: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 72),
+        child: Text(
+          fmtCallDateTime('${call['created_at']}'),
+          maxLines: 2,
+          textAlign: TextAlign.right,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: _dimText, fontSize: 12),
+        ),
       ),
     );
   }
