@@ -23,12 +23,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   bool _loading = false;
   String _newPassword = '';
+  String _confirmPassword = '';
 
   @override
   void initState() {
     super.initState();
     _newPasswordController.addListener(() {
       setState(() => _newPassword = _newPasswordController.text);
+    });
+    _confirmPasswordController.addListener(() {
+      setState(() => _confirmPassword = _confirmPasswordController.text);
     });
   }
 
@@ -52,18 +56,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final newPassword = _newPasswordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
-    if (currentPassword.isEmpty ||
-        newPassword.isEmpty ||
-        confirmPassword.isEmpty) {
+    if (currentPassword.isEmpty || newPassword.isEmpty) {
       _showError('Please fill in all password fields');
+      return;
+    }
+    if (confirmPassword.isNotEmpty && newPassword != confirmPassword) {
+      _showError('Passwords do not match');
       return;
     }
     if (!isPasswordValid(newPassword)) {
       _showError('Please satisfy all password rules');
-      return;
-    }
-    if (newPassword != confirmPassword) {
-      _showError('Passwords do not match');
       return;
     }
 
@@ -124,16 +126,19 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     label: 'New Password',
                     obscureText: true,
                   ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: PasswordRulesChecklist(password: _newPassword),
-                  ),
                   const SizedBox(height: 16),
                   AuthTextField(
                     controller: _confirmPasswordController,
                     label: 'Confirm Password',
                     obscureText: true,
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: PasswordRulesChecklist(
+                      password: _newPassword,
+                      confirmPassword: _confirmPassword,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -150,7 +155,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      onPressed: (_loading || !isPasswordValid(_newPassword))
+                      onPressed: (_loading ||
+                              !isPasswordValid(_newPassword) ||
+                              (_confirmPassword.isNotEmpty &&
+                                  _newPassword != _confirmPassword))
                           ? null
                           : _submit,
                       child: _loading

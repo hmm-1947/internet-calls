@@ -27,6 +27,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
   bool _loading = false;
   bool _otpExpired = false;
   String _newPassword = '';
+  String _confirmPassword = '';
 
   /// Which channel the account uses, decided by the backend in step 1.
   AuthChannel _channel = AuthChannel.email;
@@ -42,6 +43,9 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
     super.initState();
     _newPasswordController.addListener(() {
       setState(() => _newPassword = _newPasswordController.text);
+    });
+    _confirmPasswordController.addListener(() {
+      setState(() => _confirmPassword = _confirmPasswordController.text);
     });
   }
 
@@ -121,16 +125,16 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
   Future<void> _submitNewPassword() async {
     final newPassword = _newPasswordController.text;
     final confirmPassword = _confirmPasswordController.text;
-    if (newPassword.isEmpty || confirmPassword.isEmpty) {
-      _showError('Please fill in both password fields');
+    if (newPassword.isEmpty) {
+      _showError('Please enter a new password');
+      return;
+    }
+    if (confirmPassword.isNotEmpty && newPassword != confirmPassword) {
+      _showError('Passwords do not match');
       return;
     }
     if (!isPasswordValid(newPassword)) {
       _showError('Please satisfy all password rules');
-      return;
-    }
-    if (newPassword != confirmPassword) {
-      _showError('Passwords do not match');
       return;
     }
     setState(() => _loading = true);
@@ -269,22 +273,27 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
           label: 'New Password',
           obscureText: true,
         ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: PasswordRulesChecklist(password: _newPassword),
-        ),
         const SizedBox(height: 16),
         AuthTextField(
           controller: _confirmPasswordController,
           label: 'Confirm Password',
           obscureText: true,
         ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PasswordRulesChecklist(
+            password: _newPassword,
+            confirmPassword: _confirmPassword,
+          ),
+        ),
         const SizedBox(height: 24),
         _buildButton(
           'Reset Password',
           _submitNewPassword,
-          disabled: !isPasswordValid(_newPassword),
+          disabled: !isPasswordValid(_newPassword) ||
+              (_confirmPassword.isNotEmpty &&
+                  _newPassword != _confirmPassword),
         ),
       ],
     );

@@ -70,9 +70,12 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
         normalizedPhone: PhoneAuthService.normalize(_identifier.trim()),
       );
 
+  // null when confirm is empty (optional) or matches; error only when the
+  // user has typed something that doesn't match.
   String? get _confirmError {
-    if (_confirm.isEmpty) return 'Re-enter your password';
-    if (_confirm != _password) return 'Passwords do not match';
+    if (_confirm.isNotEmpty && _confirm != _password) {
+      return 'Passwords do not match';
+    }
     return null;
   }
 
@@ -85,8 +88,8 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
   Future<void> _continue() async {
     setState(() => _showErrors = true);
     final error = _identifierError ??
-        (isPasswordValid(_password) ? null : 'Please satisfy all password rules') ??
-        _confirmError;
+        _confirmError ??
+        (isPasswordValid(_password) ? null : 'Please satisfy all password rules');
     if (error != null) {
       _showMessage(error);
       return;
@@ -190,11 +193,13 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                     label: 'Confirm Password',
                     obscureText: true,
                   ),
-                  _fieldHint(_confirmError, 'Both passwords must match'),
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: PasswordRulesChecklist(password: _password),
+                    child: PasswordRulesChecklist(
+                      password: _password,
+                      confirmPassword: _confirm,
+                    ),
                   ),
                   const SizedBox(height: 22),
                   SizedBox(

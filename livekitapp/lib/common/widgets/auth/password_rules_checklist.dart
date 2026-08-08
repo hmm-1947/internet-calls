@@ -29,41 +29,66 @@ bool isPasswordValid(String password) {
       passwordRules.every((rule) => rule.validator(password));
 }
 
-/// Displays each password rule with a green tick when satisfied and a
-/// red cross when not, updating live as the user types.
+/// Shown below the Confirm Password field.
+///
+/// Priority logic (evaluated top-to-bottom, first match wins):
+///   1. Hidden when [password] is empty (user hasn't typed anything yet).
+///   2. "Passwords do not match" when [confirmPassword] is non-empty and
+///      differs from [password].
+///   3. Failing password rules when any rule is violated.
+///   4. Hidden when both passwords match and all rules pass (ready to submit).
+///
+/// Pass [confirmPassword] whenever this widget sits below a confirm field.
+/// Omit it (or leave it as the default empty string) on screens that have no
+/// confirm field — behaviour then falls back to showing only failing rules.
 class PasswordRulesChecklist extends StatelessWidget {
   final String password;
-  const PasswordRulesChecklist({super.key, required this.password});
+  final String confirmPassword;
+
+  const PasswordRulesChecklist({
+    super.key,
+    required this.password,
+    this.confirmPassword = '',
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Nothing to show until the user starts typing the password.
+    if (password.isEmpty) return const SizedBox.shrink();
+
+    // Priority 1: mismatch message (only when the confirm field has content).
+    if (confirmPassword.isNotEmpty && confirmPassword != password) {
+      return _row(Icons.cancel, Colors.redAccent, 'Passwords do not match');
+    }
+
+    // Priority 2: failing rules.
+    final failingRules =
+        passwordRules.where((rule) => !rule.validator(password)).toList();
+    if (failingRules.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: passwordRules.map((rule) {
-        final passed = rule.validator(password);
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3.0),
-          child: Row(
-            children: [
-              Icon(
-                passed ? Icons.check_circle : Icons.cancel,
-                color: passed ? Colors.greenAccent : Colors.redAccent,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  rule.label,
-                  style: TextStyle(
-                    color: passed ? Colors.greenAccent : Colors.redAccent,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-            ],
+      children: failingRules
+          .map((rule) => _row(Icons.cancel, Colors.redAccent, rule.label))
+          .toList(),
+    );
+  }
+
+  Widget _row(IconData icon, Color color, String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: color, fontSize: 12.5),
+            ),
           ),
-        );
-      }).toList(),
+        ],
+      ),
     );
   }
 }
