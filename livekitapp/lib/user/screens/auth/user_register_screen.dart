@@ -7,12 +7,12 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_signup_otp_screen.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
 
-/// Sign-up step 1 of 3: the email or phone number to verify, and the password.
+/// Sign-up step 1 of 3: the phone number to verify, and the password.
 ///
-/// One field takes both: anything with an "@" is treated as an email, anything
-/// else as an Indian mobile number, and the verification code is sent through
-/// whichever channel that turns out to be. No account is created here; the
-/// backend only stores a pending sign-up until step 3 finishes.
+/// Signing up with an email address is not offered any more: it is either an
+/// Indian mobile number here, or Google from the login screen. No account is
+/// created yet; the backend only stores a pending sign-up until step 3
+/// finishes.
 class UserRegisterScreen extends StatefulWidget {
   const UserRegisterScreen({super.key});
 
@@ -57,18 +57,12 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
     super.dispose();
   }
 
-  bool get _isEmail => looksLikeEmail(_identifier.trim());
+  /// The value to send: the phone number stripped down to its 10 digits.
+  String get _normalizedIdentifier =>
+      PhoneAuthService.normalize(_identifier.trim());
 
-  /// The value to send: emails as typed (the backend lower-cases them), phone
-  /// numbers stripped down to their 10 digits.
-  String get _normalizedIdentifier => _isEmail
-      ? _identifier.trim()
-      : PhoneAuthService.normalize(_identifier.trim());
-
-  String? get _identifierError => identifierError(
-        _identifier,
-        normalizedPhone: PhoneAuthService.normalize(_identifier.trim()),
-      );
+  String? get _identifierError =>
+      phoneNumberError(_identifier, normalizedPhone: _normalizedIdentifier);
 
   // null when confirm is empty (optional) or matches; error only when the
   // user has typed something that doesn't match.
@@ -97,10 +91,9 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
 
     setState(() => _loading = true);
     try {
-      // Starts verification: the backend sends the code, mailed for an email
-      // or texted for a phone number. Either way it refuses up front if the
-      // identifier already has an account, so no code is ever sent to a
-      // registered email or phone.
+      // Starts verification: the backend texts the code, refusing up front if
+      // the number already has an account so no SMS is ever sent to a
+      // registered phone.
       final start = await _repository.registerInitiate(
         _normalizedIdentifier,
         _password,
@@ -108,12 +101,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
       );
       if (!mounted) return;
       await Navigator.of(context).push(
-        fadeRoute(
-          UserSignupOtpScreen(
-            identifier: start.identifier,
-            channel: start.channel,
-          ),
-        ),
+        fadeRoute(UserSignupOtpScreen(identifier: start.identifier)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -165,21 +153,20 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                 icon: Icons.person_add_alt_1,
                 title: 'Create Account',
                 subtitle:
-                    'Enter your email or phone number and we will send you a '
-                    'code to verify it',
+                    'Enter your phone number and we will send you a code to '
+                    'verify it',
                 children: [
                   AuthTextField(
                     controller: _identifierController,
-                    label: 'Email or Phone Number',
-                    keyboardType: TextInputType.emailAddress,
+                    label: 'Phone Number',
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
                   ),
                   _fieldHint(
                     _identifierError,
                     _identifier.trim().isEmpty
-                        ? 'We detect automatically whether this is an email or a phone number'
-                        : (_isEmail
-                            ? 'Code will be emailed to you'
-                            : 'Code will be sent by SMS to +91 ${PhoneAuthService.normalize(_identifier.trim())}'),
+                        ? 'Indian mobile numbers only, without +91'
+                        : 'Code will be sent by SMS to +91 $_normalizedIdentifier',
                   ),
                   const SizedBox(height: 16),
                   AuthTextField(

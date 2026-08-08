@@ -9,30 +9,22 @@
 /// email so a typo reports an email error, not a phone-number one.
 bool looksLikeEmail(String value) => value.contains('@');
 
-final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$');
+/// Shown whenever someone types an email address into a field that now only
+/// accepts a phone number.
+const String useGoogleInsteadMessage =
+    'Use your phone number, or continue with Google';
 
-/// Returns null when [value] is a usable email address, otherwise the message
-/// to show under the field.
-String? emailFormatError(String value) {
-  final email = value.trim();
-  if (email.isEmpty) return 'Enter your email address';
-  if (email.length > 254 || !_emailPattern.hasMatch(email)) {
-    return 'Enter a valid email address';
-  }
-  return null;
-}
-
-/// Validates the combined email-or-phone field used on the sign-up and login
-/// screens. [normalizedPhone] is the digits-only phone number produced by
+/// Validates the phone number field used on the sign-up, login and password
+/// reset screens. [normalizedPhone] is the digits-only number produced by
 /// `PhoneAuthService.normalize`, passed in so this file stays free of Firebase
 /// imports.
-String? identifierError(String value, {required String normalizedPhone}) {
+String? phoneNumberError(String value, {required String normalizedPhone}) {
   final input = value.trim();
-  if (input.isEmpty) return 'Enter your email or phone number';
-  if (looksLikeEmail(input)) return emailFormatError(input);
+  if (input.isEmpty) return 'Enter your phone number';
+  if (looksLikeEmail(input)) return useGoogleInsteadMessage;
   if (normalizedPhone.length != 10 ||
       !RegExp(r'^[6-9]').hasMatch(normalizedPhone)) {
-    return 'Enter a valid email or 10-digit phone number';
+    return 'Enter a valid 10-digit phone number';
   }
   return null;
 }

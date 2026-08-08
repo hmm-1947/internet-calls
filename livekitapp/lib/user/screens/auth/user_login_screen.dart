@@ -1,5 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/onboarding_screen.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -7,7 +10,9 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_register_screen.dart';
 import 'package:livekitapp/user/screens/auth/user_forgot_password_screen.dart';
 import 'package:livekitapp/user/screens/auth/user_phone_otp_screen.dart';
+import 'package:livekitapp/user/screens/auth/user_profile_setup_screen.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
+import 'package:livekitapp/user/services/phone_auth_service.dart';
 
 class UserLoginScreen extends StatefulWidget {
   const UserLoginScreen({super.key});
@@ -22,6 +27,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
   bool _loading = false;
+  bool _googleLoading = false;
   @override
   void dispose() {
     _identifierController.dispose();
@@ -30,45 +36,94 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   }
 
   Future<void> _login() async {
+    final input = _identifierController.text.trim();
+    final phone = PhoneAuthService.normalize(input);
+    final error = phoneNumberError(input, normalizedPhone: phone);
+    if (error != null) {
+      _showMessage(error);
+      return;
+    }
+
     setState(() => _loading = true);
     try {
-      // The backend works out from the identifier which account this is and
-      // what the second step should be: phone accounts get an SMS OTP sent
-      // right away, email accounts are signed in by password alone.
-      final start = await _repository.loginInitiate(
-        _identifierController.text.trim(),
+      // The password is checked first; the backend then texts an OTP to the
+      // number on the account, which the next screen collects.
+      final otpPhone = await _repository.loginInitiate(
+        phone,
         _passwordController.text,
       );
       if (!mounted) return;
-      if (start.channel == AuthChannel.email) {
-        final auth = start.auth!;
-        await _localStorage.saveSession(auth.token, auth.id, auth.name);
-        final fcmToken = await FirebaseMessaging.instance.getToken();
-        if (fcmToken != null) {
-          await _repository.updateFcmToken(auth.token, fcmToken);
-        }
-        if (!mounted) return;
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const UserMainScreen()),
-          (route) => false,
-        );
-        return;
-      }
       await Navigator.of(context).push(
         fadeRoute(
           UserPhoneOtpScreen(
-            phone: start.phone!,
+            phone: otpPhone,
             password: _passwordController.text,
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      _showMessage(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _googleLoading = true);
+    try {
+      final googleSignIn = GoogleSignIn.instance;
+      await googleSignIn.initialize();
+      final googleAccount = await googleSignIn.authenticate();
+      final googleAuth = googleAccount.authentication;
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final firebaseIdToken = await userCredential.user!.getIdToken();
+      final result = await _repository.signInWithGoogle(firebaseIdToken!);
+      final auth = result.auth;
+      await _localStorage.saveSession(auth.token, auth.id, auth.name);
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await _repository.updateFcmToken(auth.token, fcmToken);
+      }
+      if (!mounted) return;
+      // A first-time Google account has no username or display name yet, so
+      // it goes through the same profile step a phone sign-up does. Returning
+      // users go straight in.
+      if (result.profileComplete) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const UserMainScreen()),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).push(
+          fadeRoute(
+            UserProfileSetupScreen(
+              existingSessionToken: auth.token,
+              initialDisplayName: auth.name,
+            ),
+          ),
+        );
+      }
+    } on GoogleSignInException catch (e) {
+      if (!mounted) return;
+      if (e.code == GoogleSignInExceptionCode.canceled) return;
+      _showMessage('Google sign-in failed');
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
     }
   }
 
@@ -93,10 +148,12 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
               const SizedBox(height: 32),
               TextField(
                 controller: _identifierController,
-                keyboardType: TextInputType.emailAddress,
+                keyboardType: TextInputType.phone,
+                maxLength: 10,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  labelText: 'Email or Phone',
+                  counterText: '',
+                  labelText: 'Phone Number',
                   labelStyle: const TextStyle(color: Colors.white),
                   enabledBorder: OutlineInputBorder(
                     borderSide: const BorderSide(color: Colors.white),
@@ -172,6 +229,32 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                 child: const Text(
                   'Create an account',
                   style: TextStyle(color: Colors.red),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white24),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: _googleLoading ? null : _signInWithGoogle,
+                  icon: _googleLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.g_mobiledata, size: 24),
+                  label: const Text('Sign in with Google'),
                 ),
               ),
             ],

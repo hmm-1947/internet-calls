@@ -179,6 +179,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   bool _loading = true;
   bool _videoCallEnabled = true;
   bool _videoCallDisabledByAdmin = false;
+  bool _isGoogleAccount = false;
   bool _savingVideoCallSetting = false;
   bool _loggingOut = false;
   bool _openingEnrollChat = false;
@@ -203,12 +204,14 @@ class UserProfileScreenState extends State<UserProfileScreen> {
       final newVideoCallEnabled = data['video_call_enabled'] ?? true;
       final newVideoCallDisabledByAdmin =
           data['video_call_disabled_by_admin'] ?? false;
+      final newIsGoogleAccount = data['is_google_account'] ?? false;
       if (_coins != newCoins ||
           _name != newName ||
           _phone != newPhone ||
           _photoUrl != newPhotoUrl ||
           _videoCallEnabled != newVideoCallEnabled ||
-          _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin) {
+          _videoCallDisabledByAdmin != newVideoCallDisabledByAdmin ||
+          _isGoogleAccount != newIsGoogleAccount) {
         setState(() {
           _coins = newCoins;
           _name = newName;
@@ -216,6 +219,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
           _photoUrl = newPhotoUrl;
           _videoCallEnabled = newVideoCallEnabled;
           _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
+          _isGoogleAccount = newIsGoogleAccount;
           _loading = false;
         });
       } else if (_loading) {
@@ -224,6 +228,48 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     } catch (_) {
       setState(() => _loading = false);
     }
+  }
+
+  /// Google accounts never had a password, so there is nothing to change.
+  /// They are told why instead of being shown a form that cannot succeed.
+  void _openChangePassword() {
+    if (_isGoogleAccount) {
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: _AppColors.cardBg,
+          title: const Text(
+            'No password on this account',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+          content: const Text(
+            'You signed in with Google, so this account does not have a '
+            'password to change. Manage it from your Google account instead.',
+            style: TextStyle(color: _AppColors.textMuted),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Got it',
+                style: TextStyle(color: _AppColors.brandRed),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChangePasswordScreen(
+          onSubmit: (current, next) async {
+            final token = await _localStorage.getToken();
+            await _repository.changePassword(token!, current, next);
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleVideoCall(bool enabled) async {
@@ -489,22 +535,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                     _SettingsTile(
                       icon: Icons.lock_reset,
                       title: 'Change Password',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ChangePasswordScreen(
-                              onSubmit: (current, next) async {
-                                final token = await _localStorage.getToken();
-                                await _repository.changePassword(
-                                  token!,
-                                  current,
-                                  next,
-                                );
-                              },
-                            ),
-                          ),
-                        );
-                      },
+                      onTap: _openChangePassword,
                     ),
                   ]),
                   _SectionLabel('PREFERENCES'),

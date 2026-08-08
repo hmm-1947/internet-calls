@@ -96,7 +96,7 @@ class _EditableField extends StatelessWidget {
   }
 }
 
-/// The email / phone row: the current value, a green tick once it is verified
+/// The phone number row: the current value, a green tick once it is verified
 /// and the button that starts the OTP flow to add or change it.
 class _ContactField extends StatelessWidget {
   final IconData icon;
@@ -286,9 +286,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
   String _name = '';
   String _username = '';
   String _bio = '';
-  String? _email;
   String? _phone;
-  bool _emailVerified = false;
   bool _phoneVerified = false;
   String? _photoUrl;
 
@@ -296,7 +294,6 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
   /// free right now. Derived from the seconds the backend reports, so a wrong
   /// device clock cannot unlock a field early.
   DateTime? _usernameUnlockAt;
-  DateTime? _emailUnlockAt;
   DateTime? _phoneUnlockAt;
   Timer? _ticker;
 
@@ -402,12 +399,9 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
     _name = data['name'] ?? _name;
     _username = data['username'] ?? '';
     _bio = data['bio'] ?? '';
-    _email = data['email'];
     _phone = data['phone'];
-    _emailVerified = data['email_verified'] ?? (_email != null);
     _phoneVerified = data['phone_verified'] ?? (_phone != null);
     _usernameUnlockAt = _unlockAt(data['username_cooldown_seconds']);
-    _emailUnlockAt = _unlockAt(data['email_cooldown_seconds']);
     _phoneUnlockAt = _unlockAt(data['phone_cooldown_seconds']);
   }
 
@@ -422,14 +416,9 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
-      if (_usernameUnlockAt == null &&
-          _emailUnlockAt == null &&
-          _phoneUnlockAt == null) {
-        return;
-      }
+      if (_usernameUnlockAt == null && _phoneUnlockAt == null) return;
       setState(() {
         if (_expired(_usernameUnlockAt)) _usernameUnlockAt = null;
-        if (_expired(_emailUnlockAt)) _emailUnlockAt = null;
         if (_expired(_phoneUnlockAt)) _phoneUnlockAt = null;
       });
     });
@@ -558,21 +547,14 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
     }
   }
 
-  Future<void> _openContactChange(AuthChannel channel) async {
+  Future<void> _openPhoneChange() async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => UserContactChangeScreen(
-          channel: channel,
-          currentValue: channel == AuthChannel.email ? _email : _phone,
-        ),
+        builder: (_) => UserContactChangeScreen(currentValue: _phone),
       ),
     );
     if (changed != true || !mounted) return;
-    _showMessage(
-      channel == AuthChannel.email
-          ? 'Email address verified and saved'
-          : 'Phone number verified and saved',
-    );
+    _showMessage('Phone number verified and saved');
     await _load();
   }
 
@@ -853,31 +835,13 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                 ),
                 _usernameHint(),
                 const SizedBox(height: 18),
-                const _FieldLabel('EMAIL ADDRESS'),
-                _ContactField(
-                  icon: Icons.email_outlined,
-                  value: _email,
-                  emptyHint: 'No email added',
-                  verified: _emailVerified,
-                  onAction: _locked(_emailUnlockAt)
-                      ? null
-                      : () => _openContactChange(AuthChannel.email),
-                ),
-                _contactHint(
-                  _emailUnlockAt,
-                  'email address',
-                  _email == null || _email!.isEmpty,
-                ),
-                const SizedBox(height: 18),
                 const _FieldLabel('PHONE NUMBER'),
                 _ContactField(
                   icon: Icons.phone_outlined,
                   value: _phone,
                   emptyHint: 'No phone number added',
                   verified: _phoneVerified,
-                  onAction: _locked(_phoneUnlockAt)
-                      ? null
-                      : () => _openContactChange(AuthChannel.phone),
+                  onAction: _locked(_phoneUnlockAt) ? null : _openPhoneChange,
                 ),
                 _contactHint(
                   _phoneUnlockAt,

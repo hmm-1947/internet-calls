@@ -17,7 +17,8 @@ class User(Base):
     # channel), so both are nullable and the other can be added later.
     email = Column(String, unique=True, index=True, nullable=True)
     phone = Column(String, unique=True, index=True, nullable=True)
-    password_hash = Column(String, nullable=False)
+    password_hash = Column(String, nullable=True)
+    google_uid = Column(String, unique=True, index=True, nullable=True)
     fcm_token = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     is_online = Column(Boolean, default=False)

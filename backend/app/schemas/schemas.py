@@ -308,7 +308,7 @@ class AdminPurchaseOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 class UserRegisterInitiate(BaseModel):
-    """Step 1: the email or phone number to verify, plus the account password.
+    """Step 1: the phone number to verify, plus the account password.
 
     `confirm_password` is optional because the app already compares the two
     fields; when it is sent we check it again so an API client cannot create an
@@ -331,10 +331,6 @@ class UserRegisterInitiate(BaseModel):
         if v is not None and password is not None and v != password:
             raise ValueError("Passwords do not match")
         return v
-
-class UserRegisterVerifyEmailOtp(BaseModel):
-    identifier: str
-    otp_code: str
 
 class UserRegisterResendOtp(BaseModel):
     identifier: str
@@ -405,7 +401,7 @@ class UserProfileUpdate(BaseModel):
 
 
 class UserContactChangeRequest(BaseModel):
-    """`identifier` is the new email address or phone number to verify."""
+    """`identifier` is the new phone number to verify."""
 
     identifier: str
 
@@ -418,7 +414,7 @@ class UserVideoCallSettingUpdate(BaseModel):
     enabled: bool
 
 class UserForgotPasswordRequestOtp(BaseModel):
-    """`identifier` is an email or a phone number, as on the login screen."""
+    """`identifier` is the phone number registered on the account."""
 
     identifier: str
 
@@ -468,6 +464,14 @@ class AuthResponse(BaseModel):
     token: str
     id: int
     name: str
+
+class GoogleSignIn(BaseModel):
+    id_token: str
+
+
+class GoogleAuthResponse(AuthResponse):
+    profile_complete: bool
+
 
 class FcmTokenUpdate(BaseModel):
     fcm_token: str

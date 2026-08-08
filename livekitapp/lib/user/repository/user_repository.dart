@@ -25,44 +25,31 @@ class AvailabilityResult {
   const AvailabilityResult({required this.available, this.reason});
 }
 
-/// Which channel a sign-up or login is being verified through.
-enum AuthChannel { email, phone }
-
-AuthChannel _channelFrom(String? value) =>
-    value == 'email' ? AuthChannel.email : AuthChannel.phone;
-
-/// Outcome of sign-up step 1. For [AuthChannel.email] the backend has already
-/// mailed the code; for [AuthChannel.phone] the app asks Firebase to send it.
+/// Outcome of sign-up step 1: the backend has texted a code to the number.
 class SignupStart {
-  final AuthChannel channel;
-
-  /// The identifier as the backend stored it: a lower-cased email or the bare
-  /// 10 digits of the phone number. Every later step must send this value.
+  /// The number as the backend stored it: the bare 10 digits. Every later
+  /// step must send this value.
   final String identifier;
   final bool otpSent;
 
-  const SignupStart({
-    required this.channel,
-    required this.identifier,
-    required this.otpSent,
-  });
+  const SignupStart({required this.identifier, required this.otpSent});
 }
 
-/// Outcome of login step 1. Email accounts are logged in straight away, phone
-/// accounts still have to pass the Firebase OTP.
-class LoginStart {
-  final AuthChannel channel;
-  final AuthResponse? auth;
-  final String? phone;
+/// Outcome of a Google sign-in. [profileComplete] is false the first time an
+/// account is created, which is what sends the app to the profile setup
+/// screen to collect a photo, username and display name.
+class GoogleAuthResult {
+  final AuthResponse auth;
+  final bool profileComplete;
 
-  const LoginStart({required this.channel, this.auth, this.phone});
+  const GoogleAuthResult({required this.auth, required this.profileComplete});
 }
 
 class UserRepository {
   final ApiClient _apiClient = ApiClient();
 
-  /// Checked before requesting an OTP so we never send a code to an email or
-  /// phone number that already has an account.
+  /// Checked before requesting an OTP so we never send a code to a phone
+  /// number that already has an account.
   Future<AvailabilityResult> checkIdentifierAvailable(String identifier) async {
     final response = await _apiClient.get(
       '${ApiConstants.userIdentifierAvailable}'
@@ -70,7 +57,7 @@ class UserRepository {
     );
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(data['detail'] ?? 'Could not check this email or phone number');
+      throw Exception(data['detail'] ?? 'Could not check this phone number');
     }
     return AvailabilityResult(
       available: data['available'] == true,
@@ -103,8 +90,8 @@ class UserRepository {
     );
   }
 
-  /// Sign-up step 1: hand over the email/phone and password. No account exists
-  /// until [registerComplete] succeeds.
+  /// Sign-up step 1: hand over the phone number and password. No account
+  /// exists until [registerComplete] succeeds.
   Future<SignupStart> registerInitiate(
     String identifier,
     String password,
@@ -120,26 +107,12 @@ class UserRepository {
       throw Exception(_detail(data) ?? 'Could not start sign-up');
     }
     return SignupStart(
-      channel: _channelFrom(data['channel'] as String?),
       identifier: data['identifier'] as String,
       otpSent: data['otp_sent'] == true,
     );
   }
 
-  /// Sign-up step 2 (email): exchange the mailed code for the sign-up token.
-  Future<String> registerVerifyOtp(String identifier, String otpCode) async {
-    final response = await _apiClient.post(ApiConstants.userRegisterVerifyOtp, {
-      'identifier': identifier,
-      'otp_code': otpCode,
-    });
-    final data = jsonDecode(response.body);
-    if (response.statusCode != 200) {
-      throw Exception(_detail(data) ?? 'OTP verification failed');
-    }
-    return data['signup_token'] as String;
-  }
-
-  /// Resends the sign-up verification code, by email or SMS.
+  /// Resends the sign-up verification code by SMS.
   Future<void> registerResendOtp(String identifier) async {
     final response = await _apiClient.post(ApiConstants.userRegisterResendOtp, {
       'identifier': identifier,
@@ -185,9 +158,9 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
-  /// Login step 1. Email accounts come back logged in; phone accounts come
-  /// back with the number to send a Firebase OTP to.
-  Future<LoginStart> loginInitiate(String identifier, String password) async {
+  /// Login step 1: the password is checked and an OTP is texted to the number
+  /// on the account. Returns that number, which [loginVerify] needs.
+  Future<String> loginInitiate(String identifier, String password) async {
     final response = await _apiClient.post(ApiConstants.userLoginInitiate, {
       'identifier': identifier,
       'password': password,
@@ -196,11 +169,23 @@ class UserRepository {
     if (response.statusCode != 200) {
       throw Exception(_detail(data) ?? 'Login failed');
     }
-    final channel = _channelFrom(data['channel'] as String?);
-    return LoginStart(
-      channel: channel,
-      auth: channel == AuthChannel.email ? AuthResponse.fromJson(data) : null,
-      phone: data['phone'] as String?,
+    return data['phone'] as String;
+  }
+
+  /// Signs in with a Firebase ID token obtained from Google Sign-In. The
+  /// backend finds-or-creates the account and returns the same session shape
+  /// as every other login path.
+  Future<GoogleAuthResult> signInWithGoogle(String idToken) async {
+    final response = await _apiClient.post(ApiConstants.userAuthGoogle, {
+      'id_token': idToken,
+    });
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(data) ?? 'Google sign-in failed');
+    }
+    return GoogleAuthResult(
+      auth: AuthResponse.fromJson(data),
+      profileComplete: data['profile_complete'] == true,
     );
   }
 
@@ -236,18 +221,15 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
-  /// Starts a password reset. Both email and phone accounts get an OTP sent
-  /// to them, by mail or SMS respectively.
-  Future<AuthChannel> forgotPasswordRequestOtp(String identifier) async {
+  /// Starts a password reset by texting a code to the registered number.
+  Future<void> forgotPasswordRequestOtp(String identifier) async {
     final response = await _apiClient.post(
       ApiConstants.userForgotPasswordRequestOtp,
       {'identifier': identifier},
     );
-    final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(_detail(data) ?? 'Failed to send OTP');
+      throw Exception(_detail(jsonDecode(response.body)) ?? 'Failed to send OTP');
     }
-    return _channelFrom(data['channel'] as String?);
   }
 
   Future<void> forgotPasswordVerifyOtp(String identifier, String otpCode) async {
@@ -261,8 +243,7 @@ class UserRepository {
     }
   }
 
-  /// Finishes the reset with the OTP sent to the identifier (mailed for
-  /// email accounts, texted for phone accounts).
+  /// Finishes the reset with the OTP texted to the registered number.
   Future<void> forgotPasswordReset(
     String identifier,
     String newPassword, {
@@ -740,24 +721,20 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     return Map<String, dynamic>.from(data);
   }
 
-  /// Step 1 of adding or changing the registered email / phone number. Both
-  /// channels send an OTP (mail or SMS), which is why the channel comes back
-  /// to the caller.
-  Future<AuthChannel> requestContactChangeOtp(
-    String token,
-    String identifier,
-  ) async {
+  /// Step 1 of changing the registered phone number: texts an OTP to it.
+  Future<void> requestContactChangeOtp(String token, String identifier) async {
     final response = await _apiClient.post(ApiConstants.userContactRequestOtp, {
       'identifier': identifier,
     }, token: token);
-    final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
-      throw Exception(_detail(data) ?? 'Could not send the verification code');
+      throw Exception(
+        _detail(jsonDecode(response.body)) ??
+            'Could not send the verification code',
+      );
     }
-    return _channelFrom(data['channel'] as String?);
   }
 
-  /// Step 2: prove the new email/phone is reachable and save it on the
+  /// Step 2: prove the new phone number is reachable and save it on the
   /// account, using the OTP sent to it.
   Future<Map<String, dynamic>> verifyContactChange(
     String token,
