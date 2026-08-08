@@ -79,7 +79,13 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
     setState(() => _googleLoading = true);
     try {
       final googleSignIn = GoogleSignIn.instance;
-      await googleSignIn.initialize();
+      await googleSignIn.initialize(
+        // Web OAuth client (client_type 3 in google-services.json). Required
+        // on Android for the sign-in flow to complete and for a non-null
+        // idToken to come back from `authentication`.
+        serverClientId:
+            '141308428641-i0te3frr4aco6ukqebpcdak7fahrgfls.apps.googleusercontent.com',
+      );
       final googleAccount = await googleSignIn.authenticate();
       final googleAuth = googleAccount.authentication;
       final credential = GoogleAuthProvider.credential(
@@ -117,8 +123,14 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       }
     } on GoogleSignInException catch (e) {
       if (!mounted) return;
-      if (e.code == GoogleSignInExceptionCode.canceled) return;
-      _showMessage('Google sign-in failed');
+      // A true user cancel (tapping outside the picker) has no description.
+      // Failures that happen mid-flow (bad config, reauth failure, etc.) can
+      // also carry the `canceled` code on Android, but come with a
+      // description - those should be surfaced, not swallowed.
+      if (e.code == GoogleSignInExceptionCode.canceled && e.description == null) {
+        return;
+      }
+      _showMessage('Google sign-in failed: ${e.description ?? e.code}');
     } catch (e) {
       if (!mounted) return;
       _showMessage(e.toString().replaceFirst('Exception: ', ''));
