@@ -30,7 +30,12 @@ class BillingRepository {
   /// user's home screen, ordered by sort_order.
   Future<List<Map<String, dynamic>>> getSpecialOffers() async {
     final response = await _apiClient.get(ApiConstants.specialOffers);
-    if (response.statusCode != 200) return [];
+    if (response.statusCode != 200) {
+      // Throw instead of returning [] so a transient failure (timeout, 5xx)
+      // is retried by the caller rather than being treated as "server says
+      // there are no offers" and overwriting the cached ones with nothing.
+      throw Exception('Failed to load special offers');
+    }
     final data = jsonDecode(response.body);
     return List<Map<String, dynamic>>.from(data);
   }
