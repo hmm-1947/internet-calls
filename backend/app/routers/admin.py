@@ -360,7 +360,6 @@ def delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(verify_ad
     return {"detail": "User deleted"}
 
 @router.get("/recordings")
-@router.get("/recordings")
 def list_recordings(db: Session = Depends(get_db), _=Depends(verify_admin)):
     rows = (
         db.query(CallRecording, Call, User, Listener)
@@ -376,7 +375,7 @@ def list_recordings(db: Session = Depends(get_db), _=Depends(verify_admin)):
             "id": r.id,
             "call_id": r.call_id,
             "room_name": r.room_name,
-            "file_path": r.file_path.replace("/out/", ""),
+            "file_path": r.file_path.replace("/out/", "") if r.file_path else None,
             "status": r.status,
             "started_at": r.started_at,
             "ended_at": r.ended_at,
