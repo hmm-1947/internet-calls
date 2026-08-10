@@ -22,6 +22,7 @@ class ListenerDataCache {
   static const _meSnapshotKey = 'listener_me_snapshot';
   static const _threadsSnapshotKey = 'listener_threads_snapshot';
   static const _usersSnapshotKey = 'listener_users_snapshot';
+  static const _walletSnapshotKey = 'listener_wallet_snapshot';
 
   Map<String, dynamic>? _me;
   DateTime? _meFetchedAt;
@@ -105,6 +106,10 @@ class ListenerDataCache {
           PresenceCache().seedFromUserCatalogue(_users!);
         }
       }
+      if (_wallet == null) {
+        final wallet = await HomeCache().getJson(_walletSnapshotKey);
+        if (wallet is Map) _wallet = Map<String, dynamic>.from(wallet);
+      }
     } catch (_) {
       // A corrupt snapshot must never block start-up.
     }
@@ -133,6 +138,7 @@ class ListenerDataCache {
   void setWallet(Map<String, dynamic> data) {
     _wallet = data;
     _walletFetchedAt = DateTime.now();
+    HomeCache().setJson(_walletSnapshotKey, data);
   }
 
   /// Marks the entry stale without dropping it, so it can still paint while a
@@ -161,5 +167,6 @@ class ListenerDataCache {
     HomeCache().clear(_meSnapshotKey);
     HomeCache().clear(_threadsSnapshotKey);
     HomeCache().clear(_usersSnapshotKey);
+    HomeCache().clear(_walletSnapshotKey);
   }
 }

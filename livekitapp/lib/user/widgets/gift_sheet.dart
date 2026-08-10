@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
 import 'package:livekitapp/common/widgets/gift_success_popup.dart';
 
@@ -58,23 +60,23 @@ Widget buildGiftIcon(String? icon, {double size = 34}) {
   );
 }
 
+const _giftCatalogCacheKey = 'user_gift_catalog';
+
 Future<void> showGiftSheet(
   BuildContext context, {
   required int listenerId,
   int? callId,
   bool fromTop = false,
 }) async {
-  final localStorage = LocalStorage();
-  final coinRepository = CoinRepository();
-  int coins = 0;
-  List<Map<String, dynamic>> gifts = [];
-  try {
-    final token = await localStorage.getToken();
-    if (token != null) {
-      coins = await coinRepository.getCoins(token);
-      gifts = await coinRepository.getGiftCatalog(token);
-    }
-  } catch (_) {}
+  // Instant open: paint from whatever is already on disk/in memory (the last
+  // fetched gift catalog and the last known coin balance) instead of blocking
+  // the sheet on a network round-trip. GiftSheet refreshes both itself in the
+  // background once it's on screen.
+  final cachedGifts = await HomeCache().getJson(_giftCatalogCacheKey);
+  final gifts = cachedGifts is List
+      ? cachedGifts.cast<Map<String, dynamic>>()
+      : <Map<String, dynamic>>[];
+  final coins = (UserDataCache().lastMe?['coins'] as num?)?.toInt() ?? 0;
   if (!context.mounted) return;
 
   if (fromTop) {
@@ -137,6 +139,7 @@ class GiftSheet extends StatefulWidget {
 
 class _GiftSheetState extends State<GiftSheet> {
   late int _balance;
+  late List<Map<String, dynamic>> _gifts;
   final _localStorage = LocalStorage();
   final _coinRepository = CoinRepository();
   bool _sending = false;
@@ -145,6 +148,34 @@ class _GiftSheetState extends State<GiftSheet> {
   void initState() {
     super.initState();
     _balance = widget.balance;
+    _gifts = widget.gifts;
+    _refresh();
+  }
+
+  /// Refreshes the gift catalog and balance from the network in the
+  /// background. The sheet is already on screen (painted from cache), so a
+  /// failure here just leaves the cached values in place.
+  Future<void> _refresh() async {
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      final results = await Future.wait([
+        _coinRepository.getCoins(token),
+        _coinRepository.getGiftCatalog(token),
+      ]);
+      final coins = results[0] as int;
+      final gifts = results[1] as List<Map<String, dynamic>>;
+      if (!mounted) return;
+      setState(() {
+        _balance = coins;
+        if (gifts.isNotEmpty) _gifts = gifts;
+      });
+      if (gifts.isNotEmpty) {
+        HomeCache().setJson(_giftCatalogCacheKey, gifts);
+      }
+    } catch (_) {
+      // Cached values already on screen; nothing to fall back to.
+    }
   }
 
   Future<void> _send(Map<String, dynamic> gift) async {
@@ -249,7 +280,7 @@ class _GiftSheetState extends State<GiftSheet> {
           Wrap(
             spacing: 10,
             runSpacing: 14,
-            children: widget.gifts
+            children: _gifts
                 .map(
                   (g) => SizedBox(
                     width: (MediaQuery.sizeOf(context).width - 40 - 20) / 3,
