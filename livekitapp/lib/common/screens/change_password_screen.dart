@@ -22,19 +22,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _confirmPasswordController = TextEditingController();
 
   bool _loading = false;
-  String _newPassword = '';
-  String _confirmPassword = '';
+  bool _showErrors = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _newPasswordController.addListener(() {
-      setState(() => _newPassword = _newPasswordController.text);
-    });
-    _confirmPasswordController.addListener(() {
-      setState(() => _confirmPassword = _confirmPasswordController.text);
-    });
-  }
+  // Snapshots of the password fields taken only at the moment Submit is
+  // pressed. The checklist reads these instead of the live text so it does
+  // not re-evaluate on every keystroke once it becomes visible; it only
+  // updates the next time Submit is pressed.
+  String _checkedPassword = '';
+  String _checkedConfirmPassword = '';
 
   @override
   void dispose() {
@@ -56,11 +51,17 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final newPassword = _newPasswordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
+    setState(() {
+      _showErrors = true;
+      _checkedPassword = newPassword;
+      _checkedConfirmPassword = confirmPassword;
+    });
+
     if (currentPassword.isEmpty || newPassword.isEmpty) {
       _showError('Please fill in all password fields');
       return;
     }
-    if (confirmPassword.isNotEmpty && newPassword != confirmPassword) {
+    if (newPassword != confirmPassword) {
       _showError('Passwords do not match');
       return;
     }
@@ -136,8 +137,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: PasswordRulesChecklist(
-                      password: _newPassword,
-                      confirmPassword: _confirmPassword,
+                      password: _checkedPassword,
+                      confirmPassword: _checkedConfirmPassword,
+                      showErrors: _showErrors,
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -155,12 +157,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      onPressed: (_loading ||
-                              !isPasswordValid(_newPassword) ||
-                              (_confirmPassword.isNotEmpty &&
-                                  _newPassword != _confirmPassword))
-                          ? null
-                          : _submit,
+                      onPressed: _loading ? null : _submit,
                       child: _loading
                           ? const SizedBox(
                               width: 22,

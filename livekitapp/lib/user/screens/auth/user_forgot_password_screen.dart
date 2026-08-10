@@ -26,22 +26,16 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
   _ForgotPasswordStep _step = _ForgotPasswordStep.identifier;
   bool _loading = false;
   bool _otpExpired = false;
-  String _newPassword = '';
-  String _confirmPassword = '';
+  bool _showErrors = false;
 
+  // Snapshots of the password fields taken only at the moment Submit is
+  // pressed. The checklist reads these instead of the live text so it does
+  // not re-evaluate on every keystroke once visible; it only updates the
+  // next time Submit is pressed.
+  String _checkedPassword = '';
+  String _checkedConfirmPassword = '';
   /// The number exactly as sent to the backend: its bare 10 digits.
   String _identifier = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _newPasswordController.addListener(() {
-      setState(() => _newPassword = _newPasswordController.text);
-    });
-    _confirmPasswordController.addListener(() {
-      setState(() => _confirmPassword = _confirmPasswordController.text);
-    });
-  }
 
   @override
   void dispose() {
@@ -117,11 +111,16 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
   Future<void> _submitNewPassword() async {
     final newPassword = _newPasswordController.text;
     final confirmPassword = _confirmPasswordController.text;
+    setState(() {
+      _showErrors = true;
+      _checkedPassword = newPassword;
+      _checkedConfirmPassword = confirmPassword;
+    });
     if (newPassword.isEmpty) {
       _showError('Please enter a new password');
       return;
     }
-    if (confirmPassword.isNotEmpty && newPassword != confirmPassword) {
+    if (newPassword != confirmPassword) {
       _showError('Passwords do not match');
       return;
     }
@@ -275,17 +274,15 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
         Align(
           alignment: Alignment.centerLeft,
           child: PasswordRulesChecklist(
-            password: _newPassword,
-            confirmPassword: _confirmPassword,
+            password: _checkedPassword,
+            confirmPassword: _checkedConfirmPassword,
+            showErrors: _showErrors,
           ),
         ),
         const SizedBox(height: 24),
         _buildButton(
           'Reset Password',
           _submitNewPassword,
-          disabled: !isPasswordValid(_newPassword) ||
-              (_confirmPassword.isNotEmpty &&
-                  _newPassword != _confirmPassword),
         ),
       ],
     );

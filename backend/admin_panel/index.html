@@ -1409,7 +1409,7 @@
         <input id="forgotNewPassword" placeholder="New password" type="password">
         <div id="forgotPwRules" class="pw-rules"></div>
         <input id="forgotConfirmPassword" placeholder="Confirm password" type="password">
-        <button class="btn btn-primary" id="forgotResetBtn" onclick="resetForgotPassword()" disabled>Reset password</button>
+        <button class="btn btn-primary" id="forgotResetBtn" onclick="resetForgotPassword()">Reset password</button>
       </div>
       <div id="forgotMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
       <div style="margin-top:8px;">
@@ -1434,7 +1434,7 @@
         <input id="setupUsername" placeholder="Choose a username">
         <input id="setupPassword" placeholder="Choose a password" type="password">
         <div id="setupPwRules" class="pw-rules"></div>
-        <button class="btn btn-primary" id="setupCompleteBtn" onclick="completeSetup()" disabled>Create account</button>
+        <button class="btn btn-primary" id="setupCompleteBtn" onclick="completeSetup()">Create account</button>
       </div>
       <div id="setupMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
     </div>
@@ -1919,7 +1919,7 @@
       document.getElementById('forgotNewPassword').value = '';
       document.getElementById('forgotConfirmPassword').value = '';
       document.getElementById('forgotResetBtn').disabled = true;
-      renderPasswordRules('forgotPwRules', '');
+      document.getElementById('forgotPwRules').innerHTML = '';
       clearOtpTimer('forgotOtpTimer');
       document.getElementById('forgotOtpTimer').textContent = '';
       setForgotMsg('', null);
@@ -1990,15 +1990,7 @@
       _otpTimers[timerId] = setInterval(tick, 1000);
     }
 
-    document.getElementById('forgotNewPassword').addEventListener('input', function () {
-      renderPasswordRules('forgotPwRules', this.value);
-      document.getElementById('forgotResetBtn').disabled = !isPasswordValidAdmin(this.value);
-    });
 
-    document.getElementById('setupPassword').addEventListener('input', function () {
-      renderPasswordRules('setupPwRules', this.value);
-      document.getElementById('setupCompleteBtn').disabled = !isPasswordValidAdmin(this.value);
-    });
 
 
     async function requestForgotOtp() {
@@ -2040,8 +2032,7 @@
         clearOtpTimer('forgotOtpTimer');
         document.getElementById('forgotStepOtp').style.display = 'none';
         document.getElementById('forgotStepReset').style.display = '';
-        renderPasswordRules('forgotPwRules', '');
-        document.getElementById('forgotResetBtn').disabled = true;
+        document.getElementById('forgotPwRules').innerHTML = '';
       } catch (e) { setForgotMsg('✗ ' + e.message, false); }
     }
 
@@ -2050,9 +2041,11 @@
       const otp_code = document.getElementById('forgotOtp').value.trim();
       const newPassword = document.getElementById('forgotNewPassword').value;
       const confirmPassword = document.getElementById('forgotConfirmPassword').value;
+      // Always render the rules on submit so failing rules become visible.
+      renderPasswordRules('forgotPwRules', newPassword);
       if (!newPassword || !confirmPassword) { setForgotMsg('Please fill in all fields.', false); return; }
-      if (!isPasswordValidAdmin(newPassword)) { setForgotMsg('Please satisfy all password rules.', false); return; }
       if (newPassword !== confirmPassword) { setForgotMsg('Passwords do not match.', false); return; }
+      if (!isPasswordValidAdmin(newPassword)) { setForgotMsg('Please satisfy all password rules.', false); return; }
       setForgotMsg('Resetting…', null);
       try {
         const res = await fetch(API_URL + '/admin/auth/forgot-password/reset', {
@@ -2071,8 +2064,7 @@
       document.getElementById('setupScreen').style.display = '';
       document.getElementById('panelRoot').style.display = 'none';
       document.getElementById('setupPassword').value = '';
-      document.getElementById('setupCompleteBtn').disabled = true;
-      renderPasswordRules('setupPwRules', '');
+      document.getElementById('setupPwRules').innerHTML = '';
       clearOtpTimer('setupOtpTimer');
       document.getElementById('setupOtpTimer').textContent = '';
     }
@@ -2670,14 +2662,15 @@
         clearOtpTimer('setupOtpTimer');
         document.getElementById('setupStepOtp').style.display = 'none';
         document.getElementById('setupStepCreds').style.display = '';
-        renderPasswordRules('setupPwRules', '');
-        document.getElementById('setupCompleteBtn').disabled = true;
+        document.getElementById('setupPwRules').innerHTML = '';
       } catch (e) { setSetupMsg('✗ ' + e.message, false); }
     }
 
     async function completeSetup() {
       const username = document.getElementById('setupUsername').value.trim();
       const password = document.getElementById('setupPassword').value;
+      // Render rules on submit so the user can see which rules are violated.
+      renderPasswordRules('setupPwRules', password);
       if (!username || !password) { setSetupMsg('Please fill in all fields.', false); return; }
       if (!isPasswordValidAdmin(password)) { setSetupMsg('Please satisfy all password rules.', false); return; }
       setSetupMsg('Creating account…', null);

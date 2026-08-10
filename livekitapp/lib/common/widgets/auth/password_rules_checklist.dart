@@ -29,14 +29,13 @@ bool isPasswordValid(String password) {
       passwordRules.every((rule) => rule.validator(password));
 }
 
-/// Shown below the Confirm Password field.
+/// Shown below the Confirm Password field, but only after the user has
+/// attempted to submit (controlled by [showErrors]).
 ///
-/// Priority logic (evaluated top-to-bottom, first match wins):
-///   1. Hidden when [password] is empty (user hasn't typed anything yet).
-///   2. "Passwords do not match" when [confirmPassword] is non-empty and
-///      differs from [password].
-///   3. Failing password rules when any rule is violated.
-///   4. Hidden when both passwords match and all rules pass (ready to submit).
+/// When [showErrors] is true, priority logic (evaluated top-to-bottom):
+///   1. "Passwords do not match" when [confirmPassword] differs from [password].
+///   2. Failing password rules when any rule is violated.
+///   3. Hidden when both passwords match and all rules pass.
 ///
 /// Pass [confirmPassword] whenever this widget sits below a confirm field.
 /// Omit it (or leave it as the default empty string) on screens that have no
@@ -44,20 +43,23 @@ bool isPasswordValid(String password) {
 class PasswordRulesChecklist extends StatelessWidget {
   final String password;
   final String confirmPassword;
+  /// When false the widget is always hidden (errors shown only after submit).
+  final bool showErrors;
 
   const PasswordRulesChecklist({
     super.key,
     required this.password,
     this.confirmPassword = '',
+    this.showErrors = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Nothing to show until the user starts typing the password.
-    if (password.isEmpty) return const SizedBox.shrink();
+    // Hidden until the user has attempted to submit.
+    if (!showErrors) return const SizedBox.shrink();
 
-    // Priority 1: mismatch message (only when the confirm field has content).
-    if (confirmPassword.isNotEmpty && confirmPassword != password) {
+    // Priority 1: mismatch message (when the confirm field differs).
+    if (confirmPassword != password) {
       return _row(Icons.cancel, Colors.redAccent, 'Passwords do not match');
     }
 

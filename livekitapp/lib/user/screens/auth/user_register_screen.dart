@@ -35,6 +35,13 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
   /// rather than while they are still typing the first character.
   bool _showErrors = false;
 
+  // Snapshots of the password fields taken only at the moment Submit is
+  // pressed. The checklist reads these instead of the live text so it does
+  // not re-evaluate on every keystroke once visible; it only updates the
+  // next time Submit is pressed.
+  String _checkedPassword = '';
+  String _checkedConfirm = '';
+
   @override
   void initState() {
     super.initState();
@@ -66,21 +73,23 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
 
   // null when confirm is empty (optional) or matches; error only when the
   // user has typed something that doesn't match.
+  // null when confirm matches password; error only after submit attempt.
   String? get _confirmError {
-    if (_confirm.isNotEmpty && _confirm != _password) {
+    if (_confirm != _password) {
       return 'Passwords do not match';
     }
     return null;
   }
 
-  bool get _canSubmit =>
-      !_loading &&
-      _identifierError == null &&
-      isPasswordValid(_password) &&
-      _confirmError == null;
+  bool get _canSubmit => !_loading;
+
 
   Future<void> _continue() async {
-    setState(() => _showErrors = true);
+    setState(() {
+      _showErrors = true;
+      _checkedPassword = _password;
+      _checkedConfirm = _confirm;
+    });
     final error = _identifierError ??
         _confirmError ??
         (isPasswordValid(_password) ? null : 'Please satisfy all password rules');
@@ -184,8 +193,9 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: PasswordRulesChecklist(
-                      password: _password,
-                      confirmPassword: _confirm,
+                      password: _checkedPassword,
+                      confirmPassword: _checkedConfirm,
+                      showErrors: _showErrors,
                     ),
                   ),
                   const SizedBox(height: 22),
