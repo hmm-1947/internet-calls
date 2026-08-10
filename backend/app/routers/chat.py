@@ -122,6 +122,13 @@ def _get_settings(db, owner_type, owner_id, other_id):
         ChatSettings.other_id == other_id,
     ).first()
 
+def _is_muted(db, owner_type, owner_id, other_id) -> bool:
+    """Whether owner_type/owner_id has muted their thread with other_id.
+    Muted threads stay visible in the chat list; only push notifications
+    are suppressed for them."""
+    settings = _get_settings(db, owner_type, owner_id, other_id)
+    return bool(settings and settings.is_muted)
+
 def _msg_dict(msg):
     return {
         "type": "chat_message",
@@ -245,7 +252,7 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     await manager.send_to_listener(listener.id, _msg_dict(msg))
 
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
-    if listener.fcm_token:
+    if listener.fcm_token and not _is_muted(db, "listener", listener.id, current_user.id):
         try:
             if listener_online:
                 send_chat_message(listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
@@ -276,7 +283,7 @@ async def listener_send_message(payload: ListenerChatMessageSend, db: Session = 
     db.refresh(msg)
     await manager.send_to_user(user.id, _msg_dict(msg))
     await manager.send_to_listener(current_listener.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
-    if user.fcm_token:
+    if user.fcm_token and not _is_muted(db, "user", user.id, current_listener.id):
         try:
             if user_online:
                 send_chat_message(user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
@@ -320,7 +327,7 @@ async def user_send_voice(
     await deduct_voice_message_coins(db, current_user, listener.id, msg.id)
     await manager.send_to_listener(listener.id, _msg_dict(msg))
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
-    if listener.fcm_token:
+    if listener.fcm_token and not _is_muted(db, "listener", listener.id, current_user.id):
         try:
             send_chat_message(listener.fcm_token, current_user.name, "🎤 Voice message", current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
         except Exception as e:
@@ -358,7 +365,7 @@ async def listener_send_voice(
     db.refresh(msg)
     await manager.send_to_user(user.id, _msg_dict(msg))
     await manager.send_to_listener(current_listener.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
-    if user.fcm_token:
+    if user.fcm_token and not _is_muted(db, "user", user.id, current_listener.id):
         try:
             send_chat_message(user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
         except Exception as e:

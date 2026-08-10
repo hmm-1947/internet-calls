@@ -223,10 +223,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     _pendingOrderId = null;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(reason),
-        backgroundColor: Colors.redAccent,
-      ),
+      SnackBar(content: Text(reason), backgroundColor: Colors.redAccent),
     );
     setState(() => _purchasing = false);
   }
@@ -368,9 +365,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                     : _purchase,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _AppColors.brandRed,
-                  disabledBackgroundColor: _AppColors.brandRed.withOpacity(
-                    0.4,
-                  ),
+                  disabledBackgroundColor: _AppColors.brandRed.withOpacity(0.4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -458,7 +453,10 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           url.isEmpty
               ? Icon(Icons.workspace_premium, color: _AppColors.gold, size: 72)
               : ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 220, maxWidth: 260,),
+                  constraints: const BoxConstraints(
+                    maxHeight: 220,
+                    maxWidth: 260,
+                  ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
                     child: Image.network(

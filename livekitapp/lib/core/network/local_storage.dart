@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:livekitapp/common/services/native_call_bridge.dart';
 
@@ -118,5 +120,62 @@ class LocalStorage {
   Future<bool> getFlag(String key) async {
     final value = await _storage.read(key: 'flag_$key');
     return value == 'true';
+  }
+
+  static const _pendingChatSettingsKey = 'pending_chat_settings_v1';
+
+  /// Chat-settings toggles (favorite/archive/mute) made while offline, keyed
+  /// by "ownerType:otherId" so a later toggle on the same thread overwrites
+  /// the earlier one instead of piling up duplicate work.
+  Future<Map<String, Map<String, dynamic>>> getPendingChatSettings() async {
+    final raw = await _storage.read(key: _pendingChatSettingsKey);
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return decoded.map(
+        (key, value) => MapEntry(key, Map<String, dynamic>.from(value as Map)),
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _saveAllPendingChatSettings(
+    Map<String, Map<String, dynamic>> all,
+  ) async {
+    if (all.isEmpty) {
+      await _storage.delete(key: _pendingChatSettingsKey);
+      return;
+    }
+    await _storage.write(
+      key: _pendingChatSettingsKey,
+      value: jsonEncode(all),
+    );
+  }
+
+  /// Merges a toggle into the outbox for "ownerType:otherId", overwriting
+  /// only the fields that changed so an earlier queued favorite doesn't get
+  /// lost when a later archive toggle is queued for the same thread.
+  Future<void> queuePendingChatSettings(
+    String ownerType,
+    int otherId, {
+    bool? isPinned,
+    bool? isArchived,
+    bool? isMuted,
+  }) async {
+    final all = await getPendingChatSettings();
+    final key = '$ownerType:$otherId';
+    final existing = all[key] ?? <String, dynamic>{'other_id': otherId};
+    if (isPinned != null) existing['is_pinned'] = isPinned;
+    if (isArchived != null) existing['is_archived'] = isArchived;
+    if (isMuted != null) existing['is_muted'] = isMuted;
+    all[key] = existing;
+    await _saveAllPendingChatSettings(all);
+  }
+
+  Future<void> clearPendingChatSettings(String ownerType, int otherId) async {
+    final all = await getPendingChatSettings();
+    if (all.remove('$ownerType:$otherId') == null) return;
+    await _saveAllPendingChatSettings(all);
   }
 }
