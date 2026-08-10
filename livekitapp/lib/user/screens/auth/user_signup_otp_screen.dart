@@ -5,21 +5,15 @@ import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_profile_setup_screen.dart';
 
-/// Sign-up step 2 of 3: verify the identifier from step 1.
+/// Sign-up step 2 of 3: verify the phone number from step 1.
 ///
-/// Both channels end the same way, with a short-lived sign-up token that the
-/// profile screen exchanges for the account. The backend has already sent
-/// the code by the time this screen opens: mailed for email, texted for
-/// phone.
+/// It ends with a short-lived sign-up token that the profile screen exchanges
+/// for the account. The backend has already texted the code by the time this
+/// screen opens.
 class UserSignupOtpScreen extends StatefulWidget {
   final String identifier;
-  final AuthChannel channel;
 
-  const UserSignupOtpScreen({
-    super.key,
-    required this.identifier,
-    required this.channel,
-  });
+  const UserSignupOtpScreen({super.key, required this.identifier});
 
   @override
   State<UserSignupOtpScreen> createState() => _UserSignupOtpScreenState();
@@ -29,8 +23,6 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
   final _otpController = TextEditingController();
   final _repository = UserRepository();
   final _countdownKey = GlobalKey<OtpCountdownState>();
-
-  bool get _isEmail => widget.channel == AuthChannel.email;
 
   bool _sending = false;
   bool _verifying = false;
@@ -45,8 +37,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
     super.dispose();
   }
 
-  String get _destination =>
-      _isEmail ? widget.identifier : '+91 ${widget.identifier}';
+  String get _destination => '+91 ${widget.identifier}';
 
   Future<void> _resend() async {
     setState(() {
@@ -73,17 +64,15 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
 
   Future<void> _verify() async {
     final code = _otpController.text.trim();
-    final expectedLength = _isEmail ? 6 : 4;
-    if (code.length != expectedLength) {
-      _showMessage('Enter the $expectedLength-digit code');
+    if (code.length != 4) {
+      _showMessage('Enter the 4-digit code');
       return;
     }
 
     setState(() => _verifying = true);
     try {
-      final signupToken = _isEmail
-          ? await _repository.registerVerifyOtp(widget.identifier, code)
-          : await _repository.registerVerifyPhone(widget.identifier, code);
+      final signupToken =
+          await _repository.registerVerifyPhone(widget.identifier, code);
       _goToProfileSetup(signupToken);
     } catch (e) {
       if (!mounted) return;
@@ -114,7 +103,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(_isEmail ? 'Verify Email' : 'Verify Phone'),
+        title: const Text('Verify Phone'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.red,
         elevation: 0,
@@ -125,7 +114,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
           child: Center(
             child: SingleChildScrollView(
               child: AuthCard(
-                icon: _isEmail ? Icons.mark_email_read_outlined : Icons.sms_outlined,
+                icon: Icons.sms_outlined,
                 title: 'Verify OTP',
                 subtitle: _sending
                     ? 'Sending a new code to $_destination…'
@@ -160,7 +149,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
                     controller: _otpController,
                     label: 'OTP',
                     keyboardType: TextInputType.number,
-                    maxLength: _isEmail ? 6 : 4,
+                    maxLength: 4,
                     textAlign: TextAlign.center,
                     letterSpacing: 8,
                     fontSize: 20,
@@ -169,7 +158,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
                   if (_sendError == null)
                     OtpCountdown(
                       key: _countdownKey,
-                      seconds: _isEmail ? 600 : 300,
+                      seconds: 300,
                       onExpire: () {},
                       onResend: _resend,
                     ),

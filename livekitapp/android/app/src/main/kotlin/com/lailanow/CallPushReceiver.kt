@@ -16,6 +16,7 @@ class CallPushReceiver : BroadcastReceiver() {
     }
 
     private fun onIncomingCall(context: Context, extras: android.os.Bundle) {
+        if (!CallApi.hasAuthToken(context)) return
         val callId = extras.getString("call_id") ?: return
         val callerName = extras.getString("caller_name")?.takeIf { it.isNotBlank() } ?: "Unknown"
         val callType = extras.getString("call_type") ?: "audio"

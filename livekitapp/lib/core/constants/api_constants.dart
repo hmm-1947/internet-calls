@@ -4,7 +4,6 @@ class ApiConstants {
   static final String baseUrl = dotenv.env['API_BASE_URL']!;
 
   static const String userRegisterInitiate = '/user/register/initiate';
-  static const String userRegisterVerifyOtp = '/user/register/verify-otp';
   static const String userRegisterResendOtp = '/user/register/resend-otp';
   static const String userRegisterVerifyPhone = '/user/register/verify-phone';
   static const String userRegisterComplete = '/user/register/complete';
@@ -12,6 +11,7 @@ class ApiConstants {
   static const String userIdentifierAvailable = '/user/identifier/available';
   static const String userLoginInitiate = '/user/login/initiate';
   static const String userLoginVerify = '/user/login/verify';
+  static const String userAuthGoogle = '/user/auth/google';
   static const String userSessionCheck = '/user/session/check';
   static const String userForgotPasswordRequestOtp =
       '/user/forgot-password/request-otp';

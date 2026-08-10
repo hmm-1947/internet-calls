@@ -217,6 +217,9 @@ async def logout(authorization: str = Header(...), db: Session = Depends(get_db)
     db.query(SessionModel).filter(SessionModel.token == token).delete()
     current_listener.is_online = False
     current_listener.last_seen = datetime.now(timezone.utc)
+    # Otherwise a call placed after logout still reaches this device: the
+    # push only checks for a stored token, not whether anyone is logged in.
+    current_listener.fcm_token = None
     record_audit_event(db, "listener", current_listener.id, current_listener.name, "logout")
     db.commit()
     await manager.disconnect_listener(current_listener.id)

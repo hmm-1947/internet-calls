@@ -12,13 +12,27 @@ import 'package:livekitapp/user/screens/user_main_screen.dart';
 
 /// Sign-up step 3 of 3: the profile, exchanged for the actual account.
 ///
+/// Reached two ways: with a `signupToken` at the end of a phone sign-up, or
+/// with an `existingSessionToken` straight after a first Google sign-in,
+/// where the account already exists but has no username or display name yet.
+///
 /// The photo is optional and can be added later from the profile screen. The
 /// username must be unique, so it is checked against the backend as the user
 /// types and again when the account is created.
 class UserProfileSetupScreen extends StatefulWidget {
-  final String signupToken;
+  final String? signupToken;
+  final String? existingSessionToken;
 
-  const UserProfileSetupScreen({super.key, required this.signupToken});
+  /// Prefilled into the display name field. Google hands us the account's
+  /// name, so there is no reason to make the user type it again.
+  final String? initialDisplayName;
+
+  const UserProfileSetupScreen({
+    super.key,
+    this.signupToken,
+    this.existingSessionToken,
+    this.initialDisplayName,
+  }) : assert(signupToken != null || existingSessionToken != null);
 
   @override
   State<UserProfileSetupScreen> createState() => _UserProfileSetupScreenState();
@@ -51,6 +65,11 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
     _displayNameController.addListener(
       () => setState(() => _displayName = _displayNameController.text),
     );
+    final initialName = widget.initialDisplayName?.trim() ?? '';
+    if (initialName.isNotEmpty) {
+      _displayNameController.text = initialName;
+      _displayName = initialName;
+    }
   }
 
   @override
@@ -143,18 +162,29 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
 
     setState(() => _loading = true);
     try {
-      final result = await _repository.registerComplete(
-        widget.signupToken,
-        _username,
-        _displayName.trim(),
-      );
-      await _localStorage.saveSession(result.token, result.id, result.name);
+      final String token;
+      if (widget.existingSessionToken != null) {
+        token = widget.existingSessionToken!;
+        await _repository.updateProfile(
+          token,
+          username: _username,
+          displayName: _displayName.trim(),
+        );
+      } else {
+        final result = await _repository.registerComplete(
+          widget.signupToken!,
+          _username,
+          _displayName.trim(),
+        );
+        token = result.token;
+        await _localStorage.saveSession(result.token, result.id, result.name);
+      }
 
       // The photo is a nice-to-have: a failed upload must not block a user who
       // now has a working account, they can retry from their profile.
       if (_photo != null) {
         try {
-          await _repository.updatePhoto(result.token, _photo!.path);
+          await _repository.updatePhoto(token, _photo!.path);
         } catch (_) {
           if (mounted) {
             _showMessage(
@@ -167,7 +197,7 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
 
       final fcmToken = await FirebaseMessaging.instance.getToken();
       if (fcmToken != null) {
-        await _repository.updateFcmToken(result.token, fcmToken);
+        await _repository.updateFcmToken(token, fcmToken);
       }
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -380,9 +410,13 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
                                 strokeWidth: 2.4,
                               ),
                             )
-                          : const Text(
-                              'Create Account',
-                              style: TextStyle(fontWeight: FontWeight.w700),
+                          : Text(
+                              widget.existingSessionToken != null
+                                  ? 'Continue'
+                                  : 'Create Account',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                     ),
                   ),

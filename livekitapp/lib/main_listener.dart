@@ -256,6 +256,11 @@ Future<void> _handleMessage(RemoteMessage message) async {
   final type = message.data['type'];
   if (CallkitService.instance.isDuplicateMessage(message.messageId)) return;
   if (type == 'call') {
+    // A call push can still be in flight right after logout (the backend
+    // clears the stored token, but this one was already sent). Don't show
+    // the incoming-call UI for a session that no longer exists locally.
+    final authToken = await LocalStorage().getToken();
+    if (authToken == null) return;
     await CallkitService.instance.showIncomingCall(message.data);
   } else if (type == 'call_cancelled') {
     await CallkitService.instance.handleCallCancelled(message.data);

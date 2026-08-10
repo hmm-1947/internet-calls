@@ -29,14 +29,8 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
   String _newPassword = '';
   String _confirmPassword = '';
 
-  /// Which channel the account uses, decided by the backend in step 1.
-  AuthChannel _channel = AuthChannel.email;
-
-  /// The identifier exactly as sent to the backend: a trimmed email or the
-  /// bare 10 digits of the phone number.
+  /// The number exactly as sent to the backend: its bare 10 digits.
   String _identifier = '';
-
-  bool get _isEmail => _channel == AuthChannel.email;
 
   @override
   void initState() {
@@ -67,22 +61,20 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
 
   Future<void> _submitIdentifier() async {
     final input = _identifierController.text.trim();
-    final normalizedPhone = PhoneAuthService.normalize(input);
-    final error = identifierError(input, normalizedPhone: normalizedPhone);
+    final identifier = PhoneAuthService.normalize(input);
+    final error = phoneNumberError(input, normalizedPhone: identifier);
     if (error != null) {
       _showError(error);
       return;
     }
-    final identifier = looksLikeEmail(input) ? input : normalizedPhone;
 
     setState(() => _loading = true);
     try {
-      // The backend looks the account up, sends an OTP by mail or SMS
-      // depending on the channel, and reports back which one it used.
-      final channel = await _repository.forgotPasswordRequestOtp(identifier);
+      // The backend looks the account up and texts the code to the number
+      // registered on it.
+      await _repository.forgotPasswordRequestOtp(identifier);
       if (!mounted) return;
       setState(() {
-        _channel = channel;
         _identifier = identifier;
         _otpController.clear();
         _otpExpired = false;
@@ -92,7 +84,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
       final message = e.toString().replaceFirst('Exception: ', '');
       _showError(
         message.toLowerCase().contains('registered')
-            ? 'enter a registered email id or phone number'
+            ? 'enter a registered phone number'
             : message,
       );
     } finally {
@@ -200,13 +192,14 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
       icon: Icons.lock_reset,
       title: 'Forgot Password',
       subtitle:
-          'Enter the email or phone number you signed up with. We will send '
-          'you an OTP to reset your password.',
+          'Enter the phone number you signed up with. We will text you an OTP '
+          'to reset your password.',
       children: [
         AuthTextField(
           controller: _identifierController,
-          label: 'Email or Phone',
-          keyboardType: TextInputType.emailAddress,
+          label: 'Phone Number',
+          keyboardType: TextInputType.phone,
+          maxLength: 10,
         ),
         const SizedBox(height: 24),
         _buildButton('Send OTP', _submitIdentifier),
@@ -217,10 +210,9 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
   Widget _buildOtpStep() {
     return AuthCard(
       key: const ValueKey('otp'),
-      icon: _isEmail ? Icons.mark_email_read_outlined : Icons.sms_outlined,
+      icon: Icons.sms_outlined,
       title: 'Verify OTP',
-      subtitle:
-          'Enter the code sent to ${_isEmail ? _identifier : '+91 $_identifier'}',
+      subtitle: 'Enter the code sent to +91 $_identifier',
       children: [
         AuthTextField(
           controller: _otpController,
@@ -232,7 +224,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
         ),
         const SizedBox(height: 18),
         OtpCountdown(
-          seconds: _isEmail ? 300 : 300,
+          seconds: 300,
           onExpire: () => setState(() => _otpExpired = true),
           onResend: () async {
             await _repository.forgotPasswordRequestOtp(_identifier);
@@ -253,7 +245,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
                   }),
           icon: const Icon(Icons.arrow_back, color: Colors.white60, size: 16),
           label: const Text(
-            'Change email or phone number',
+            'Change phone number',
             style: TextStyle(color: Colors.white60, fontSize: 12.5),
           ),
         ),

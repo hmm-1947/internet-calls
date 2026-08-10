@@ -1,32 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
 
-/// Adds or replaces the email address / phone number registered on the
-/// account, always behind an OTP.
+/// Adds or replaces the phone number registered on the account, always
+/// behind an OTP.
 ///
-/// The two channels are verified the same way they are at sign-up: the
-/// backend sends a code (mailed for email, texted for phone) and checks it
-/// against what the user types back in.
+/// It is verified the same way it is at sign-up: the backend texts a code and
+/// checks it against what the user types back in.
 ///
 /// The account is only updated once that verification passes, so a typo can
 /// never take away a working login. Pops `true` when the change was saved.
 class UserContactChangeScreen extends StatefulWidget {
-  final AuthChannel channel;
-
-  /// The value already on the account, or null when this is the first one.
+  /// The number already on the account, or null when this is the first one.
   /// Only used for wording and to stop the user re-entering the same value.
   final String? currentValue;
 
-  const UserContactChangeScreen({
-    super.key,
-    required this.channel,
-    this.currentValue,
-  });
+  const UserContactChangeScreen({super.key, this.currentValue});
 
   @override
   State<UserContactChangeScreen> createState() =>
@@ -40,11 +32,10 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
   final _localStorage = LocalStorage();
   final _countdownKey = GlobalKey<OtpCountdownState>();
 
-  bool get _isEmail => widget.channel == AuthChannel.email;
   bool get _isAdding =>
       widget.currentValue == null || widget.currentValue!.trim().isEmpty;
 
-  String get _label => _isEmail ? 'email address' : 'phone number';
+  static const String _label = 'phone number';
 
   /// The value the OTP was sent to. Non-null once step 1 has succeeded, which
   /// is also what switches the screen to the code entry step.
@@ -62,15 +53,11 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
     super.dispose();
   }
 
-  /// The value as the backend stores it: a trimmed, lower-cased email or the
-  /// bare 10 digits of the phone number.
-  String get _normalizedInput {
-    final raw = _identifierController.text.trim();
-    return _isEmail ? raw.toLowerCase() : PhoneAuthService.normalize(raw);
-  }
+  /// The value as the backend stores it: the bare 10 digits of the number.
+  String get _normalizedInput =>
+      PhoneAuthService.normalize(_identifierController.text.trim());
 
   String? _validate(String value) {
-    if (_isEmail) return emailFormatError(value);
     if (!PhoneAuthService.isValidIndianPhone(value)) {
       return 'Enter a valid 10-digit phone number';
     }
@@ -84,7 +71,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
       setState(() => _fieldError = error);
       return;
     }
-    if (identifier == (widget.currentValue ?? '').trim().toLowerCase()) {
+    if (identifier == (widget.currentValue ?? '').trim()) {
       setState(() => _fieldError = 'This is already your $_label');
       return;
     }
@@ -125,7 +112,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
       if (!mounted) return;
       setState(() => _sending = false);
       _otpController.clear();
-      _showMessage('A new code has been sent to $_pendingIdentifier');
+      _showMessage('A new code has been sent to +91 $_pendingIdentifier');
     } catch (e) {
       if (!mounted) return;
       final message = e.toString().replaceFirst('Exception: ', '');
@@ -139,9 +126,8 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
 
   Future<void> _verify() async {
     final code = _otpController.text.trim();
-    final expectedLength = _isEmail ? 6 : 4;
-    if (code.length != expectedLength) {
-      _showMessage('Enter the $expectedLength-digit code');
+    if (code.length != 4) {
+      _showMessage('Enter the 4-digit code');
       return;
     }
 
@@ -178,14 +164,11 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String get _title {
-    final what = _isEmail ? 'Email' : 'Phone';
-    return _isAdding ? 'Add $what' : 'Change $what';
-  }
+  String get _title => _isAdding ? 'Add Phone' : 'Change Phone';
 
   Widget _identifierStep() {
     return AuthCard(
-      icon: _isEmail ? Icons.alternate_email : Icons.phone_iphone,
+      icon: Icons.phone_iphone,
       title: _title,
       subtitle: _isAdding
           ? 'We will send a code to confirm this $_label is yours'
@@ -194,20 +177,15 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
       children: [
         AuthTextField(
           controller: _identifierController,
-          label: _isEmail ? 'New email address' : 'New phone number',
-          keyboardType: _isEmail
-              ? TextInputType.emailAddress
-              : TextInputType.phone,
-          maxLength: _isEmail ? 254 : 10,
+          label: 'New phone number',
+          keyboardType: TextInputType.phone,
+          maxLength: 10,
         ),
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            _fieldError ??
-                (_isEmail
-                    ? 'You will use this to sign in'
-                    : 'Indian mobile numbers only, without +91'),
+            _fieldError ?? 'Indian mobile numbers only, without +91',
             style: TextStyle(
               color: _fieldError != null ? Colors.redAccent : Colors.white38,
               fontSize: 12.5,
@@ -230,9 +208,9 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
   }
 
   Widget _otpStep() {
-    final destination = _isEmail ? _pendingIdentifier! : '+91 $_pendingIdentifier';
+    final destination = '+91 $_pendingIdentifier';
     return AuthCard(
-      icon: _isEmail ? Icons.mark_email_read_outlined : Icons.sms_outlined,
+      icon: Icons.sms_outlined,
       title: 'Verify OTP',
       subtitle: _sending
           ? 'Sending code to $destination…'
@@ -261,7 +239,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
           controller: _otpController,
           label: 'OTP',
           keyboardType: TextInputType.number,
-          maxLength: _isEmail ? 6 : 4,
+          maxLength: 4,
           textAlign: TextAlign.center,
           letterSpacing: 8,
           fontSize: 20,
@@ -270,7 +248,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
         if (_sendError == null)
           OtpCountdown(
             key: _countdownKey,
-            seconds: _isEmail ? 600 : 300,
+            seconds: 300,
             onExpire: () {},
             onResend: _resend,
           ),
@@ -288,9 +266,9 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
                     _pendingIdentifier = null;
                     _sendError = null;
                   }),
-          child: Text(
+          child: const Text(
             'Use a different $_label',
-            style: const TextStyle(color: Colors.white54, fontSize: 12.5),
+            style: TextStyle(color: Colors.white54, fontSize: 12.5),
           ),
         ),
       ],
