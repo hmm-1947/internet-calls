@@ -633,6 +633,9 @@ def auth_google(payload: GoogleSignIn, db: Session = Depends(get_db)):
 def logout(authorization: str = Header(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     token = authorization.replace("Bearer ", "")
     db.query(SessionModel).filter(SessionModel.token == token).delete()
+    # Otherwise a chat message sent after logout still pushes to this device:
+    # FCM delivery only checks for a stored token, not whether anyone is logged in.
+    current_user.fcm_token = None
     record_audit_event(db, "user", current_user.id, current_user.name, "logout")
     db.commit()
     return {"status": "logged_out"}

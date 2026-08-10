@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/common/models/auth_response.dart';
+import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 
 class InsufficientCoinsException implements Exception {
@@ -636,6 +637,10 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     }
   }
 
+  /// Applies a favorite/archive/mute toggle. When the device is offline the
+  /// change is queued in [LocalStorage] instead of failing, so the person can
+  /// keep toggling chats with no connection; [flushPendingChatSettings]
+  /// (called on reconnect) pushes the queued changes to the server.
   Future<void> updateChatSettings(
     String token,
     int otherId, {
@@ -643,17 +648,58 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     bool? isArchived,
     bool? isMuted,
   }) async {
-    final response = await _apiClient.post(ApiConstants.userChatSettings, {
-      'other_id': otherId,
-      'is_pinned': isPinned,
-      'is_archived': isArchived,
-      'is_muted': isMuted,
-    }, token: token);
-    if (response.statusCode != 200) {
-      final data = jsonDecode(response.body);
-      throw Exception(data['detail'] ?? 'Failed to update chat settings');
+    try {
+      final response = await _apiClient.post(ApiConstants.userChatSettings, {
+        'other_id': otherId,
+        'is_pinned': isPinned,
+        'is_archived': isArchived,
+        'is_muted': isMuted,
+      }, token: token);
+      if (response.statusCode != 200) {
+        final data = jsonDecode(response.body);
+        throw Exception(data['detail'] ?? 'Failed to update chat settings');
+      }
+      await LocalStorage().clearPendingChatSettings('user', otherId);
+      UserDataCache().invalidateThreads();
+    } on ServerUnreachableException {
+      await LocalStorage().queuePendingChatSettings(
+        'user',
+        otherId,
+        isPinned: isPinned,
+        isArchived: isArchived,
+        isMuted: isMuted,
+      );
     }
-    UserDataCache().invalidateThreads();
+  }
+
+  /// Pushes any favorite/archive/mute toggles made while offline. Safe to
+  /// call whenever connectivity may have just returned (socket reconnect,
+  /// app resume, chat list load) - a clean queue is a fast no-op.
+  Future<void> flushPendingChatSettings(String token) async {
+    final pending = await LocalStorage().getPendingChatSettings();
+    final entries = pending.entries.where((e) => e.key.startsWith('user:'));
+    for (final entry in entries) {
+      final otherId = entry.value['other_id'] as int?;
+      if (otherId == null) continue;
+      try {
+        final response = await _apiClient.post(ApiConstants.userChatSettings, {
+          'other_id': otherId,
+          'is_pinned': entry.value['is_pinned'],
+          'is_archived': entry.value['is_archived'],
+          'is_muted': entry.value['is_muted'],
+        }, token: token);
+        if (response.statusCode != 200) continue;
+        await LocalStorage().clearPendingChatSettings('user', otherId);
+      } on ServerUnreachableException {
+        // Still offline - leave it queued and try again next time.
+        break;
+      } catch (_) {
+        // Non-connectivity failure (e.g. thread no longer exists); drop it
+        // so it doesn't retry forever.
+        await LocalStorage().clearPendingChatSettings('user', otherId);
+      }
+    }
+    if (pending.isNotEmpty) UserDataCache().invalidateThreads();
   }
 
   Future<Map<String, dynamic>> getMe(

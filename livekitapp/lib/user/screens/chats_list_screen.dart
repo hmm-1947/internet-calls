@@ -109,6 +109,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     if (_token != null) {
       ChatSocketService().connect(_token!, 'user');
       _socketSub = ChatSocketService().stream.listen(_onSocketEvent);
+      _flushPendingChatSettings();
     }
     if (_threads.isNotEmpty) {
       _refreshSilently();
@@ -116,6 +117,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       await _load();
     }
     _refreshProfile();
+  }
+
+  /// Pushes any favorite/archive/mute toggles made while offline. Called on
+  /// load and whenever the chat socket reconnects, since either is a sign
+  /// connectivity may have just returned.
+  Future<void> _flushPendingChatSettings() async {
+    if (_token == null) return;
+    await _repository.flushPendingChatSettings(_token!);
   }
 
   Future<void> _refreshProfile() async {
@@ -145,6 +154,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       TypingCache().setListenerTyping(listenerId, data['is_typing'] == true);
     } else if (type == 'socket_disconnected') {
       TypingCache().clear();
+    } else if (type == 'socket_connected') {
+      _flushPendingChatSettings();
     } else if (type == 'listener_online' || type == 'listener_offline') {
       final listenerId = data['listener_id'];
       if (listenerId is! int) return;
@@ -271,80 +282,115 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     } catch (_) {}
   }
 
+  /// Flips [field] on the given thread immediately in the UI (works with no
+  /// connection), then sends the change to the server - updateChatSettings
+  /// queues it locally on its own if that call fails offline.
+  void _applyLocalThreadChange(Map<String, dynamic> thread, String field, bool value) {
+    final index = _threads.indexWhere(
+      (t) => t['listener_id'] == thread['listener_id'],
+    );
+    if (index == -1) return;
+    setState(() {
+      _threads[index][field] = value;
+      _filtered = _applyFilter();
+    });
+  }
+
   Future<void> _togglePin(Map<String, dynamic> thread) async {
+    final next = !(thread['is_pinned'] ?? false);
+    _applyLocalThreadChange(thread, 'is_pinned', next);
     final token = await _localStorage.getToken();
     if (token == null) return;
     await _repository.updateChatSettings(
       token,
       thread['listener_id'],
-      isPinned: !(thread['is_pinned'] ?? false),
+      isPinned: next,
     );
-    _refreshSilently();
   }
 
   Future<void> _toggleArchive(Map<String, dynamic> thread) async {
+    final next = !(thread['is_archived'] ?? false);
+    _applyLocalThreadChange(thread, 'is_archived', next);
     final token = await _localStorage.getToken();
     if (token == null) return;
     await _repository.updateChatSettings(
       token,
       thread['listener_id'],
-      isArchived: !(thread['is_archived'] ?? false),
+      isArchived: next,
     );
-    _refreshSilently();
   }
 
   Future<void> _toggleMute(Map<String, dynamic> thread) async {
+    final next = !(thread['is_muted'] ?? false);
+    _applyLocalThreadChange(thread, 'is_muted', next);
     final token = await _localStorage.getToken();
     if (token == null) return;
     await _repository.updateChatSettings(
       token,
       thread['listener_id'],
-      isMuted: !(thread['is_muted'] ?? false),
+      isMuted: next,
     );
-    _refreshSilently();
   }
 
   void _showThreadOptions(Map<String, dynamic> thread) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: Icon(
-                thread['is_pinned'] == true
-                    ? Icons.push_pin_outlined
-                    : Icons.push_pin,
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141821),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Wrap(
+            children: [
+              const SizedBox(height: 10),
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
-              title: Text(thread['is_pinned'] == true ? 'Unpin' : 'Pin'),
-              onTap: () {
-                Navigator.pop(context);
-                _togglePin(thread);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.archive),
-              title: Text(
-                thread['is_archived'] == true ? 'Unarchive' : 'Archive',
+              const SizedBox(height: 8),
+              _ThreadOptionTile(
+                icon: thread['is_pinned'] == true
+                    ? Icons.favorite
+                    : Icons.favorite_border,
+                label: thread['is_pinned'] == true
+                    ? 'Remove from Favorites'
+                    : 'Favorites',
+                onTap: () {
+                  Navigator.pop(context);
+                  _togglePin(thread);
+                },
               ),
-              onTap: () {
-                Navigator.pop(context);
-                _toggleArchive(thread);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                thread['is_muted'] == true
-                    ? Icons.notifications
-                    : Icons.notifications_off,
+              _ThreadOptionTile(
+                icon: Icons.archive_outlined,
+                label: thread['is_archived'] == true ? 'Unarchive' : 'Archive',
+                onTap: () {
+                  Navigator.pop(context);
+                  _toggleArchive(thread);
+                },
               ),
-              title: Text(thread['is_muted'] == true ? 'Unmute' : 'Mute'),
-              onTap: () {
-                Navigator.pop(context);
-                _toggleMute(thread);
-              },
-            ),
-          ],
+              _ThreadOptionTile(
+                icon: thread['is_muted'] == true
+                    ? Icons.notifications_outlined
+                    : Icons.notifications_off_outlined,
+                label: thread['is_muted'] == true ? 'Unmute' : 'Mute',
+                onTap: () {
+                  Navigator.pop(context);
+                  _toggleMute(thread);
+                },
+              ),
+              const SizedBox(height: 6),
+            ],
+          ),
         ),
       ),
     );
@@ -421,7 +467,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 return _ThreadTile(
                                   key: ValueKey<Object?>(thread['listener_id']),
                                   thread: thread,
-                                  onArchive: () => _toggleArchive(thread),
                                   onOpen: () => _openThread(thread),
                                   onOptions: () => _showThreadOptions(thread),
                                 );
@@ -483,55 +528,23 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
 class _ThreadTile extends StatelessWidget {
   final Map<String, dynamic> thread;
-  final Future<void> Function() onArchive;
   final VoidCallback onOpen;
   final VoidCallback onOptions;
 
   const _ThreadTile({
     super.key,
     required this.thread,
-    required this.onArchive,
     required this.onOpen,
     required this.onOptions,
   });
-
-  static const _archiveBackground = ColoredBox(
-    color: Colors.blueGrey,
-    child: Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: EdgeInsets.only(left: 20),
-        child: Icon(Icons.archive, color: Colors.white),
-      ),
-    ),
-  );
-
-  static const _archiveSecondaryBackground = ColoredBox(
-    color: Colors.blueGrey,
-    child: Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: EdgeInsets.only(right: 20),
-        child: Icon(Icons.archive, color: Colors.white),
-      ),
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
     final unread = thread['unread_count'] ?? 0;
     return RepaintBoundary(
-      child: Dismissible(
-        key: ValueKey<Object?>(thread['listener_id']),
-        background: _archiveBackground,
-        secondaryBackground: _archiveSecondaryBackground,
-        confirmDismiss: (_) async {
-          await onArchive();
-          return false;
-        },
-        child: Material(
-          color: _bg,
-          child: ListTile(
+      child: Material(
+        color: _bg,
+        child: ListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 6,
@@ -618,7 +631,27 @@ class _ThreadTile extends StatelessWidget {
             onLongPress: onOptions,
           ),
         ),
-      ),
+    );
+  }
+}
+
+class _ThreadOptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ThreadOptionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white70),
+      title: Text(label, style: const TextStyle(color: Colors.white)),
+      onTap: onTap,
     );
   }
 }
