@@ -220,7 +220,8 @@ def _issue_phone_otp(db: Session, pending: PendingSignup) -> None:
     pending.otp_attempts = 0
     pending.otp_sent_count = (pending.otp_sent_count or 0) + 1
     db.commit()
-    send_otp_sms(pending.identifier, code)
+    if not send_otp_sms(pending.identifier, code):
+        raise HTTPException(status_code=502, detail="Failed to send OTP SMS. Please try again.")
 
 
 def _issue_signup_token(db: Session, pending: PendingSignup) -> str:
@@ -530,7 +531,8 @@ def login_initiate(payload: UserLoginInitiate, db: Session = Depends(get_db)):
     user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     user.reset_otp_attempts = 0
     db.commit()
-    send_otp_sms(otp_phone, code)
+    if not send_otp_sms(otp_phone, code):
+        raise HTTPException(status_code=502, detail="Failed to send OTP SMS. Please try again.")
     return {"channel": "phone", "status": "credentials_ok", "phone": otp_phone}
 
 
@@ -735,7 +737,8 @@ def forgot_password_request_otp(payload: UserForgotPasswordRequestOtp, db: Sessi
     user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     user.reset_otp_attempts = 0
     db.commit()
-    send_otp_sms(identifier, otp_code)
+    if not send_otp_sms(identifier, otp_code):
+        raise HTTPException(status_code=502, detail="Failed to send OTP SMS. Please try again.")
     return {"channel": "phone", "identifier": identifier, "status": "otp_sent"}
 
 
@@ -1065,7 +1068,8 @@ def contact_change_request_otp(
     code = generate_sms_otp_code()
     current_user.pending_contact_otp_code = code
     db.commit()
-    send_otp_sms(identifier, code)
+    if not send_otp_sms(identifier, code):
+        raise HTTPException(status_code=502, detail="Failed to send OTP SMS. Please try again.")
     return {"channel": "phone", "identifier": identifier, "otp_sent": True}
 
 

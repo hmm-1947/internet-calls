@@ -12,6 +12,7 @@ from app.core.ws_manager import manager
 from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate, ListenerChangePassword
 from app.utils.security import verify_password, generate_session_token, hash_password, session_expiry
 from app.utils.audit import record_audit_event
+from app.utils.rate_limit import enforce_rate_limit, rate_limit
 from app.core.deps import get_current_listener
 
 router = APIRouter(prefix="/listener", tags=["listener-auth"])
@@ -183,8 +184,22 @@ async def update_photo(file: UploadFile = File(...), db: Session = Depends(get_d
     db.commit()
     return {"status": "updated", "photo_url": current_listener.photo_url}
 
-@router.post("/login", response_model=AuthResponse)
+@router.post(
+    "/login",
+    response_model=AuthResponse,
+    dependencies=[Depends(rate_limit("listener_login", limit=10, window_seconds=60))],
+)
 def login(payload: ListenerLogin, db: Session = Depends(get_db)):
+    # IP-based limiting above stops a single source from hammering many
+    # accounts; this per-phone limit stops distributed attempts at
+    # guessing one account's password from many IPs.
+    enforce_rate_limit(
+        "listener_login_identifier",
+        payload.phone,
+        limit=10,
+        window_seconds=60,
+        detail="Too many login attempts. Please wait a moment and try again.",
+    )
     listener = db.query(Listener).filter(Listener.phone == payload.phone).first()
     if not listener or not verify_password(payload.password, listener.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")

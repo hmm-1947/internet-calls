@@ -1,4 +1,4 @@
-import random
+import secrets
 import smtplib
 import logging
 import os
@@ -20,7 +20,7 @@ RETRY_BACKOFF_SECONDS = 1.5
 
 
 def generate_otp_code() -> str:
-    return str(random.randint(100000, 999999))
+    return str(secrets.randbelow(900000) + 100000)
 
 
 def _build_message(to_email: str, otp_code: str) -> MIMEMultipart:
@@ -96,7 +96,7 @@ def _build_message(to_email: str, otp_code: str) -> MIMEMultipart:
     return msg
 
 
-def _send_with_retry(to_email: str, otp_code: str, msg: MIMEMultipart):
+def _send_with_retry(to_email: str, otp_code: str, msg: MIMEMultipart) -> bool:
     last_error = None
     for attempt in range(1, MAX_SEND_RETRIES + 1):
         try:
@@ -105,8 +105,9 @@ def _send_with_retry(to_email: str, otp_code: str, msg: MIMEMultipart):
                 refused = server.sendmail(settings.smtp_from_email, [to_email], msg.as_string())
                 if refused:
                     logger.info(f"sendmail refused recipients: {refused}")
+                    return False
             logger.info(f"OTP email sent to {to_email}")
-            return
+            return True
         except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, smtplib.SMTPHeloError, TimeoutError, OSError) as e:
             last_error = e
             logger.warning(f"Transient SMTP error sending to {to_email} (attempt {attempt}/{MAX_SEND_RETRIES}): {e}")
@@ -114,11 +115,18 @@ def _send_with_retry(to_email: str, otp_code: str, msg: MIMEMultipart):
                 time.sleep(RETRY_BACKOFF_SECONDS * attempt)
         except Exception as e:
             logger.exception(f"Failed to send OTP email to {to_email}: {e}")
-            return
+            return False
     logger.error(f"Giving up sending OTP email to {to_email} after {MAX_SEND_RETRIES} attempts: {last_error}")
+    return False
 
 
 def send_otp_email(to_email: str, otp_code: str):
+    """Queue the OTP email on a background thread so the request isn't held
+    open for a slow SMTP round trip. Returns the Future; existing callers
+    that ignore it keep today's fire-and-forget behavior, but a caller that
+    wants to know whether the email actually went out can now do
+    `future.result(timeout=...)` to find out instead of the outcome being
+    unreachable."""
     msg = _build_message(to_email, otp_code)
-    _executor.submit(_send_with_retry, to_email, otp_code, msg)
+    return _executor.submit(_send_with_retry, to_email, otp_code, msg)
 
