@@ -4386,6 +4386,16 @@
               <input type="text" id="tagsInput-${p.id}" style="width:100%" value="${(() => { try { return (JSON.parse(p.raw.tags || '[]')).join(', '); } catch (e) { return ''; } })()}">
               <label>Languages (comma separated)</label>
               <input type="text" id="languagesInput-${p.id}" style="width:100%" value="${(() => { try { return (JSON.parse(p.raw.languages || '[]')).join(', '); } catch (e) { return ''; } })()}">
+              <div style="display:flex;gap:10px">
+                <div style="flex:1">
+                  <label>Age</label>
+                  <input type="number" id="ageInput-${p.id}" style="width:100%" min="18" max="100" value="${p.raw.age ?? ''}">
+                </div>
+                <div style="flex:2">
+                  <label>Occupation</label>
+                  <input type="text" id="occupationInput-${p.id}" style="width:100%" maxlength="100" value="${escapeHtml(p.raw.occupation || '')}">
+                </div>
+              </div>
               `}
               <button class="btn btn-leaf" style="align-self:flex-start" onclick="saveProfileEdits('${p.type}', ${p.id})">Save Profile</button>
             </div>
@@ -4727,7 +4737,15 @@ ${logSection === 'chats' ? '' : `
           const clash = (listenersCache || []).find(l => l.id !== id && (l.name || '').trim().toLowerCase() === name.toLowerCase());
           if (clash) throw new Error(`A listener named "${clash.name}" already exists. Please use a different name.`);
 
-          body = { name, about: document.getElementById(`aboutInput-${id}`).value, tags, languages };
+          const ageRaw = document.getElementById(`ageInput-${id}`).value.trim();
+          const age = ageRaw === '' ? null : parseInt(ageRaw, 10);
+          if (age !== null && (Number.isNaN(age) || age < 18 || age > 100)) {
+            throw new Error('Age must be between 18 and 100');
+          }
+          const occupation = document.getElementById(`occupationInput-${id}`).value.trim();
+
+          body = { name, about: document.getElementById(`aboutInput-${id}`).value, tags, languages, age, occupation };
+
         }
         const res = await fetch(API_URL + endpoint, { method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(body) });
         const data = await res.json();

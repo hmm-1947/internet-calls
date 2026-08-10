@@ -187,7 +187,7 @@ def list_listeners(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None
     if limit is not None:
         q = q.limit(limit)
     listeners = q.all()
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -205,8 +205,12 @@ def update_listener_profile(listener_id: int, payload: AdminListenerProfileUpdat
         listener.tags = json.dumps(payload.tags)
     if payload.languages is not None:
         listener.languages = json.dumps(payload.languages)
+    if payload.age is not None:
+        listener.age = payload.age
+    if payload.occupation is not None:
+        listener.occupation = payload.occupation
     db.commit()
-    return {"id": listener.id, "name": listener.name, "about": listener.about, "tags": listener.tags, "languages": listener.languages}
+    return {"id": listener.id, "name": listener.name, "about": listener.about, "tags": listener.tags, "languages": listener.languages, "age": listener.age, "occupation": listener.occupation}
 
 @router.post("/listeners/{listener_id}/photo")
 async def update_listener_photo(listener_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _=Depends(verify_admin)):

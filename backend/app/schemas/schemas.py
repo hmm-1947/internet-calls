@@ -109,6 +109,8 @@ class AdminListenerProfileUpdate(BaseModel):
     about: Optional[str] = None
     tags: Optional[list[str]] = None
     languages: Optional[list[str]] = None
+    age: Optional[int] = None
+    occupation: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -120,6 +122,20 @@ class AdminListenerProfileUpdate(BaseModel):
     def about_length(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and len(v) > 2000:
             raise ValueError("About must be under 2000 characters")
+        return v
+
+    @field_validator("age")
+    @classmethod
+    def age_range(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (18 <= v <= 100):
+            raise ValueError("Age must be between 18 and 100")
+        return v
+
+    @field_validator("occupation")
+    @classmethod
+    def occupation_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 100:
+            raise ValueError("Occupation must be under 100 characters")
         return v
 
     @field_validator("tags", "languages")
