@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -45,7 +47,47 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
+    _loadFromCache();
     _load();
+  }
+
+  static const _plansCacheKey = 'user_upgrade_plans';
+  static const _bannerCacheKey = 'user_upgrade_banner';
+  static const _coinsCacheKey = 'user_upgrade_coins';
+
+  /// Renders the admin-configured plans/banner and the last known coin
+  /// balance from local storage instantly, so opening this screen doesn't
+  /// always show a spinner (or a misleading 0) while the network round-trip
+  /// completes. The displayed values only change in [_load] once a fresh
+  /// fetch shows they actually differ from what's cached.
+  Future<void> _loadFromCache() async {
+    final cachedPlans = await HomeCache().getJson(_plansCacheKey);
+    final cachedBanner = await HomeCache().getJson(_bannerCacheKey);
+    final cachedCoins = await HomeCache().getJson(_coinsCacheKey);
+    if (!mounted) return;
+    final hasPlans = cachedPlans is List && cachedPlans.isNotEmpty;
+    final hasCoins = cachedCoins is Map && cachedCoins['coins'] is num;
+    if (!hasPlans && !hasCoins) return;
+    setState(() {
+      if (hasPlans) {
+        final plans = cachedPlans.cast<Map<String, dynamic>>();
+        _plans = plans;
+        _bannerUrl = cachedBanner is Map
+            ? cachedBanner['url'] as String?
+            : null;
+        _selectedPlanId =
+            (plans.firstWhere(
+                  (p) => p['is_featured'] == true,
+                  orElse: () => plans.first,
+                )['id']
+                as int);
+      }
+      if (hasCoins) {
+        _coins = (cachedCoins['coins'] as num).toInt();
+      }
+      _error = null;
+      _loading = false;
+    });
   }
 
   @override
@@ -54,11 +96,19 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     super.dispose();
   }
 
+  bool _hasCachedCoins = false;
+
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    // Only show the spinner when there is nothing on screen yet - if
+    // _loadFromCache already rendered plans or a coin balance, this refresh
+    // happens quietly behind them instead of blanking the screen back to a
+    // spinner.
+    if (_plans.isEmpty && !_hasCachedCoins) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     final token = await _localStorage.getToken();
     if (token == null) {
@@ -72,12 +122,19 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
 
     // Balance is essential info for this screen — if it fails, show the
     // error state since something is genuinely wrong (e.g. bad session).
-    int coins;
+    // A cached plan list/coin balance already on screen is left alone
+    // rather than being replaced with a hard error over a coins-fetch
+    // failure.
+    int? coins;
     try {
       final me = await _userRepository.getMe(token);
       coins = (me['coins'] as num?)?.toInt() ?? 0;
     } catch (e) {
       if (!mounted) return;
+      if (_plans.isNotEmpty || _hasCachedCoins) {
+        setState(() => _loading = false);
+        return;
+      }
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
@@ -86,38 +143,59 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     }
 
     // Plans are optional — if none exist yet, or the request fails for any
-    // reason (empty table, transient server error, etc.), just fall back to
-    // an empty list so the screen still renders with "No plan available"
-    // instead of showing a hard error.
-    List<Map<String, dynamic>> plans = [];
+    // reason (empty table, transient server error, etc.), keep whatever is
+    // already cached/on screen instead of clearing it to "No plan available".
+    List<Map<String, dynamic>>? plans;
     try {
       plans = await _billingRepository.getPlans(token);
     } catch (_) {
-      plans = [];
+      plans = null;
     }
 
     String? bannerUrl;
+    bool bannerFetched = false;
     try {
       bannerUrl = await _billingRepository.getUpgradeBannerUrl();
+      bannerFetched = true;
     } catch (_) {
-      bannerUrl = null;
+      bannerFetched = false;
     }
 
     if (!mounted) return;
+    final plansChanged = plans != null && dataChanged(_plans, plans);
+    final coinsChanged = !_hasCachedCoins || dataChanged(_coins, coins);
     setState(() {
-      _coins = coins;
-      _bannerUrl = bannerUrl;
-      _plans = plans;
-      _selectedPlanId = plans.isNotEmpty
-          ? (plans.firstWhere(
-                  (p) => p['is_featured'] == true,
-                  orElse: () => plans.first,
-                )['id']
-                as int)
-          : null;
+      if (coinsChanged) {
+        _coins = coins!;
+      }
+      _hasCachedCoins = true;
+      if (plansChanged) {
+        _plans = plans!;
+        _selectedPlanId = plans.isNotEmpty
+            ? (plans.firstWhere(
+                    (p) => p['is_featured'] == true,
+                    orElse: () => plans!.first,
+                  )['id']
+                  as int)
+            : null;
+      }
+      if (bannerFetched && dataChanged(_bannerUrl, bannerUrl)) {
+        _bannerUrl = bannerUrl;
+      }
       _loading = false;
     });
+
+    if (plans != null) {
+      HomeCache().setJson(_plansCacheKey, plans);
+    }
+    if (bannerFetched) {
+      HomeCache().setJson(_bannerCacheKey, {'url': bannerUrl});
+    }
+    if (coinsChanged) {
+      HomeCache().setJson(_coinsCacheKey, {'coins': coins});
+    }
   }
+
 
   Future<void> _purchase() async {
     if (_selectedPlanId == null || _purchasing) return;
