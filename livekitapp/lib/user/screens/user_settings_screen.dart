@@ -3,6 +3,7 @@ import 'package:livekitapp/common/screens/change_password_screen.dart';
 import 'package:livekitapp/common/screens/legal_document_screen.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -307,6 +308,11 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     } catch (e) {
       debugPrint('Logout: API call failed: $e');
     } finally {
+      // Without this the backend's websocket connection for this user stays
+      // open, so `is_user_online` keeps reporting true to listeners/admin
+      // even after logging out (and after a different account signs in on
+      // this device).
+      ChatSocketService().disconnect();
       await _localStorage.clear();
       UserDataCache().clear();
       if (mounted) {

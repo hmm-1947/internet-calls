@@ -47,6 +47,11 @@ object CallApi {
         if (!token.isNullOrBlank()) flushPending(app)
     }
 
+    /** True once a listener is logged in on this device (mirrored via setAuthToken). */
+    fun hasAuthToken(context: Context): Boolean {
+        return !prefs(context.applicationContext).getString(KEY_AUTH_TOKEN, null).isNullOrBlank()
+    }
+
     /** Queues the reject and immediately tries to deliver it. */
     fun reject(context: Context, callId: String) {
         if (callId.isBlank()) return
