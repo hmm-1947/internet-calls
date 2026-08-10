@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/legal_repository.dart';
 import 'package:livekitapp/common/widgets/simple_html_view.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 
 /// Shared full-screen viewer for the admin-authored Terms of Service or
 /// Privacy Policy. Used from both the user and listener settings screens.
@@ -20,24 +22,55 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
   String? _error;
   String _content = '';
 
+  /// Cached copies live under one shared key so a change made to either
+  /// document while offline is still reflected once the other is opened,
+  /// same shape the server response already uses.
+  static const _cacheKey = 'legal_terms_privacy';
+
+  String get _dataKey =>
+      widget.documentType == 'privacy' ? 'privacy_policy' : 'terms_of_service';
+
   @override
   void initState() {
     super.initState();
+    _loadFromCache();
     _load();
+  }
+
+  Future<void> _loadFromCache() async {
+    final cached = await HomeCache().getJson(_cacheKey);
+    if (!mounted || cached is! Map) return;
+    final text = cached[_dataKey];
+    if (text is! String || text.isEmpty) return;
+    setState(() {
+      _content = text;
+      _loading = false;
+    });
   }
 
   Future<void> _load() async {
     try {
       final data = await _repository.getTermsAndPrivacy();
       if (!mounted) return;
-      setState(() {
-        _content = widget.documentType == 'privacy'
-            ? data['privacy_policy'] ?? ''
-            : data['terms_of_service'] ?? '';
-        _loading = false;
-      });
+      final fresh = data[_dataKey] ?? '';
+      // Only touch state/cache when the server copy actually differs, so a
+      // background refresh after the cached copy already rendered doesn't
+      // cause a visible flash for the common case of unchanged content.
+      if (dataChanged(_content, fresh) || _loading) {
+        setState(() {
+          _content = fresh;
+          _loading = false;
+        });
+      }
+      HomeCache().setJson(_cacheKey, data);
     } catch (e) {
       if (!mounted) return;
+      // A cached copy is already showing - a failed refresh should not
+      // replace it with an error screen.
+      if (_content.isNotEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
