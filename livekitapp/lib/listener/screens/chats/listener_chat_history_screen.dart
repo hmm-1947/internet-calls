@@ -68,6 +68,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
 
   late final ValueNotifier<List<Map<String, dynamic>>> _messages;
   late final ValueNotifier<bool> _favorite;
+  late final ValueNotifier<UnreadSnapshot> _unread;
   final _atBottom = ValueNotifier<bool>(true);
 
   String? _token;
@@ -115,6 +116,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     _messages = ValueNotifier<List<Map<String, dynamic>>>(
       ChatMessageCache().messages(widget.userId),
     );
+    _unread = ValueNotifier<UnreadSnapshot>(_computeUnread(_messages.value));
     final thread = ListenerDataCache().thread(widget.userId);
     _favorite = ValueNotifier<bool>(thread['is_pinned'] == true);
     _scrollController.addListener(_onScroll);
@@ -137,6 +139,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     _scrollController.dispose();
     _messages.dispose();
     _favorite.dispose();
+    _unread.dispose();
     _atBottom.dispose();
     super.dispose();
   }
@@ -274,11 +277,29 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     } catch (_) {}
   }
 
+  UnreadSnapshot _computeUnread(List<Map<String, dynamic>> messages) {
+    var count = 0;
+    String? boundaryKey;
+    for (final message in messages.reversed) {
+      if (message['sender_type'] == 'listener') break;
+      if (message['is_read'] == true) break;
+      count++;
+      boundaryKey = chatMessageKey(message);
+    }
+    return count == 0
+        ? UnreadSnapshot.none
+        : UnreadSnapshot(count: count, boundaryKey: boundaryKey);
+  }
+
   Future<void> _markRead({int attempt = 0}) async {
     final token = _token;
     if (token == null) return;
     try {
       await _repository.markMessagesRead(token, widget.userId);
+      _patch(
+        (m) => m['sender_type'] != 'listener' && m['is_read'] != true,
+        (m) => m['is_read'] = true,
+      );
     } catch (_) {
       if (!mounted || attempt >= 3) return;
       Future.delayed(Duration(seconds: 2 * (attempt + 1)), () {
@@ -467,6 +488,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
   Future<void> _sendText(String text) async {
     final token = _token;
     if (token == null) return;
+    _unread.value = UnreadSnapshot.none;
     _stopTyping();
     final clientId = const Uuid().v4();
     _merge([
@@ -494,11 +516,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
       ),
     );
     await _chatStorage.addPending(
-      PendingMessage(
-        clientId: clientId,
-        otherId: widget.userId,
-        message: text,
-      ),
+      PendingMessage(clientId: clientId, otherId: widget.userId, message: text),
     );
     await _retrySend(clientId, text);
   }
@@ -506,6 +524,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
   Future<void> _sendVoice(String filePath, int duration) async {
     final token = _token;
     if (token == null) return;
+    _unread.value = UnreadSnapshot.none;
     final clientId = const Uuid().v4();
     _merge([
       {
@@ -763,6 +782,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
                   isMine: (message) => message['sender_type'] == 'listener',
                   giftCoins: (message) =>
                       ((message['gift_coins'] ?? 0) as int) ~/ 2,
+                  unread: _unread,
                   bubbleMinWidth: 56,
                   otherPartyName: widget.userName,
                   chatKey: _chatKey,

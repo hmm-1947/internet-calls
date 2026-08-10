@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
 from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
-from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary
+from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary, send_async
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
 from app.core.ws_manager import manager
 
@@ -255,10 +255,10 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     if listener.fcm_token and not _is_muted(db, "listener", listener.id, current_user.id):
         try:
             if listener_online:
-                send_chat_message(listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
+                send_async(send_chat_message, listener.fcm_token, current_user.name, payload.message, current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
             else:
                 payload_msgs = _undelivered_summary_payload(db, current_user.id, listener.id, "user")
-                send_chat_summary(listener.fcm_token, current_user.name, payload_msgs, current_user.id, listener.id, "user", current_user.photo_url)
+                send_async(send_chat_summary, listener.fcm_token, current_user.name, payload_msgs, current_user.id, listener.id, "user", current_user.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of chat message: {e}")
     return msg
@@ -286,10 +286,10 @@ async def listener_send_message(payload: ListenerChatMessageSend, db: Session = 
     if user.fcm_token and not _is_muted(db, "user", user.id, current_listener.id):
         try:
             if user_online:
-                send_chat_message(user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
+                send_async(send_chat_message, user.fcm_token, current_listener.name, payload.message, user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
             else:
                 payload_msgs = _undelivered_summary_payload(db, user.id, current_listener.id, "listener")
-                send_chat_summary(user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener", current_listener.photo_url)
+                send_async(send_chat_summary, user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener", current_listener.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of chat message: {e}")
     return msg
@@ -329,7 +329,7 @@ async def user_send_voice(
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if listener.fcm_token and not _is_muted(db, "listener", listener.id, current_user.id):
         try:
-            send_chat_message(listener.fcm_token, current_user.name, "🎤 Voice message", current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
+            send_async(send_chat_message, listener.fcm_token, current_user.name, "🎤 Voice message", current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of voice message: {e}")
     return msg
@@ -367,7 +367,7 @@ async def listener_send_voice(
     await manager.send_to_listener(current_listener.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if user.fcm_token and not _is_muted(db, "user", user.id, current_listener.id):
         try:
-            send_chat_message(user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
+            send_async(send_chat_message, user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of voice message: {e}")
     return msg
@@ -687,7 +687,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             last_seen=listener.last_seen,
             photo_url=listener.photo_url,
         ))
-    result.sort(key=lambda t: (not t.is_pinned, t.last_message_at), reverse=False)
+    result.sort(key=lambda t: t.last_message_at, reverse=True)
     result.sort(key=lambda t: t.is_pinned, reverse=True)
     return result
 

@@ -27,8 +27,10 @@ import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
+import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
+import 'package:livekitapp/core/network/chat_message_cache.dart';
 
 /// Top-level function — runs in a separate isolate when the app is
 /// background or killed. Must be a top-level (not a class method).
@@ -105,23 +107,29 @@ Future<void> _cacheAndAckChatSummary(RemoteMessage message) async {
   if (userId == null) return;
   final List<dynamic> items = jsonDecode(message.data['messages'] ?? '[]');
   final ids = <int>[];
+  final cachedMessages = <Map<String, dynamic>>[];
   for (final item in items) {
     final messageId = item['id'] is int
         ? item['id'] as int
         : int.tryParse('${item['id']}');
-    await ChatStorage().upsertMessage(
-      userId,
-      LocalChatMessage(
-        id: messageId,
-        clientId: item['client_id'] ?? '',
-        otherId: userId,
-        senderType: message.data['sender_type'] ?? 'user',
-        message: item['message'] ?? '',
-        status: 'sent',
-        createdAt: DateTime.now().toUtc().toIso8601String(),
-      ),
+    final local = LocalChatMessage(
+      id: messageId,
+      clientId: item['client_id'] ?? '',
+      otherId: userId,
+      senderType: message.data['sender_type'] ?? 'user',
+      message: item['message'] ?? '',
+      status: 'sent',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
     );
+    await ChatStorage().upsertMessage(userId, local);
+    cachedMessages.add(local.toJson());
     if (messageId != null) ids.add(messageId);
+  }
+  if (cachedMessages.isNotEmpty) {
+    ChatMessageCache().save(
+      userId,
+      mergeChatMessages(ChatMessageCache().messages(userId), cachedMessages),
+    );
   }
   if (ids.isEmpty) return;
   final token = await LocalStorage().getToken();
@@ -149,17 +157,19 @@ Future<void> _cacheAndAckChatMessage(RemoteMessage message) async {
   final userId = int.tryParse(message.data['user_id'] ?? '');
   final messageId = int.tryParse(message.data['id'] ?? '');
   if (userId == null) return;
-  await ChatStorage().upsertMessage(
+  final local = LocalChatMessage(
+    id: messageId,
+    clientId: message.data['client_id'] ?? '',
+    otherId: userId,
+    senderType: message.data['sender_type'] ?? 'user',
+    message: message.data['message'] ?? '',
+    status: 'sent',
+    createdAt: DateTime.now().toUtc().toIso8601String(),
+  );
+  await ChatStorage().upsertMessage(userId, local);
+  ChatMessageCache().save(
     userId,
-    LocalChatMessage(
-      id: messageId,
-      clientId: message.data['client_id'] ?? '',
-      otherId: userId,
-      senderType: message.data['sender_type'] ?? 'user',
-      message: message.data['message'] ?? '',
-      status: 'sent',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
-    ),
+    mergeChatMessages(ChatMessageCache().messages(userId), [local.toJson()]),
   );
   if (messageId == null) return;
   final token = await LocalStorage().getToken();
@@ -214,6 +224,7 @@ void main() async {
     _handleMessage(message);
     _applyStatusPush(message);
     _cacheAndAckChatSummary(message);
+    _cacheAndAckChatMessage(message);
   });
   FirebaseMessaging.onMessage.listen((message) {
     if (message.data['type'] == 'chat_message' ||

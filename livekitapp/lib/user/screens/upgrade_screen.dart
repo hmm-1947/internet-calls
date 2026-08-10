@@ -196,7 +196,6 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     }
   }
 
-
   Future<void> _purchase() async {
     if (_selectedPlanId == null || _purchasing) return;
     setState(() => _purchasing = true);
