@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
+import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 
 class ListenerLoginScreen extends StatefulWidget {
@@ -31,6 +33,8 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
         _phoneController.text.trim(),
         _passwordController.text,
       );
+      ListenerDataCache().clear();
+      await ChatStorage().clearAll();
       await _localStorage.saveSession(result.token, result.id, result.name);
       // Register FCM token immediately after login so backend can send call notifications
       final fcmToken = await FirebaseMessaging.instance.getToken();

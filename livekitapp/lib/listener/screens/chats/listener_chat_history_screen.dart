@@ -760,15 +760,6 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
               onPressed: _toggleFavorite,
             ),
           ),
-          IconButton(
-            style: iconButtonStyle,
-            icon: Icon(
-              Icons.more_vert,
-              color: Colors.white,
-              size: isNarrow ? 20 : 24,
-            ),
-            onPressed: () {},
-          ),
         ],
       ),
       body: Column(

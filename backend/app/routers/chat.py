@@ -639,7 +639,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
     if not listener_ids:
         return []
 
-    listeners = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids)).all()}
+    listeners = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids), Listener.is_active == True).all()}
 
     all_msgs = db.query(ChatMessage).filter(
         ChatMessage.user_id == current_user.id,
@@ -697,7 +697,7 @@ def listener_get_threads(db: Session = Depends(get_db), current_listener: Listen
     if not user_ids:
         return []
 
-    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids), User.is_active == True).all()}
 
     all_msgs = db.query(ChatMessage).filter(
         ChatMessage.listener_id == current_listener.id,

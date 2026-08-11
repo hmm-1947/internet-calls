@@ -6,6 +6,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
+import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_personal_info_screen.dart';
@@ -315,6 +316,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
       ChatSocketService().disconnect();
       await _localStorage.clear();
       UserDataCache().clear();
+      await ChatStorage().clearAll();
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const UserLoginScreen()),

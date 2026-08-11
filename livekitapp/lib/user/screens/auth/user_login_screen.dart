@@ -6,6 +6,8 @@ import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/onboarding_screen.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
+import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_register_screen.dart';
 import 'package:livekitapp/user/screens/auth/user_forgot_password_screen.dart';
@@ -97,6 +99,8 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       final firebaseIdToken = await userCredential.user!.getIdToken();
       final result = await _repository.signInWithGoogle(firebaseIdToken!);
       final auth = result.auth;
+      UserDataCache().clear();
+      await ChatStorage().clearAll();
       await _localStorage.saveSession(auth.token, auth.id, auth.name);
       final fcmToken = await FirebaseMessaging.instance.getToken();
       if (fcmToken != null) {

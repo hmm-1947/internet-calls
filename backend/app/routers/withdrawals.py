@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_listener
 from app.core.ws_manager import manager
 from app.models.models import Listener, ListenerCoinTransaction, WithdrawalRequest, AdminUser
+from app.routers.notifications import create_admin_notification
 from app.schemas.schemas import WithdrawalRequestCreate, WithdrawalRequestOut, WithdrawalDecision
 from app.utils.fcm import send_withdrawal_decision
 
@@ -19,7 +20,7 @@ admin_router = APIRouter(prefix="/admin/withdrawals", tags=["admin-withdrawals"]
 # ---------------------------------------------------------------------------
 
 @listener_router.post("", response_model=WithdrawalRequestOut)
-def create_withdrawal_request(
+async def create_withdrawal_request(
     payload: WithdrawalRequestCreate,
     db: Session = Depends(get_db),
     listener: Listener = Depends(get_current_listener),
@@ -57,6 +58,16 @@ def create_withdrawal_request(
     db.add(request)
     db.commit()
     db.refresh(request)
+
+    await create_admin_notification(
+        db,
+        type="withdrawal_request",
+        title="Withdrawal request",
+        body=f"{listener.name} requested to withdraw {payload.coins} coins.",
+        subject_type="listener",
+        subject_id=listener.id,
+        subject_name=listener.name,
+    )
 
     out = WithdrawalRequestOut.model_validate(request)
     out.listener_name = listener.name
