@@ -122,7 +122,9 @@ class ChatNotificationService {
   }) async {
     if (onTap != null) _onTap = onTap;
     if (_initialised) return true;
-    const android = AndroidInitializationSettings('ic_stat_face');
+    const android = AndroidInitializationSettings(
+      'ic_stat_woman_head_side_silhouette',
+    );
     const darwin = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
