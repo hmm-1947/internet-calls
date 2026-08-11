@@ -3,6 +3,7 @@ import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/common/models/auth_response.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 
 class ListenerRepository {
@@ -72,11 +73,9 @@ class ListenerRepository {
     String token,
     int coins,
   ) async {
-    final response = await _apiClient.post(
-      ApiConstants.listenerWithdrawals,
-      {'coins': coins},
-      token: token,
-    );
+    final response = await _apiClient.post(ApiConstants.listenerWithdrawals, {
+      'coins': coins,
+    }, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to submit withdrawal request');
@@ -101,7 +100,6 @@ class ListenerRepository {
   }
 
   Future<void> updateStatus(String token, bool isOnline) async {
-
     final response = await _apiClient.post(ApiConstants.listenerStatus, {
       'is_online': isOnline,
     }, token: token);
@@ -133,7 +131,6 @@ class ListenerRepository {
     }
     ListenerDataCache().invalidateMe();
   }
-
 
   Future<void> logout(String token) async {
     final response = await _apiClient.post(
@@ -278,10 +275,7 @@ class ListenerRepository {
   }) async {
     var path = ApiConstants.listenerMessages(userId);
     if (beforeId != null) path = '$path?before_id=$beforeId';
-    final response = await _apiClient.get(
-      path,
-      token: token,
-    );
+    final response = await _apiClient.get(path, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load messages');
@@ -290,11 +284,9 @@ class ListenerRepository {
   }
 
   Future<void> markMessagesDelivered(String token, List<int> messageIds) async {
-    await _apiClient.post(
-      ApiConstants.listenerMarkDelivered,
-      {'message_ids': messageIds},
-      token: token,
-    );
+    await _apiClient.post(ApiConstants.listenerMarkDelivered, {
+      'message_ids': messageIds,
+    }, token: token);
   }
 
   Future<void> markMessagesRead(String token, int userId) async {
@@ -314,17 +306,18 @@ class ListenerRepository {
   }) async {
     var path = '${ApiConstants.listenerCallHistory}?limit=$limit';
     if (beforeId != null) path = '$path&before_id=$beforeId';
-    final response = await _apiClient.get(
-      path,
-      token: token,
-    );
+    final response = await _apiClient.get(path, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load call history');
     }
     return List<Map<String, dynamic>>.from(data);
   }
-Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
+
+  Future<Map<String, dynamic>> updatePhoto(
+    String token,
+    String filePath,
+  ) async {
     final response = await _apiClient.postMultipart(
       ApiConstants.listenerPhoto,
       {},
@@ -338,6 +331,7 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     }
     return data;
   }
+
   Future<List<Map<String, dynamic>>> getChatThreads(
     String token, {
     bool forceRefresh = false,
@@ -442,12 +436,13 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     bool? isMuted,
   }) async {
     try {
-      final response = await _apiClient.post(ApiConstants.listenerChatSettings, {
-        'other_id': otherId,
-        'is_pinned': isPinned,
-        'is_archived': isArchived,
-        'is_muted': isMuted,
-      }, token: token);
+      final response = await _apiClient
+          .post(ApiConstants.listenerChatSettings, {
+            'other_id': otherId,
+            'is_pinned': isPinned,
+            'is_archived': isArchived,
+            'is_muted': isMuted,
+          }, token: token);
       if (response.statusCode != 200) {
         final data = jsonDecode(response.body);
         throw Exception(data['detail'] ?? 'Failed to update chat settings');
@@ -475,16 +470,13 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
       final otherId = entry.value['other_id'] as int?;
       if (otherId == null) continue;
       try {
-        final response = await _apiClient.post(
-          ApiConstants.listenerChatSettings,
-          {
-            'other_id': otherId,
-            'is_pinned': entry.value['is_pinned'],
-            'is_archived': entry.value['is_archived'],
-            'is_muted': entry.value['is_muted'],
-          },
-          token: token,
-        );
+        final response = await _apiClient
+            .post(ApiConstants.listenerChatSettings, {
+              'other_id': otherId,
+              'is_pinned': entry.value['is_pinned'],
+              'is_archived': entry.value['is_archived'],
+              'is_muted': entry.value['is_muted'],
+            }, token: token);
         if (response.statusCode != 200) continue;
         await LocalStorage().clearPendingChatSettings('listener', otherId);
       } on ServerUnreachableException {
@@ -499,6 +491,16 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     if (pending.isNotEmpty) ListenerDataCache().invalidateThreads();
   }
 
+  Future<Map<String, dynamic>?> getCachedNoteByCall(int callId) async {
+    final data = await HomeCache().getJson('listener_note_call_$callId');
+    return data == null ? null : Map<String, dynamic>.from(data);
+  }
+
+  Future<Map<String, dynamic>?> getCachedNoteByUser(int userId) async {
+    final data = await HomeCache().getJson('listener_note_user_$userId');
+    return data == null ? null : Map<String, dynamic>.from(data);
+  }
+
   Future<Map<String, dynamic>?> getNoteByCall(String token, int callId) async {
     final response = await _apiClient.get(
       ApiConstants.listenerNoteByCall(callId),
@@ -509,6 +511,7 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load note');
     }
+    await HomeCache().setJson('listener_note_call_$callId', data);
     return data;
   }
 
@@ -522,6 +525,7 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load note');
     }
+    await HomeCache().setJson('listener_note_user_$userId', data);
     return data;
   }
 

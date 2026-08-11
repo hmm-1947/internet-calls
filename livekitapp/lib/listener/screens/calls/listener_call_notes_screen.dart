@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
@@ -57,25 +58,43 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
     _loadNote();
   }
 
+  Map<String, dynamic>? _appliedNote;
+
   Future<void> _loadNote() async {
     if (widget.callId == null && widget.userId == null) {
       setState(() => _loading = false);
       return;
+    }
+    final cached = widget.callId != null
+        ? await _repository.getCachedNoteByCall(widget.callId!)
+        : await _repository.getCachedNoteByUser(widget.userId!);
+    if (cached != null) {
+      _appliedNote = cached;
+      _applyNote(cached);
+      _savedText = _controller.text;
+      if (mounted) setState(() => _loading = false);
     }
     try {
       final token = await _localStorage.getToken();
       final note = widget.callId != null
           ? await _repository.getNoteByCall(token!, widget.callId!)
           : await _repository.getNoteByUser(token!, widget.userId!);
-      if (note != null) {
-        _controller.text = note['note'] ?? '';
-        _userName = note['user_name'];
-        final lastCall = note['last_call_at'];
-        if (lastCall != null) _lastCallAt = DateTime.tryParse(lastCall);
+      if (note != null &&
+          dataChanged(_appliedNote, note) &&
+          !_hasUnsavedChanges) {
+        _appliedNote = note;
+        _applyNote(note);
+        _savedText = _controller.text;
       }
     } catch (_) {}
-    _savedText = _controller.text;
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _applyNote(Map<String, dynamic> note) {
+    _controller.text = note['note'] ?? '';
+    _userName = note['user_name'];
+    final lastCall = note['last_call_at'];
+    if (lastCall != null) _lastCallAt = DateTime.tryParse(lastCall);
   }
 
   bool get _hasUnsavedChanges => _controller.text != _savedText;
