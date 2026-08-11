@@ -198,6 +198,17 @@ void main() async {
   PaintingBinding.instance.imageCache.maximumSizeBytes = 160 << 20;
   PaintingBinding.instance.imageCache.maximumSize = 800;
 
+  // Paint the splash screen the instant Flutter can draw a frame, before any
+  // async startup work runs. On slow devices the init below (Firebase, FCM
+  // permission prompts, cache restores) can take several seconds; without
+  // this, nothing is on screen at all until it finishes.
+  runApp(
+    const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: SplashScreen(),
+    ),
+  );
+
   await dotenv.load(fileName: ".env");
   await AvatarCache.instance.init();
   FlavorConfig.set(AppFlavor.user);

@@ -106,8 +106,8 @@ flutter:
     - assets/audio/listener_no_response.mp3
     - assets/audio/ringtone_default.mp3
     - assets/images/banner.png
-    - assets/images/splash.png
     - assets/images/rupee_icon.png
+    - assets/images/app_logo.png
     - .env
 
 

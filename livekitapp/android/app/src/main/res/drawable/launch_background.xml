@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Modify this file to customize your launch splash screen -->
+<!-- Solid color only: no bitmap here. Older/slow Android devices (API 28
+     and below observed) can render the very first compositor frame of a
+     windowBackground bitmap stretched-to-fill before the layer-list/gravity
+     is respected, causing a brief full-screen stretched logo flash on cold
+     start. Avoiding a bitmap in the native launch background sidesteps
+     this entirely; the logo itself is shown correctly-scaled inside the
+     custom Flutter SplashScreen widget instead. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_background" />
-
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/launch_image" />
-    </item>
 </layer-list>
