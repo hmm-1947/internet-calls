@@ -23,6 +23,7 @@ class ListenerDataCache {
   static const _threadsSnapshotKey = 'listener_threads_snapshot';
   static const _usersSnapshotKey = 'listener_users_snapshot';
   static const _walletSnapshotKey = 'listener_wallet_snapshot';
+  static const _reviewsSnapshotKey = 'listener_reviews_snapshot';
 
   Map<String, dynamic>? _me;
   DateTime? _meFetchedAt;
@@ -35,6 +36,9 @@ class ListenerDataCache {
 
   Map<String, dynamic>? _wallet;
   DateTime? _walletFetchedAt;
+
+  List<Map<String, dynamic>>? _reviews;
+  DateTime? _reviewsFetchedAt;
 
   bool get _meFresh =>
       _me != null &&
@@ -56,17 +60,25 @@ class ListenerDataCache {
       _walletFetchedAt != null &&
       DateTime.now().difference(_walletFetchedAt!) < _ttl;
 
+  bool get _reviewsFresh =>
+      _reviews != null &&
+      _reviewsFetchedAt != null &&
+      DateTime.now().difference(_reviewsFetchedAt!) < _ttl;
+
   Map<String, dynamic>? get cachedMe => _meFresh ? _me : null;
   List<Map<String, dynamic>>? get cachedUsers => _usersFresh ? _users : null;
   List<Map<String, dynamic>>? get cachedThreads =>
       _threadsFresh ? _threads : null;
   Map<String, dynamic>? get cachedWallet => _walletFresh ? _wallet : null;
+  List<Map<String, dynamic>>? get cachedReviews =>
+      _reviewsFresh ? _reviews : null;
 
   /// Last known values, ignoring freshness. Meant for painting the first frame.
   Map<String, dynamic>? get lastMe => _me;
   List<Map<String, dynamic>>? get lastUsers => _users;
   List<Map<String, dynamic>>? get lastThreads => _threads;
   Map<String, dynamic>? get lastWallet => _wallet;
+  List<Map<String, dynamic>>? get lastReviews => _reviews;
 
   /// The cached thread for [userId], or an empty map when unknown.
   Map<String, dynamic> thread(int userId) {
@@ -110,6 +122,15 @@ class ListenerDataCache {
         final wallet = await HomeCache().getJson(_walletSnapshotKey);
         if (wallet is Map) _wallet = Map<String, dynamic>.from(wallet);
       }
+      if (_reviews == null) {
+        final reviews = await HomeCache().getJson(_reviewsSnapshotKey);
+        if (reviews is List) {
+          _reviews = reviews
+              .whereType<Map>()
+              .map((r) => Map<String, dynamic>.from(r))
+              .toList();
+        }
+      }
     } catch (_) {
       // A corrupt snapshot must never block start-up.
     }
@@ -141,6 +162,12 @@ class ListenerDataCache {
     HomeCache().setJson(_walletSnapshotKey, data);
   }
 
+  void setReviews(List<Map<String, dynamic>> data) {
+    _reviews = data;
+    _reviewsFetchedAt = DateTime.now();
+    HomeCache().setJson(_reviewsSnapshotKey, data);
+  }
+
   /// Marks the entry stale without dropping it, so it can still paint while a
   /// background refresh is in flight.
   void invalidateMe() => _meFetchedAt = null;
@@ -151,6 +178,8 @@ class ListenerDataCache {
 
   void invalidateWallet() => _walletFetchedAt = null;
 
+  void invalidateReviews() => _reviewsFetchedAt = null;
+
   void clear() {
     _me = null;
     _meFetchedAt = null;
@@ -160,6 +189,8 @@ class ListenerDataCache {
     _threadsFetchedAt = null;
     _wallet = null;
     _walletFetchedAt = null;
+    _reviews = null;
+    _reviewsFetchedAt = null;
     ChatMessageCache().clear();
     ChatDraftCache().clearAll();
     PresenceCache().clear();
@@ -168,5 +199,6 @@ class ListenerDataCache {
     HomeCache().clear(_threadsSnapshotKey);
     HomeCache().clear(_usersSnapshotKey);
     HomeCache().clear(_walletSnapshotKey);
+    HomeCache().clear(_reviewsSnapshotKey);
   }
 }

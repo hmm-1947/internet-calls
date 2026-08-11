@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
@@ -21,12 +22,17 @@ class ListenerReviewsScreen extends StatefulWidget {
 class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
-  bool _loading = true;
   List<Map<String, dynamic>> _reviews = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    final cached = ListenerDataCache().lastReviews;
+    if (cached != null) {
+      _reviews = cached;
+      _loading = false;
+    }
     _load();
   }
 
@@ -42,6 +48,19 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
       }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final token = await _localStorage.getToken();
+      final reviews = await _repository.getReviews(
+        token!,
+        forceRefresh: true,
+      );
+      if (mounted) setState(() => _reviews = reviews);
+    } catch (_) {
+      // Keep showing whatever is already on screen if the refresh fails.
     }
   }
 
@@ -69,87 +88,107 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFFE53950)),
             )
-          : _reviews.isEmpty
-          ? const Center(
-              child: Text('No reviews yet', style: TextStyle(color: dimText)),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _reviews.length,
-              itemBuilder: (context, index) {
-                final r = _reviews[index];
-                final rating = (r['rating'] ?? 0) as int;
-                final review = r['review'] as String?;
-                final createdAt = DateTime.tryParse(r['created_at'] ?? '');
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AvatarImage(
-                            photoUrl: r['user_photo_url'],
-                            radius: 20,
-                            iconSize: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              r['user_name'] ?? 'Unknown',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (createdAt != null)
-                            Text(
-                              _timeAgo(createdAt),
-                              style: const TextStyle(
-                                color: dimText,
-                                fontSize: 12,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      if (review != null && review.isNotEmpty) ...[
-                        Text(
-                          review,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            height: 1.4,
+          : RefreshIndicator(
+              color: const Color(0xFFE53950),
+              onRefresh: _refresh,
+              child: _reviews.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 120),
+                        Center(
+                          child: Text(
+                            'No reviews yet',
+                            style: TextStyle(color: dimText),
                           ),
                         ),
-                        const SizedBox(height: 8),
                       ],
-                      Row(
-                        children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            rating.toString(),
-                            style: const TextStyle(
-                              color: Colors.amber,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _reviews.length,
+                      itemBuilder: (context, index) {
+                        final r = _reviews[index];
+                        final rating = (r['rating'] ?? 0) as int;
+                        final review = r['review'] as String?;
+                        final createdAt = DateTime.tryParse(
+                          r['created_at'] ?? '',
+                        );
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1A1A),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  AvatarImage(
+                                    photoUrl: r['user_photo_url'],
+                                    radius: 20,
+                                    iconSize: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      r['user_name'] ?? 'Unknown',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (createdAt != null)
+                                    Text(
+                                      _timeAgo(createdAt),
+                                      style: const TextStyle(
+                                        color: dimText,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (review != null && review.isNotEmpty) ...[
+                                Text(
+                                  review,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.star,
+                                    color: Colors.amber,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    rating.toString(),
+                                    style: const TextStyle(
+                                      color: Colors.amber,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             ),
     );
   }

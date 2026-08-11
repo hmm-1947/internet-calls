@@ -20,7 +20,7 @@
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
 <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <application
-        android:label="livekitapp"
+        android:label="LailaNow"
         android:usesCleartextTraffic="true"
         android:name="com.lailanow.MainApplication"
         android:icon="@mipmap/ic_launcher">
@@ -98,6 +98,13 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="chat_messages" />
+        <!-- Small/status-bar icon used by FCM when it renders a notification
+             natively (app backgrounded or killed). Must be a flat white
+             silhouette on transparent — otherwise Android shows a plain
+             dot instead of an icon. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_face" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

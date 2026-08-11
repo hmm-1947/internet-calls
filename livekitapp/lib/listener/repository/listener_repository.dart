@@ -353,7 +353,14 @@ class ListenerRepository {
     return threads;
   }
 
-  Future<List<Map<String, dynamic>>> getReviews(String token) async {
+  Future<List<Map<String, dynamic>>> getReviews(
+    String token, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = ListenerDataCache().cachedReviews;
+      if (cached != null) return cached;
+    }
     final response = await _apiClient.get(
       ApiConstants.listenerReviews,
       token: token,
@@ -362,7 +369,9 @@ class ListenerRepository {
     if (response.statusCode != 200) {
       throw Exception(data['detail'] ?? 'Failed to load reviews');
     }
-    return List<Map<String, dynamic>>.from(data);
+    final reviews = List<Map<String, dynamic>>.from(data);
+    ListenerDataCache().setReviews(reviews);
+    return reviews;
   }
 
   Future<List<Map<String, dynamic>>> getUsers(

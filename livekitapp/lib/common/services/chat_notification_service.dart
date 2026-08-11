@@ -122,7 +122,7 @@ class ChatNotificationService {
   }) async {
     if (onTap != null) _onTap = onTap;
     if (_initialised) return true;
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('ic_stat_face');
     const darwin = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,

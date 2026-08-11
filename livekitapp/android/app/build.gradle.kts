@@ -37,12 +37,10 @@ android {
         create("user") {
             dimension = "app"
             applicationId = "com.lailanow.user"
-            resValue("string", "app_name", "LailaNow User")
         }
         create("listener") {
             dimension = "app"
             applicationId = "com.lailanow.listener"
-            resValue("string", "app_name", "LailaNow Listener")
         }
     }
 

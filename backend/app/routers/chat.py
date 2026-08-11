@@ -235,6 +235,15 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
     _require_chat_coins(db, current_user)
+    if payload.client_id:
+        existing = db.query(ChatMessage).filter(
+            ChatMessage.client_id == payload.client_id,
+            ChatMessage.user_id == current_user.id,
+            ChatMessage.listener_id == listener.id,
+            ChatMessage.sender_type == "user",
+        ).first()
+        if existing:
+            return existing
     listener_online = manager.is_listener_online(listener.id)
     msg = ChatMessage(
         client_id=payload.client_id,
@@ -268,6 +277,15 @@ async def listener_send_message(payload: ListenerChatMessageSend, db: Session = 
     user = db.query(User).filter(User.id == payload.user_id, User.is_active == True).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if payload.client_id:
+        existing = db.query(ChatMessage).filter(
+            ChatMessage.client_id == payload.client_id,
+            ChatMessage.user_id == user.id,
+            ChatMessage.listener_id == current_listener.id,
+            ChatMessage.sender_type == "listener",
+        ).first()
+        if existing:
+            return existing
     user_online = manager.is_user_online(user.id)
     msg = ChatMessage(
         client_id=payload.client_id,
