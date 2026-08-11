@@ -4,12 +4,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import razorpay
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.utils.rate_limit import client_ip, enforce_rate_limit
 from app.models.models import AdminUser, BillingPlan, BillingPlanAuditLog, UserBillingPurchase, User
 from app.routers.admin import verify_admin
 from app.core.ws_manager import manager
@@ -271,13 +272,15 @@ async def verify_payment(
             UserBillingPurchase.razorpay_order_id == payload.razorpay_order_id,
             UserBillingPurchase.user_id == current_user.id,
         )
+        .with_for_update()
         .first()
     )
     if not purchase:
         raise HTTPException(status_code=404, detail="Purchase not found")
 
     if purchase.status == "completed":
-        # Already processed (e.g. duplicate callback) - respond idempotently.
+        # Already processed (e.g. duplicate callback, or the webhook already
+        # landed first) - respond idempotently.
         user = db.query(User).filter(User.id == current_user.id).first()
         return {
             "id": purchase.id,
@@ -307,7 +310,7 @@ async def verify_payment(
     purchase.razorpay_signature = payload.razorpay_signature
     purchase.failure_reason = None
 
-    user = db.query(User).filter(User.id == current_user.id).first()
+    user = db.query(User).filter(User.id == current_user.id).with_for_update().first()
     user.coins = (user.coins or 0) + purchase.coins_purchased
 
     db.commit()
@@ -352,6 +355,83 @@ def payment_failed(
         db.commit()
 
     return {"status": purchase.status}
+
+
+@router.post("/billing/webhook/razorpay")
+async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
+    """Server-to-server notification from Razorpay. This is the source of
+    truth for marking a purchase completed - unlike /billing/verify-payment,
+    it does not depend on the client staying online after payment.
+
+    Not behind get_current_user: Razorpay calls this directly, with no user
+    JWT, only its own HMAC signature over the raw body.
+    """
+    # Signature verification below already rejects forged payloads. This is
+    # only a backstop against a flood of junk requests, NOT a per-user limit:
+    # Razorpay's webhook calls all come from its own small set of server IPs,
+    # so every real customer's payment webhook shares this same bucket. The
+    # limit must stay well above realistic concurrent-payment volume or it
+    # will start rejecting genuine webhooks during busy periods.
+    enforce_rate_limit("razorpay_webhook", client_ip(request), limit=600, window_seconds=60)
+
+    raw_body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+
+    if not settings.razorpay_webhook_secret:
+        raise HTTPException(status_code=500, detail="Razorpay webhook secret is not configured on the server")
+
+    expected_signature = hmac.new(
+        settings.razorpay_webhook_secret.encode(),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    payload = await request.json()
+    event = payload.get("event", "")
+    payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+    order_id = payment_entity.get("order_id")
+    payment_id = payment_entity.get("id")
+
+    if event in ("payment.captured", "order.paid") and order_id:
+        purchase = (
+            db.query(UserBillingPurchase)
+            .filter(UserBillingPurchase.razorpay_order_id == order_id)
+            .with_for_update()
+            .first()
+        )
+        if purchase and purchase.status != "completed":
+            purchase.status = "completed"
+            purchase.razorpay_payment_id = payment_id
+            purchase.failure_reason = None
+
+            user = db.query(User).filter(User.id == purchase.user_id).with_for_update().first()
+            if user:
+                user.coins = (user.coins or 0) + purchase.coins_purchased
+                db.commit()
+                await manager.send_to_user(user.id, {"type": "coins_updated", "coins": user.coins})
+            else:
+                db.commit()
+        # Already completed (e.g. duplicate webhook delivery, or the client's
+        # own /verify-payment call already landed first) - nothing to do.
+
+    elif event == "payment.failed" and order_id:
+        purchase = (
+            db.query(UserBillingPurchase)
+            .filter(UserBillingPurchase.razorpay_order_id == order_id)
+            .with_for_update()
+            .first()
+        )
+        if purchase and purchase.status == "pending":
+            purchase.status = "failed"
+            purchase.failure_reason = payment_entity.get("error_description") or "Payment failed"
+            db.commit()
+
+    # Razorpay only needs a 2xx to stop retrying; unhandled event types are
+    # acknowledged and ignored.
+    return {"status": "ok"}
 
 
 @router.get("/billing/my-purchases")
