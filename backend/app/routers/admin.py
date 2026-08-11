@@ -15,6 +15,7 @@ from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
     CoinTransaction, CallRating, Session as SessionModel, AdminUser, AuditLog,
     GiftTransaction, ListenerCoinTransaction, ChatSettings, ReservedUsername,
+    ListenerNote, UserBillingPurchase,
 )
 from datetime import timedelta
 from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate
@@ -251,6 +252,7 @@ def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(v
         db.query(SessionModel).filter(SessionModel.listener_id == listener_id).delete(synchronize_session=False)
         db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(ListenerNote).filter(ListenerNote.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ChatSettings).filter(
             ((ChatSettings.owner_type == "listener") & (ChatSettings.owner_id == listener_id)) |
             ((ChatSettings.owner_type == "user") & (ChatSettings.other_id == listener_id))
@@ -260,10 +262,12 @@ def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(v
             db.query(CoinTransaction).filter(CoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
             db.query(GiftTransaction).filter(GiftTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
             db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+            db.query(ListenerNote).filter(ListenerNote.call_id.in_(call_ids)).delete(synchronize_session=False)
         db.query(Call).filter(Call.callee_listener_id == listener_id).delete(synchronize_session=False)
 
         db.delete(listener)
         db.commit()
+
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete listener due to related data")
@@ -342,6 +346,9 @@ def delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(verify_ad
         db.query(SessionModel).filter(SessionModel.user_id == user_id).delete(synchronize_session=False)
         db.query(CoinTransaction).filter(CoinTransaction.user_id == user_id).delete(synchronize_session=False)
         db.query(GiftTransaction).filter(GiftTransaction.user_id == user_id).delete(synchronize_session=False)
+        db.query(ListenerNote).filter(ListenerNote.user_id == user_id).delete(synchronize_session=False)
+        db.query(UserBillingPurchase).filter(UserBillingPurchase.user_id == user_id).delete(synchronize_session=False)
+        db.query(ReservedUsername).filter(ReservedUsername.reserved_by_user_id == user_id).delete(synchronize_session=False)
         db.query(ChatSettings).filter(
             ((ChatSettings.owner_type == "user") & (ChatSettings.owner_id == user_id)) |
             ((ChatSettings.owner_type == "listener") & (ChatSettings.other_id == user_id))
@@ -350,10 +357,12 @@ def delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(verify_ad
             db.query(CallRecording).filter(CallRecording.call_id.in_(call_ids)).delete(synchronize_session=False)
             db.query(GiftTransaction).filter(GiftTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
             db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.call_id.in_(call_ids)).delete(synchronize_session=False)
+            db.query(ListenerNote).filter(ListenerNote.call_id.in_(call_ids)).delete(synchronize_session=False)
         db.query(Call).filter(Call.caller_user_id == user_id).delete(synchronize_session=False)
 
         db.delete(user)
         db.commit()
+
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete user due to related data")

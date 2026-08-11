@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
+import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
 
@@ -78,6 +80,8 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
         widget.password,
         code,
       );
+      UserDataCache().clear();
+      await ChatStorage().clearAll();
       await _localStorage.saveSession(result.token, result.id, result.name);
       final fcmToken = await FirebaseMessaging.instance.getToken();
       if (fcmToken != null) {

@@ -4,6 +4,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
+import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_login_screen.dart';
 import 'package:livekitapp/listener/screens/listener_edit_profile_screen.dart';
@@ -181,6 +182,7 @@ Future<void> refresh() async {
     } finally {
       await _localStorage.clear();
       ListenerDataCache().clear();
+      await ChatStorage().clearAll();
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const ListenerLoginScreen()),

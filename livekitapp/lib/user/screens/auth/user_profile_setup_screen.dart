@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
+import 'package:livekitapp/core/network/user_data_cache.dart';
+import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
 
@@ -177,6 +179,8 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
           _displayName.trim(),
         );
         token = result.token;
+        UserDataCache().clear();
+        await ChatStorage().clearAll();
         await _localStorage.saveSession(result.token, result.id, result.name);
       }
 

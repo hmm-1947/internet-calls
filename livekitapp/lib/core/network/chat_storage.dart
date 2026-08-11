@@ -416,5 +416,18 @@ class ChatStorage {
       value: jsonEncode(all.map((m) => m.toJson()).toList()),
     );
   }
+
+  /// Wipes every locally cached message and pending-send entry.
+  ///
+  /// This database is keyed only by the other party's id, not by which
+  /// account is currently signed in, so it must be cleared whenever a
+  /// different account signs in on this device - otherwise the new
+  /// account's chat screens would paint from the previous account's
+  /// message history.
+  Future<void> clearAll() async {
+    final db = await _openDb();
+    await db.delete('messages');
+    await _secure.delete(key: _pendingKey);
+  }
 }
 

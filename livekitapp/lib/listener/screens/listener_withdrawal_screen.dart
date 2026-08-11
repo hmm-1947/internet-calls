@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
@@ -24,30 +26,55 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
   static const int _pageSize = 10;
   bool _hasNextPage = false;
 
+  static const _walletCacheKey = 'listener_withdrawal_wallet';
+  static const _logCacheKey = 'listener_withdrawal_log_page0';
+
   @override
   void initState() {
     super.initState();
+    _loadFromCache();
     _loadWallet();
     _loadLog();
+  }
+
+  Future<void> _loadFromCache() async {
+    final cachedWallet = await HomeCache().getJson(_walletCacheKey);
+    final cachedLog = await HomeCache().getJson(_logCacheKey);
+    if (!mounted) return;
+    final hasWallet = cachedWallet is Map && cachedWallet['coins'] is num;
+    final hasLog = cachedLog is List;
+    if (!hasWallet && !hasLog) return;
+    setState(() {
+      if (hasWallet) {
+        _walletCoins = (cachedWallet['coins'] as num).toInt();
+        _loadingWallet = false;
+      }
+      if (hasLog && _page == 0) {
+        _log = cachedLog.cast<Map<String, dynamic>>();
+        _loadingLog = false;
+      }
+    });
   }
 
   Future<void> _loadWallet() async {
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getWallet(token!, forceRefresh: true);
-      if (mounted) {
+      final coins = data['coins'] ?? 0;
+      if (mounted && (dataChanged(_walletCoins, coins) || _loadingWallet)) {
         setState(() {
-          _walletCoins = data['coins'] ?? 0;
+          _walletCoins = coins;
           _loadingWallet = false;
         });
       }
+      HomeCache().setJson(_walletCacheKey, {'coins': coins});
     } catch (_) {
       if (mounted) setState(() => _loadingWallet = false);
     }
   }
 
   Future<void> _loadLog() async {
-    setState(() => _loadingLog = true);
+    if (_log.isEmpty) setState(() => _loadingLog = true);
     try {
       final token = await _localStorage.getToken();
       // Fetch one extra row to know whether a next page exists.
@@ -56,13 +83,16 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
         skip: _page * _pageSize,
         limit: _pageSize + 1,
       );
+      final hasNextPage = rows.length > _pageSize;
+      final page = rows.take(_pageSize).toList();
       if (mounted) {
         setState(() {
-          _hasNextPage = rows.length > _pageSize;
-          _log = rows.take(_pageSize).toList();
+          _hasNextPage = hasNextPage;
+          _log = page;
           _loadingLog = false;
         });
       }
+      if (_page == 0) HomeCache().setJson(_logCacheKey, page);
     } catch (_) {
       if (mounted) setState(() => _loadingLog = false);
     }
@@ -118,7 +148,10 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.white54),
+                  ),
                 ),
                 TextButton(
                   onPressed: _submitting
@@ -126,19 +159,25 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
                       : () async {
                           final parsed = int.tryParse(controller.text.trim());
                           if (parsed == null || parsed <= 0) {
-                            setDialogState(() => errorText = 'Enter a valid amount');
+                            setDialogState(
+                              () => errorText = 'Enter a valid amount',
+                            );
                             return;
                           }
                           if (parsed > _walletCoins) {
                             setDialogState(
-                              () => errorText = 'Cannot exceed your available balance',
+                              () => errorText =
+                                  'Cannot exceed your available balance',
                             );
                             return;
                           }
                           setDialogState(() => _submitting = true);
                           try {
                             final token = await _localStorage.getToken();
-                            await _repository.createWithdrawalRequest(token!, parsed);
+                            await _repository.createWithdrawalRequest(
+                              token!,
+                              parsed,
+                            );
                             if (mounted) Navigator.of(dialogContext).pop();
                             _page = 0;
                             _loadLog();
@@ -152,7 +191,10 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
                           } catch (e) {
                             setDialogState(() {
                               _submitting = false;
-                              errorText = e.toString().replaceFirst('Exception: ', '');
+                              errorText = e.toString().replaceFirst(
+                                'Exception: ',
+                                '',
+                              );
                             });
                           }
                         },
@@ -162,7 +204,10 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Withdraw', style: TextStyle(color: Color(0xFFE53950))),
+                      : const Text(
+                          'Withdraw',
+                          style: TextStyle(color: Color(0xFFE53950)),
+                        ),
                 ),
               ],
             );
@@ -190,13 +235,14 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
       backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0D0D0D),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        foregroundColor: Colors.white,
         title: const Text(
           'Withdraw',
-          style: TextStyle(color: Color(0xFFE53950), fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: RefreshIndicator(
@@ -309,26 +355,42 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
                 child: Column(
                   children: [
                     for (int i = 0; i < _log.length; i++) ...[
-                      if (i > 0) const Divider(height: 1, color: Colors.white12),
+                      if (i > 0)
+                        const Divider(height: 1, color: Colors.white12),
                       ListTile(
                         title: Text(
                           '${_log[i]['coins']} coins',
                           style: const TextStyle(color: Colors.white),
                         ),
                         subtitle: Text(
-                          (_log[i]['created_at'] ?? '').toString().split('T').first,
-                          style: const TextStyle(color: Colors.white38, fontSize: 12),
+                          (_log[i]['created_at'] ?? '')
+                              .toString()
+                              .split('T')
+                              .first,
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 12,
+                          ),
                         ),
                         trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: _statusColor(_log[i]['status'] ?? 'pending').withOpacity(0.15),
+                            color: _statusColor(
+                              _log[i]['status'] ?? 'pending',
+                            ).withOpacity(0.15),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            (_log[i]['status'] ?? 'pending').toString().toUpperCase(),
+                            (_log[i]['status'] ?? 'pending')
+                                .toString()
+                                .toUpperCase(),
                             style: TextStyle(
-                              color: _statusColor(_log[i]['status'] ?? 'pending'),
+                              color: _statusColor(
+                                _log[i]['status'] ?? 'pending',
+                              ),
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
