@@ -320,6 +320,9 @@ class AdminPurchaseOut(BaseModel):
     razorpay_order_id: Optional[str] = None
     razorpay_payment_id: Optional[str] = None
     failure_reason: Optional[str] = None
+    razorpay_refund_id: Optional[str] = None
+    refunded_amount_paise: int = 0
+    refunded_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

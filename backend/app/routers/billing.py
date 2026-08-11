@@ -13,6 +13,7 @@ from app.core.deps import get_current_user
 from app.utils.rate_limit import client_ip, enforce_rate_limit
 from app.models.models import AdminUser, BillingPlan, BillingPlanAuditLog, UserBillingPurchase, User
 from app.routers.admin import verify_admin
+from app.routers.notifications import create_admin_notification
 from app.core.ws_manager import manager
 from app.schemas.schemas import (
     AdminPurchaseOut,
@@ -190,6 +191,9 @@ def admin_list_purchases(db: Session = Depends(get_db), _=Depends(verify_admin))
             razorpay_order_id=p.razorpay_order_id,
             razorpay_payment_id=p.razorpay_payment_id,
             failure_reason=p.failure_reason,
+            razorpay_refund_id=p.razorpay_refund_id,
+            refunded_amount_paise=p.refunded_amount_paise or 0,
+            refunded_at=p.refunded_at,
             created_at=p.created_at,
             updated_at=p.updated_at,
         )
@@ -357,6 +361,77 @@ def payment_failed(
     return {"status": purchase.status}
 
 
+REFUND_NOTIFICATION_TYPE = "payment_refunded"
+
+
+async def _record_refund(db: Session, refund_entity: dict, fallback_order_id: Optional[str]) -> None:
+    """Marks a purchase as (partially) refunded and asks an admin to reconcile.
+
+    Deliberately does NOT touch `user.coins`. By the time a refund lands the
+    coins have usually been spent on calls and gifts, so deducting them would
+    push the balance negative. An admin decides what to do and applies it
+    through Coins -> Adjust.
+    """
+    refund_id = refund_entity.get("id")
+    payment_id = refund_entity.get("payment_id")
+    amount_paise = int(refund_entity.get("amount") or 0)
+
+    q = db.query(UserBillingPurchase)
+    if payment_id:
+        purchase = q.filter(UserBillingPurchase.razorpay_payment_id == payment_id).with_for_update().first()
+    elif fallback_order_id:
+        purchase = q.filter(UserBillingPurchase.razorpay_order_id == fallback_order_id).with_for_update().first()
+    else:
+        purchase = None
+
+    if not purchase:
+        # A refund for a payment we have no record of (e.g. a test payment, or
+        # an order whose row was never created). Still worth an admin's eyes.
+        await create_admin_notification(
+            db,
+            type=REFUND_NOTIFICATION_TYPE,
+            title="Refund for an unknown payment",
+            body=(
+                f"Razorpay refund {refund_id} of ₹{amount_paise / 100:.2f} was processed for "
+                f"payment {payment_id or '—'}, which does not match any purchase in the database. "
+                "Check the Razorpay dashboard."
+            ),
+        )
+        return
+
+    # Guards against Razorpay re-delivering the same refund event. Distinct
+    # partial refunds each carry their own id and are summed correctly; only a
+    # redelivery of an *older* partial refund after a newer one could double
+    # count, which the cap below keeps harmless.
+    if refund_id and purchase.razorpay_refund_id == refund_id:
+        return
+
+    order_total_paise = purchase.price_paid * 100
+    already_refunded = purchase.refunded_amount_paise or 0
+    purchase.refunded_amount_paise = min(already_refunded + amount_paise, order_total_paise)
+    purchase.razorpay_refund_id = refund_id
+    purchase.refunded_at = datetime.now(timezone.utc)
+    purchase.status = "refunded" if purchase.refunded_amount_paise >= order_total_paise else "partially_refunded"
+    db.commit()
+
+    user = db.query(User).filter(User.id == purchase.user_id).first()
+    await create_admin_notification(
+        db,
+        type=REFUND_NOTIFICATION_TYPE,
+        title=f"Refund processed: ₹{amount_paise / 100:.2f}",
+        body=(
+            f"Purchase #{purchase.id} ({purchase.plan_name}, {purchase.coins_purchased} coins, "
+            f"₹{purchase.price_paid}) was refunded via Razorpay refund {refund_id}. "
+            f"Total refunded so far: ₹{purchase.refunded_amount_paise / 100:.2f}. "
+            f"The user still holds the coins ({user.coins if user else '—'} in wallet) - "
+            "deduct them manually under Coins if that is appropriate."
+        ),
+        subject_type="user",
+        subject_id=purchase.user_id,
+        subject_name=user.name if user else None,
+    )
+
+
 @router.post("/billing/webhook/razorpay")
 async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     """Server-to-server notification from Razorpay. This is the source of
@@ -428,6 +503,14 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
             purchase.status = "failed"
             purchase.failure_reason = payment_entity.get("error_description") or "Payment failed"
             db.commit()
+
+    elif event == "refund.processed":
+        # Refund events carry their own entity; the refund itself has no
+        # order_id, so the lookup goes through payment_id. `refund.created` is
+        # deliberately ignored - only a processed refund means money left.
+        refund_entity = payload.get("payload", {}).get("refund", {}).get("entity", {})
+        if refund_entity:
+            await _record_refund(db, refund_entity, order_id)
 
     # Razorpay only needs a 2xx to stop retrying; unhandled event types are
     # acknowledged and ignored.

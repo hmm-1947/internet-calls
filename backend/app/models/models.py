@@ -377,11 +377,18 @@ class UserBillingPurchase(Base):
     plan_name = Column(String, nullable=False)
     price_paid = Column(Integer, nullable=False)
     coins_purchased = Column(Integer, nullable=False, default=0)
-    status = Column(String, default="pending", nullable=False)  # pending | completed | failed
+    status = Column(String, default="pending", nullable=False)  # pending | completed | failed | partially_refunded | refunded
     razorpay_order_id = Column(String, nullable=True, index=True)
     razorpay_payment_id = Column(String, nullable=True, index=True)
     razorpay_signature = Column(String, nullable=True)
     failure_reason = Column(String, nullable=True)
+    # Refunds are always initiated outside this app (Razorpay dashboard, or
+    # Razorpay's own auto-refund of an uncaptured payment). These three
+    # columns are a record of money that left the account; the coins are NOT
+    # clawed back automatically because they may already have been spent.
+    razorpay_refund_id = Column(String, nullable=True, index=True)  # most recent refund seen
+    refunded_amount_paise = Column(Integer, nullable=False, default=0, server_default="0")
+    refunded_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
