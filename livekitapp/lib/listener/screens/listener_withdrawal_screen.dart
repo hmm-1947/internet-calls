@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -182,10 +183,9 @@ class _ListenerWithdrawalScreenState extends State<ListenerWithdrawalScreen> {
                             _page = 0;
                             _loadLog();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Withdrawal request submitted'),
-                                ),
+                              PillMessage.showSuccess(
+                                context,
+                                'Withdrawal request submitted',
                               );
                             }
                           } catch (e) {

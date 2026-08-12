@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
@@ -110,9 +111,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
+        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
       }
       if (mounted) setState(() => _submitting = false);
     }
@@ -121,9 +120,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
   Future<void> _callAgain() async {
     if (_callingAgain || _summary == null) return;
     if (ActiveCallManager.instance.hasActiveCall) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are already on a call')),
-      );
+      PillMessage.show(context, 'You are already on a call');
       return;
     }
     setState(() => _callingAgain = true);
@@ -148,9 +145,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
+        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _callingAgain = false);

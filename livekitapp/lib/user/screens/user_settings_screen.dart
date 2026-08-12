@@ -3,6 +3,7 @@ import 'package:livekitapp/common/screens/change_password_screen.dart';
 import 'package:livekitapp/common/screens/legal_document_screen.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
@@ -179,6 +180,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   String _phone = '';
   String? _photoUrl;
   bool _loading = true;
+  bool _hasLoadedOnce = false;
   bool _videoCallEnabled = true;
   bool _videoCallDisabledByAdmin = false;
   bool _isGoogleAccount = false;
@@ -194,7 +196,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> refresh() async {
-    final isFirstLoad = _name.isEmpty;
+    final isFirstLoad = !_hasLoadedOnce;
     if (isFirstLoad) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
@@ -223,12 +225,16 @@ class UserProfileScreenState extends State<UserProfileScreen> {
           _videoCallDisabledByAdmin = newVideoCallDisabledByAdmin;
           _isGoogleAccount = newIsGoogleAccount;
           _loading = false;
+          _hasLoadedOnce = true;
         });
-      } else if (_loading) {
-        setState(() => _loading = false);
+      } else if (_loading || !_hasLoadedOnce) {
+        setState(() {
+          _loading = false;
+          _hasLoadedOnce = true;
+        });
       }
     } catch (_) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -287,9 +293,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _videoCallEnabled = previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update video call setting: $e')),
-      );
+      PillMessage.showError(context, 'Failed to update video call setting: $e');
     } finally {
       if (mounted) setState(() => _savingVideoCallSetting = false);
     }
@@ -377,12 +381,9 @@ class UserProfileScreenState extends State<UserProfileScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Could not send your deletion request. Please try again.',
-          ),
-        ),
+      PillMessage.showError(
+        context,
+        'Could not send your deletion request. Please try again.',
       );
       debugPrint('Delete account: request failed: $e');
     } finally {

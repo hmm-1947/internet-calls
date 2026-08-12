@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -201,8 +202,9 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
       if (mounted) setState(() => _photoUrl = result['photo_url']);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        PillMessage.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
         );
       }
     } finally {
@@ -217,9 +219,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
   Future<void> _saveProfile() async {
     final parsedAge = int.tryParse(_ageController.text.trim());
     if (parsedAge != null && (parsedAge < 1 || parsedAge > 100)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Age must be between 1 and 100')),
-      );
+      PillMessage.showError(context, 'Age must be between 1 and 100');
       return;
     }
     setState(() => _saving = true);
@@ -245,8 +245,9 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        PillMessage.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
         );
       }
     }

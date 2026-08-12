@@ -12,6 +12,7 @@ class ActiveCallInfo {
   final int callId;
   final String otherPartyName;
   final String? otherPartyPhotoUrl;
+  final Map<String, dynamic>? otherPartyBadgeTag;
   final bool isVideo;
   final int? listenerId;
   final String? livekitUrl;
@@ -23,6 +24,7 @@ class ActiveCallInfo {
     required this.callId,
     required this.otherPartyName,
     this.otherPartyPhotoUrl,
+    this.otherPartyBadgeTag,
     this.isVideo = false,
     this.listenerId,
     this.livekitUrl,

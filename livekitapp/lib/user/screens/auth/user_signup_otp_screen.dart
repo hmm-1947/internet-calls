@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_profile_setup_screen.dart';
 
@@ -93,9 +94,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.show(context, message);
   }
 
   @override

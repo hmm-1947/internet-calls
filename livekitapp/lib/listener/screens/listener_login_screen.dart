@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -47,8 +48,9 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      PillMessage.showError(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

@@ -45,6 +45,8 @@ class AvatarImage extends StatefulWidget {
   final Color backgroundColor;
   final IconData fallbackIcon;
   final double iconSize;
+  final String? badgeLabel;
+  final Color? badgeColor;
 
   const AvatarImage({
     super.key,
@@ -53,6 +55,8 @@ class AvatarImage extends StatefulWidget {
     this.backgroundColor = const Color(0xFF2A2A2A),
     this.fallbackIcon = Icons.person,
     this.iconSize = 28,
+    this.badgeLabel,
+    this.badgeColor,
   });
 
   /// True for an on-device path (a cached avatar), as opposed to a path that is
@@ -64,6 +68,26 @@ class AvatarImage extends StatefulWidget {
       path.startsWith('/var/') ||
       path.startsWith('/private/') ||
       path.contains('/cache/');
+
+  static String? badgeLabelOf(dynamic badgeTag) {
+    if (badgeTag is Map) return badgeTag['name'] as String?;
+    return null;
+  }
+
+  static Color? badgeColorOf(dynamic badgeTag) {
+    if (badgeTag is Map) {
+      final hex = badgeTag['color'] as String?;
+      if (hex != null && hex.isNotEmpty) {
+        final cleaned = hex.replaceFirst('#', '');
+        final value = int.tryParse(
+          cleaned.length == 6 ? 'FF$cleaned' : cleaned,
+          radix: 16,
+        );
+        if (value != null) return Color(value);
+      }
+    }
+    return null;
+  }
 
   @override
   State<AvatarImage> createState() => _AvatarImageState();
@@ -104,6 +128,10 @@ class _AvatarImageState extends State<AvatarImage> {
     final resolved = ApiConstants.resolveMediaUrl(widget.photoUrl);
     if (resolved.isEmpty) return;
     _remoteUrl = resolved;
+    if (!AvatarCache.instance.isReady) {
+      AvatarCache.instance.init().then((_) => _recoverFromDisk(resolved));
+      return;
+    }
     final cached = AvatarCache.instance.localPathSync(resolved);
     if (cached != null) {
       _filePath = cached;
@@ -147,25 +175,72 @@ class _AvatarImageState extends State<AvatarImage> {
     return ResizeImage(provider, width: pixels, allowUpscaling: false);
   }
 
+  Widget _badgeWrap(Widget child) {
+    final label = widget.badgeLabel;
+    if (label == null || label.isEmpty) return child;
+    final color = widget.badgeColor ?? const Color(0xFFE11D48);
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        child,
+        Positioned(
+          top: -(widget.radius * 0.32),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color, Color.lerp(color, Colors.black, 0.25)!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.white, width: 1.4),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.55),
+                  blurRadius: 5,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: (widget.radius * 0.32).clamp(8, 11),
+                height: 1.1,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filePath = _filePath;
     if (filePath != null) {
-      return CircleAvatar(
+      return _badgeWrap(CircleAvatar(
         radius: widget.radius,
         backgroundColor: widget.backgroundColor,
         backgroundImage: _sized(FileImage(File(filePath))),
         onBackgroundImageError: (_, _) => _onFileError(filePath),
-      );
+      ));
     }
     final remoteUrl = _remoteUrl;
-    if (remoteUrl == null) return _fallback();
-    return CircleAvatar(
+    if (remoteUrl == null) return _badgeWrap(_fallback());
+    return _badgeWrap(CircleAvatar(
       radius: widget.radius,
       backgroundColor: widget.backgroundColor,
       backgroundImage: _sized(NetworkImage(remoteUrl)),
       onBackgroundImageError: (_, _) => _recoverFromDisk(remoteUrl),
-    );
+    ));
   }
 }
 

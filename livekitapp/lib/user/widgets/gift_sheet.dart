@@ -5,6 +5,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
 import 'package:livekitapp/common/widgets/gift_success_popup.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 
 IconData giftIconFor(String? icon) {
   switch (icon) {
@@ -66,7 +67,6 @@ Future<void> showGiftSheet(
   BuildContext context, {
   required int listenerId,
   int? callId,
-  bool fromTop = false,
 }) async {
   // Instant open: paint from whatever is already on disk/in memory (the last
   // fetched gift catalog and the last known coin balance) instead of blocking
@@ -79,30 +79,6 @@ Future<void> showGiftSheet(
   final coins = (UserDataCache().lastMe?['coins'] as num?)?.toInt() ?? 0;
   if (!context.mounted) return;
 
-  if (fromTop) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.black54,
-        pageBuilder: (ctx, anim, _) => GiftSheet(
-          balance: coins,
-          gifts: gifts,
-          listenerId: listenerId,
-          callId: callId,
-          fromTop: true,
-        ),
-        transitionsBuilder: (ctx, animation, _, child) {
-          final offset = Tween<Offset>(
-            begin: const Offset(0, -1),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
-          return SlideTransition(position: offset, child: child);
-        },
-      ),
-    );
-    return;
-  }
-
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
@@ -112,7 +88,6 @@ Future<void> showGiftSheet(
       gifts: gifts,
       listenerId: listenerId,
       callId: callId,
-      fromTop: false,
     ),
   );
 }
@@ -122,7 +97,6 @@ class GiftSheet extends StatefulWidget {
   final List<Map<String, dynamic>> gifts;
   final int listenerId;
   final int? callId;
-  final bool fromTop;
 
   const GiftSheet({
     super.key,
@@ -130,7 +104,6 @@ class GiftSheet extends StatefulWidget {
     required this.gifts,
     required this.listenerId,
     this.callId,
-    this.fromTop = false,
   });
 
   @override
@@ -181,9 +154,7 @@ class _GiftSheetState extends State<GiftSheet> {
   Future<void> _send(Map<String, dynamic> gift) async {
     final cost = gift['coins'] as int;
     if (_balance < cost) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not enough coins')),
-      );
+      PillMessage.showError(context, 'Not enough coins');
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -232,11 +203,17 @@ class _GiftSheetState extends State<GiftSheet> {
           giftName: giftName as String,
           coins: sentCoins as int,
         );
+        PillMessage.showSuccess(
+          // ignore: use_build_context_synchronously
+          rootContext,
+          'You sent $giftName',
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        PillMessage.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
         );
       }
     } finally {
@@ -250,9 +227,7 @@ class _GiftSheetState extends State<GiftSheet> {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
       decoration: BoxDecoration(
         color: const Color(0xFF141821),
-        borderRadius: widget.fromTop
-            ? const BorderRadius.vertical(bottom: Radius.circular(24))
-            : const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -416,11 +391,6 @@ class _GiftSheetState extends State<GiftSheet> {
       ),
     );
 
-    if (widget.fromTop) {
-      return SafeArea(
-        child: Align(alignment: Alignment.topCenter, child: content),
-      );
-    }
     return content;
   }
 }

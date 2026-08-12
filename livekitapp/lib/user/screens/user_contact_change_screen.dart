@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
@@ -159,9 +160,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.show(context, message);
   }
 
   String get _title => _isAdding ? 'Add Phone' : 'Change Phone';

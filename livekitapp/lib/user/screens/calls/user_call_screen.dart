@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/common/services/proximity_service.dart';
@@ -27,6 +28,7 @@ class CallScreen extends StatefulWidget {
   final bool startWithVideo;
   final String otherPartyName;
   final String? otherPartyPhotoUrl;
+  final Map<String, dynamic>? otherPartyBadgeTag;
   final bool busy;
   final int? listenerId;
 
@@ -35,6 +37,7 @@ class CallScreen extends StatefulWidget {
     required this.callId,
     required this.otherPartyName,
     this.otherPartyPhotoUrl,
+    this.otherPartyBadgeTag,
     this.startWithVideo = false,
     this.busy = false,
     this.listenerId,
@@ -379,9 +382,7 @@ class _CallScreenState extends State<CallScreen> {
   void _showMessage(String message) {
     final rootContext = userNavigatorKey.currentContext;
     if (rootContext == null) return;
-    ScaffoldMessenger.of(
-      rootContext,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.show(rootContext, message);
   }
 
   void _openSummary() {
@@ -782,7 +783,6 @@ class _CallScreenState extends State<CallScreen> {
       context,
       listenerId: widget.listenerId!,
       callId: widget.callId,
-      fromTop: false,
     );
   }
 

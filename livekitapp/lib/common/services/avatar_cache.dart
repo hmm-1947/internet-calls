@@ -16,8 +16,14 @@ class AvatarCache {
 
   bool get isReady => _dirPath.isNotEmpty;
 
-  Future<void> init() async {
-    if (_dirPath.isNotEmpty) return;
+  Future<void>? _initFuture;
+
+  Future<void> init() {
+    if (_dirPath.isNotEmpty) return Future.value();
+    return _initFuture ??= _doInit();
+  }
+
+  Future<void> _doInit() async {
     try {
       final base = await getApplicationSupportDirectory();
       final dir = Directory('${base.path}/avatar_cache');
@@ -28,6 +34,7 @@ class AvatarCache {
         _dirPath = (await getTemporaryDirectory()).path;
       } catch (_) {}
     }
+    _initFuture = null;
   }
 
   String _fileNameFor(String url) {

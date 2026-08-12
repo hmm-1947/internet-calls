@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -108,6 +109,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   String _name = '';
   String _phone = '';
   String? _photoUrl;
+  Map<String, dynamic>? _badgeTag;
   bool _statusOnline = true;
 
   @override
@@ -123,6 +125,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     _name = cached['name'] ?? '';
     _phone = cached['phone']?.toString() ?? '';
     _photoUrl = cached['photo_url'];
+    _badgeTag = cached['badge_tag'] as Map<String, dynamic>?;
     if (cached['is_online'] is bool) _statusOnline = cached['is_online'];
   }
 
@@ -135,6 +138,7 @@ Future<void> refresh() async {
         _name = data['name'] ?? '';
         _phone = data['phone']?.toString() ?? '';
         _photoUrl = data['photo_url'];
+        _badgeTag = data['badge_tag'] as Map<String, dynamic>?;
         if (data['is_online'] is bool) {
           _statusOnline = data['is_online'] as bool;
         }
@@ -157,9 +161,7 @@ Future<void> refresh() async {
     } catch (e) {
       if (mounted) {
         setState(() => _statusOnline = previous);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update status: $e')),
-        );
+        PillMessage.showError(context, 'Failed to update status: $e');
       }
     }
   }
@@ -208,6 +210,8 @@ Future<void> refresh() async {
                   radius: 32,
                   iconSize: 32,
                   backgroundColor: const Color(0xFF2A3145),
+                  badgeLabel: AvatarImage.badgeLabelOf(_badgeTag),
+                  badgeColor: AvatarImage.badgeColorOf(_badgeTag),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

@@ -12,7 +12,7 @@ from app.core.config import settings
 from fastapi import Request
 from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
-from app.models.models import Listener, Call, User
+from app.models.models import Listener, Call, User, ListenerBadgeTag
 from app.schemas.schemas import CallInitiate
 from app.utils.livekit_token import generate_token
 from app.utils.fcm import send_call_notification, send_call_cancelled, send_call_rejected, send_call_accepted, send_call_ended, send_call_coin_exceeded, send_call_missed, send_async
@@ -523,6 +523,11 @@ def user_call_history(before_id: int | None = None, limit: int = 25, db: Session
     calls = query.order_by(Call.id.desc()).limit(limit).all()
     listener_ids = {c.callee_listener_id for c in calls if c.callee_listener_id}
     listeners_by_id = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids)).all()}
+    badge_tag_ids = {l.badge_tag_id for l in listeners_by_id.values() if l.badge_tag_id}
+    badge_tags_by_id = {}
+    if badge_tag_ids:
+        for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(badge_tag_ids)).all():
+            badge_tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
     result = []
     for c in calls:
         listener = listeners_by_id.get(c.callee_listener_id)
@@ -532,6 +537,7 @@ def user_call_history(before_id: int | None = None, limit: int = 25, db: Session
             call_type=c.call_type, status=c.status, duration_seconds=c.duration_seconds,
             coins_deducted=c.coins_deducted, created_at=c.created_at, connected_at=c.connected_at,
             other_party_photo_url=listener.photo_url if listener else None,
+            badge_tag=badge_tags_by_id.get(listener.badge_tag_id) if listener else None,
         ))
     return result
 
@@ -563,6 +569,11 @@ def call_summary(call_id: int, db: Session = Depends(get_db), current_user: User
         raise HTTPException(status_code=404, detail="Call not found")
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     existing = db.query(CallRating).filter(CallRating.call_id == call_id).first()
+    badge_tag = None
+    if listener and listener.badge_tag_id:
+        t = db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id == listener.badge_tag_id).first()
+        if t:
+            badge_tag = {"id": t.id, "name": t.name, "color": t.color}
     return CallSummaryOut(
         call_id=call.id, listener_id=call.callee_listener_id,
         listener_name=listener.name if listener else "Unknown",
@@ -570,6 +581,7 @@ def call_summary(call_id: int, db: Session = Depends(get_db), current_user: User
         duration_seconds=call.duration_seconds, coins_deducted=call.coins_deducted,
         existing_rating=existing.rating if existing else None,
         existing_review=existing.review if existing else None,
+        badge_tag=badge_tag,
     )
 
 @router.post("/{call_id}/rate")

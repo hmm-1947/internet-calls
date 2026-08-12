@@ -3,6 +3,7 @@ import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
 import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
 
@@ -48,9 +49,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.showError(context, message);
   }
 
   Future<void> _submitIdentifier() async {
@@ -136,9 +135,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
         otpCode: _otpController.text.trim(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset successful. Please login.')),
-      );
+      PillMessage.showSuccess(context, 'Password reset successful. Please login.');
       Navigator.of(context).pop();
     } catch (e) {
       // Surfaces backend messages as-is, e.g. when the new password

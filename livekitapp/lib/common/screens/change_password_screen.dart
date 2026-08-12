@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 
 /// Shared "Change Password" screen used from both the user and listener
 /// settings screens. The caller supplies [onSubmit], which should call the
@@ -41,9 +42,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.showError(context, message);
   }
 
   Future<void> _submit() async {
@@ -74,9 +73,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     try {
       await widget.onSubmit(currentPassword, newPassword);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password successfully changed')),
-      );
+      PillMessage.showSuccess(context, 'Password successfully changed');
       Navigator.of(context).pop();
     } catch (e) {
       // Surfaces backend messages as-is, e.g. "Current password is

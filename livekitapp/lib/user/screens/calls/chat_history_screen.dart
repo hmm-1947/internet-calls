@@ -6,6 +6,7 @@ import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/chat_composer.dart';
 import 'package:livekitapp/common/widgets/chat_message_list.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/widgets/typing_indicator.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
@@ -26,12 +27,14 @@ class ChatHistoryScreen extends StatefulWidget {
   final int listenerId;
   final String listenerName;
   final String? listenerPhotoUrl;
+  final Map<String, dynamic>? listenerBadgeTag;
 
   const ChatHistoryScreen({
     super.key,
     required this.listenerId,
     required this.listenerName,
     this.listenerPhotoUrl,
+    this.listenerBadgeTag,
   });
 
   @override
@@ -715,9 +718,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
 
   void _showInsufficientCoins() {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Not enough coins to send this message')),
-    );
+    PillMessage.show(context, 'Not enough coins to send this message');
   }
 
   Future<void> _toggleFavorite() async {
@@ -752,9 +753,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     final token = _token;
     if (_callingListener || token == null) return;
     if (ActiveCallManager.instance.hasActiveCall) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are already on a call')),
-      );
+      PillMessage.show(context, 'You are already on a call');
       return;
     }
     _callingListener = true;
@@ -777,9 +776,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
+        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       _callingListener = false;
@@ -940,7 +937,6 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
             onPressed: () => showGiftSheet(
               context,
               listenerId: widget.listenerId,
-              fromTop: true,
             ),
           ),
           ValueListenableBuilder<bool>(

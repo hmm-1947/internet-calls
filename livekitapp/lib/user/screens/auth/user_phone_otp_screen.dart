@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
@@ -59,18 +60,14 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
         _sending = false;
         _sendError = message;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      PillMessage.showError(context, message);
     }
   }
 
   Future<void> _verify() async {
     final code = _otpController.text.trim();
     if (code.length != 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 4-digit OTP')),
-      );
+      PillMessage.showError(context, 'Enter the 4-digit OTP');
       return;
     }
     setState(() => _verifying = true);
@@ -94,9 +91,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _verifying = false);
     }

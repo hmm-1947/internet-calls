@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
 from app.core.database import get_db
-from app.models.models import Listener, Session as SessionModel, Call, CallRating
+from app.models.models import Listener, Session as SessionModel, Call, CallRating, ListenerBadgeTag
 from datetime import datetime, timezone
 import json
 from app.models.models import ChatMessage
@@ -40,6 +40,11 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
     ).scalar()
     avg_rating = db.query(sa_func.avg(CallRating.rating)).filter(CallRating.listener_id == current_listener.id).scalar()
     rating_count = db.query(sa_func.count(CallRating.id)).filter(CallRating.listener_id == current_listener.id).scalar()
+    badge_tag = None
+    if current_listener.badge_tag_id:
+        t = db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id == current_listener.badge_tag_id).first()
+        if t:
+            badge_tag = {"id": t.id, "name": t.name, "color": t.color}
     return {
         "id": current_listener.id,
         "name": current_listener.name,
@@ -59,6 +64,7 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "photo_url": current_listener.photo_url,
         "age": current_listener.age,
         "occupation": current_listener.occupation,
+        "badge_tag": badge_tag,
     }
 
 

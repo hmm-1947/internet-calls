@@ -45,7 +45,7 @@ from app.utils.phone import normalize_indian_phone
 from app.utils.rate_limit import enforce_rate_limit, rate_limit
 from app.utils.security import hash_password, verify_password, generate_session_token, session_expiry
 from app.utils.audit import record_audit_event
-from app.models.models import Listener
+from app.models.models import Listener, ListenerBadgeTag
 from app.core.deps import get_current_user
 from app.utils.coins import chat_message_coin_cost
 from firebase_admin import auth as firebase_auth
@@ -803,6 +803,12 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
     ).group_by(Call.callee_listener_id).all()
     last_call_by_listener = {r[0]: r[1] for r in last_call_rows}
 
+    badge_tag_ids = {l.badge_tag_id for l in listeners if l.badge_tag_id}
+    badge_tags_by_id = {}
+    if badge_tag_ids:
+        for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(badge_tag_ids)).all():
+            badge_tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
+
     result = []
     for l in listeners:
         avg_rating, rating_count = ratings_by_listener.get(l.id, (None, 0))
@@ -819,6 +825,7 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             "photo_url": l.photo_url,
             "age": l.age,
             "occupation": l.occupation,
+            "badge_tag": badge_tags_by_id.get(l.badge_tag_id),
             # Null for a listener this user has never called. The client sorts
             # on the same field so presence changes arriving over the socket
             # keep the list in this exact order without a refetch.
@@ -855,6 +862,11 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
         languages = json.loads(l.languages) if l.languages else []
     except Exception:
         languages = []
+    badge_tag = None
+    if l.badge_tag_id:
+        t = db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id == l.badge_tag_id).first()
+        if t:
+            badge_tag = {"id": t.id, "name": t.name, "color": t.color}
     return {
         "id": l.id,
         "name": l.name,
@@ -868,6 +880,7 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
         "photo_url": l.photo_url,
         "age": l.age,
         "occupation": l.occupation,
+        "badge_tag": badge_tag,
     }
 
     

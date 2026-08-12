@@ -178,6 +178,15 @@ class AdminVideoCallUpdate(BaseModel):
     disabled: bool
 
 
+class ListenerBadgeTagCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#E11D48"
+
+
+class ListenerTagAssign(BaseModel):
+    tag_id: Optional[int] = None
+
+
 class BillingPlanBase(BaseModel):
     name: str
     price: int
@@ -588,6 +597,7 @@ class ChatThreadOut(BaseModel):
     is_online: bool = False
     last_seen: Optional[datetime] = None
     photo_url: Optional[str] = None
+    badge_tag: Optional[dict] = None
 
 class TypingEvent(BaseModel):
     listener_id: Optional[int] = None
@@ -618,7 +628,7 @@ class CallHistoryOut(BaseModel):
     created_at: datetime
     connected_at: Optional[datetime] = None
     other_party_photo_url: Optional[str] = None
-
+    badge_tag: Optional[dict] = None
     class Config:
         from_attributes = True
 
@@ -635,6 +645,7 @@ class CallSummaryOut(BaseModel):
     coins_deducted: int
     existing_rating: Optional[int] = None
     existing_review: Optional[str] = None
+    badge_tag: Optional[dict] = None
 
 class ListenerNoteSave(BaseModel):
     call_id: Optional[int] = None

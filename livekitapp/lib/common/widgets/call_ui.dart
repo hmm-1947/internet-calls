@@ -21,12 +21,16 @@ class PulsingAvatarRing extends StatefulWidget {
   final bool showVideo;
   final VideoTrack? videoTrack;
   final String? photoUrl;
+  final String? badgeLabel;
+  final Color? badgeColor;
   const PulsingAvatarRing({
     super.key,
     required this.audioLevel,
     this.showVideo = false,
     this.videoTrack,
     this.photoUrl,
+    this.badgeLabel,
+    this.badgeColor,
   });
 
   @override
@@ -122,6 +126,16 @@ class _PulsingAvatarRingState extends State<PulsingAvatarRing>
                   videoTrack: widget.videoTrack,
                   photoUrl: widget.photoUrl,
                 ),
+                if (!widget.showVideo &&
+                    widget.badgeLabel != null &&
+                    widget.badgeLabel!.isNotEmpty)
+                  Positioned(
+                    top: -(photoSize * 0.06),
+                    child: _CallBadge(
+                      label: widget.badgeLabel!,
+                      color: widget.badgeColor ?? const Color(0xFFE11D48),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -217,6 +231,47 @@ class _AvatarRingFace extends StatelessWidget {
         border: Border.all(color: _pink.withValues(alpha: 0.9), width: 2.5),
       ),
       child: ClipOval(child: face),
+    );
+  }
+}
+
+class _CallBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _CallBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color, Color.lerp(color, Colors.black, 0.25)!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1.6),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.6),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+          letterSpacing: 0.2,
+        ),
+      ),
     );
   }
 }
