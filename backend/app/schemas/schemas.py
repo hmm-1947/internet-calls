@@ -764,6 +764,7 @@ class AdminProfileOut(BaseModel):
     username: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
 class AdminProfileUpdate(BaseModel):

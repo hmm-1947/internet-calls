@@ -1,9 +1,11 @@
+import os
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -27,6 +29,7 @@ from app.schemas.schemas import (
 
 from app.utils.email_otp import generate_otp_code, send_otp_email
 from app.utils.security import hash_password, verify_password, generate_session_token, session_expiry
+from app.utils.uploads import read_and_validate_image, write_file
 
 router = APIRouter(prefix="/admin/auth", tags=["admin-auth"])
 
@@ -139,11 +142,32 @@ def complete_invite(payload: AdminInviteComplete, db: Session = Depends(get_db))
 
 
 def _profile_out(admin: AdminUser) -> AdminProfileOut:
-    return AdminProfileOut(id=admin.id, username=admin.username, email=admin.email, phone=admin.phone)
+    return AdminProfileOut(id=admin.id, username=admin.username, email=admin.email, phone=admin.phone, photo_url=admin.photo_url)
 
 
 @router.get("/me", response_model=AdminProfileOut)
 def get_admin_profile(admin: AdminUser = Depends(verify_admin)):
+    return _profile_out(admin)
+
+
+@router.post("/me/photo", response_model=AdminProfileOut)
+async def update_admin_photo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(verify_admin),
+):
+    admin = db.query(AdminUser).filter(AdminUser.id == current_admin.id).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    contents, ext = await read_and_validate_image(file)
+    filename = f"admin_{admin.id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join("profile_photos", filename)
+    await write_file(filepath, contents)
+    admin.photo_url = f"/profile_photos/{filename}"
+    db.commit()
+    db.refresh(admin)
+
     return _profile_out(admin)
 
 

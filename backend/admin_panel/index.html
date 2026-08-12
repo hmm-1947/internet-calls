@@ -71,7 +71,7 @@
 
     .app-shell {
       display: grid;
-      grid-template-columns: var(--sidebar-w) 1fr;
+      grid-template-columns: 1fr;
       min-height: 100vh;
     }
 
@@ -82,7 +82,35 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      z-index: 300;
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+      overflow-y: auto;
     }
+
+    .side-nav.open {
+      transform: translateX(0);
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
+    }
+
+    /* Slim strip along the left screen edge that hints a drawer lives there. */
+    .side-nav-edge-hint {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100vh;
+      background: var(--leaf);
+      opacity: 0.25;
+      z-index: 290;
+      pointer-events: none;
+    }
+
 
     .theme-toggle {
       margin-top: auto;
@@ -173,6 +201,9 @@
       font-size: 14px;
       cursor: pointer;
       border: 1px solid transparent;
+      position: relative;
+      z-index: 1;
+      transition: color 0.2s;
     }
 
     .nav-item .nav-ic {
@@ -181,19 +212,48 @@
     }
 
     .nav-item:hover {
-      background: var(--mint);
       color: var(--leaf);
     }
 
     .nav-item.active {
-      background: #fdeceb;
       color: var(--leaf);
-      border-color: var(--leaf);
     }
 
-    [data-theme="dark"] .nav-item.active {
+    @keyframes navItemShake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-3px); }
+      40% { transform: translateX(3px); }
+      60% { transform: translateX(-2px); }
+      80% { transform: translateX(2px); }
+    }
+
+    .nav-item.nav-shake {
+      animation: navItemShake 0.35s ease;
+    }
+
+
+    .nav-slider {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      top: 0;
+      height: 0;
+      background: #fdeceb;
+      border: 1px solid var(--leaf);
+      border-radius: 10px;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0;
+      will-change: top, height;
+      transition: top 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+                  height 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+                  opacity 0.2s ease;
+    }
+
+    [data-theme="dark"] .nav-slider {
       background: #3a2224;
     }
+
 
     /* Red counter of unseen notifications, sits at the end of the nav row. */
     .nav-badge {
@@ -373,6 +433,14 @@
       justify-content: center;
       font-weight: 700;
       font-size: 13px;
+    }
+
+    .admin-avatar-photo {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: none;
     }
 
     .admin-name-block {
@@ -1619,6 +1687,14 @@
   <div class="confirm-box profile-box">
     <div class="confirm-icon info">&#128100;</div>
     <div class="confirm-title">Edit Profile</div>
+    <div class="profile-avatar-edit" style="display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 10px;">
+      <div style="position:relative;width:72px;height:72px;">
+        <div class="admin-avatar" id="profileAvatarInitial" style="width:72px;height:72px;font-size:28px;">A</div>
+        <img id="profileAvatarPhoto" alt="Admin photo" style="width:72px;height:72px;border-radius:50%;object-fit:cover;display:none;">
+        <input type="file" id="profilePhotoInput" accept="image/*" style="display:none;" onchange="uploadAdminPhoto(this)">
+      </div>
+      <button type="button" class="btn btn-ghost" style="padding:4px 12px;font-size:12px;" onclick="document.getElementById('profilePhotoInput').click()">Change photo</button>
+    </div>
     <div class="profile-username" id="profileUsernameLabel"></div>
     <div class="profile-field">
       <label for="profileEmail">Email address</label>
@@ -1722,7 +1798,9 @@
 
   <div id="panelRoot" style="display:none;">
   <div class="app-shell">
-    <div class="side-nav">
+    <div class="side-nav-edge-hint"></div>
+    <div class="side-nav" id="sideNav">
+      <div class="nav-slider" id="navSlider"></div>
       <div class="side-brand"><span class="brand-icon">&#128222;</span>LailaNowAdmin</div>
       <div class="nav-item active" id="navDashboard" onclick="switchPage('dashboard')"><span class="nav-ic">&#9635;</span>Dashboard</div>
       <div class="nav-item" id="navNotifications" onclick="switchPage('notifications')"><span class="nav-ic">&#128276;</span>Notifications<span class="nav-badge" id="navNotificationsBadge">0</span></div>
@@ -1743,6 +1821,7 @@
           <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">&#9788;</button>
           <div class="admin-chip" onclick="toggleAdminMenu()">
             <div class="admin-avatar" id="adminAvatarInitial">A</div>
+            <img class="admin-avatar-photo" id="adminAvatarPhoto" alt="Admin photo">
             <div class="admin-name-block">
               <span class="an" id="adminNameLabel">Admin</span>
               <span class="ar">Admin</span>
@@ -2392,6 +2471,8 @@
     }
 
     function switchPage(page) {
+      const prevActiveEl = document.querySelector('.side-nav .nav-item.active');
+      const prevPage = prevActiveEl ? prevActiveEl.id : null;
       localStorage.setItem('adminActivePage', page);
       document.getElementById('page-notifications').style.display = page === 'notifications' ? '' : 'none';
       document.getElementById('navNotifications').classList.toggle('active', page === 'notifications');
@@ -2434,7 +2515,94 @@
         loadPendingWithdrawals();
         loadWithdrawalLog();
       }
+      updateNavSlider();
+      shakeItemsInTheWay(prevPage, page);
     }
+
+    // Visual order of the nav items, top to bottom, matching the markup.
+    const NAV_ORDER = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy'];
+    const NAV_IDS = ['navDashboard', 'navNotifications', 'navUsers', 'navListeners', 'navCoinSettings', 'navBilling', 'navGifts', 'navSpecialOffers', 'navWeeklyChallenges', 'navTermsPrivacy'];
+
+    function shakeItemsInTheWay(prevPageId, page) {
+      if (!prevPageId) return;
+      const prevIdx = NAV_IDS.indexOf(prevPageId);
+      const newIdx = NAV_ORDER.indexOf(page);
+      if (prevIdx === -1 || newIdx === -1 || prevIdx === newIdx) return;
+
+      // Indices strictly between the old and new selection - the items the
+      // pill visually slides across - ordered starting from the item nearest
+      // the old selection, rippling toward the new one.
+      const between = [];
+      if (newIdx > prevIdx) {
+        for (let i = prevIdx + 1; i < newIdx; i++) between.push(i);
+      } else {
+        for (let i = prevIdx - 1; i > newIdx; i--) between.push(i);
+      }
+
+      between.forEach(function (idx, seq) {
+        const item = document.getElementById(NAV_IDS[idx]);
+        if (!item) return;
+        item.classList.remove('nav-shake');
+        item.style.animationDelay = (seq * 60) + 'ms';
+        // Force a reflow so the animation restarts even if it was just removed.
+        void item.offsetWidth;
+        item.classList.add('nav-shake');
+        item.addEventListener('animationend', function handler() {
+          item.classList.remove('nav-shake');
+          item.style.animationDelay = '';
+          item.removeEventListener('animationend', handler);
+        });
+      });
+    }
+
+    function updateNavSlider() {
+      const active = document.querySelector('.side-nav .nav-item.active');
+      const slider = document.getElementById('navSlider');
+      if (!active || !slider) return;
+      slider.style.top = active.offsetTop + 'px';
+      slider.style.height = active.offsetHeight + 'px';
+      slider.style.opacity = '1';
+    }
+
+    window.addEventListener('resize', updateNavSlider);
+
+    // ---- Left nav as a drag-driven drawer ----
+    // Moving the mouse toward the left edge of the screen opens the drawer;
+    // dragging it back toward the right (past the drawer's own width) closes it.
+    let lastMouseX = null;
+    const NAV_OPEN_EDGE_PX = 32;
+
+    document.addEventListener('mousemove', function (e) {
+      const panelRoot = document.getElementById('panelRoot');
+      const nav = document.getElementById('sideNav');
+      if (!panelRoot || panelRoot.style.display === 'none' || !nav) {
+        lastMouseX = e.clientX;
+        return;
+      }
+
+      if (lastMouseX === null) {
+        lastMouseX = e.clientX;
+        return;
+      }
+
+      const dx = e.clientX - lastMouseX;
+      const navWidth = nav.offsetWidth || 240;
+
+      if (dx < 0 && e.clientX <= NAV_OPEN_EDGE_PX) {
+        // Dragging left, close to the edge -> reveal the drawer.
+        nav.classList.add('open');
+      } else if (dx > 0 && nav.classList.contains('open') && e.clientX > navWidth) {
+        // Dragging right, past the open drawer -> tuck it away.
+        nav.classList.remove('open');
+      }
+
+      lastMouseX = e.clientX;
+    });
+
+    document.addEventListener('mouseleave', function () {
+      lastMouseX = null;
+    });
+
 
     // ---- Terms & Privacy Policy rich text editor (Quill) ----
     let tpActiveTab = 'terms';
@@ -2581,7 +2749,88 @@
       const name = localStorage.getItem('adminUsername') || 'Admin';
       document.getElementById('adminNameLabel').textContent = name;
       document.getElementById('adminAvatarInitial').textContent = name.charAt(0).toUpperCase();
+      updateAdminAvatar(localStorage.getItem('adminPhotoUrl') || '');
     }
+
+    // Shows the uploaded photo in the top-right chip when one exists, otherwise
+    // falls back to the initial-letter avatar. Also mirrors it into the edit
+    // profile modal's own preview if that's on screen.
+    function updateAdminAvatar(photoUrl) {
+      const img = document.getElementById('adminAvatarPhoto');
+      const initial = document.getElementById('adminAvatarInitial');
+      const modalImg = document.getElementById('profileAvatarPhoto');
+      const modalInitial = document.getElementById('profileAvatarInitial');
+      const src = photoUrl ? (API_URL + photoUrl) : '';
+      if (photoUrl) {
+        localStorage.setItem('adminPhotoUrl', photoUrl);
+        img.src = src;
+        img.style.display = 'block';
+        initial.style.display = 'none';
+      } else {
+        localStorage.removeItem('adminPhotoUrl');
+        img.removeAttribute('src');
+        img.style.display = 'none';
+        initial.style.display = '';
+      }
+      if (modalImg && modalInitial) {
+        if (photoUrl) {
+          modalImg.src = src;
+          modalImg.style.display = 'block';
+          modalInitial.style.display = 'none';
+        } else {
+          modalImg.removeAttribute('src');
+          modalImg.style.display = 'none';
+          modalInitial.style.display = '';
+        }
+      }
+    }
+
+    // Holds the file picked via "Change photo" until Confirm is pressed —
+    // selecting a photo only previews it locally, it is not sent to the
+    // server until the profile save is confirmed.
+    let _pendingAdminPhotoFile = null;
+
+    function uploadAdminPhoto(input) {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { setProfileMsg('Please choose an image file.', false); input.value = ''; return; }
+      if (file.size > 5 * 1024 * 1024) { setProfileMsg('Image must be under 5MB.', false); input.value = ''; return; }
+
+      _pendingAdminPhotoFile = file;
+      const modalImg = document.getElementById('profileAvatarPhoto');
+      const modalInitial = document.getElementById('profileAvatarInitial');
+      const reader = new FileReader();
+      reader.onload = () => {
+        modalImg.src = reader.result;
+        modalImg.style.display = 'block';
+        modalInitial.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+      setProfileMsg('Photo selected — press Confirm to save.', null);
+    }
+
+    async function submitAdminPhoto() {
+      const file = _pendingAdminPhotoFile;
+      if (!file) return true;
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(API_URL + '/admin/auth/me/photo', {
+          method: 'POST', headers: authHeaders(false),
+          body: formData
+        });
+        const data = await readResponseBody(res);
+        if (!res.ok) throw new Error(profileRequestError(res, data));
+        _adminProfile.photo_url = data.photo_url || '';
+        updateAdminAvatar(_adminProfile.photo_url);
+        _pendingAdminPhotoFile = null;
+        return true;
+      } catch (e) {
+        setProfileMsg('✗ ' + e.message, false);
+        return false;
+      }
+    }
+
 
     function toggleAdminMenu() {
       document.getElementById('adminMenu').classList.toggle('open');
@@ -2788,7 +3037,7 @@
     }
 
     // ─── Edit admin profile (email + phone) ───────────────────────────────────
-    let _adminProfile = { email: '', phone: '' };
+    let _adminProfile = { email: '', phone: '', photo_url: '' };
 
     function setProfileMsg(text, ok) {
       const el = document.getElementById('profileMsg');
@@ -2804,6 +3053,8 @@
       document.getElementById('profileEmail').value = _adminProfile.email || localStorage.getItem('adminEmail') || '';
       document.getElementById('profilePhone').value = _adminProfile.phone || '';
       document.getElementById('profileSaveBtn').disabled = true;
+      _pendingAdminPhotoFile = null;
+      updateAdminAvatar(_adminProfile.photo_url || localStorage.getItem('adminPhotoUrl') || '');
       setProfileMsg('Loading your details…', null);
       overlay.style.display = 'flex';
       requestAnimationFrame(() => overlay.classList.add('show'));
@@ -2842,11 +3093,12 @@
         if (!res.ok) throw new Error(profileRequestError(res, data));
         // Current values straight from the account: the email is the one saved when the
         // admin was created, shown as editable text. Phone stays blank until one is set.
-        _adminProfile = { email: data.email || '', phone: data.phone || '' };
+        _adminProfile = { email: data.email || '', phone: data.phone || '', photo_url: data.photo_url || '' };
         document.getElementById('profileEmail').value = _adminProfile.email;
         document.getElementById('profilePhone').value = _adminProfile.phone;
         document.getElementById('profileUsernameLabel').textContent = '@' + (data.username || 'admin');
         if (data.email) localStorage.setItem('adminEmail', data.email);
+        updateAdminAvatar(_adminProfile.photo_url);
         setProfileMsg(
           data.email
             ? ''
@@ -2872,11 +3124,13 @@
 
       const emailChanged = email.toLowerCase() !== (_adminProfile.email || '').toLowerCase();
       const phoneChanged = phone !== (_adminProfile.phone || '');
-      if (!emailChanged && !phoneChanged) { setProfileMsg('No changes to save.', null); return; }
+      const photoChanged = !!_pendingAdminPhotoFile;
+      if (!emailChanged && !phoneChanged && !photoChanged) { setProfileMsg('No changes to save.', null); return; }
 
       const changes = [];
       if (emailChanged) changes.push('email to ' + email);
       if (phoneChanged) changes.push('phone number to ' + (phone || 'empty'));
+      if (photoChanged) changes.push('profile photo');
       const ok = await confirmDialog({
         title: 'Confirm profile change',
         body: 'Do you want to change your ' + changes.join(' and ') + '?'
@@ -2891,16 +3145,22 @@
       setProfileMsg('Saving…', null);
       document.getElementById('profileSaveBtn').disabled = true;
       try {
-        const res = await fetch(API_URL + '/admin/auth/me', {
-          method: 'PATCH', headers: authHeaders(true),
-          body: JSON.stringify({ email, phone: phone || null })
-        });
-        const data = await readResponseBody(res);
-        if (!res.ok) throw new Error(profileRequestError(res, data));
-        _adminProfile = { email: data.email || '', phone: data.phone || '' };
-        document.getElementById('profileEmail').value = _adminProfile.email;
-        document.getElementById('profilePhone').value = _adminProfile.phone;
-        if (data.email) localStorage.setItem('adminEmail', data.email);
+        if (photoChanged) {
+          const photoOk = await submitAdminPhoto();
+          if (!photoOk) return;
+        }
+        if (emailChanged || phoneChanged) {
+          const res = await fetch(API_URL + '/admin/auth/me', {
+            method: 'PATCH', headers: authHeaders(true),
+            body: JSON.stringify({ email, phone: phone || null })
+          });
+          const data = await readResponseBody(res);
+          if (!res.ok) throw new Error(profileRequestError(res, data));
+          _adminProfile = { email: data.email || '', phone: data.phone || '', photo_url: _adminProfile.photo_url || '' };
+          document.getElementById('profileEmail').value = _adminProfile.email;
+          document.getElementById('profilePhone').value = _adminProfile.phone;
+          if (data.email) localStorage.setItem('adminEmail', data.email);
+        }
         setProfileMsg('✓ Profile updated', true);
         setTimeout(closeEditProfile, 1000);
       } catch (e) {
@@ -2909,6 +3169,7 @@
         document.getElementById('profileSaveBtn').disabled = false;
       }
     }
+
 
     // FastAPI validation errors arrive as a list of objects — surface the first message.
     function detailMessage(detail) {
