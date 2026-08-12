@@ -28,7 +28,7 @@
       --mint: #1a1d24;
       --ink: #eef0f4;
       --slate: #9aa2b1;
-      --line: #2a2e38;
+      --line: #3a4053;
       --white: #232733;
       --bg: #14161c;
     }
@@ -172,6 +172,7 @@
       font-weight: 600;
       font-size: 14px;
       cursor: pointer;
+      border: 1px solid transparent;
     }
 
     .nav-item .nav-ic {
@@ -180,13 +181,18 @@
     }
 
     .nav-item:hover {
-      background: #fbeaec;
+      background: var(--mint);
       color: var(--leaf);
     }
 
     .nav-item.active {
-      background: #fdecee;
+      background: #fdeceb;
       color: var(--leaf);
+      border-color: var(--leaf);
+    }
+
+    [data-theme="dark"] .nav-item.active {
+      background: #3a2224;
     }
 
     /* Red counter of unseen notifications, sits at the end of the nav row. */
@@ -454,22 +460,83 @@
       border-bottom: 1px solid var(--line);
     }
 
-    input {
+    input,
+    textarea,
+    select {
       padding: 10px 12px;
       margin: 5px 0;
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       background: var(--white);
       color: var(--ink);
       font-size: 13px;
-      transition: border-color .15s, box-shadow .15s;
+      font-family: inherit;
+      box-shadow: inset 0 1px 2px rgba(20, 20, 30, .04);
+      transition: border-color .15s, box-shadow .15s, background .15s;
     }
 
-    input:focus {
+    [data-theme="dark"] input,
+    [data-theme="dark"] textarea,
+    [data-theme="dark"] select {
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25);
+    }
+
+    textarea {
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--slate);
+      opacity: .75;
+    }
+
+    input:hover,
+    textarea:hover,
+    select:hover {
+      border-color: #d8dae0;
+    }
+
+    [data-theme="dark"] input:hover,
+    [data-theme="dark"] textarea:hover,
+    [data-theme="dark"] select:hover {
+      border-color: #4c5468;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
       outline: none;
       border-color: var(--sky);
-      box-shadow: 0 0 0 3px rgba(230, 57, 70, .12);
+      box-shadow: inset 0 1px 2px rgba(20, 20, 30, .04), 0 0 0 3px rgba(230, 57, 70, .12);
+      background: var(--white);
+    }
+
+    [data-theme="dark"] input:focus,
+    [data-theme="dark"] textarea:focus,
+    [data-theme="dark"] select:focus {
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25), 0 0 0 3px rgba(230, 57, 70, .18);
+    }
+
+    /* Coin Settings "add coins" drawer: a plain amount field reads better
+       without the browser's built-in increment/decrement spinner. */
+    #coinAdjustAmount::-webkit-outer-spin-button,
+    #coinAdjustAmount::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    #coinAdjustAmount {
+      -moz-appearance: textfield;
+    }
+
+    input:disabled,
+    textarea:disabled,
+    select:disabled {
+      opacity: .6;
+      cursor: not-allowed;
     }
 
     .btn {
@@ -522,6 +589,41 @@
       background: var(--leaf-dark);
     }
 
+    /* Styled "Choose file" control for photo/image uploads, replacing the
+       bare OS file picker with a button that matches the rest of the UI. */
+    .file-input {
+      display: block;
+      font-size: 13px;
+      color: var(--slate);
+      margin: 6px 0;
+    }
+
+    .file-input::file-selector-button,
+    .file-input::-webkit-file-upload-button {
+      padding: 9px 18px;
+      margin-right: 12px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: var(--leaf);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .2px;
+      cursor: pointer;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      box-shadow: 0 3px 10px rgba(230, 57, 70, .2);
+    }
+
+    .file-input::file-selector-button:hover,
+    .file-input::-webkit-file-upload-button:hover {
+      background: var(--leaf-dark);
+    }
+
+    .file-input::file-selector-button:active,
+    .file-input::-webkit-file-upload-button:active {
+      transform: scale(.97);
+    }
+
     .btn-ghost {
       background: var(--mint);
       color: var(--ink);
@@ -544,6 +646,10 @@
       box-shadow: 0 2px 10px rgba(20, 20, 30, .05);
       margin-bottom: 22px;
       border: 1px solid var(--line);
+    }
+
+    [data-theme="dark"] .card {
+      box-shadow: 0 2px 14px rgba(0, 0, 0, .35);
     }
 
     .tp-quill-wrap {
@@ -595,6 +701,78 @@
     .tp-quill-wrap .ql-picker.ql-font .ql-picker-options,
     .tp-quill-wrap .ql-picker.ql-size .ql-picker-options { width: max-content; }
 
+    /* Quill's snow theme hardcodes dark icon strokes/fills and dark picker
+       text, tuned for a light toolbar. In dark mode that leaves bold,
+       italic, and every other toolbar control nearly invisible against the
+       dark background, so recolor them to match the theme. */
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-stroke {
+      stroke: var(--ink);
+    }
+
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-fill,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-stroke.ql-fill {
+      fill: var(--ink);
+    }
+
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker {
+      color: var(--ink);
+    }
+
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker-options {
+      background: var(--white);
+      border-color: var(--line);
+    }
+
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker-item {
+      color: var(--ink);
+    }
+
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow button:hover .ql-stroke,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow button.ql-active .ql-stroke,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker-label:hover .ql-stroke,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker-item:hover,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker-label.ql-active {
+      color: var(--leaf);
+    }
+
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow button:hover .ql-stroke,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow button.ql-active .ql-stroke,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker-label:hover .ql-stroke,
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker-label.ql-active .ql-stroke {
+      stroke: var(--leaf);
+    }
+
+    [data-theme="dark"] .tp-quill-wrap .ql-toolbar.ql-snow .ql-picker.ql-expanded .ql-picker-label {
+      border-color: var(--line);
+    }
+
+    /* Themed scrollbar, used everywhere in the admin panel (list panes,
+       modals, the coin-search results, etc.), matching dark mode instead
+       of the OS-default scrollbar. */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--slate) var(--mint);
+    }
+
+    *::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    *::-webkit-scrollbar-track {
+      background: var(--mint);
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background: var(--slate);
+      border-radius: 999px;
+      border: 2px solid var(--mint);
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+      background: var(--leaf);
+    }
+
     .tp-tab-btn {
       background: var(--white);
       color: var(--ink);
@@ -605,6 +783,50 @@
       background: var(--ink);
       color: var(--white);
     }
+
+    .coin-add-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .coin-search-results {
+      margin-top: 4px;
+      max-height: 640px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .coin-search-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-top: 8px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, transform .1s;
+    }
+
+    .coin-search-row:hover {
+      border-color: var(--leaf);
+      background: var(--mint);
+    }
+
+    .coin-search-row:active {
+      transform: scale(.99);
+    }
+
+    .coin-search-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 160px;
+    }
+
 
     .stat-cards {
       display: grid;
@@ -856,23 +1078,38 @@
     }
 
     .person-item {
-      padding: 10px 10px;
-      border-radius: 8px;
+      padding: 10px 12px;
+      border-radius: 10px;
       cursor: pointer;
-      margin-bottom: 5px;
-      border: 1px solid transparent;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      background: var(--white);
       display: flex;
       flex-direction: column;
       gap: 2px;
+      transition: border-color .15s, background .15s, transform .1s;
     }
 
     .person-item:hover {
       background: var(--mint);
+      border-color: #d8dae0;
+    }
+
+    [data-theme="dark"] .person-item:hover {
+      border-color: #4c5468;
+    }
+
+    .person-item:active {
+      transform: scale(.99);
     }
 
     .person-item.selected {
       background: #fdeceb;
       border-color: var(--leaf);
+    }
+
+    [data-theme="dark"] .person-item.selected {
+      background: #3a2224;
     }
 
     .person-name {
@@ -1322,6 +1559,31 @@
       margin-bottom: 5px;
     }
     .profile-field input { width: 100%; margin: 0; }
+
+    /* The box itself and a plain input share the same --white surface, so
+       without an explicit fill an unfocused field is nearly invisible,
+       especially in dark mode. Give fields inside a modal a slightly
+       recessed background so they read as inputs at rest, not just on
+       hover/focus. */
+    .confirm-box input,
+    .confirm-box textarea,
+    .confirm-box select {
+      background: var(--mint);
+    }
+
+    .confirm-box input:focus,
+    .confirm-box textarea:focus,
+    .confirm-box select:focus {
+      background: var(--white);
+    }
+
+    /* .btn-ghost's border already exists but reads too faint against a
+       modal's own surface in dark mode - a touch more contrast so Cancel
+       is clearly a button before it's hovered. */
+    [data-theme="dark"] .confirm-box .btn-ghost {
+      border-color: #3a3f4c;
+    }
+
     .profile-username {
       font-size: 12px;
       color: var(--slate);
@@ -1375,6 +1637,24 @@
     <div class="confirm-btns">
       <button class="btn btn-ghost" onclick="closeEditProfile()">Cancel</button>
       <button class="btn btn-primary" id="profileSaveBtn" onclick="submitEditProfile()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Coin Settings: add-coins drawer for a searched user/listener -->
+<div class="confirm-overlay profile-overlay" id="coinAdjustOverlay" style="display:none;">
+  <div class="confirm-box profile-box">
+    <div class="confirm-icon info">&#129689;</div>
+    <div class="confirm-title" id="coinAdjustTitle">Add Coins</div>
+    <div class="profile-username" id="coinAdjustSubtitle"></div>
+    <div class="profile-field">
+      <label for="coinAdjustAmount">Amount (use a minus sign to deduct)</label>
+      <input id="coinAdjustAmount" type="number" placeholder="e.g. 100 or -50" onkeydown="if(event.key==='Enter') submitCoinAdjust()">
+    </div>
+    <div id="coinAdjustMsg" style="font-weight:600;font-size:13px;text-align:center;min-height:18px;margin-bottom:12px;"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeCoinAdjust()">Cancel</button>
+      <button class="btn btn-leaf" onclick="submitCoinAdjust()">Apply</button>
     </div>
   </div>
 </div>
@@ -1662,6 +1942,20 @@
       <input id="voiceCoins" placeholder="e.g. 1" type="number">
       <button class="btn btn-leaf" onclick="saveCoinSettings()">Save Settings</button>
     </div>
+
+    <div class="coin-add-grid">
+      <div class="card">
+        <h2>Add Coins — User</h2>
+        <input type="text" id="coinUserSearch" placeholder="Search user by name, @username, email or phone" oninput="renderCoinSearchResults('user')">
+        <div id="coinUserResults" class="coin-search-results"></div>
+      </div>
+
+      <div class="card">
+        <h2>Add Coins — Listener</h2>
+        <input type="text" id="coinListenerSearch" placeholder="Search listener by name or phone" oninput="renderCoinSearchResults('listener')">
+        <div id="coinListenerResults" class="coin-search-results"></div>
+      </div>
+    </div>
   </div>
 
   <div id="page-billing" style="display:none;">
@@ -1669,7 +1963,7 @@
       <h2>Upgrade Screen Banner</h2>
       <p style="font-size:13px;color:var(--slate);margin-top:0;">This image is shown at the top of the Upgrade screen in the user app, replacing the default badge icon.</p>
       <div id="upgradeBannerPreviewWrap" style="margin-bottom:10px;"></div>
-      <input type="file" id="upgradeBannerFile" accept="image/*">
+      <input type="file" id="upgradeBannerFile" class="file-input" accept="image/*">
       <button class="btn btn-leaf" onclick="uploadUpgradeBanner()">Upload Banner</button>
       <button class="btn btn-ghost" id="upgradeBannerRemoveBtn" style="display:none;" onclick="confirmRemoveBanner()">Remove Banner</button>
       <div id="upgradeBannerMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
@@ -1685,7 +1979,7 @@
       <label style="font-size:13px;color:var(--slate);font-weight:600">Number of coins</label>
       <input id="billingCoins" placeholder="e.g. 500" type="number">
       <label style="font-size:13px;color:var(--slate);font-weight:600">Icon</label>
-      <select id="billingIcon" style="padding:10px 12px;margin:5px 0;width:100%;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
+      <select id="billingIcon">
         <option value="coin">Coin</option>
         <option value="diamond">Diamond</option>
         <option value="star">Star</option>
@@ -1718,7 +2012,7 @@
       <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <span>Purchase History</span>
         <span style="display:flex;align-items:center;gap:8px;">
-          <select id="billingPurchaseStatusFilter" onchange="filterBillingPurchases()" style="padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.06);color:var(--ink);font-size:13px;">
+          <select id="billingPurchaseStatusFilter" onchange="filterBillingPurchases()" style="width:auto;margin:0;padding:8px 10px;">
             <option value="">All statuses</option>
             <option value="completed">Successful</option>
             <option value="pending">Pending</option>
@@ -1740,7 +2034,7 @@
       <label style="font-size:13px;color:var(--slate);font-weight:600">Coins</label>
       <input id="giftCoins" placeholder="e.g. 50" type="number">
       <label style="font-size:13px;color:var(--slate);font-weight:600">Icon image (photo or GIF)</label>
-      <input id="giftIconFile" type="file" accept="image/*,image/gif">
+      <input id="giftIconFile" type="file" class="file-input" accept="image/*,image/gif">
       <div id="giftIconPreviewWrap" style="display:none;margin:8px 0;">
         <img id="giftIconPreview" src="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
       </div>
@@ -1783,7 +2077,7 @@
     <div class="card">
       <h2>Add Special Offer Image</h2>
       <label style="font-size:13px;color:var(--slate);font-weight:600">Offer image</label>
-      <input id="offerImageFile" type="file" accept="image/*">
+      <input id="offerImageFile" type="file" class="file-input" accept="image/*">
       <div id="offerImagePreviewWrap" style="display:none;margin:8px 0;">
         <img id="offerImagePreview" src="" style="width:120px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
       </div>
@@ -2073,6 +2367,9 @@
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = '';
+      const validPages = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy'];
+      const lastPage = localStorage.getItem('adminActivePage');
+      switchPage(validPages.includes(lastPage) ? lastPage : 'dashboard');
       loadPeople();
       loadCoinSettings();
       loadUpgradeBanner();
@@ -2095,6 +2392,7 @@
     }
 
     function switchPage(page) {
+      localStorage.setItem('adminActivePage', page);
       document.getElementById('page-notifications').style.display = page === 'notifications' ? '' : 'none';
       document.getElementById('navNotifications').classList.toggle('active', page === 'notifications');
       document.getElementById('page-dashboard').style.display = page === 'dashboard' ? '' : 'none';
@@ -4270,6 +4568,8 @@
         if (!lRes.ok) throw new Error(listenersCache.detail || 'Failed to load listeners');
         renderPersonList('user');
         renderPersonList('listener');
+        renderCoinSearchResults('user');
+        renderCoinSearchResults('listener');
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
 
@@ -4354,15 +4654,11 @@
           </div>
           ${p.type === 'user' ? `
           <div style="display:flex;gap:6px;align-items:center">
-            <input type="number" id="amount-${p.id}" placeholder="±amount" style="width:90px">
-            <button class="btn btn-leaf" onclick="adjustCoins(${p.id})">Apply</button>
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('user', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
             <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleVideoCall(${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
             <button class="btn btn-danger" onclick="deletePerson('user', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete User</button>
           </div>` : `
           <div style="display:flex;gap:6px;align-items:center">
-            <input type="number" id="amount-${p.id}" placeholder="±amount" style="width:90px">
-            <button class="btn btn-leaf" onclick="adjustListenerCoins(${p.id})">Apply</button>
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
             <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
           </div>`}
@@ -4371,7 +4667,7 @@
           <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
             <div>
               <img src="${p.raw.photo_url ? API_URL + p.raw.photo_url : ''}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:#222;display:block;margin-bottom:6px">
-              <input type="file" id="photoInput-${p.id}" accept="image/*" onchange="uploadProfilePhoto('${p.type}', ${p.id})">
+              <input type="file" id="photoInput-${p.id}" class="file-input" accept="image/*" onchange="uploadProfilePhoto('${p.type}', ${p.id})">
             </div>
             <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px">
               ${p.type === 'user' ? `
@@ -4811,54 +5107,92 @@ ${logSection === 'chats' ? '' : `
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
 
-    async function adjustCoins(userId) {
-      const amount = parseInt(document.getElementById('amount-' + userId).value);
-      if (!amount) { setMsg('Enter a valid amount.', false); return; }
-      const action = amount > 0 ? 'add' : 'deduct';
-      const ok = await confirmDialog({
-        title: 'Adjust User Coins',
-        body: `${action === 'add' ? 'Add' : 'Deduct'} ${Math.abs(amount)} coins ${action === 'add' ? 'to' : 'from'} this user?`,
-        okLabel: action === 'add' ? 'Add Coins' : 'Deduct Coins',
-        okClass: action === 'add' ? 'btn-leaf' : 'btn-danger',
-        icon: '🪙',
-        iconClass: action === 'add' ? 'info' : 'danger'
-      });
-      if (!ok) return;
-      try {
-        const res = await fetch(API_URL + '/admin/coins/adjust', {
-          method: 'POST', headers: authHeaders(true),
-          body: JSON.stringify({ user_id: userId, amount })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
-        setMsg('✓ Coins updated', true);
-        loadPeople();
-      } catch (e) { setMsg('✗ ' + e.message, false); }
+    // ─── Coin Settings: "Add Coins" drawer for a searched user/listener ───────
+    let _coinAdjust = { type: null, id: null };
+
+    /** Opens the coin-adjust drawer for one searched person, reusing the same
+     *  confirm-overlay chrome as the logout/profile modals instead of an
+     *  inline amount field + Apply button per search row. */
+    function openCoinAdjust(type, id, name, coins) {
+      _coinAdjust = { type, id };
+      document.getElementById('coinAdjustTitle').textContent = type === 'user' ? 'Add Coins — User' : 'Add Coins — Listener';
+      document.getElementById('coinAdjustSubtitle').textContent = `${name} · ${coins} coins`;
+      document.getElementById('coinAdjustAmount').value = '';
+      setCoinAdjustMsg('', null);
+      const overlay = document.getElementById('coinAdjustOverlay');
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('show'));
+      setTimeout(() => document.getElementById('coinAdjustAmount').focus(), 180);
     }
 
-    async function adjustListenerCoins(listenerId) {
-      const amount = parseInt(document.getElementById('amount-' + listenerId).value);
-      if (!amount) { setMsg('Enter a valid amount.', false); return; }
-      const action = amount > 0 ? 'add' : 'deduct';
-      const ok = await confirmDialog({
-        title: 'Adjust Listener Coins',
-        body: `${action === 'add' ? 'Add' : 'Deduct'} ${Math.abs(amount)} coins ${action === 'add' ? 'to' : 'from'} this listener?`,
-        okLabel: action === 'add' ? 'Add Coins' : 'Deduct Coins',
-        okClass: action === 'add' ? 'btn-leaf' : 'btn-danger',
-        icon: '🪙',
-        iconClass: action === 'add' ? 'info' : 'danger'
-      });
-      if (!ok) return;
+    function closeCoinAdjust() {
+      const overlay = document.getElementById('coinAdjustOverlay');
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 180);
+    }
+
+    document.getElementById('coinAdjustOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeCoinAdjust();
+    });
+
+    function setCoinAdjustMsg(text, ok) {
+      const el = document.getElementById('coinAdjustMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function submitCoinAdjust() {
+      const { type, id } = _coinAdjust;
+      const amount = parseInt(document.getElementById('coinAdjustAmount').value);
+      if (!amount) { setCoinAdjustMsg('Enter a valid amount.', false); return; }
       try {
-        const res = await fetch(API_URL + '/admin/coins/listener/adjust', {
+        const endpoint = type === 'user' ? '/admin/coins/adjust' : '/admin/coins/listener/adjust';
+        const body = type === 'user' ? { user_id: id, amount } : { listener_id: id, amount };
+        const res = await fetch(API_URL + endpoint, {
           method: 'POST', headers: authHeaders(true),
-          body: JSON.stringify({ listener_id: listenerId, amount })
+          body: JSON.stringify(body)
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg('✓ Coins updated', true);
         loadPeople();
-      } catch (e) { setMsg('✗ ' + e.message, false); }
+        renderCoinSearchResults(type);
+        closeCoinAdjust();
+      } catch (e) { setCoinAdjustMsg('✗ ' + e.message, false); }
+    }
+
+    /** Renders the search results in the Coin Settings "Add Coins" cards.
+     *  Reuses the same usersCache/listenersCache loaded by loadPeople(), so
+     *  search here works as soon as the page has loaded once, and stays in
+     *  sync with the Users/Listeners tabs after a coin adjustment. Each row
+     *  is clickable and opens the coin-adjust drawer rather than carrying
+     *  its own amount field + Apply button. */
+    function renderCoinSearchResults(type) {
+      const searchEl = document.getElementById(type === 'user' ? 'coinUserSearch' : 'coinListenerSearch');
+      const wrap = document.getElementById(type === 'user' ? 'coinUserResults' : 'coinListenerResults');
+      const raw = searchEl.value.trim().toLowerCase();
+      const q = raw.startsWith('@') ? raw.slice(1) : raw;
+      const source = type === 'user' ? usersCache : listenersCache;
+      const filtered = (source || []).filter(p =>
+        !q ||
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.phone || '').includes(q) ||
+        (type === 'user' && (
+          (p.username || '').toLowerCase().includes(q) ||
+          (p.email || '').toLowerCase().includes(q)
+        ))
+      );
+      if (filtered.length === 0) {
+        wrap.innerHTML = '<div class="empty-state">No results.</div>';
+        return;
+      }
+      wrap.innerHTML = filtered.map(p => `
+        <div class="coin-search-row" onclick="openCoinAdjust('${type}', ${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', ${p.coins})">
+          <div class="coin-search-info">
+            <span class="person-name">${escapeHtml(p.name)}</span>
+            <span class="person-sub">${type === 'user' ? personHandle(p) : ''}${personContact(p, type)} · ${p.coins} coins</span>
+          </div>
+        </div>`).join('');
     }
 
     async function generateAdminInvite() {
