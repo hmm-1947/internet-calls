@@ -87,6 +87,12 @@ class _CallScreenState extends State<CallScreen> {
   Timer? _durationTimer;
   final ValueNotifier<int> _callDurationSeconds = ValueNotifier<int>(0);
   Timer? _remoteLeftTimer;
+  // Closes the "No answer" screen when the user does not pick either action.
+  Timer? _noAnswerTimer;
+  static const _noAnswerAutoCloseDelay = Duration(seconds: 10);
+  bool _redialInFlight = false;
+  // Hang-up pressed while the redial request was still in flight.
+  bool _redialAbandoned = false;
   LocalVideoTrack? _pendingVideoTrack;
   bool _cameraWarmupInFlight = false;
   bool _cameraRequestInFlight = false;
@@ -222,7 +228,7 @@ class _CallScreenState extends State<CallScreen> {
             }
             break;
           case 'rejected':
-            _onCallEnded(rejected: true);
+            _onCallRejected();
             break;
           case 'missed':
             _onCallMissed();
@@ -406,7 +412,7 @@ class _CallScreenState extends State<CallScreen> {
       final token = message.data['token'] ?? '';
       _onCallAccepted(url, token);
     } else if (type == 'call_rejected') {
-      _onCallEnded(rejected: true);
+      _onCallRejected();
     } else if (type == 'call_ended') {
       _onCallEnded();
     } else if (type == 'call_coin_exceeded') {
@@ -835,7 +841,7 @@ class _CallScreenState extends State<CallScreen> {
     _showMessage('Not enough coins to continue the call');
   }
 
-  void _onCallEnded({bool rejected = false}) {
+  void _onCallEnded() {
     if (!mounted || _isEnding) return;
     _isEnding = true;
     _stopRingingTone();
@@ -851,14 +857,138 @@ class _CallScreenState extends State<CallScreen> {
     PipService.instance.setCallActive(false);
     ProximityService.instance.disable();
 
-    if (rejected) {
-      _closeCall();
-      _showMessage('Call was declined by the listener.');
-    } else if (wasConnected) {
+    if (wasConnected) {
       _openSummary();
     } else {
       _closeCall();
     }
+  }
+
+  /// The listener declined.
+  ///
+  /// Tearing the screen down here is what used to leave the caller back on the
+  /// home screen with no idea why the call had gone, so the screen stays up
+  /// showing "No answer" instead, with a redial and a way out. If the user does
+  /// neither it closes itself after [_noAnswerAutoCloseDelay].
+  void _onCallRejected() {
+    if (!mounted || _isEnding) return;
+    _isEnding = true;
+    _releaseCallResources();
+    setState(() {
+      _phase = _CallPhase.noAnswer;
+      // Both feeds are gone, and dropping the local one also takes the screen
+      // back to the audio layout for a video call that was never answered.
+      _localVideoTrack = null;
+      _remoteVideoTrack = null;
+      _remoteJoined = false;
+    });
+    _publishStatus();
+    _noAnswerTimer = Timer(_noAnswerAutoCloseDelay, _dismissCallScreen);
+  }
+
+  /// Hands back everything the ringing phase was holding, but leaves the screen
+  /// mounted: the user is still looking at it.
+  void _releaseCallResources() {
+    _stopRingingTone();
+    _ringingTimer?.cancel();
+    _statusPollTimer?.cancel();
+    _remoteJoinTimer?.cancel();
+    _remoteLeftTimer?.cancel();
+    _coinTimer?.cancel();
+    _durationTimer?.cancel();
+    _durationTimer = null;
+    _audioLevelTimer?.cancel();
+    _roomListener?.dispose();
+    _roomListener = null;
+    _room?.disconnect();
+    _room = null;
+    unawaited(_disposeUnpublishedCamera());
+    unawaited(CallForegroundService.instance.stop());
+    unawaited(UserCallkitService.instance.endCall(widget.callId.toString()));
+    PipService.instance.setCallActive(false);
+    ProximityService.instance.disable();
+    ActiveCallManager.instance.updateMinimizedVideoTrack(null);
+  }
+
+  /// Leaves the call screen, sliding it away to reveal the home screen.
+  void _dismissCallScreen() {
+    _noAnswerTimer?.cancel();
+    _noAnswerTimer = null;
+    unawaited(ActiveCallManager.instance.dismissWithAnimation());
+  }
+
+  /// Redials the same listener from the "No answer" screen.
+  ///
+  /// The screen flips to the outgoing-call layout straight away, before the
+  /// backend has handed back a call id: waiting for that round trip on the
+  /// "No answer" screen with a spinner made the redial look like it had not
+  /// started, when the listener's phone was already ringing.
+  Future<void> _callAgain() async {
+    if (_redialInFlight) return;
+    final listenerId = widget.listenerId;
+    if (listenerId == null) {
+      _showMessage('Cannot call this listener again from here');
+      return;
+    }
+    // The user is doing something, so the auto-close no longer applies.
+    _noAnswerTimer?.cancel();
+    _noAnswerTimer = null;
+    setState(() {
+      _redialInFlight = true;
+      _phase = _CallPhase.redialing;
+    });
+    _publishStatus();
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) throw Exception('Session expired');
+      final result = await _repository.initiateCall(
+        token,
+        listenerId,
+        callType: widget.startWithVideo ? 'video' : 'audio',
+      );
+      final newCallId = result['call_id'] as int;
+      // Hang-up landed while the request was still out: the listener is now
+      // ringing for a call nobody is waiting on, so take it back.
+      if (_redialAbandoned || !mounted) {
+        unawaited(_cancelAbandonedRedial(newCallId));
+        return;
+      }
+      // Swapped in place: this screen is keyed on the call id, so the new id
+      // rebuilds it from scratch as a fresh outgoing call, with its own ringing
+      // tone, CallKit entry and camera warm-up.
+      ActiveCallManager.instance.replace(
+        ActiveCallInfo(
+          role: ActiveCallRole.user,
+          callId: newCallId,
+          otherPartyName: widget.otherPartyName,
+          otherPartyPhotoUrl: widget.otherPartyPhotoUrl,
+          otherPartyBadgeTag: widget.otherPartyBadgeTag,
+          isVideo: widget.startWithVideo,
+          listenerId: listenerId,
+        ),
+      );
+    } catch (e) {
+      if (!mounted || _redialAbandoned) return;
+      setState(() {
+        _redialInFlight = false;
+        _phase = _CallPhase.noAnswer;
+      });
+      _publishStatus();
+      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      // Give the full window back rather than stranding the user here after a
+      // redial that never got off the ground.
+      _noAnswerTimer = Timer(_noAnswerAutoCloseDelay, _dismissCallScreen);
+    }
+  }
+
+  /// Cancels a redial the user walked away from before it came back with a call
+  /// id, so the listener's phone stops ringing.
+  Future<void> _cancelAbandonedRedial(int callId) async {
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      await _repository.cancelCall(token, callId);
+    } catch (_) {}
   }
 
   Future<void> _maybeEnterPip() async {
@@ -868,6 +998,20 @@ class _CallScreenState extends State<CallScreen> {
 
   /// User taps hang-up — cancel if still ringing, end if connected.
   Future<void> _hangUp() async {
+    // Nothing left to hang up on the "No answer" screen: the call is already
+    // over, so the hang-up on the minimized bar (and the one on the system
+    // notification) just closes it.
+    if (_phase == _CallPhase.noAnswer) {
+      _dismissCallScreen();
+      return;
+    }
+    // Hung up during a redial that has no call id yet. The screen goes now and
+    // `_callAgain` cancels the call once the backend answers.
+    if (_phase == _CallPhase.redialing) {
+      _redialAbandoned = true;
+      _dismissCallScreen();
+      return;
+    }
     if (_isEnding) return;
     _isEnding = true;
     _stopRingingTone();
@@ -918,6 +1062,7 @@ class _CallScreenState extends State<CallScreen> {
     _statusPollTimer?.cancel();
     _remoteJoinTimer?.cancel();
     _remoteLeftTimer?.cancel();
+    _noAnswerTimer?.cancel();
     unawaited(_disposeUnpublishedCamera());
     _busyTimer?.cancel();
     _coinTimer?.cancel();
@@ -935,9 +1080,14 @@ class _CallScreenState extends State<CallScreen> {
     _missedPlayer?.dispose();
     UserCallkitService.instance.endCall(widget.callId.toString());
     CallForegroundService.instance.stop();
-    PipService.instance.onPipModeChanged = null;
-    PipService.instance.onUserLeaveHint = null;
-    PipService.instance.setCallActive(false);
+    // A redial replaces this screen with the one for the new call, which is
+    // already mounted and has registered its own callbacks by the time we get
+    // here. Clearing them then would leave the new call without PiP.
+    if (!ActiveCallManager.instance.hasActiveCall) {
+      PipService.instance.onPipModeChanged = null;
+      PipService.instance.onUserLeaveHint = null;
+      PipService.instance.setCallActive(false);
+    }
     ProximityService.instance.disable();
     super.dispose();
   }
@@ -979,6 +1129,7 @@ class _CallScreenState extends State<CallScreen> {
               // listener answers instead of swapping in a beat later.
               child:
                   widget.startWithVideo &&
+                      _phase != _CallPhase.noAnswer &&
                       (_phase == _CallPhase.connected ||
                           _localVideoTrack != null)
                   ? _buildConnectedVideo()
@@ -1054,7 +1205,7 @@ class _CallScreenState extends State<CallScreen> {
             videoTrack: _remoteVideoTrack,
             photoUrl: widget.otherPartyPhotoUrl,
           ),
-          if (!_fullyConnected)
+          if (!_fullyConnected && _phase != _CallPhase.noAnswer)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
               child: Text(
@@ -1067,42 +1218,103 @@ class _CallScreenState extends State<CallScreen> {
           const Spacer(),
           Padding(
             padding: const EdgeInsets.only(bottom: 40),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                CallActionButton(
-                  icon: _micEnabled ? Icons.mic : Icons.mic_off,
-                  label: 'Mute',
-                  background: _micEnabled
-                      ? null
-                      : Colors.redAccent.withOpacity(0.3),
-                  onTap: _toggleMic,
+            child: _phase == _CallPhase.noAnswer
+                ? _buildNoAnswerActions()
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      CallActionButton(
+                        icon: _micEnabled ? Icons.mic : Icons.mic_off,
+                        label: 'Mute',
+                        background: _micEnabled
+                            ? null
+                            : Colors.redAccent.withOpacity(0.3),
+                        onTap: _toggleMic,
+                      ),
+                      CallActionButton(
+                        icon: _speakerOn ? Icons.volume_up : Icons.volume_off,
+                        label: 'Speaker',
+                        background: _speakerOn
+                            ? const Color(0xFF1F2430)
+                            : Colors.redAccent.withOpacity(0.3),
+                        onTap: _toggleSpeaker,
+                      ),
+                      CallActionButton(
+                        icon: Icons.call_end,
+                        label: '',
+                        background: const Color(0xFFE53950),
+                        onTap: _hangUp,
+                      ),
+                      CallActionButton(
+                        icon: Icons.card_giftcard,
+                        label: 'Gift',
+                        // The declined call is dead and the redial has no id
+                        // yet, so there is nothing to attach a gift to.
+                        onTap: _phase == _CallPhase.redialing
+                            ? null
+                            : _openGiftSheet,
+                      ),
+                      CallActionButton(
+                        icon: Icons.close_fullscreen,
+                        label: 'Minimize',
+                        onTap: ActiveCallManager.instance.minimize,
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Replaces the call controls once the listener has declined: none of them
+  /// still do anything, so the only choices are leaving or trying again.
+  Widget _buildNoAnswerActions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _dismissCallScreen,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: Colors.white38),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
                 ),
-                CallActionButton(
-                  icon: _speakerOn ? Icons.volume_up : Icons.volume_off,
-                  label: 'Speaker',
-                  background: _speakerOn
-                      ? const Color(0xFF1F2430)
-                      : Colors.redAccent.withOpacity(0.3),
-                  onTap: _toggleSpeaker,
+              ),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white, fontSize: 15),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _redialInFlight ? null : _callAgain,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE53950),
+                disabledBackgroundColor: const Color(
+                  0xFFE53950,
+                ).withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
                 ),
-                CallActionButton(
-                  icon: Icons.call_end,
-                  label: '',
-                  background: const Color(0xFFE53950),
-                  onTap: _hangUp,
+              ),
+              // No spinner: the tap swaps this screen for the outgoing-call
+              // layout immediately, so there is nothing to wait on here.
+              icon: const Icon(Icons.call, color: Colors.white, size: 20),
+              label: const Text(
+                'Call Again',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
-                CallActionButton(
-                  icon: Icons.card_giftcard,
-                  label: 'Gift',
-                  onTap: _openGiftSheet,
-                ),
-                CallActionButton(
-                  icon: Icons.close_fullscreen,
-                  label: 'Minimize',
-                  onTap: ActiveCallManager.instance.minimize,
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -1118,6 +1330,12 @@ class _CallScreenState extends State<CallScreen> {
         return 'Connecting...';
       case _CallPhase.connected:
         return _remoteJoined ? _connectionQualityText() : 'Connecting...';
+      case _CallPhase.noAnswer:
+        return 'No Answer';
+      // Deliberately identical to `ringing`: the redial is meant to look like
+      // any other outgoing call while its call id is on the way.
+      case _CallPhase.redialing:
+        return 'Calling...';
     }
   }
 
@@ -1309,4 +1527,4 @@ class _CallScreenState extends State<CallScreen> {
   }
 }
 
-enum _CallPhase { ringing, connecting, connected }
+enum _CallPhase { ringing, connecting, connected, noAnswer, redialing }

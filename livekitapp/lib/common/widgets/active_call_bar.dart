@@ -95,16 +95,45 @@ class ActiveCallHost extends StatelessWidget {
               Positioned.fill(
                 child: Offstage(
                   offstage: !expanded,
-                  child: HeroControllerScope.none(
-                    child: Navigator(
-                      key: manager.callNavigatorKey,
-                      onGenerateRoute: (settings) => PageRouteBuilder(
-                        settings: settings,
-                        pageBuilder: (routeContext, _, _) =>
-                            callScreenBuilder(routeContext, info),
-                        transitionDuration: Duration.zero,
-                        reverseTransitionDuration: Duration.zero,
+                  // Slid away rather than dropped, so leaving the call (the
+                  // "No answer" screen closing itself, or the user cancelling
+                  // it) reveals the screen underneath with the same motion as
+                  // a page pop. The navigator is passed as `child` so the call
+                  // screen keeps its state across the animation.
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: manager.dismissing,
+                    child: HeroControllerScope.none(
+                      child: Navigator(
+                        key: manager.callNavigatorKey,
+                        onGenerateRoute: (settings) => PageRouteBuilder(
+                          settings: settings,
+                          // Built off `current` rather than the captured
+                          // `info`: this route is generated once and kept, so a
+                          // call swapped in place (the redial after a decline)
+                          // would otherwise keep rendering the call it
+                          // replaced. The screen is keyed on the call id, so a
+                          // new id rebuilds it from scratch.
+                          pageBuilder: (routeContext, _, _) =>
+                              ValueListenableBuilder<ActiveCallInfo?>(
+                                valueListenable: manager.current,
+                                builder: (builderContext, currentInfo, _) =>
+                                    currentInfo == null
+                                    ? const SizedBox.shrink()
+                                    : callScreenBuilder(
+                                        builderContext,
+                                        currentInfo,
+                                      ),
+                              ),
+                          transitionDuration: Duration.zero,
+                          reverseTransitionDuration: Duration.zero,
+                        ),
                       ),
+                    ),
+                    builder: (context, dismissing, child) => AnimatedSlide(
+                      offset: dismissing ? const Offset(0, 1) : Offset.zero,
+                      duration: ActiveCallManager.dismissAnimationDuration,
+                      curve: Curves.easeInCubic,
+                      child: child,
                     ),
                   ),
                 ),

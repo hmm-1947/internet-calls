@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/home_header.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
@@ -22,19 +23,22 @@ class UserMainScreen extends StatefulWidget {
 class _UserMainScreenState extends State<UserMainScreen> {
   int _index = 0;
   bool _navBarVisible = true;
+
+  /// Tabs that have reported a vertical scrollable with somewhere to go. A tab
+  /// that is not in here cannot scroll, so it has no way of bringing a hidden
+  /// nav bar back on its own and gets it back automatically instead.
+  final Set<int> _scrollablePages = {};
+
   final _profileKey = GlobalKey<UserProfileScreenState>();
   final _homeKey = GlobalKey<UserHomeScreenState>();
   late final PageController _pageController = PageController(
     initialPage: _index,
   );
 
-  bool _onScrollNotification(ScrollNotification notification) {
+  bool _onScrollNotification(int index, ScrollNotification notification) {
     final metrics = notification.metrics;
     if (metrics.axis != Axis.vertical) return false;
-    if (!metrics.hasContentDimensions ||
-        metrics.maxScrollExtent <= metrics.minScrollExtent) {
-      return false;
-    }
+    if (!_recordScrollability(index, metrics)) return false;
     if (notification is ScrollUpdateNotification) {
       final delta = notification.scrollDelta ?? 0;
       if (delta.abs() < 1) return false;
@@ -45,6 +49,49 @@ class _UserMainScreenState extends State<UserMainScreen> {
       }
     }
     return false;
+  }
+
+  /// Content dimensions arrive here without the user touching anything, which
+  /// is what tells us a tab has become (or stopped being) scrollable.
+  bool _onScrollMetrics(int index, ScrollMetricsNotification notification) {
+    final metrics = notification.metrics;
+    if (metrics.axis == Axis.vertical) _recordScrollability(index, metrics);
+    return false;
+  }
+
+  /// Returns whether the tab can actually be scrolled, and reveals the nav bar
+  /// when the tab the user is looking at cannot.
+  bool _recordScrollability(int index, ScrollMetrics metrics) {
+    final canScroll =
+        metrics.hasContentDimensions &&
+        metrics.maxScrollExtent > metrics.minScrollExtent;
+    if (canScroll) {
+      _scrollablePages.add(index);
+      return true;
+    }
+    _scrollablePages.remove(index);
+    if (index == _index) _showNavBar();
+    return false;
+  }
+
+  /// Brings a hidden nav bar back when moving to a tab that cannot scroll.
+  void _revealNavBarForPage(int index) {
+    if (_scrollablePages.contains(index)) return;
+    _showNavBar();
+  }
+
+  void _showNavBar() {
+    if (_navBarVisible) return;
+    // Scroll metrics land mid-frame, so the rebuild is deferred when it would
+    // otherwise happen during build or layout.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showNavBar();
+      });
+      return;
+    }
+    setState(() => _navBarVisible = true);
   }
 
   late final List<Widget> _screens = [
@@ -64,6 +111,7 @@ class _UserMainScreenState extends State<UserMainScreen> {
 
   void _onTabSelected(int i) {
     if (i == _index) return;
+    _revealNavBarForPage(i);
     _pageController.animateToPage(
       i,
       duration: const Duration(milliseconds: 320),
@@ -73,6 +121,7 @@ class _UserMainScreenState extends State<UserMainScreen> {
 
   void _onPageChanged(int i) {
     setState(() => _index = i);
+    _revealNavBarForPage(i);
     if (i == 0) {
       _homeKey.currentState?.refresh();
     }
@@ -106,17 +155,26 @@ class _UserMainScreenState extends State<UserMainScreen> {
             ),
           ),
           Expanded(
-            child: NotificationListener<ScrollNotification>(
-              onNotification: _onScrollNotification,
-              child: PageView(
-                controller: _pageController,
-                physics: const ClampingScrollPhysics(),
-                onPageChanged: _onPageChanged,
-                children: [
-                  for (final screen in _screens)
-                    KeepAlivePage(child: RepaintBoundary(child: screen)),
-                ],
-              ),
+            // Listened to per page rather than around the whole PageView, so a
+            // notification can be attributed to the tab it came from.
+            child: PageView(
+              controller: _pageController,
+              physics: const ClampingScrollPhysics(),
+              onPageChanged: _onPageChanged,
+              children: [
+                for (var i = 0; i < _screens.length; i++)
+                  KeepAlivePage(
+                    child: RepaintBoundary(
+                      child: NotificationListener<ScrollMetricsNotification>(
+                        onNotification: (n) => _onScrollMetrics(i, n),
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: (n) => _onScrollNotification(i, n),
+                          child: _screens[i],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],

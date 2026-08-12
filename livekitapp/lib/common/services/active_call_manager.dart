@@ -51,6 +51,14 @@ class ActiveCallManager {
   final ValueNotifier<int> durationSeconds = ValueNotifier<int>(0);
   final ValueNotifier<String> statusText = ValueNotifier<String>('');
 
+  /// True while the expanded call screen is sliding away. The host plays the
+  /// exit animation off this, then the call is torn out of the tree.
+  final ValueNotifier<bool> dismissing = ValueNotifier<bool>(false);
+
+  /// How long the slide-away lasts. Shared with the host so the animation and
+  /// the teardown that follows it cannot drift apart.
+  static const dismissAnimationDuration = Duration(milliseconds: 280);
+
   /// Track to show in the floating window while a video call is minimized. The
   /// call screen publishes the remote feed, or the local camera while the other
   /// side has no video.
@@ -96,9 +104,23 @@ class ActiveCallManager {
     if (hasActiveCall) return false;
     durationSeconds.value = 0;
     statusText.value = '';
+    dismissing.value = false;
     current.value = info;
     expanded.value = true;
     return true;
+  }
+
+  /// Swaps the active call for a new one, used by the redial on the "No answer"
+  /// screen. Clearing first would drop the overlay for a frame and flash the
+  /// screen underneath in between the two calls.
+  void replace(ActiveCallInfo info) {
+    onHangUp = null;
+    durationSeconds.value = 0;
+    statusText.value = '';
+    minimizedVideoTrack.value = null;
+    dismissing.value = false;
+    current.value = info;
+    expanded.value = true;
   }
 
   void expand() {
@@ -134,6 +156,24 @@ class ActiveCallManager {
     durationSeconds.value = 0;
     statusText.value = '';
     minimizedVideoTrack.value = null;
+    dismissing.value = false;
+  }
+
+  /// Slides the expanded call screen away before clearing it, so the screen
+  /// underneath is revealed with the same motion as a page pop instead of
+  /// appearing abruptly.
+  Future<void> dismissWithAnimation() async {
+    if (!hasActiveCall) return;
+    // Nothing to animate when the call is only a bar, or already on its way out.
+    if (!expanded.value || dismissing.value) {
+      clear();
+      return;
+    }
+    dismissing.value = true;
+    await Future<void>.delayed(dismissAnimationDuration);
+    // A redial can start a different call while the slide is still running.
+    if (!dismissing.value) return;
+    clear();
   }
 
   Future<void> hangUp() async {

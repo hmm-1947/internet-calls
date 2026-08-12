@@ -822,13 +822,13 @@ class UserHomeScreenState extends State<UserHomeScreen>
   // -------------------------------------------------------------------------
   static const _dummyOffers = [
     _DummyOfferCard(
-      badge: 'LIMITED TIME',
-      title: '50% Off First Call',
+      badge: 'WELCOME',
+      title: 'Welcome! Let’s Get Started',
       gradient: LinearGradient(colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)]),
     ),
     _DummyOfferCard(
-      badge: 'NEW',
-      title: 'Free 5-min Trial',
+      badge: 'HELLO',
+      title: 'Nice to Have You Here',
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
