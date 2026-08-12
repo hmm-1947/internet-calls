@@ -496,9 +496,10 @@ async def livekit_webhook(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
     auth_header = request.headers.get("Authorization", "")
     try:
-        receiver = livekit_api.WebhookReceiver(settings.livekit_api_key, settings.livekit_api_secret)
+        receiver = livekit_api.WebhookReceiver(livekit_api.TokenVerifier(settings.livekit_api_key, settings.livekit_api_secret))
         event_data = receiver.receive(raw_body.decode("utf-8"), auth_header)
-    except Exception:
+    except Exception as e:
+        print("WEBHOOK AUTH FAIL:", repr(e))
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     if event_data.event != "room_finished":

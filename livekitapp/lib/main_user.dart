@@ -203,10 +203,7 @@ void main() async {
   // permission prompts, cache restores) can take several seconds; without
   // this, nothing is on screen at all until it finishes.
   runApp(
-    const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
-    ),
+    const MaterialApp(debugShowCheckedModeBanner: false, home: SplashScreen()),
   );
 
   await dotenv.load(fileName: ".env");

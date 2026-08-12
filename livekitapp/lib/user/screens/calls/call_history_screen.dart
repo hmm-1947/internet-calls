@@ -104,6 +104,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
   bool _refreshInFlight = false;
   bool _loadingMore = false;
   bool _hasMore = true;
+
+  /// Set when a page request fails (offline being the usual reason). It hides
+  /// the trailing spinner - which would otherwise turn forever on a list that
+  /// can never grow - without giving up: the next scroll still retries.
+  bool _loadMoreFailed = false;
   DateTime? _lastRefreshAt;
   String _search = '';
   String _filter = 'all';
@@ -238,12 +243,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       } else if (_loading) {
         setState(() => _loading = false);
       }
+      if (mounted) _fillViewport();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     } finally {
       _refreshInFlight = false;
     }
-    if (mounted) _fillViewport();
   }
 
   /// Appends the page older than everything held. Ids already present are
@@ -263,6 +268,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       );
       if (!mounted) return;
       _hasMore = older.length == _pageSize;
+      _loadMoreFailed = false;
       final knownIds = _calls.map((c) => c['id']).toSet();
       final fresh = older.where((c) => !knownIds.contains(c['id'])).toList();
       if (fresh.isEmpty) {
@@ -274,12 +280,13 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         _filteredCalls = _applyFilter();
       });
       _cacheCalls();
+      if (mounted) _fillViewport();
     } catch (_) {
       // Leave _hasMore alone: scrolling again retries.
+      if (mounted) setState(() => _loadMoreFailed = true);
     } finally {
       _loadingMore = false;
     }
-    if (mounted) _fillViewport();
   }
 
   @override
@@ -374,7 +381,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                         SizedBox(
                           height: MediaQuery.sizeOf(context).height * 0.7,
                           child: Center(
-                            child: _hasMore
+                            child: _hasMore && !_loadMoreFailed
                                 ? const CircularProgressIndicator()
                                 : const Text(
                                     'No calls yet',
@@ -390,7 +397,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                         return ListView.builder(
                           controller: _scrollController,
                           physics: const AlwaysScrollableScrollPhysics(),
-                          itemCount: _filteredCalls.length + (_hasMore ? 1 : 0),
+                          itemCount:
+                              _filteredCalls.length +
+                              (_hasMore && !_loadMoreFailed ? 1 : 0),
                           itemExtent: 72,
                           itemBuilder: (context, index) {
                             if (index >= _filteredCalls.length) {
@@ -484,7 +493,9 @@ class _CallHistoryTile extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             status == 'ended'
-                ? fmtCallDuration((call['duration_seconds'] ?? 0) as int)
+                ? fmtCallDuration(
+                    (call['duration_seconds'] as num?)?.toInt() ?? 0,
+                  )
                 : _statusLabel(status),
             style: const TextStyle(color: _dimText),
           ),

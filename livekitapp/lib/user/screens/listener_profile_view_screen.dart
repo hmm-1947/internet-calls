@@ -197,12 +197,19 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         setState(() => _loading = false);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        // A failed refresh must never replace a profile that was already
+        // painted from the cache: offline, the cached copy is the answer.
+        _error = _hasCachedProfile
+            ? null
+            : e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
     }
   }
+
+  bool get _hasCachedProfile => _name.isNotEmpty || _createdAt != null;
 
   @override
   Widget build(BuildContext context) {

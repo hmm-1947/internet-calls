@@ -90,7 +90,10 @@ class LocalChatMessage {
 
   Map<String, dynamic> _toDb() => {
     'server_id': id,
-    'client_id': clientId,
+    // Server-generated rows (call logs, gifts) carry no client id. They must
+    // be stored as NULL, never as '', or every one of them would land on the
+    // same "(other_id, '')" unique key and overwrite the previous one.
+    'client_id': clientId.isEmpty ? null : clientId,
     'other_id': otherId,
     'sender_type': senderType,
     'message': message,
@@ -187,36 +190,8 @@ class ChatStorage {
     final path = join(await getDatabasesPath(), 'chat_cache.db');
     _db = await openDatabase(
       path,
-      version: 2,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE messages (
-            local_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            server_id INTEGER,
-            client_id TEXT NOT NULL,
-            other_id INTEGER NOT NULL,
-            sender_type TEXT NOT NULL,
-            message TEXT,
-            message_type TEXT,
-            audio_url TEXT,
-            audio_duration INTEGER,
-            gift_id INTEGER,
-            gift_name TEXT,
-            gift_icon TEXT,
-            gift_coins INTEGER,
-            call_id INTEGER,
-            status TEXT,
-            is_read INTEGER,
-            is_deleted INTEGER,
-            created_at TEXT,
-            edited_at TEXT,
-            UNIQUE(other_id, client_id)
-          )
-        ''');
-        await db.execute(
-          'CREATE INDEX idx_messages_other ON messages(other_id, server_id)',
-        );
-      },
+      version: 3,
+      onCreate: (db, version) async => _createSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('ALTER TABLE messages ADD COLUMN gift_id INTEGER');
@@ -225,9 +200,73 @@ class ChatStorage {
           await db.execute('ALTER TABLE messages ADD COLUMN gift_coins INTEGER');
           await db.execute('ALTER TABLE messages ADD COLUMN call_id INTEGER');
         }
+        if (oldVersion < 3) await _migrateToV3(db);
       },
     );
     return _db!;
+  }
+
+  static const _columns =
+      'server_id, client_id, other_id, sender_type, message, message_type, '
+      'audio_url, audio_duration, gift_id, gift_name, gift_icon, gift_coins, '
+      'call_id, status, is_read, is_deleted, created_at, edited_at';
+
+  /// Identity is "(other_id, client_id)" for messages this device composed and
+  /// "(other_id, server_id)" for everything the server created. Two *partial*
+  /// unique indexes express that, instead of one table-level UNIQUE that a
+  /// NULL/empty client id would collapse.
+  Future<void> _createSchema(Database db) async {
+    await db.execute('''
+      CREATE TABLE messages (
+        local_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id INTEGER,
+        client_id TEXT,
+        other_id INTEGER NOT NULL,
+        sender_type TEXT NOT NULL,
+        message TEXT,
+        message_type TEXT,
+        audio_url TEXT,
+        audio_duration INTEGER,
+        gift_id INTEGER,
+        gift_name TEXT,
+        gift_icon TEXT,
+        gift_coins INTEGER,
+        call_id INTEGER,
+        status TEXT,
+        is_read INTEGER,
+        is_deleted INTEGER,
+        created_at TEXT,
+        edited_at TEXT
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_messages_other ON messages(other_id, server_id)',
+    );
+    await db.execute(
+      "CREATE UNIQUE INDEX idx_messages_client ON messages(other_id, client_id) "
+      "WHERE client_id IS NOT NULL AND client_id <> ''",
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX idx_messages_server ON messages(other_id, server_id) '
+      'WHERE server_id IS NOT NULL',
+    );
+  }
+
+  /// Rebuilds the table without the "UNIQUE(other_id, client_id)" constraint
+  /// that made every server-generated row (call logs, gifts) overwrite the
+  /// previous one, leaving a single such message per conversation offline.
+  Future<void> _migrateToV3(Database db) async {
+    await db.execute('ALTER TABLE messages RENAME TO messages_old');
+    await db.execute('DROP INDEX IF EXISTS idx_messages_other');
+    await _createSchema(db);
+    await db.execute(
+      'INSERT OR IGNORE INTO messages ($_columns) '
+      "SELECT server_id, NULLIF(client_id, ''), other_id, sender_type, message, "
+      'message_type, audio_url, audio_duration, gift_id, gift_name, gift_icon, '
+      'gift_coins, call_id, status, is_read, is_deleted, created_at, edited_at '
+      'FROM messages_old',
+    );
+    await db.execute('DROP TABLE messages_old');
   }
 
   Future<Map<String, dynamic>?> _existingRow(
@@ -301,6 +340,9 @@ class ChatStorage {
   }
 
   Future<void> updateStatus(String clientId, String status) async {
+    // An empty client id belongs to server-generated rows and would match all
+    // of them at once.
+    if (clientId.isEmpty) return;
     final db = await _openDb();
     final lower = _lowerRankStatuses(status);
     if (lower.isEmpty) return;

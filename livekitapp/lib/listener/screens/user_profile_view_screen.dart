@@ -124,7 +124,11 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        // Keep the cached profile visible instead of showing a connection
+        // error over data we already have on disk.
+        _error = _name.isNotEmpty
+            ? null
+            : e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
     }
