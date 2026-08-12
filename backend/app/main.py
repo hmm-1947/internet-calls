@@ -27,6 +27,7 @@ app.mount("/gift_icons", StaticFiles(directory="gift_icons"), name="gift_icons")
 app.mount("/ringtones", StaticFiles(directory="ringtones"), name="ringtones")
 app.mount("/upgrade_banners", StaticFiles(directory="upgrade_banners"), name="upgrade_banners")
 app.mount("/special_offers", StaticFiles(directory="special_offers"), name="special_offers")
+app.mount("/assets", StaticFiles(directory="app/assets"), name="assets")
 
 app.mount("/panel", StaticFiles(directory="admin_panel", html=True), name="admin_panel")
 

@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin ka Panel</title>
+  <title>Laila Now-Admin</title>
+  <link rel="icon" type="image/png" href="/assets/title_logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400&family=Open+Sans:ital,wght@0,400;0,700;1,400&family=Lato:ital,wght@0,400;0,700;1,400&family=PT+Sans:ital,wght@0,400;0,700;1,400&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -295,6 +296,20 @@
     .nav-item .nav-ic {
       width: 18px;
       text-align: center;
+    }
+
+    /* Labels must never wrap. While the sidebar is animating from collapsed
+       back to full width, it briefly passes through widths too narrow to
+       fit longer labels (e.g. "Weekly Challenges") on one line - if that
+       text is allowed to wrap, the item's height inflates for a moment,
+       pushing every item below it (and the active highlight) down, then
+       snapping back up once the sidebar finishes expanding. Keeping the
+       label on one line the whole time keeps item heights constant, so
+       there's nothing for the highlight to jump around. */
+    .nav-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .nav-item .nav-ic svg,
@@ -774,6 +789,11 @@
       background: var(--white);
     }
 
+    select:disabled {
+      cursor: not-allowed;
+      opacity: .6;
+    }
+
     [data-theme="dark"] input:focus,
     [data-theme="dark"] textarea:focus,
     [data-theme="dark"] select:focus {
@@ -1210,14 +1230,23 @@
     }
 
     .range-select {
-      padding: 8px 14px;
+      padding: 8px 34px 8px 14px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: var(--white);
+      background-color: var(--white);
       color: var(--ink);
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+
+    .range-select:hover {
+      border-color: #d8dae0;
+    }
+
+    [data-theme="dark"] .range-select:hover {
+      border-color: #4c5468;
     }
 
     table {
@@ -1361,6 +1390,58 @@
 
     .person-item:active {
       transform: scale(.99);
+    }
+
+    .tag-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      transition: border-color .15s, background .15s, transform .1s;
+    }
+
+    .tag-row:hover {
+      background: var(--mint);
+      border-color: #d8dae0;
+    }
+
+    [data-theme="dark"] .tag-row:hover {
+      border-color: #4c5468;
+    }
+
+    .tag-listener-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, transform .1s;
+    }
+
+    .tag-listener-row:hover {
+      background: var(--mint);
+      border-color: #d8dae0;
+    }
+
+    [data-theme="dark"] .tag-listener-row:hover {
+      border-color: #4c5468;
+    }
+
+    .tag-listener-row:active {
+      transform: scale(.99);
+    }
+
+    .tag-listener-row.selected {
+      background: #fdeceb;
+      border-color: var(--leaf);
+    }
+
+    [data-theme="dark"] .tag-listener-row.selected {
+      background: #3a2224;
     }
 
     .person-item.selected {
@@ -1536,10 +1617,24 @@
     }
 
     .page-size-row select {
-      padding: 5px 8px;
+      padding: 5px 28px 5px 10px;
       border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--white);
+      border-radius: 8px;
+      background-color: var(--white);
+      background-size: 12px;
+      background-position: right 8px center;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      transition: border-color .15s, background .15s;
+    }
+
+    .page-size-row select:hover {
+      border-color: #d8dae0;
+    }
+
+    [data-theme="dark"] .page-size-row select:hover {
+      border-color: #4c5468;
     }
 
     .pagination {
@@ -1647,14 +1742,24 @@
     }
 
     .other-person-picker select {
-      padding: 7px 10px;
+      padding: 7px 30px 7px 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: var(--white);
+      background-color: var(--white);
+      background-size: 12px;
       color: var(--ink);
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+
+    .other-person-picker select:hover {
+      border-color: #d8dae0;
+    }
+
+    [data-theme="dark"] .other-person-picker select:hover {
+      border-color: #4c5468;
     }
 
     .other-person-picker select:focus {
@@ -2113,7 +2218,7 @@
     <div class="side-nav" id="sideNav">
       <div class="nav-slider" id="navSlider"></div>
       <div class="side-nav-header">
-        <div class="side-brand"><span class="brand-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span><span class="side-brand-label">LailaNowAdmin</span></div>
+        <div class="side-brand"><img src="/assets/admin_logo.png" alt="Logo" class="side-brand-logo" style="height:44px;width:auto;display:block;"></div>
         <button type="button" class="nav-toggle-btn" id="navToggleBtn" onclick="toggleSideNav()" title="Collapse navigation" aria-label="Collapse navigation">
           <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
         </button>
@@ -2408,7 +2513,7 @@
       <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <span>Purchase History</span>
         <span style="display:flex;align-items:center;gap:8px;">
-          <select id="billingPurchaseStatusFilter" onchange="filterBillingPurchases()" style="width:auto;margin:0;padding:8px 10px;">
+          <select id="billingPurchaseStatusFilter" onchange="filterBillingPurchases()" style="width:auto;margin:0;padding:8px 30px 8px 12px;">
             <option value="">All statuses</option>
             <option value="completed">Successful</option>
             <option value="pending">Pending</option>
@@ -2583,7 +2688,7 @@
     <div class="card">
       <h2>Assign Tag to Listener</h2>
       <label style="font-size:13px;color:var(--slate);font-weight:600">Search listeners</label>
-      <input id="tagListenerSearch" placeholder="Search by name…" oninput="onTagListenerSearchInput()">
+      <input class="search-box" id="tagListenerSearch" placeholder="Search by name…" oninput="onTagListenerSearchInput()">
       <div id="tagListenerResults" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:420px;overflow-y:auto;"></div>
     </div>
   </div>
@@ -4353,7 +4458,7 @@
         return;
       }
       wrap.innerHTML = tags.map(t => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;">
+        <div class="tag-row">
           <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;background:${escapeHtml(t.color)};box-shadow:0 1px 3px rgba(0,0,0,.25);">${escapeHtml(t.name)}</span>
           <span style="font-size:12px;color:var(--slate);">${t.listener_count} listener${t.listener_count === 1 ? '' : 's'}</span>
           <span style="flex:1;"></span>
@@ -4499,7 +4604,7 @@
         return;
       }
       wrap.innerHTML = listeners.map(l => `
-        <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;" onclick="openListenerTagPopup(${l.id})">
+        <div class="tag-listener-row${tagAssignListenerId === l.id ? ' selected' : ''}" onclick="openListenerTagPopup(${l.id})">
           <div style="position:relative;width:44px;height:44px;flex-shrink:0;">
             <img src="${l.photo_url ? API_URL + l.photo_url : ''}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;background:#222;display:block;">
             ${l.badge_tag ? `<span style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:800;color:#fff;background:${escapeHtml(l.badge_tag.color)};box-shadow:0 1px 3px rgba(0,0,0,.35);border:1.5px solid var(--bg,#fff);">${escapeHtml(l.badge_tag.name)}</span>` : ''}
@@ -4513,6 +4618,7 @@
       const l = tagListenerResultsCache.find(x => x.id === listenerId);
       if (!l) return;
       tagAssignListenerId = listenerId;
+      renderTagListenerResults(tagListenerResultsCache);
       document.getElementById('tagAssignSubtitle').textContent = l.name;
       const tagOptions = listenerTagsCache.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
       const sel = document.getElementById('tagAssignSelect');
@@ -4527,6 +4633,7 @@
 
     function closeTagAssignPopup() {
       tagAssignListenerId = null;
+      renderTagListenerResults(tagListenerResultsCache);
       const overlay = document.getElementById('tagAssignOverlay');
       overlay.classList.remove('show');
       setTimeout(() => { overlay.style.display = 'none'; }, 180);
