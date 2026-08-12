@@ -21,7 +21,7 @@
       --white: #ffffff;
       --danger: #e63946;
       --bg: #f5f6f9;
-      --sidebar-w: 240px;
+      --sidebar-w: 272px;
       --sidebar-w-collapsed: 68px;
     }
 
@@ -158,7 +158,7 @@
     }
 
     .side-nav.collapsed .side-brand {
-      padding: 6px 0;
+      display: none;
     }
 
 
@@ -226,11 +226,21 @@
       font-weight: 800;
       font-size: 17px;
       color: var(--ink);
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+    }
+
+    .side-brand-label {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     .side-brand .brand-icon {
       width: 34px;
       height: 34px;
+      flex-shrink: 0;
       border-radius: 10px;
       background: var(--leaf);
       display: flex;
@@ -2708,8 +2718,21 @@
         btn.setAttribute('aria-label', label);
         btn.setAttribute('title', label);
       }
+      // The slider's top/height depend on layout that is still animating
+      // (sidebar width, header direction), so recompute at several points
+      // rather than relying on a single call: right after the class swap,
+      // once more on the next frame, when the width transition actually
+      // ends, and via a timeout fallback in case transitionend never fires
+      // (e.g. the nav is toggled again mid-transition).
       updateNavSlider();
-      nav.addEventListener('transitionend', updateNavSlider, { once: true });
+      requestAnimationFrame(updateNavSlider);
+      nav.addEventListener('transitionend', function handler(e) {
+        if (e.target === nav && e.propertyName === 'width') {
+          nav.removeEventListener('transitionend', handler);
+          updateNavSlider();
+        }
+      });
+      setTimeout(updateNavSlider, 260);
     }
 
     function applyStoredNavCollapse() {
