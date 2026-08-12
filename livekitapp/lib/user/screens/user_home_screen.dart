@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
@@ -143,13 +145,72 @@ class _DummyOfferCard extends StatelessWidget {
   }
 }
 
-class _SpecialOfferImageCard extends StatelessWidget {
+class _SpecialOfferImageCard extends StatefulWidget {
   final String imageUrl;
 
   const _SpecialOfferImageCard({required this.imageUrl});
 
   @override
+  State<_SpecialOfferImageCard> createState() => _SpecialOfferImageCardState();
+}
+
+class _SpecialOfferImageCardState extends State<_SpecialOfferImageCard> {
+  String? _filePath;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_SpecialOfferImageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) _resolve();
+  }
+
+  void _resolve() {
+    _filePath = null;
+    final url = widget.imageUrl;
+    if (url.isEmpty) return;
+    final cached = AvatarCache.instance.localPathSync(url);
+    if (cached != null) {
+      _filePath = cached;
+      return;
+    }
+    AvatarCache.instance.ensureCached(url).then((path) {
+      if (path == null || !mounted || widget.imageUrl != url) return;
+      setState(() => _filePath = path);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final filePath = _filePath;
+    Widget child;
+    if (widget.imageUrl.isEmpty) {
+      child = const ColoredBox(color: _AppColors.cardBg);
+    } else if (filePath != null) {
+      child = Image.file(
+        File(filePath),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) =>
+            const ColoredBox(color: _AppColors.cardBg),
+      );
+    } else {
+      child = Image.network(
+        widget.imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        cacheWidth:
+            (MediaQuery.sizeOf(context).width *
+                    MediaQuery.devicePixelRatioOf(context))
+                .round(),
+        errorBuilder: (context, error, stackTrace) =>
+            const ColoredBox(color: _AppColors.cardBg),
+      );
+    }
     return Container(
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
@@ -157,19 +218,7 @@ class _SpecialOfferImageCard extends StatelessWidget {
         border: Border.all(color: _AppColors.cardBorder),
       ),
       clipBehavior: Clip.antiAlias,
-      child: imageUrl.isEmpty
-          ? const ColoredBox(color: _AppColors.cardBg)
-          : Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              cacheWidth:
-                  (MediaQuery.sizeOf(context).width *
-                          MediaQuery.devicePixelRatioOf(context))
-                      .round(),
-              errorBuilder: (context, error, stackTrace) =>
-                  const ColoredBox(color: _AppColors.cardBg),
-            ),
+      child: child,
     );
   }
 }
@@ -505,7 +554,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
   Future<void> _callListener(int listenerId, {bool video = false}) async {
     if (_callingListenerId != null) return;
     if (ActiveCallManager.instance.hasActiveCall) {
-      PillMessage.show(context, 'You are already on a call');
+      PillMessage.show(context, 'You are already on a call', bottomOffset: 78);
       return;
     }
     setState(() => _callingListenerId = listenerId);
@@ -536,6 +585,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
         PillMessage.showError(
           context,
           e.toString().replaceFirst('Exception: ', ''),
+          bottomOffset: 78,
         );
       }
     } finally {
@@ -547,6 +597,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
     PillMessage.show(
       context,
       'Admin has disabled video calls for your account',
+      bottomOffset: 78,
     );
   }
 

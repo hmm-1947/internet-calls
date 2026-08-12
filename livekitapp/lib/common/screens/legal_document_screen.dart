@@ -26,6 +26,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
   /// document while offline is still reflected once the other is opened,
   /// same shape the server response already uses.
   static const _cacheKey = 'legal_terms_privacy';
+  static const _refreshTtl = Duration(days: 7);
 
   String get _dataKey =>
       widget.documentType == 'privacy' ? 'privacy_policy' : 'terms_of_service';
@@ -34,18 +35,22 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
   void initState() {
     super.initState();
     _loadFromCache();
-    _load();
   }
 
   Future<void> _loadFromCache() async {
+    final fresh = await HomeCache().isFresh(_cacheKey, _refreshTtl);
     final cached = await HomeCache().getJson(_cacheKey);
-    if (!mounted || cached is! Map) return;
-    final text = cached[_dataKey];
-    if (text is! String || text.isEmpty) return;
-    setState(() {
-      _content = text;
-      _loading = false;
-    });
+    if (!mounted) return;
+    if (cached is Map) {
+      final text = cached[_dataKey];
+      if (text is String && text.isNotEmpty) {
+        setState(() {
+          _content = text;
+          _loading = false;
+        });
+      }
+    }
+    if (!fresh) _load();
   }
 
   Future<void> _load() async {

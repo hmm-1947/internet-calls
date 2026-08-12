@@ -9,6 +9,7 @@ class PillMessage {
     IconData? icon,
     Color? color,
     Duration duration = const Duration(seconds: 3),
+    double bottomOffset = 0,
   }) {
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
@@ -21,6 +22,7 @@ class PillMessage {
         message: message,
         icon: icon,
         color: color ?? const Color(0xFF1F2937),
+        bottomOffset: bottomOffset,
         onDismissed: () {
           _current?.remove();
           _current = null;
@@ -38,21 +40,31 @@ class PillMessage {
     });
   }
 
-  static void showError(BuildContext context, String message) {
+  static void showError(
+    BuildContext context,
+    String message, {
+    double bottomOffset = 0,
+  }) {
     show(
       context,
       message,
       icon: Icons.error_outline,
       color: const Color(0xFFB91C1C),
+      bottomOffset: bottomOffset,
     );
   }
 
-  static void showSuccess(BuildContext context, String message) {
+  static void showSuccess(
+    BuildContext context,
+    String message, {
+    double bottomOffset = 0,
+  }) {
     show(
       context,
       message,
       icon: Icons.check_circle_outline,
       color: const Color(0xFF15803D),
+      bottomOffset: bottomOffset,
     );
   }
 }
@@ -61,12 +73,14 @@ class _PillMessageWidget extends StatefulWidget {
   final String message;
   final IconData? icon;
   final Color color;
+  final double bottomOffset;
   final VoidCallback onDismissed;
 
   const _PillMessageWidget({
     required this.message,
     required this.icon,
     required this.color,
+    required this.bottomOffset,
     required this.onDismissed,
   });
 
@@ -104,12 +118,17 @@ class _PillMessageWidgetState extends State<_PillMessageWidget>
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final clearance = keyboardInset > 0
+        ? keyboardInset + widget.bottomOffset + 12
+        : widget.bottomOffset + bottomPadding + 12;
     return Positioned(
-      bottom: bottomPadding + 12,
+      bottom: clearance,
       left: 16,
       right: 16,
       child: SafeArea(
         top: false,
+        bottom: false,
         child: FadeTransition(
           opacity: _fade,
           child: SlideTransition(
@@ -167,3 +186,4 @@ class _PillMessageWidgetState extends State<_PillMessageWidget>
     );
   }
 }
+

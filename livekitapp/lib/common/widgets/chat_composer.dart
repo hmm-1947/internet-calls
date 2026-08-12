@@ -108,7 +108,11 @@ class _ChatComposerState extends State<ChatComposer> {
   }
 
   void _warnRecordingBlocked() {
-    PillMessage.show(context, "You can't record a voice message during a call");
+    PillMessage.show(
+      context,
+      "You can't record a voice message during a call",
+      bottomOffset: 72,
+    );
   }
 
   void _warnHoldToRecord() {
@@ -116,6 +120,7 @@ class _ChatComposerState extends State<ChatComposer> {
       context,
       'Hold the mic to record. Slide up to lock, left to cancel.',
       duration: const Duration(milliseconds: 1600),
+      bottomOffset: 72,
     );
   }
 
@@ -136,7 +141,7 @@ class _ChatComposerState extends State<ChatComposer> {
     if (limit != null && text.length > limit) {
       final message = widget.tooLongMessage;
       if (message != null) {
-        PillMessage.show(context, message);
+        PillMessage.show(context, message, bottomOffset: 72);
       }
       return;
     }

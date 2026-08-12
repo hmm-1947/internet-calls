@@ -49,6 +49,21 @@ class HomeCache {
     }
   }
 
+  Future<bool> isFresh(String key, Duration ttl) async {
+    final db = await _database;
+    final rows = await db.query(
+      'kv',
+      columns: ['updated_at'],
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return false;
+    final updatedAt = rows.first['updated_at'] as int;
+    final age = DateTime.now().millisecondsSinceEpoch - updatedAt;
+    return age < ttl.inMilliseconds;
+  }
+
   Future<void> clear(String key) async {
     final db = await _database;
     await db.delete('kv', where: 'key = ?', whereArgs: [key]);

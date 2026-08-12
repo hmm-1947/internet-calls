@@ -71,9 +71,11 @@ List<Map<String, dynamic>> mergeChatMessages(
       return;
     }
 
+    final hadLocalCreatedAt = existing['created_at'] != null;
     for (final entry in message.entries) {
       if (entry.value == null) continue;
       if (entry.key == 'status') continue;
+      if (entry.key == 'created_at' && hadLocalCreatedAt) continue;
       existing[entry.key] = entry.value;
     }
     final incomingStatus = message['status'];

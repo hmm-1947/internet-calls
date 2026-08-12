@@ -138,12 +138,18 @@ class PendingMessage {
   final String clientId;
   final int otherId;
   final String message;
+  final String messageType;
+  final String? audioUrl;
+  final int? audioDuration;
   int retryCount;
 
   PendingMessage({
     required this.clientId,
     required this.otherId,
     required this.message,
+    this.messageType = 'text',
+    this.audioUrl,
+    this.audioDuration,
     this.retryCount = 0,
   });
 
@@ -151,6 +157,9 @@ class PendingMessage {
     'client_id': clientId,
     'other_id': otherId,
     'message': message,
+    'message_type': messageType,
+    'audio_url': audioUrl,
+    'audio_duration': audioDuration,
     'retry_count': retryCount,
   };
 
@@ -158,6 +167,9 @@ class PendingMessage {
     clientId: json['client_id'],
     otherId: json['other_id'],
     message: json['message'],
+    messageType: json['message_type'] ?? 'text',
+    audioUrl: json['audio_url'],
+    audioDuration: json['audio_duration'],
     retryCount: json['retry_count'] ?? 0,
   );
 }

@@ -82,6 +82,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   bool _hasMoreOlder = true;
   bool _loadingOlder = false;
   bool _callingListener = false;
+  bool _flushingPending = false;
   int _chatMessageCoinCost =
       UserDataCache().lastMe?['chat_message_coin_cost'] ?? 0;
 
@@ -434,11 +435,21 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   }
 
   Future<void> _flushPending() async {
-    final pending = await _chatStorage.getPending();
-    for (final message in pending.where(
-      (p) => p.otherId == widget.listenerId,
-    )) {
-      await _retrySend(message.clientId, message.message);
+    if (_flushingPending) return;
+    _flushingPending = true;
+    try {
+      while (mounted) {
+        final pending = await _chatStorage.getPending();
+        final next = pending.firstWhere(
+          (p) => p.otherId == widget.listenerId,
+          orElse: () => PendingMessage(clientId: '', otherId: -1, message: ''),
+        );
+        if (next.clientId.isEmpty) return;
+        final ok = await _sendPending(next);
+        if (!ok) return;
+      }
+    } finally {
+      _flushingPending = false;
     }
   }
 
@@ -507,6 +518,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       case 'socket_connected':
         _setPeerTyping(false);
         _refreshMessages();
+        _flushPending();
         return;
       case 'socket_disconnected':
         _resetTypingState();
@@ -611,7 +623,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
         message: text,
       ),
     );
-    await _retrySend(clientId, text);
+    _flushPending();
   }
 
   Future<void> _sendVoice(String filePath, int duration) async {
@@ -634,85 +646,106 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       },
     ]);
     _jumpToLatest();
-    try {
-      final sent = await _repository.sendVoiceMessage(
-        token,
-        widget.listenerId,
-        filePath,
-        duration,
+    await _chatStorage.upsertMessage(
+      widget.listenerId,
+      LocalChatMessage(
         clientId: clientId,
-      );
-      // Keep the recording we just uploaded as this device's cached copy so
-      // playing back our own note never hits the network.
-      await VoiceNoteCache.instance.store(
-        '${sent['audio_url'] ?? ''}',
-        filePath,
-      );
-      if (!mounted) return;
-      _merge([sent]);
-      await _chatStorage.upsertMessage(
-        widget.listenerId,
-        LocalChatMessage.fromJson(sent, widget.listenerId),
-      );
-    } on InsufficientCoinsException {
-      if (!mounted) return;
-      _removeMessage(clientId);
-      _showInsufficientCoins();
-      _refreshProfile();
-    } catch (_) {
-      if (!mounted) return;
-      _patch((m) => m['client_id'] == clientId, (m) => m['status'] = 'failed');
-    }
+        otherId: widget.listenerId,
+        senderType: 'user',
+        message: '',
+        messageType: 'audio',
+        audioUrl: filePath,
+        audioDuration: duration,
+        status: 'sending',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+    await _chatStorage.addPending(
+      PendingMessage(
+        clientId: clientId,
+        otherId: widget.listenerId,
+        message: '',
+        messageType: 'audio',
+        audioUrl: filePath,
+        audioDuration: duration,
+      ),
+    );
+    _flushPending();
   }
 
-  Future<void> _retrySend(String clientId, String text) async {
+  /// Sends one queued message and reports whether the drain loop should keep
+  /// going. Returns false on anything that means "stop for now" (still
+  /// offline, or the caller navigated away) so the loop in [_flushPending]
+  /// does not spin retrying the same failure.
+  Future<bool> _sendPending(PendingMessage pending) async {
     final token = _token;
-    if (token == null) return;
+    if (token == null) return false;
     try {
-      final sent = await _repository.sendChatMessage(
-        token,
-        widget.listenerId,
-        text,
-        clientId: clientId,
-      );
-      await _chatStorage.removePending(clientId);
+      final Map<String, dynamic> sent;
+      if (pending.messageType == 'audio') {
+        final audioUrl = pending.audioUrl;
+        if (audioUrl == null) {
+          await _chatStorage.removePending(pending.clientId);
+          if (!mounted) return false;
+          _removeMessage(pending.clientId);
+          return true;
+        }
+        sent = await _repository.sendVoiceMessage(
+          token,
+          widget.listenerId,
+          audioUrl,
+          pending.audioDuration ?? 0,
+          clientId: pending.clientId,
+        );
+        await VoiceNoteCache.instance.store('${sent['audio_url'] ?? ''}', audioUrl);
+      } else {
+        sent = await _repository.sendChatMessage(
+          token,
+          widget.listenerId,
+          pending.message,
+          clientId: pending.clientId,
+        );
+      }
+      await _chatStorage.removePending(pending.clientId);
       await _chatStorage.upsertMessage(
         widget.listenerId,
         LocalChatMessage.fromJson(sent, widget.listenerId),
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       _merge([sent]);
       _refreshProfile();
+      return true;
     } on InsufficientCoinsException {
-      await _chatStorage.removePending(clientId);
-      if (!mounted) return;
-      _removeMessage(clientId);
+      await _chatStorage.removePending(pending.clientId);
+      if (!mounted) return false;
+      _removeMessage(pending.clientId);
       _showInsufficientCoins();
       _refreshProfile();
+      return true;
     } catch (_) {
       await _chatStorage.upsertMessage(
         widget.listenerId,
         LocalChatMessage(
-          clientId: clientId,
+          clientId: pending.clientId,
           otherId: widget.listenerId,
           senderType: 'user',
-          message: text,
+          message: pending.message,
+          messageType: pending.messageType,
+          audioUrl: pending.audioUrl,
+          audioDuration: pending.audioDuration,
           status: 'failed',
           createdAt: DateTime.now().toUtc().toIso8601String(),
         ),
       );
-      await _chatStorage.addPending(
-        PendingMessage(
-          clientId: clientId,
-          otherId: widget.listenerId,
-          message: text,
-        ),
+      if (!mounted) return false;
+      _patch(
+        (m) => m['client_id'] == pending.clientId,
+        (m) => m['status'] = 'failed',
       );
-      if (!mounted) return;
-      _patch((m) => m['client_id'] == clientId, (m) => m['status'] = 'failed');
       Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) _retrySend(clientId, text);
+        if (mounted) _flushPending();
       });
+      return false;
     }
   }
 

@@ -161,7 +161,7 @@ Future<void> refresh() async {
     } catch (e) {
       if (mounted) {
         setState(() => _statusOnline = previous);
-        PillMessage.showError(context, 'Failed to update status: $e');
+        PillMessage.showError(context, 'Failed to update status: $e', bottomOffset: 78);
       }
     }
   }

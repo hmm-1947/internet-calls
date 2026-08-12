@@ -192,12 +192,27 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _hydrateFromCache();
     refresh();
+  }
+
+  void _hydrateFromCache() {
+    final cached = UserDataCache().lastMe;
+    if (cached == null) return;
+    _coins = cached['coins'] ?? 0;
+    _name = cached['name'] ?? '';
+    _phone = cached['phone'] ?? '';
+    _photoUrl = cached['photo_url'];
+    _videoCallEnabled = cached['video_call_enabled'] ?? true;
+    _videoCallDisabledByAdmin =
+        cached['video_call_disabled_by_admin'] ?? false;
+    _isGoogleAccount = cached['is_google_account'] ?? false;
+    _loading = false;
   }
 
   Future<void> refresh() async {
     final isFirstLoad = !_hasLoadedOnce;
-    if (isFirstLoad) setState(() => _loading = true);
+    if (isFirstLoad && _name.isEmpty) setState(() => _loading = true);
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!);
@@ -293,7 +308,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _videoCallEnabled = previous);
-      PillMessage.showError(context, 'Failed to update video call setting: $e');
+      PillMessage.showError(context, 'Failed to update video call setting: $e', bottomOffset: 78);
     } finally {
       if (mounted) setState(() => _savingVideoCallSetting = false);
     }
@@ -384,6 +399,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
       PillMessage.showError(
         context,
         'Could not send your deletion request. Please try again.',
+        bottomOffset: 78,
       );
       debugPrint('Delete account: request failed: $e');
     } finally {
