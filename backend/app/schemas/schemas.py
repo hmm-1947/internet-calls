@@ -127,8 +127,11 @@ class AdminListenerProfileUpdate(BaseModel):
     @field_validator("age")
     @classmethod
     def age_range(cls, v: Optional[int]) -> Optional[int]:
-        if v is not None and not (18 <= v <= 100):
-            raise ValueError("Age must be between 18 and 100")
+        # Admins may set any age here, including under 18 (e.g. for
+        # placeholder/incomplete listener records); just guard against
+        # nonsensical zero/negative values.
+        if v is not None and v < 1:
+            raise ValueError("Please enter a valid age")
         return v
 
     @field_validator("occupation")

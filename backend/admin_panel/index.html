@@ -4389,7 +4389,8 @@
               <div style="display:flex;gap:10px">
                 <div style="flex:1">
                   <label>Age</label>
-                  <input type="number" id="ageInput-${p.id}" style="width:100%" min="18" max="100" value="${p.raw.age ?? ''}">
+                  <input type="number" id="ageInput-${p.id}" style="width:100%" min="1" value="${p.raw.age ?? ''}">
+                  <div id="ageError-${p.id}" style="display:none;color:#e11d48;font-size:12px;margin-top:2px"></div>
                 </div>
                 <div style="flex:2">
                   <label>Occupation</label>
@@ -4737,10 +4738,16 @@ ${logSection === 'chats' ? '' : `
           const clash = (listenersCache || []).find(l => l.id !== id && (l.name || '').trim().toLowerCase() === name.toLowerCase());
           if (clash) throw new Error(`A listener named "${clash.name}" already exists. Please use a different name.`);
 
-          const ageRaw = document.getElementById(`ageInput-${id}`).value.trim();
+          const ageInputEl = document.getElementById(`ageInput-${id}`);
+          const ageErrorEl = document.getElementById(`ageError-${id}`);
+          ageErrorEl.style.display = 'none';
+          const ageRaw = ageInputEl.value.trim();
           const age = ageRaw === '' ? null : parseInt(ageRaw, 10);
-          if (age !== null && (Number.isNaN(age) || age < 18 || age > 100)) {
-            throw new Error('Age must be between 18 and 100');
+          if (age !== null && (Number.isNaN(age) || age < 1)) {
+            ageInputEl.value = selectedPerson && selectedPerson.raw ? (selectedPerson.raw.age ?? '') : '';
+            ageErrorEl.textContent = 'Please enter a valid age';
+            ageErrorEl.style.display = 'block';
+            return;
           }
           const occupation = document.getElementById(`occupationInput-${id}`).value.trim();
 
@@ -4752,10 +4759,11 @@ ${logSection === 'chats' ? '' : `
         if (!res.ok) throw new Error(data.detail || 'Failed');
         setMsg('✓ Profile updated', true);
 
-        // Keep the open detail view in step with the new name.
-        if (type === 'listener' && data.name && selectedPerson && selectedPerson.id === id) {
+        // Keep the open detail view in step with the saved values, without
+        // waiting on the loadPeople() round trip below.
+        if (type === 'listener' && selectedPerson && selectedPerson.id === id) {
           selectedPerson.name = data.name;
-          selectedPerson.raw.name = data.name;
+          Object.assign(selectedPerson.raw, data);
           renderPersonContent();
         }
         loadPeople();
