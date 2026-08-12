@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_recording_indicator.dart';
 import 'package:livekitapp/core/network/chat_draft_cache.dart';
@@ -107,26 +108,15 @@ class _ChatComposerState extends State<ChatComposer> {
   }
 
   void _warnRecordingBlocked() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("You can't record a voice message during a call"),
-      ),
-    );
+    PillMessage.show(context, "You can't record a voice message during a call");
   }
 
-  /// Shown for a tap on the mic and for a clip released under a second: both
-  /// produce nothing, so the gesture is spelled out instead.
   void _warnHoldToRecord() {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(
-          duration: Duration(milliseconds: 1600),
-          content: Text(
-            'Hold the mic to record. Slide up to lock, left to cancel.',
-          ),
-        ),
-      );
+    PillMessage.show(
+      context,
+      'Hold the mic to record. Slide up to lock, left to cancel.',
+      duration: const Duration(milliseconds: 1600),
+    );
   }
 
   void _onChanged() {
@@ -146,9 +136,7 @@ class _ChatComposerState extends State<ChatComposer> {
     if (limit != null && text.length > limit) {
       final message = widget.tooLongMessage;
       if (message != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        PillMessage.show(context, message);
       }
       return;
     }

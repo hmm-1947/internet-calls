@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
 import 'package:livekitapp/core/network/local_storage.dart' as ls;
 import 'package:livekitapp/core/network/home_cache.dart';
@@ -504,9 +505,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
   Future<void> _callListener(int listenerId, {bool video = false}) async {
     if (_callingListenerId != null) return;
     if (ActiveCallManager.instance.hasActiveCall) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are already on a call')),
-      );
+      PillMessage.show(context, 'You are already on a call');
       return;
     }
     setState(() => _callingListenerId = listenerId);
@@ -534,8 +533,9 @@ class UserHomeScreenState extends State<UserHomeScreen>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        PillMessage.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
         );
       }
     } finally {
@@ -544,10 +544,9 @@ class UserHomeScreenState extends State<UserHomeScreen>
   }
 
   void _showVideoDisabledByAdmin() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Admin has disabled video calls for your account'),
-      ),
+    PillMessage.show(
+      context,
+      'Admin has disabled video calls for your account',
     );
   }
 
@@ -558,6 +557,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
           listenerId: listener['id'],
           listenerName: listener['name'],
           listenerPhotoUrl: listener['photo_url'],
+          listenerBadgeTag: listener['badge_tag'] as Map<String, dynamic>?,
         ),
       ),
     );
@@ -840,25 +840,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
   Widget _buildFeaturedHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'Call me',
-          style: TextStyle(
-            fontSize: 16,
-            color: _AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        IconButton(
-          icon: const Icon(
-            Icons.refresh,
-            color: _AppColors.textMuted,
-            size: 20,
-          ),
-          onPressed: _pullToRefresh,
-          tooltip: 'Refresh',
-        ),
-      ],
+      children: [SizedBox(height: 10)],
     );
   }
 }
@@ -915,6 +897,12 @@ class _ListenerCard extends StatelessWidget {
                       photoUrl: listener['photo_url'],
                       radius: 50,
                       iconSize: 40,
+                      badgeLabel: AvatarImage.badgeLabelOf(
+                        listener['badge_tag'],
+                      ),
+                      badgeColor: AvatarImage.badgeColorOf(
+                        listener['badge_tag'],
+                      ),
                     ),
                     Positioned(
                       right: 2,

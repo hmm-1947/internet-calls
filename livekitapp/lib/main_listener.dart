@@ -24,6 +24,7 @@ import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
@@ -382,10 +383,9 @@ class _ListenerAppState extends State<ListenerApp> {
     final giftName = data['gift_name'] ?? 'Gift';
     final credited = data['credited_coins'] ?? 0;
     final fromName = data['from_user_name'] ?? 'Someone';
-    ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(
-        content: Text('$fromName sent you a $giftName · +$credited coins'),
-      ),
+    PillMessage.showSuccess(
+      ctx,
+      '$fromName sent you a $giftName · +$credited coins',
     );
   }
 

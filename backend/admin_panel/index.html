@@ -1964,6 +1964,7 @@
       <div class="nav-item" id="navSpecialOffers" data-label="Special Offers" onclick="switchPage('specialoffers')"><span class="nav-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M9 12.5 7 21l5-3 5 3-2-8.5"/></svg></span><span class="nav-label">Special Offers</span></div>
       <div class="nav-item" id="navWeeklyChallenges" data-label="Weekly Challenges" onclick="switchPage('weeklychallenges')"><span class="nav-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 9h18"/></svg></span><span class="nav-label">Weekly Challenges</span></div>
       <div class="nav-item" id="navTermsPrivacy" data-label="Terms &amp; Privacy" onclick="switchPage('termsprivacy')"><span class="nav-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg></span><span class="nav-label">Terms &amp; Privacy</span></div>
+      <div class="nav-item" id="navTags" onclick="switchPage('tags')"><span class="nav-ic">&#127991;</span>Tags</div>
 
     </div>
     <div class="main-col">
@@ -2389,6 +2390,40 @@
     </div>
   </div>
 
+  <div id="page-tags" style="display:none;">
+    <div class="card">
+      <h2 id="tagFormTitle">Create Tag</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Tags appear as a small badge on top of a listener's profile picture everywhere users see it.
+      </p>
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;">
+          <label style="font-size:13px;color:var(--slate);font-weight:600">Tag name</label>
+          <input id="tagNameInput" placeholder="e.g. Top Rated" maxlength="24">
+        </div>
+        <div>
+          <label style="font-size:13px;color:var(--slate);font-weight:600">Color</label>
+          <input id="tagColorInput" type="color" value="#E11D48" style="width:56px;height:38px;padding:2px;border-radius:8px;cursor:pointer;">
+        </div>
+        <button id="tagFormSubmitBtn" class="btn btn-leaf" onclick="submitListenerTagForm()" style="height:38px;">Create Tag</button>
+        <button id="tagFormCancelBtn" class="btn" onclick="cancelEditListenerTag()" style="height:38px;display:none;">Cancel</button>
+      </div>
+      <div id="tagCreateMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>All Tags</h2>
+      <div id="tagsListWrap" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Assign Tag to Listener</h2>
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Search listeners</label>
+      <input id="tagListenerSearch" placeholder="Search by name…" oninput="onTagListenerSearchInput()">
+      <div id="tagListenerResults" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+    </div>
+  </div>
+
       </div>
     </div>
   </div>
@@ -2638,6 +2673,7 @@
       document.getElementById('page-specialoffers').style.display = page === 'specialoffers' ? '' : 'none';
       document.getElementById('page-weeklychallenges').style.display = page === 'weeklychallenges' ? '' : 'none';
       document.getElementById('page-termsprivacy').style.display = page === 'termsprivacy' ? '' : 'none';
+      document.getElementById('page-tags').style.display = page === 'tags' ? '' : 'none';
       document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
       document.getElementById('navUsers').classList.toggle('active', page === 'users');
       document.getElementById('navListeners').classList.toggle('active', page === 'listeners');
@@ -2647,7 +2683,8 @@
       document.getElementById('navSpecialOffers').classList.toggle('active', page === 'specialoffers');
       document.getElementById('navWeeklyChallenges').classList.toggle('active', page === 'weeklychallenges');
       document.getElementById('navTermsPrivacy').classList.toggle('active', page === 'termsprivacy');
-      const titles = { dashboard: 'Dashboard', notifications: 'Notifications', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges', termsprivacy: 'Terms & Privacy' };
+      document.getElementById('navTags').classList.toggle('active', page === 'tags');
+      const titles = { dashboard: 'Dashboard', notifications: 'Notifications', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges', termsprivacy: 'Terms & Privacy', tags: 'Tags' };
       if (page === 'notifications') openNotificationsPage();
       if (page === 'weeklychallenges') {
         loadWeeklyChallengeGoals();
@@ -2657,6 +2694,10 @@
       }
       if (page === 'termsprivacy') {
         loadTermsPrivacy();
+      }
+      if (page === 'tags') {
+        loadListenerTags();
+        loadTagListenerSearch('');
       }
 
       document.getElementById('topBarTitle').textContent = titles[page] || 'Dashboard';
@@ -4120,6 +4161,214 @@
       el.textContent = text;
       el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
     }
+
+    function setTagCreateMsg(text, ok) {
+      const el = document.getElementById('tagCreateMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    let listenerTagsCache = [];
+
+    async function loadListenerTags() {
+      try {
+        const res = await fetch(API_URL + '/admin/listener-tags', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load tags');
+        listenerTagsCache = data;
+        renderListenerTags(data);
+      } catch (e) {
+        setTagCreateMsg('✗ ' + e.message, false);
+      }
+    }
+
+    function renderListenerTags(tags) {
+      const wrap = document.getElementById('tagsListWrap');
+      if (!tags.length) {
+        wrap.innerHTML = '<div style="color:var(--slate);font-size:13px;">No tags yet. Create one above.</div>';
+        return;
+      }
+      wrap.innerHTML = tags.map(t => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;">
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;background:${escapeHtml(t.color)};box-shadow:0 1px 3px rgba(0,0,0,.25);">${escapeHtml(t.name)}</span>
+          <span style="font-size:12px;color:var(--slate);">${t.listener_count} listener${t.listener_count === 1 ? '' : 's'}</span>
+          <span style="flex:1;"></span>
+          <button class="btn" style="padding:6px 12px;font-size:12px;" onclick="startEditListenerTag(${t.id})">Edit</button>
+          <button class="btn btn-danger" style="padding:6px 12px;font-size:12px;" onclick="deleteListenerTag(${t.id})">Delete</button>
+        </div>
+      `).join('');
+    }
+
+    let editingTagId = null;
+
+    function startEditListenerTag(tagId) {
+      const tag = listenerTagsCache.find(t => t.id === tagId);
+      if (!tag) return;
+      editingTagId = tagId;
+      document.getElementById('tagNameInput').value = tag.name;
+      document.getElementById('tagColorInput').value = tag.color;
+      document.getElementById('tagFormTitle').textContent = 'Edit Tag';
+      document.getElementById('tagFormSubmitBtn').textContent = 'Save Changes';
+      document.getElementById('tagFormCancelBtn').style.display = '';
+      setTagCreateMsg('', null);
+      document.getElementById('tagNameInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function cancelEditListenerTag() {
+      editingTagId = null;
+      document.getElementById('tagNameInput').value = '';
+      document.getElementById('tagColorInput').value = '#E11D48';
+      document.getElementById('tagFormTitle').textContent = 'Create Tag';
+      document.getElementById('tagFormSubmitBtn').textContent = 'Create Tag';
+      document.getElementById('tagFormCancelBtn').style.display = 'none';
+      setTagCreateMsg('', null);
+    }
+
+    async function submitListenerTagForm() {
+      if (editingTagId) {
+        await updateListenerTag(editingTagId);
+      } else {
+        await createListenerTag();
+      }
+    }
+
+    async function updateListenerTag(tagId) {
+      const name = document.getElementById('tagNameInput').value.trim();
+      const color = document.getElementById('tagColorInput').value || '#E11D48';
+      if (!name) {
+        setTagCreateMsg('Please enter a tag name.', false);
+        return;
+      }
+      setTagCreateMsg('Saving…', null);
+      try {
+        const res = await fetch(`${API_URL}/admin/listener-tags/${tagId}`, {
+          method: 'PUT',
+          headers: authHeaders(true),
+          body: JSON.stringify({ name, color })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to update tag');
+        setTagCreateMsg('✓ Tag updated', true);
+        cancelEditListenerTag();
+        loadListenerTags();
+        loadTagListenerSearch(document.getElementById('tagListenerSearch').value || '');
+      } catch (e) {
+        setTagCreateMsg('✗ ' + e.message, false);
+      }
+    }
+
+    async function createListenerTag() {
+      const name = document.getElementById('tagNameInput').value.trim();
+      const color = document.getElementById('tagColorInput').value || '#E11D48';
+      if (!name) {
+        setTagCreateMsg('Please enter a tag name.', false);
+        return;
+      }
+      setTagCreateMsg('Creating…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/listener-tags', {
+          method: 'POST',
+          headers: authHeaders(true),
+          body: JSON.stringify({ name, color })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to create tag');
+        setTagCreateMsg('✓ Tag created', true);
+        document.getElementById('tagNameInput').value = '';
+        loadListenerTags();
+        loadTagListenerSearch(document.getElementById('tagListenerSearch').value || '');
+      } catch (e) {
+        setTagCreateMsg('✗ ' + e.message, false);
+      }
+    }
+
+    async function deleteListenerTag(tagId) {
+      const ok = await confirmDialog({
+        title: 'Delete Tag',
+        body: 'Remove this tag? It will be unassigned from every listener who has it.',
+        okLabel: 'Delete',
+        okClass: 'btn-danger',
+        icon: '🗑️',
+        iconClass: 'danger'
+      });
+      if (!ok) return;
+      try {
+        const res = await fetch(`${API_URL}/admin/listener-tags/${tagId}`, {
+          method: 'DELETE', headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to delete tag');
+        if (editingTagId === tagId) cancelEditListenerTag();
+        loadListenerTags();
+        loadTagListenerSearch(document.getElementById('tagListenerSearch').value || '');
+      } catch (e) {
+        setTagCreateMsg('✗ ' + e.message, false);
+      }
+    }
+
+    let tagListenerSearchTimer = null;
+    function onTagListenerSearchInput() {
+      clearTimeout(tagListenerSearchTimer);
+      const q = document.getElementById('tagListenerSearch').value;
+      tagListenerSearchTimer = setTimeout(() => loadTagListenerSearch(q), 250);
+    }
+
+    async function loadTagListenerSearch(q) {
+      try {
+        const res = await fetch(`${API_URL}/admin/listener-tags/search-listeners?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to search listeners');
+        renderTagListenerResults(data);
+      } catch (e) {
+        document.getElementById('tagListenerResults').innerHTML = `<div style="color:var(--danger);font-size:13px;">${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function renderTagListenerResults(listeners) {
+      const wrap = document.getElementById('tagListenerResults');
+      if (!listeners.length) {
+        wrap.innerHTML = '<div style="color:var(--slate);font-size:13px;">No listeners found.</div>';
+        return;
+      }
+      const tagOptions = listenerTagsCache.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+      wrap.innerHTML = listeners.map(l => `
+        <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;">
+          <div style="position:relative;width:44px;height:44px;flex-shrink:0;">
+            <img src="${l.photo_url ? API_URL + l.photo_url : ''}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;background:#222;display:block;">
+            ${l.badge_tag ? `<span style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:800;color:#fff;background:${escapeHtml(l.badge_tag.color)};box-shadow:0 1px 3px rgba(0,0,0,.35);border:1.5px solid var(--bg,#fff);">${escapeHtml(l.badge_tag.name)}</span>` : ''}
+          </div>
+          <div style="flex:1;font-weight:600;font-size:14px;">${escapeHtml(l.name)}</div>
+          <select id="tagSelect-${l.id}" style="width:auto;min-width:140px;">
+            <option value="">No tag</option>
+            ${tagOptions}
+          </select>
+          <button class="btn btn-leaf" style="padding:6px 14px;font-size:12px;" onclick="applyListenerTag(${l.id})">Apply</button>
+        </div>
+      `).join('');
+      listeners.forEach(l => {
+        const sel = document.getElementById(`tagSelect-${l.id}`);
+        if (sel && l.badge_tag) sel.value = String(l.badge_tag.id);
+      });
+    }
+
+    async function applyListenerTag(listenerId) {
+      const sel = document.getElementById(`tagSelect-${listenerId}`);
+      const tagId = sel.value ? parseInt(sel.value) : null;
+      try {
+        const res = await fetch(`${API_URL}/admin/listeners/${listenerId}/tag`, {
+          method: 'POST',
+          headers: authHeaders(true),
+          body: JSON.stringify({ tag_id: tagId })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to apply tag');
+        loadListenerTags();
+        loadTagListenerSearch(document.getElementById('tagListenerSearch').value || '');
+      } catch (e) {
+        document.getElementById('tagListenerResults').insertAdjacentHTML('afterbegin', `<div style="color:var(--danger);font-size:13px;">✗ ${escapeHtml(e.message)}</div>`);
+      }
+    }
+
 
     function setWcGoalsMsg(text, ok) {
       const el = document.getElementById('wcGoalsMsg');

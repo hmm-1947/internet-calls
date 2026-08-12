@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/call_ui.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
@@ -88,9 +89,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
   void _showMessage(String message) {
     final rootContext = CallkitService.instance.navigatorKey.currentContext;
     if (rootContext == null) return;
-    ScaffoldMessenger.of(
-      rootContext,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.show(rootContext, message);
   }
 
   void _listenForGifts() {

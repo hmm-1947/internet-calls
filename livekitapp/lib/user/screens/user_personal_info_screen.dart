@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -631,9 +632,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.show(context, message);
   }
 
   /// Inline hint under the username field: the cool-down while it is locked,

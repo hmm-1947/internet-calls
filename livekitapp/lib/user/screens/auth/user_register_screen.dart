@@ -3,6 +3,7 @@ import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_signup_otp_screen.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
@@ -121,9 +122,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.show(context, message);
   }
 
   Widget _fieldHint(String? error, String hint) {

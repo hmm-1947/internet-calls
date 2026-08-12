@@ -15,10 +15,10 @@ from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
     CoinTransaction, CallRating, Session as SessionModel, AdminUser, AuditLog,
     GiftTransaction, ListenerCoinTransaction, ChatSettings, ReservedUsername,
-    ListenerNote, UserBillingPurchase,
+    ListenerNote, UserBillingPurchase, ListenerBadgeTag,
 )
 from datetime import timedelta
-from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate
+from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, ListenerBadgeTagCreate, ListenerTagAssign
 from app.utils.security import hash_password
 from app.utils.uploads import read_and_validate_image, write_file
 
@@ -188,7 +188,12 @@ def list_listeners(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None
     if limit is not None:
         q = q.limit(limit)
     listeners = q.all()
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation} for l in listeners]
+    tag_ids = {l.badge_tag_id for l in listeners if l.badge_tag_id}
+    tags_by_id = {}
+    if tag_ids:
+        for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(tag_ids)).all():
+            tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id)} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -237,6 +242,105 @@ async def set_listener_active(listener_id: int, payload: AdminActiveUpdate, db: 
     if not listener.is_active:
         await manager.send_to_listener(listener_id, {"type": "force_logout"})
     return {"id": listener.id, "is_active": listener.is_active}
+
+@router.get("/listener-tags")
+def list_listener_tags(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    tags = db.query(ListenerBadgeTag).order_by(ListenerBadgeTag.name).all()
+    result = []
+    for t in tags:
+        count = db.query(Listener).filter(Listener.badge_tag_id == t.id).count()
+        result.append({"id": t.id, "name": t.name, "color": t.color, "listener_count": count})
+    return result
+
+
+@router.post("/listener-tags")
+def create_listener_tag(payload: ListenerBadgeTagCreate, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    existing = db.query(ListenerBadgeTag).filter(func.lower(ListenerBadgeTag.name) == name.lower()).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f'A tag named "{existing.name}" already exists.')
+    tag = ListenerBadgeTag(name=name, color=(payload.color or "#E11D48").strip())
+    db.add(tag)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Tag already exists")
+    db.refresh(tag)
+    return {"id": tag.id, "name": tag.name, "color": tag.color}
+
+
+@router.put("/listener-tags/{tag_id}")
+def update_listener_tag(tag_id: int, payload: ListenerBadgeTagCreate, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    tag = db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    existing = db.query(ListenerBadgeTag).filter(func.lower(ListenerBadgeTag.name) == name.lower(), ListenerBadgeTag.id != tag_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f'A tag named "{existing.name}" already exists.')
+    tag.name = name
+    tag.color = (payload.color or tag.color or "#E11D48").strip()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Tag already exists")
+    db.refresh(tag)
+    return {"id": tag.id, "name": tag.name, "color": tag.color}
+
+
+@router.delete("/listener-tags/{tag_id}")
+def delete_listener_tag(tag_id: int, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    tag = db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    db.query(Listener).filter(Listener.badge_tag_id == tag_id).update({Listener.badge_tag_id: None})
+    db.delete(tag)
+    db.commit()
+    return {"id": tag_id, "deleted": True}
+
+
+@router.get("/listener-tags/search-listeners")
+def search_listeners_for_tag(q: str = Query("", alias="q"), db: Session = Depends(get_db), _=Depends(verify_admin)):
+    query = db.query(Listener).order_by(Listener.name)
+    term = (q or "").strip()
+    if term:
+        query = query.filter(func.lower(Listener.name).contains(term.lower()))
+    listeners = query.limit(50).all()
+    tag_ids = {l.badge_tag_id for l in listeners if l.badge_tag_id}
+    tags_by_id = {}
+    if tag_ids:
+        for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(tag_ids)).all():
+            tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
+    return [
+        {
+            "id": l.id,
+            "name": l.name,
+            "photo_url": l.photo_url,
+            "badge_tag": tags_by_id.get(l.badge_tag_id),
+        }
+        for l in listeners
+    ]
+
+
+@router.post("/listeners/{listener_id}/tag")
+def assign_listener_tag(listener_id: int, payload: ListenerTagAssign, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    if payload.tag_id is not None:
+        tag = db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id == payload.tag_id).first()
+        if not tag:
+            raise HTTPException(status_code=404, detail="Tag not found")
+    listener.badge_tag_id = payload.tag_id
+    db.commit()
+    return {"id": listener.id, "badge_tag_id": listener.badge_tag_id}
+
 
 @router.delete("/listeners/{listener_id}")
 def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(verify_admin)):

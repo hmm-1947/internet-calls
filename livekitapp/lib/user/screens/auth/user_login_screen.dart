@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/onboarding_screen.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
@@ -72,9 +73,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    PillMessage.show(context, message);
   }
 
   Future<void> _signInWithGoogle() async {

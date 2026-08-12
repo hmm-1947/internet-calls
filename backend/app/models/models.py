@@ -67,6 +67,16 @@ class Listener(Base):
     occupation = Column(String, nullable=True)
     coins = Column(Integer, default=0, nullable=False)
     photo_url = Column(String, nullable=True)
+    badge_tag_id = Column(Integer, ForeignKey("listener_badge_tags.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ListenerBadgeTag(Base):
+    __tablename__ = "listener_badge_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    color = Column(String, nullable=False, server_default="#E11D48")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

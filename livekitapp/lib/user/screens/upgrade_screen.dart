@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -232,12 +233,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       _razorpay.open(options);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
       setState(() => _purchasing = false);
     }
   }
@@ -258,23 +254,14 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       final newBalance = (result['coins_balance'] as num?)?.toInt();
       if (!mounted) return;
       if (newBalance != null) setState(() => _coins = newBalance);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$coinsPurchased coins added to your balance'),
-          backgroundColor: _AppColors.brandRed,
-        ),
-      );
+      PillMessage.showSuccess(context, '$coinsPurchased coins added to your balance');
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Payment received but verification failed: '
-            '${e.toString().replaceFirst('Exception: ', '')}',
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
+      PillMessage.showError(
+        context,
+        'Payment received but verification failed: '
+        '${e.toString().replaceFirst('Exception: ', '')}',
       );
     } finally {
       _pendingOrderId = null;
@@ -299,17 +286,13 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     }
     _pendingOrderId = null;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(reason), backgroundColor: Colors.redAccent),
-    );
+    PillMessage.showError(context, reason);
     setState(() => _purchasing = false);
   }
 
   void _onExternalWallet(ExternalWalletResponse response) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Opening ${response.walletName ?? 'wallet'}...')),
-    );
+    PillMessage.show(context, 'Opening ${response.walletName ?? 'wallet'}...');
     setState(() => _purchasing = false);
   }
 

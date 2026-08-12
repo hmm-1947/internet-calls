@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
-from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call
+from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call, ListenerBadgeTag
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary, send_async
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
@@ -684,6 +684,11 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
     ).all()
     settings_by_listener = {s.other_id: s for s in settings_rows}
 
+    badge_tag_ids = {l.badge_tag_id for l in listeners.values() if l.badge_tag_id}
+    badge_tags_by_id = {}
+    if badge_tag_ids:
+        for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(badge_tag_ids)).all():
+            badge_tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
     result = []
     for lid in listener_ids:
         listener = listeners.get(lid)
@@ -704,6 +709,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             is_online=bool(listener.is_online) and manager.is_listener_online(lid),
             last_seen=listener.last_seen,
             photo_url=listener.photo_url,
+            badge_tag=badge_tags_by_id.get(listener.badge_tag_id),
         ))
     result.sort(key=lambda t: t.last_message_at, reverse=True)
     result.sort(key=lambda t: t.is_pinned, reverse=True)

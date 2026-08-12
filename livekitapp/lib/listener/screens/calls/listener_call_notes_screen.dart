@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 
@@ -150,15 +151,11 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
       );
       _savedText = _controller.text;
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Note saved')));
+        PillMessage.showSuccess(context, 'Note saved');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save note: $e')));
+        PillMessage.showError(context, 'Failed to save note: $e');
       }
     }
     if (mounted) setState(() => _saving = false);

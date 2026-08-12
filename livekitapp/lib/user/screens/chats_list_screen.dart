@@ -403,6 +403,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           listenerId: thread['listener_id'],
           listenerName: '${thread['listener_name'] ?? ''}',
           listenerPhotoUrl: thread['photo_url'],
+          listenerBadgeTag: thread['badge_tag'] as Map<String, dynamic>?,
         ),
       ),
     );
