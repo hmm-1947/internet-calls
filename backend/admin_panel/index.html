@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin ka Panel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,6 +38,18 @@
     [data-theme="dark"] .confirm-icon.danger  { background: #3a2224; color: #ff6b6b; }
     [data-theme="dark"] .confirm-icon.warning { background: #3a3020; color: #e0a83e; }
     [data-theme="dark"] .confirm-icon.info    { background: #1e3a2c; color: #3ed687; }
+
+    /* While the theme attribute is being swapped, every element's own
+       transition is switched off for a frame. CSS custom properties
+       (--white, --ink, etc.) change value instantly, but properties like
+       background/box-shadow that read them still try to animate - since
+       the animation target itself jumps, that mismatch is what shows up
+       as a flash across every input/card at once. Freezing transitions
+       for the swap means everything just snaps together instead. */
+    .theme-switching,
+    .theme-switching * {
+      transition: none !important;
+    }
 
     .theme-toggle {
       width: 40px;
@@ -638,6 +651,37 @@
       background: var(--mint);
     }
 
+    /* Admin chip sits pinned to the bottom of the left nav. */
+    .nav-admin-chip {
+      margin-top: auto;
+      width: 100%;
+    }
+
+    .nav-admin-chip .admin-menu {
+      top: auto;
+      bottom: 100%;
+      right: auto;
+      left: 0;
+      margin-bottom: 8px;
+      min-width: 100%;
+    }
+
+    /* Collapsed rail: show only the admin photo/initial, no name. */
+    .side-nav.collapsed .nav-admin-chip {
+      justify-content: center;
+      padding: 4px 0;
+    }
+
+    .side-nav.collapsed .nav-admin-chip .admin-name-block {
+      display: none;
+    }
+
+    .side-nav.collapsed .nav-admin-chip .admin-menu {
+      left: calc(100% + 12px);
+      bottom: 0;
+      min-width: 160px;
+    }
+
     .page-body {
       padding: 24px 28px;
       flex: 1;
@@ -1046,7 +1090,7 @@
 
     .stat-cards {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 18px;
       margin-bottom: 22px;
     }
@@ -1812,6 +1856,106 @@
       line-height: 1.5;
       margin: 2px 0 16px;
     }
+
+    /* ==================== Responsive ====================
+       Nothing below changes the desktop layout above; it only
+       adapts it as the viewport narrows, so the page (and the
+       dashboard's right-most stat card in particular) never gets
+       clipped off the edge of the screen. */
+
+    html, body {
+      /* Safety net: if any element still overflows despite the rules
+         below, this keeps it from creating a page-wide horizontal
+         scrollbar that hides content off to the right. */
+      overflow-x: hidden;
+      max-width: 100%;
+    }
+
+    .main-col {
+      /* A flex/grid item's default min-width is "auto" (the width of
+         its widest un-breakable content), which is what let the
+         dashboard cards push the column - and the sidebar toggle -
+         wider than the viewport. min-width: 0 lets it actually shrink
+         to fit instead. */
+      min-width: 0;
+    }
+
+    .page-body, .card, .stat-card {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    img, canvas, svg {
+      max-width: 100%;
+    }
+
+    /* Tablets: a little less padding, narrower sidebar. */
+    @media (max-width: 1024px) {
+      :root {
+        --sidebar-w: 240px;
+      }
+      .page-body {
+        padding: 20px;
+      }
+    }
+
+    /* Small tablets / large phones: sidebar becomes an icon-only rail
+       regardless of the user's collapse preference, and spacing tightens
+       up, so there's always room for the main content. */
+    @media (max-width: 780px) {
+      .side-nav {
+        width: var(--sidebar-w-collapsed) !important;
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+      .side-nav .side-brand,
+      .side-nav .side-brand-label,
+      .side-nav .nav-label,
+      .side-nav .nav-badge {
+        display: none;
+      }
+      .side-nav .side-nav-header {
+        flex-direction: column;
+        gap: 12px;
+        justify-content: center;
+      }
+      .side-nav .nav-item {
+        justify-content: center;
+        gap: 0;
+        padding: 10px 0;
+      }
+      .main-col {
+        margin-left: var(--sidebar-w-collapsed) !important;
+      }
+      .top-bar {
+        padding: 12px 16px;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .top-bar-title {
+        font-size: 18px;
+      }
+      .page-body {
+        padding: 16px;
+      }
+      .card {
+        padding: 16px;
+      }
+    }
+
+    /* Phones: the remaining desktop-only chrome (name/role text next to
+       the avatar) makes way for the content it sits beside. */
+    @media (max-width: 480px) {
+      .admin-name-block {
+        display: none;
+      }
+      .top-bar-right {
+        gap: 10px;
+      }
+      .stat-cards {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 
@@ -1879,6 +2023,26 @@
     <div class="confirm-btns">
       <button class="btn btn-ghost" onclick="closeCoinAdjust()">Cancel</button>
       <button class="btn btn-leaf" onclick="submitCoinAdjust()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign tag to a listener (opens when a listener row is clicked) -->
+<div class="confirm-overlay profile-overlay" id="tagAssignOverlay" style="display:none;">
+  <div class="confirm-box profile-box">
+    <div class="confirm-icon info">&#127991;</div>
+    <div class="confirm-title">Assign Tag</div>
+    <div class="profile-username" id="tagAssignSubtitle"></div>
+    <div class="profile-field">
+      <label for="tagAssignSelect">Tag</label>
+      <select id="tagAssignSelect">
+        <option value="">No tag</option>
+      </select>
+    </div>
+    <div id="tagAssignMsg" style="font-weight:600;font-size:13px;text-align:center;min-height:18px;margin-bottom:12px;"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeTagAssignPopup()">Cancel</button>
+      <button class="btn btn-leaf" onclick="submitTagAssign()">Apply</button>
     </div>
   </div>
 </div>
@@ -1964,26 +2128,26 @@
       <div class="nav-item" id="navSpecialOffers" data-label="Special Offers" onclick="switchPage('specialoffers')"><span class="nav-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M9 12.5 7 21l5-3 5 3-2-8.5"/></svg></span><span class="nav-label">Special Offers</span></div>
       <div class="nav-item" id="navWeeklyChallenges" data-label="Weekly Challenges" onclick="switchPage('weeklychallenges')"><span class="nav-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 9h18"/></svg></span><span class="nav-label">Weekly Challenges</span></div>
       <div class="nav-item" id="navTermsPrivacy" data-label="Terms &amp; Privacy" onclick="switchPage('termsprivacy')"><span class="nav-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg></span><span class="nav-label">Terms &amp; Privacy</span></div>
-      <div class="nav-item" id="navTags" onclick="switchPage('tags')"><span class="nav-ic">&#127991;</span>Tags</div>
+      <div class="nav-item" id="navTags" data-label="Tags" onclick="switchPage('tags')"><span class="nav-ic"><svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.59z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span><span class="nav-label">Tags</span></div>
 
+      <div class="admin-chip nav-admin-chip" id="navAdminChip" onclick="toggleAdminMenu()">
+        <div class="admin-avatar" id="adminAvatarInitial">A</div>
+        <img class="admin-avatar-photo" id="adminAvatarPhoto" alt="Admin photo">
+        <div class="admin-name-block">
+          <span class="an" id="adminNameLabel">Admin</span>
+          <span class="ar">Admin</span>
+        </div>
+        <div class="admin-menu" id="adminMenu">
+          <div class="admin-menu-item" onclick="openEditProfile()">Edit Profile</div>
+          <div class="admin-menu-item" onclick="confirmLogout()">Logout</div>
+        </div>
+      </div>
     </div>
     <div class="main-col">
       <div class="top-bar">
         <div class="top-bar-title" id="topBarTitle">Dashboard</div>
         <div class="top-bar-right">
           <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle dark mode"></button>
-          <div class="admin-chip" onclick="toggleAdminMenu()">
-            <div class="admin-avatar" id="adminAvatarInitial">A</div>
-            <img class="admin-avatar-photo" id="adminAvatarPhoto" alt="Admin photo">
-            <div class="admin-name-block">
-              <span class="an" id="adminNameLabel">Admin</span>
-              <span class="ar">Admin</span>
-            </div>
-            <div class="admin-menu" id="adminMenu">
-              <div class="admin-menu-item" onclick="openEditProfile()">Edit Profile</div>
-              <div class="admin-menu-item" onclick="confirmLogout()">Logout</div>
-            </div>
-          </div>
         </div>
       </div>
       <div class="page-body">
@@ -2634,7 +2798,7 @@
       document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = '';
       applyStoredNavCollapse();
-      const validPages = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy'];
+      const validPages = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy', 'tags'];
       const lastPage = localStorage.getItem('adminActivePage');
       switchPage(validPages.includes(lastPage) ? lastPage : 'dashboard', true);
       loadPeople();
@@ -2714,8 +2878,8 @@
     }
 
     // Visual order of the nav items, top to bottom, matching the markup.
-    const NAV_ORDER = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy'];
-    const NAV_IDS = ['navDashboard', 'navNotifications', 'navUsers', 'navListeners', 'navCoinSettings', 'navBilling', 'navGifts', 'navSpecialOffers', 'navWeeklyChallenges', 'navTermsPrivacy'];
+    const NAV_ORDER = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy', 'tags'];
+    const NAV_IDS = ['navDashboard', 'navNotifications', 'navUsers', 'navListeners', 'navCoinSettings', 'navBilling', 'navGifts', 'navSpecialOffers', 'navWeeklyChallenges', 'navTermsPrivacy', 'navTags'];
 
     function shakeItemsInTheWay(prevPageId, page) {
       if (!prevPageId) return;
@@ -4324,38 +4488,64 @@
       }
     }
 
+    let tagListenerResultsCache = [];
+    let tagAssignListenerId = null;
+
     function renderTagListenerResults(listeners) {
+      tagListenerResultsCache = listeners;
       const wrap = document.getElementById('tagListenerResults');
       if (!listeners.length) {
         wrap.innerHTML = '<div style="color:var(--slate);font-size:13px;">No listeners found.</div>';
         return;
       }
-      const tagOptions = listenerTagsCache.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
       wrap.innerHTML = listeners.map(l => `
-        <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;">
+        <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;" onclick="openListenerTagPopup(${l.id})">
           <div style="position:relative;width:44px;height:44px;flex-shrink:0;">
             <img src="${l.photo_url ? API_URL + l.photo_url : ''}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;background:#222;display:block;">
             ${l.badge_tag ? `<span style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:800;color:#fff;background:${escapeHtml(l.badge_tag.color)};box-shadow:0 1px 3px rgba(0,0,0,.35);border:1.5px solid var(--bg,#fff);">${escapeHtml(l.badge_tag.name)}</span>` : ''}
           </div>
           <div style="flex:1;font-weight:600;font-size:14px;">${escapeHtml(l.name)}</div>
-          <select id="tagSelect-${l.id}" style="width:auto;min-width:140px;">
-            <option value="">No tag</option>
-            ${tagOptions}
-          </select>
-          <button class="btn btn-leaf" style="padding:6px 14px;font-size:12px;" onclick="applyListenerTag(${l.id})">Apply</button>
         </div>
       `).join('');
-      listeners.forEach(l => {
-        const sel = document.getElementById(`tagSelect-${l.id}`);
-        if (sel && l.badge_tag) sel.value = String(l.badge_tag.id);
-      });
     }
 
-    async function applyListenerTag(listenerId) {
-      const sel = document.getElementById(`tagSelect-${listenerId}`);
+    function openListenerTagPopup(listenerId) {
+      const l = tagListenerResultsCache.find(x => x.id === listenerId);
+      if (!l) return;
+      tagAssignListenerId = listenerId;
+      document.getElementById('tagAssignSubtitle').textContent = l.name;
+      const tagOptions = listenerTagsCache.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+      const sel = document.getElementById('tagAssignSelect');
+      sel.innerHTML = '<option value="">No tag</option>' + tagOptions;
+      sel.value = l.badge_tag ? String(l.badge_tag.id) : '';
+      document.getElementById('tagAssignMsg').textContent = '';
+      document.getElementById('tagAssignMsg').className = '';
+      const overlay = document.getElementById('tagAssignOverlay');
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('show'));
+    }
+
+    function closeTagAssignPopup() {
+      tagAssignListenerId = null;
+      const overlay = document.getElementById('tagAssignOverlay');
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 180);
+    }
+
+    // Close on backdrop click
+    document.getElementById('tagAssignOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeTagAssignPopup();
+    });
+
+    async function submitTagAssign() {
+      if (!tagAssignListenerId) return;
+      const sel = document.getElementById('tagAssignSelect');
       const tagId = sel.value ? parseInt(sel.value) : null;
+      const msgEl = document.getElementById('tagAssignMsg');
+      msgEl.textContent = 'Saving…';
+      msgEl.className = '';
       try {
-        const res = await fetch(`${API_URL}/admin/listeners/${listenerId}/tag`, {
+        const res = await fetch(`${API_URL}/admin/listeners/${tagAssignListenerId}/tag`, {
           method: 'POST',
           headers: authHeaders(true),
           body: JSON.stringify({ tag_id: tagId })
@@ -4364,8 +4554,10 @@
         if (!res.ok) throw new Error(data.detail || 'Failed to apply tag');
         loadListenerTags();
         loadTagListenerSearch(document.getElementById('tagListenerSearch').value || '');
+        closeTagAssignPopup();
       } catch (e) {
-        document.getElementById('tagListenerResults').insertAdjacentHTML('afterbegin', `<div style="color:var(--danger);font-size:13px;">✗ ${escapeHtml(e.message)}</div>`);
+        msgEl.textContent = '✗ ' + e.message;
+        msgEl.className = 'err';
       }
     }
 
@@ -5906,7 +6098,9 @@ ${logSection === 'chats' ? '' : `
     }
 
     function applyTheme(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
+      const root = document.documentElement;
+      root.classList.add('theme-switching');
+      root.setAttribute('data-theme', theme);
       const btn = document.getElementById('themeToggleBtn');
       if (btn) {
         btn.innerHTML = theme === 'dark'
@@ -5914,6 +6108,13 @@ ${logSection === 'chats' ? '' : `
           : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>';
       }
       localStorage.setItem('adminTheme', theme);
+      // Wait a couple of frames for the new colors to actually paint, then
+      // re-enable transitions so hover/focus effects keep animating normally.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          root.classList.remove('theme-switching');
+        });
+      });
     }
 
     function toggleTheme() {
