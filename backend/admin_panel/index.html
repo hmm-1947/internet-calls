@@ -117,11 +117,17 @@
       justify-content: space-between;
       gap: 8px;
       margin-bottom: 14px;
+      /* Matches the expanded .side-brand block's height (34px icon + 6px
+         top padding + 22px bottom padding) so the header is the same
+         height whether the brand is shown or hidden - otherwise every
+         nav item below shifts up/down when the sidebar is toggled. */
+      min-height: 62px;
     }
 
     .side-nav.collapsed .side-nav-header {
       flex-direction: column;
       gap: 12px;
+      justify-content: center;
     }
 
     .nav-toggle-btn {
@@ -264,7 +270,14 @@
       position: relative;
       z-index: 1;
       transition: color 0.2s;
+      /* Without this, the notifications row (which has a 20px-tall unread
+         badge) is taller than every other row - but only while expanded,
+         since the badge is hidden entirely when collapsed. That mismatch
+         accumulates down the list, so items below notifications land in
+         a different spot in each state and the slider visibly drifts. */
+      min-height: 40px;
     }
+
 
     .nav-item .nav-ic {
       width: 18px;
@@ -2588,7 +2601,7 @@
       applyStoredNavCollapse();
       const validPages = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy'];
       const lastPage = localStorage.getItem('adminActivePage');
-      switchPage(validPages.includes(lastPage) ? lastPage : 'dashboard');
+      switchPage(validPages.includes(lastPage) ? lastPage : 'dashboard', true);
       loadPeople();
       loadCoinSettings();
       loadUpgradeBanner();
@@ -2610,7 +2623,7 @@
       connectAdminWs();
     }
 
-    function switchPage(page) {
+    function switchPage(page, instant) {
       const prevActiveEl = document.querySelector('.side-nav .nav-item.active');
       const prevPage = prevActiveEl ? prevActiveEl.id : null;
       localStorage.setItem('adminActivePage', page);
@@ -2655,8 +2668,8 @@
         loadPendingWithdrawals();
         loadWithdrawalLog();
       }
-      updateNavSlider();
-      shakeItemsInTheWay(prevPage, page);
+      updateNavSlider(instant);
+      if (!instant) shakeItemsInTheWay(prevPage, page);
     }
 
     // Visual order of the nav items, top to bottom, matching the markup.
@@ -2695,21 +2708,47 @@
       });
     }
 
-    function updateNavSlider() {
+    function updateNavSlider(instant) {
       const active = document.querySelector('.side-nav .nav-item.active');
       const slider = document.getElementById('navSlider');
       if (!active || !slider) return;
+      if (instant) slider.style.transition = 'none';
       slider.style.top = active.offsetTop + 'px';
       slider.style.height = active.offsetHeight + 'px';
       slider.style.opacity = '1';
+      if (instant) {
+        // Force the style to apply before restoring the transition,
+        // otherwise the browser can coalesce both writes into one frame
+        // and animate anyway.
+        void slider.offsetHeight;
+        slider.style.transition = '';
+      }
     }
 
-    window.addEventListener('resize', updateNavSlider);
+    window.addEventListener('resize', function () { updateNavSlider(); });
 
     // ---- Left nav collapse toggle (persistent rail, like Claude's sidebar) ----
     function toggleSideNav() {
       const nav = document.getElementById('sideNav');
       if (!nav) return;
+      const slider = document.getElementById('navSlider');
+      // The highlight is only allowed to glide when the user actually picks
+      // a different item (switchPage). A collapse/expand moves the same
+      // active icon to a new spot purely for layout reasons, so its
+      // transition stays switched off for the *entire* collapse/expand
+      // animation - not just one frame - otherwise a late correction once
+      // the sidebar's own width transition finishes would still visibly
+      // slide. It's restored only after that transition truly settles.
+      let restored = false;
+      function restoreTransition() {
+        if (restored) return;
+        restored = true;
+        if (slider) {
+          void slider.offsetHeight;
+          slider.style.transition = '';
+        }
+      }
+      if (slider) slider.style.transition = 'none';
       const collapsed = nav.classList.toggle('collapsed');
       localStorage.setItem('adminNavCollapsed', collapsed ? '1' : '0');
       const btn = document.getElementById('navToggleBtn');
@@ -2718,21 +2757,21 @@
         btn.setAttribute('aria-label', label);
         btn.setAttribute('title', label);
       }
-      // The slider's top/height depend on layout that is still animating
-      // (sidebar width, header direction), so recompute at several points
-      // rather than relying on a single call: right after the class swap,
-      // once more on the next frame, when the width transition actually
-      // ends, and via a timeout fallback in case transitionend never fires
-      // (e.g. the nav is toggled again mid-transition).
       updateNavSlider();
       requestAnimationFrame(updateNavSlider);
       nav.addEventListener('transitionend', function handler(e) {
         if (e.target === nav && e.propertyName === 'width') {
           nav.removeEventListener('transitionend', handler);
           updateNavSlider();
+          restoreTransition();
         }
       });
-      setTimeout(updateNavSlider, 260);
+      // Fallback in case transitionend never fires (e.g. reduced-motion
+      // settings skip the width transition entirely).
+      setTimeout(function () {
+        updateNavSlider();
+        restoreTransition();
+      }, 260);
     }
 
     function applyStoredNavCollapse() {
