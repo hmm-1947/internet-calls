@@ -16,13 +16,13 @@ IconData _statusIcon(String status, String callType) {
   }
   if (status == 'rejected') return Icons.call_end;
   if (status == 'cancelled') return Icons.call_missed_outgoing;
-  if (status == 'missed') return Icons.call_missed;
+  if (status == 'not_answered') return Icons.phone_missed;
   return Icons.call_made;
 }
 
 Color _statusColor(String status, Color pink) {
   if (status == 'ended') return Colors.greenAccent;
-  if (status == 'rejected' || status == 'cancelled' || status == 'missed') {
+  if (status == 'rejected' || status == 'cancelled' || status == 'not_answered') {
     return Colors.redAccent;
   }
   return pink;
@@ -37,8 +37,8 @@ String _statusLabel(String status) {
       return 'Rejected';
     case 'cancelled':
       return 'Cancelled';
-    case 'missed':
-      return 'Missed';
+    case 'not_answered':
+      return 'Not Answered';
     default:
       return status[0].toUpperCase() + status.substring(1);
   }
@@ -120,7 +120,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       'accepted': 'ended',
       'cancelled': 'cancelled',
       'rejected': 'rejected',
-      'missed': 'missed',
+      'not_answered': 'not_answered',
     };
     final status = statusOf[_filter];
     return _calls.where((c) {
@@ -358,9 +358,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 ),
                 const SizedBox(width: 8),
                 _CallFilterChip(
-                  label: 'Missed',
-                  selected: _filter == 'missed',
-                  onTap: () => _setFilter('missed'),
+                  label: 'Not Answered',
+                  selected: _filter == 'not_answered',
+                  onTap: () => _setFilter('not_answered'),
                   activeColor: pink,
                 ),
               ],

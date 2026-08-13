@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/activity_notification_service.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/native_call_bridge.dart';
@@ -465,8 +466,54 @@ if (event is CallEventActionCallAccept) {
     } catch (e) {}
   }
 
-  Future<void> showIncomingCall(Map<String, dynamic> data) async {
+  Future<bool> _isStillRinging(int callId) async {
+    try {
+      final token = await LocalStorage().getToken();
+      if (token == null) return true;
+      final status = await ListenerRepository().fetchListenerCallStatus(
+        token,
+        callId,
+      );
+      if (status == null) return true;
+      return status == 'ringing';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> _dropStaleCall(String callId, String callerName) async {
+    print(
+      '[Callkit] showIncomingCall: dropping stale/already-resolved call $callId',
+    );
+    final incomingCallId = int.tryParse(callId);
+    if (incomingCallId != null) await _rejectBusyCall(incomingCallId);
+    await ActivityNotificationService.instance.showMissedCall(
+      callId: incomingCallId ?? 0,
+      callerName: callerName,
+    );
+  }
+
+  Future<void> showIncomingCall(
+    Map<String, dynamic> data, {
+    DateTime? sentAt,
+  }) async {
     final callId = data['call_id'] ?? '';
+    final callerName = data['caller_name'] ?? 'Unknown';
+    final looksStale =
+        sentAt != null &&
+        DateTime.now().difference(sentAt) > const Duration(seconds: 45);
+    if (looksStale) {
+      await _dropStaleCall(callId.toString(), callerName);
+      return;
+    }
+    final parsedCallId = int.tryParse(callId.toString());
+    if (parsedCallId != null) {
+      final stillRinging = await _isStillRinging(parsedCallId);
+      if (!stillRinging) {
+        await _dropStaleCall(callId.toString(), callerName);
+        return;
+      }
+    }
     final activeCall = ActiveCallManager.instance.activeCall;
     if (activeCall != null) {
       final incomingCallId = int.tryParse(callId.toString());
@@ -480,7 +527,6 @@ if (event is CallEventActionCallAccept) {
     }
     if (_lastShownCallId == callId.toString()) return;
     _lastShownCallId = callId.toString();
-    final callerName = data['caller_name'] ?? 'Unknown';
     final callType = data['call_type'] ?? 'audio';
     final remoteCallerPhotoUrl = ApiConstants.resolveMediaUrl(data['caller_photo_url'] as String?);
     if (_syncLocalAvatarPath(remoteCallerPhotoUrl) == null) {

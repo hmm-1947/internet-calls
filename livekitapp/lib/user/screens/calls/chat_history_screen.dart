@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
@@ -967,10 +968,13 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
               color: Colors.white,
               size: isNarrow ? 20 : 24,
             ),
-            onPressed: () => showGiftSheet(
-              context,
-              listenerId: widget.listenerId,
-            ),
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              showGiftSheet(
+                context,
+                listenerId: widget.listenerId,
+              );
+            },
           ),
           ValueListenableBuilder<bool>(
             valueListenable: _favorite,
@@ -981,7 +985,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                 color: favorite ? _pink : Colors.white,
                 size: isNarrow ? 20 : 24,
               ),
-              onPressed: _toggleFavorite,
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                _toggleFavorite();
+              },
             ),
           ),
           _coinsPill(isNarrow: isNarrow),

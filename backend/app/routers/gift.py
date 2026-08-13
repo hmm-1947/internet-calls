@@ -11,6 +11,7 @@ from app.core.ws_manager import manager
 from app.routers.admin import verify_admin
 from app.routers.chat import _msg_dict
 from app.schemas.schemas import GiftAuditLogOut
+from app.utils.fcm import send_gift_received, send_async
 
 router = APIRouter(prefix="/gift", tags=["gift"])
 
@@ -283,5 +284,16 @@ async def send_gift(payload: GiftSend, db: Session = Depends(get_db), current_us
             "from_user_name": current_user.name,
             "sent_during_call": sent_during_call,
         })
+
+    if listener.fcm_token:
+        send_async(
+            send_gift_received,
+            listener.fcm_token,
+            gift.name,
+            gift.coins,
+            credit,
+            current_user.id,
+            current_user.name,
+        )
 
     return {"coins": current_user.coins, "gift_coins": gift.coins, "gift_name": gift.name}

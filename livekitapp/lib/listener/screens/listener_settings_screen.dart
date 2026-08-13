@@ -129,7 +129,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     if (cached['is_online'] is bool) _statusOnline = cached['is_online'];
   }
 
-Future<void> refresh() async {
+  Future<void> refresh() async {
     try {
       final token = await _localStorage.getToken();
       final data = await _repository.getMe(token!, forceRefresh: true);
@@ -146,7 +146,6 @@ Future<void> refresh() async {
     } catch (_) {}
   }
 
-
   Future<void> _toggleStatus(bool value) async {
     final previous = _statusOnline;
     setState(() => _statusOnline = value);
@@ -161,7 +160,11 @@ Future<void> refresh() async {
     } catch (e) {
       if (mounted) {
         setState(() => _statusOnline = previous);
-        PillMessage.showError(context, 'Failed to update status: $e', bottomOffset: 78);
+        PillMessage.showError(
+          context,
+          'Failed to update status: $e',
+          bottomOffset: 78,
+        );
       }
     }
   }
@@ -177,7 +180,9 @@ Future<void> refresh() async {
         }
         await _repository.logout(token);
       } else {
-        debugPrint('Logout: no token found in local storage, skipping API call');
+        debugPrint(
+          'Logout: no token found in local storage, skipping API call',
+        );
       }
     } catch (e) {
       debugPrint('Logout: API call failed: $e');
@@ -278,26 +283,22 @@ Future<void> refresh() async {
                     ChangePasswordScreen(
                       onSubmit: (current, next) async {
                         final token = await _localStorage.getToken();
-                        await _repository.changePassword(
-                          token!,
-                          current,
-                          next,
-                        );
+                        await _repository.changePassword(token!, current, next);
                       },
                     ),
                   ),
                 );
               },
             ),
-                     const Divider(height: 1, color: Colors.white12),
+            const Divider(height: 1, color: Colors.white12),
             _SettingsTile(
               icon: Icons.reviews,
               title: 'Reviews & Ratings',
-             onTap: () {
-                  Navigator.of(
-                    context,
-                  ).push(slideRoute(const ListenerReviewsScreen()));
-                },
+              onTap: () {
+                Navigator.of(
+                  context,
+                ).push(slideRoute(const ListenerReviewsScreen()));
+              },
             ),
           ]),
 
@@ -313,29 +314,17 @@ Future<void> refresh() async {
                 onChanged: _toggleStatus,
               ),
             ),
-            const Divider(height: 1, color: Colors.white12),
-            const Divider(height: 1, color: Colors.white12),
-            _SettingsTile(
-              icon: Icons.shield_outlined,
-              title: 'Privacy & Security',
-              onTap: () {},
-            ),
           ]),
           _SectionLabel('SUPPORT'),
           _SettingsCard([
-            _SettingsTile(
-              icon: Icons.help_outline,
-              title: 'Help & Support',
-              onTap: () {},
-            ),
-            const Divider(height: 1, color: Colors.white12),
             _SettingsTile(
               icon: Icons.description_outlined,
               title: 'Terms of Service',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const LegalDocumentScreen(documentType: 'terms'),
+                    builder: (_) =>
+                        const LegalDocumentScreen(documentType: 'terms'),
                   ),
                 );
               },
@@ -347,12 +336,12 @@ Future<void> refresh() async {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const LegalDocumentScreen(documentType: 'privacy'),
+                    builder: (_) =>
+                        const LegalDocumentScreen(documentType: 'privacy'),
                   ),
                 );
               },
             ),
-
           ]),
           const SizedBox(height: 16),
           _SettingsCard([

@@ -23,6 +23,7 @@ import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/activity_notification_service.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
@@ -52,6 +53,7 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
     await Firebase.initializeApp();
   }
   print('[FCM-BG] Background message received: type=${message.data["type"]}');
+  await ActivityNotificationService.instance.init();
   await _handleMessage(message);
   await _cacheAndAckChatMessage(message);
   await _cacheAndAckChatSummary(message);
@@ -191,10 +193,7 @@ void main() async {
   // permission prompts, cache restores) can take several seconds; without
   // this, nothing is on screen at all until it finishes.
   runApp(
-    const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
-    ),
+    const MaterialApp(debugShowCheckedModeBanner: false, home: SplashScreen()),
   );
 
   await dotenv.load(fileName: ".env");
@@ -213,6 +212,7 @@ void main() async {
   ActiveCallManager.instance.rootNavigatorKey =
       CallkitService.instance.navigatorKey;
   await Firebase.initializeApp();
+  await ActivityNotificationService.instance.init();
 
   // Register the background handler BEFORE runApp
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
@@ -234,6 +234,7 @@ void main() async {
   FirebaseMessaging.onMessage.listen((message) {
     print('[FCM-FG] Foreground message received: type=${message.data["type"]}');
     _handleMessage(message);
+    _handleForegroundOnlyMessage(message);
     _applyStatusPush(message);
     _cacheAndAckChatSummary(message);
     _cacheAndAckChatMessage(message);
@@ -284,9 +285,38 @@ Future<void> _handleMessage(RemoteMessage message) async {
     // the incoming-call UI for a session that no longer exists locally.
     final authToken = await LocalStorage().getToken();
     if (authToken == null) return;
-    await CallkitService.instance.showIncomingCall(message.data);
+    await CallkitService.instance.showIncomingCall(
+      message.data,
+      sentAt: message.sentTime,
+    );
   } else if (type == 'call_cancelled') {
     await CallkitService.instance.handleCallCancelled(message.data);
+  }
+}
+
+/// Foreground-only rendering for pushes whose `notification` block would
+/// otherwise be suppressed by [setForegroundNotificationPresentationOptions].
+/// Background/killed delivery already shows these natively from the FCM
+/// notification block, so calling this there too would double them up.
+Future<void> _handleForegroundOnlyMessage(RemoteMessage message) async {
+  final type = message.data['type'];
+  if (type == 'call_missed') {
+    final authToken = await LocalStorage().getToken();
+    if (authToken == null) return;
+    await ActivityNotificationService.instance.showMissedCall(
+      callId: int.tryParse('${message.data['call_id'] ?? ''}') ?? 0,
+      callerName: '${message.data['caller_name'] ?? 'Someone'}',
+    );
+  } else if (type == 'gift_received') {
+    final authToken = await LocalStorage().getToken();
+    if (authToken == null) return;
+    await ActivityNotificationService.instance.showGiftReceived(
+      fromUserId: int.tryParse('${message.data['from_user_id'] ?? ''}') ?? 0,
+      fromUserName: '${message.data['from_user_name'] ?? 'Someone'}',
+      giftName: '${message.data['gift_name'] ?? 'Gift'}',
+      creditedCoins:
+          int.tryParse('${message.data['credited_coins'] ?? ''}') ?? 0,
+    );
   }
 }
 

@@ -515,7 +515,12 @@ class _CallScreenState extends State<CallScreen> {
 
       if (_isEnding || !mounted) {
         roomListener.dispose();
-        unawaited(room.disconnect());
+        unawaited(
+          room.disconnect().timeout(
+            const Duration(seconds: 3),
+            onTimeout: () {},
+          ).catchError((_) {}),
+        );
         return;
       }
 
@@ -560,7 +565,12 @@ class _CallScreenState extends State<CallScreen> {
       }
     } catch (e) {
       roomListener?.dispose();
-      unawaited(room?.disconnect());
+      unawaited(
+        room?.disconnect().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {},
+        ).catchError((_) {}),
+      );
       _pendingVideoTrack ??= cameraTrack;
       await _disposeUnpublishedCamera();
       if (!mounted || _isEnding) return;

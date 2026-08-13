@@ -123,16 +123,17 @@ def send_call_rejected(fcm_token: str, call_id: int):
         },
     )
 
-def send_call_missed(fcm_token: str, call_id: int):
+def send_call_missed(fcm_token: str, call_id: int, caller_name: str = ""):
     """Notify the listener that they missed a call (did not respond in time)."""
     _send_with_notification(
         token=fcm_token,
         data={
             "type": "call_missed",
             "call_id": str(call_id),
+            "caller_name": caller_name or "",
         },
         title="Missed Call",
-        body="You missed a call.",
+        body=f"You missed a call from {caller_name}." if caller_name else "You missed a call.",
     )
 
 
@@ -187,6 +188,25 @@ def send_withdrawal_decision(fcm_token: str, request_id: int, status: str, coins
         title=title,
         body=body,
     )
+
+
+def send_gift_received(fcm_token: str, gift_name: str, gift_coins: int, credited_coins: int, from_user_id: int, from_user_name: str):
+    """Notify a listener that they received a gift."""
+    _send_with_notification(
+        token=fcm_token,
+        data={
+            "type": "gift_received",
+            "gift_name": gift_name,
+            "coins": str(gift_coins),
+            "credited_coins": str(credited_coins),
+            "from_user_id": str(from_user_id),
+            "from_user_name": from_user_name,
+        },
+        title="You received a gift!",
+        body=f"{from_user_name} sent you {gift_name} (+{credited_coins} coins)",
+        channel_id="gift_notifications",
+    )
+
 
 
 def _send_chat_push(token: str, data: dict, title: str, body: str, thread_id: str, collapse_key: str | None = None, ttl: int = 86400):
