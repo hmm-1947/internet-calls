@@ -1967,6 +1967,16 @@
       opacity: 0;
       transition: transform .2s cubic-bezier(.34,1.4,.64,1) .05s, opacity .18s ease .05s;
     }
+    .confirm-icon svg {
+      width: 24px;
+      height: 24px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      display: block;
+    }
     .confirm-overlay.show .confirm-icon {
       transform: scale(1);
       opacity: 1;
@@ -2154,7 +2164,7 @@
 <!-- Custom confirmation modal -->
 <div class="confirm-overlay" id="confirmOverlay" style="display:none;">
   <div class="confirm-box">
-    <div class="confirm-icon" id="confirmIcon">⚠️</div>
+    <div class="confirm-icon" id="confirmIcon"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
     <div class="confirm-title" id="confirmTitle">Are you sure?</div>
     <div class="confirm-body" id="confirmBody"></div>
     <div class="confirm-btns">
@@ -2167,7 +2177,7 @@
 <!-- Edit admin profile modal -->
 <div class="confirm-overlay profile-overlay" id="profileOverlay" style="display:none;">
   <div class="confirm-box profile-box">
-    <div class="confirm-icon info">&#128100;</div>
+    <div class="confirm-icon info"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
     <div class="confirm-title">Edit Profile</div>
     <div class="profile-avatar-edit" style="display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 10px;">
       <div style="position:relative;width:72px;height:72px;">
@@ -2202,7 +2212,7 @@
 <!-- Coin Settings: add-coins drawer for a searched user/listener -->
 <div class="confirm-overlay profile-overlay" id="coinAdjustOverlay" style="display:none;">
   <div class="confirm-box profile-box">
-    <div class="confirm-icon info">&#129689;</div>
+    <div class="confirm-icon info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.5 2.5 0 0 1 2.5-1.8c1.4 0 2.5.9 2.5 2s-1 1.5-2.5 2-2.5 1-2.5 2c0 1.1 1.1 2 2.5 2a2.5 2.5 0 0 0 2.5-1.8M12 6.5v1.1M12 16.4v1.1"/></svg></div>
     <div class="confirm-title" id="coinAdjustTitle">Add Coins</div>
     <div class="profile-username" id="coinAdjustSubtitle"></div>
     <div class="profile-field">
@@ -2220,7 +2230,7 @@
 <!-- Assign tag to a listener (opens when a listener row is clicked) -->
 <div class="confirm-overlay profile-overlay" id="tagAssignOverlay" style="display:none;">
   <div class="confirm-box profile-box">
-    <div class="confirm-icon info">&#127991;</div>
+    <div class="confirm-icon info"><svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.59z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></div>
     <div class="confirm-title">Assign Tag</div>
     <div class="profile-username" id="tagAssignSubtitle"></div>
     <div class="profile-field">
@@ -3627,11 +3637,31 @@
     // ─── Custom confirmation dialog ───────────────────────────────────────────
     let _confirmResolve = null;
 
+    // Line-style icons matching the left nav's stroke-based SVGs (see .nav-ic).
+    // Keyed by a short name so confirmDialog() callers pass e.g. icon: 'trash'
+    // instead of an emoji.
+    const CONFIRM_ICONS = {
+      warning: '<svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+      lock: '<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+      edit: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+      image: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5-11 11"/></svg>',
+      coin: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.5 2.5 0 0 1 2.5-1.8c1.4 0 2.5.9 2.5 2s-1 1.5-2.5 2-2.5 1-2.5 2c0 1.1 1.1 2 2.5 2a2.5 2.5 0 0 0 2.5-1.8M12 6.5v1.1M12 16.4v1.1"/></svg>',
+      trash: '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/></svg>',
+      calendar: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 9h18"/></svg>',
+      check: '<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m22 4-10 10.01-3-3"/></svg>',
+      block: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
+      'video-off': '<svg viewBox="0 0 24 24"><path d="M16 16v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2.5"/><path d="M10.66 5H14a2 2 0 0 1 2 2v2.34l1 1L23 7v10"/><path d="M1 1l22 22"/></svg>',
+      video: '<svg viewBox="0 0 24 24"><path d="M23 7 16 12l7 5V7Z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+      user: '<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      tag: '<svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.59z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
+    };
+
     /**
      * confirmDialog({ title, body, okLabel, okClass, icon, iconClass })
+     * `icon` is a key into CONFIRM_ICONS (falls back to 'warning').
      * Returns a Promise<boolean> — true if user clicks OK, false on cancel.
      */
-    function confirmDialog({ title = 'Are you sure?', body = '', okLabel = 'Confirm', okClass = 'btn-danger', icon = '⚠️', iconClass = 'danger' } = {}) {
+    function confirmDialog({ title = 'Are you sure?', body = '', okLabel = 'Confirm', okClass = 'btn-danger', icon = 'warning', iconClass = 'danger' } = {}) {
       return new Promise(resolve => {
         _confirmResolve = (val) => {
           const overlay = document.getElementById('confirmOverlay');
@@ -3642,7 +3672,7 @@
         };
         document.getElementById('confirmTitle').textContent = title;
         document.getElementById('confirmBody').textContent = body;
-        document.getElementById('confirmIcon').textContent = icon;
+        document.getElementById('confirmIcon').innerHTML = CONFIRM_ICONS[icon] || CONFIRM_ICONS.warning;
         document.getElementById('confirmIcon').className = 'confirm-icon ' + iconClass;
         const okBtn = document.getElementById('confirmOkBtn');
         okBtn.textContent = okLabel;
@@ -3664,7 +3694,7 @@
         body: 'Are you sure you want to log out of the admin panel?',
         okLabel: 'Logout',
         okClass: 'btn-danger',
-        icon: '🔐',
+        icon: 'lock',
         iconClass: 'warning'
       });
       if (ok) doAdminLogout();
@@ -3771,7 +3801,7 @@
           + (emailChanged ? ' Password reset codes will be sent to the new email from now on.' : ''),
         okLabel: 'Yes, change',
         okClass: 'btn-primary',
-        icon: '✏️',
+        icon: 'edit',
         iconClass: 'warning'
       });
       if (!ok) return;
@@ -4048,7 +4078,7 @@
         body: 'Remove the upgrade screen banner? The default badge icon will be shown instead.',
         okLabel: 'Remove',
         okClass: 'btn-danger',
-        icon: '🖼️',
+        icon: 'image',
         iconClass: 'danger'
       });
       if (ok) removeUpgradeBanner();
@@ -4179,7 +4209,7 @@
           : `Add a new coin pack "${name}" (${coins} coins for ₹${price})?`,
         okLabel: id ? 'Update' : 'Add Pack',
         okClass: 'btn-leaf',
-        icon: '🪙',
+        icon: 'coin',
         iconClass: 'info'
       });
       if (ok) saveBillingPlan();
@@ -4191,7 +4221,7 @@
         body: `Permanently delete the coin pack "${name}"? This cannot be undone.`,
         okLabel: 'Delete',
         okClass: 'btn-danger',
-        icon: '🗑️',
+        icon: 'trash',
         iconClass: 'danger'
       });
       if (!ok) return;
@@ -4360,7 +4390,7 @@
         body: `Permanently delete the gift "${name}"? This cannot be undone.`,
         okLabel: 'Delete',
         okClass: 'btn-danger',
-        icon: '🗑️',
+        icon: 'trash',
         iconClass: 'danger'
       });
       if (!ok) return;
@@ -4553,7 +4583,7 @@
         body: 'Permanently delete this special offer image? This cannot be undone.',
         okLabel: 'Delete',
         okClass: 'btn-danger',
-        icon: '🗑️',
+        icon: 'trash',
         iconClass: 'danger'
       });
       if (!ok) return;
@@ -4701,7 +4731,7 @@
         body: 'Remove this tag? It will be unassigned from every listener who has it.',
         okLabel: 'Delete',
         okClass: 'btn-danger',
-        icon: '🗑️',
+        icon: 'trash',
         iconClass: 'danger'
       });
       if (!ok) return;
@@ -4858,7 +4888,7 @@
         body: `Set goals to ${goal1} / ${goal2} / ${goal3} minutes and start the challenge immediately? It will expire Saturday 11:59pm.`,
         okLabel: 'Start Challenge',
         okClass: 'btn-leaf',
-        icon: '📅',
+        icon: 'calendar',
         iconClass: 'info'
       });
       if (!ok) return;
@@ -4889,7 +4919,7 @@
         body: 'This will immediately deactivate the current challenge. The weekly challenge icon will disappear from the listener app right away. This cannot be undone.',
         okLabel: 'Delete Challenge',
         okClass: 'btn-danger',
-        icon: '🗑️',
+        icon: 'trash',
         iconClass: 'danger'
       });
       if (!ok) return;
@@ -5222,7 +5252,7 @@
         body: 'Mark this notification as done? It will be removed from the list.',
         okLabel: 'Mark as done',
         okClass: 'btn-leaf',
-        icon: '✅',
+        icon: 'check',
         iconClass: 'info'
       });
       if (!ok) return;
@@ -6125,8 +6155,8 @@ ${logSection === 'chats' ? '' : `
       const roleLabel = type === 'user' ? 'User' : 'Listener';
       const ok = await confirmDialog(
         newActive
-          ? { title: `Activate ${roleLabel}`, body: `Activate this ${roleLabel.toLowerCase()}? They will regain access to the app.`, okLabel: 'Activate', okClass: 'btn-leaf', icon: '✅', iconClass: 'info' }
-          : { title: `Deactivate ${roleLabel}`, body: `Deactivate this ${roleLabel.toLowerCase()}? They will lose access to the app.`, okLabel: 'Deactivate', okClass: 'btn-danger', icon: '⛔', iconClass: 'danger' }
+          ? { title: `Activate ${roleLabel}`, body: `Activate this ${roleLabel.toLowerCase()}? They will regain access to the app.`, okLabel: 'Activate', okClass: 'btn-leaf', icon: 'check', iconClass: 'info' }
+          : { title: `Deactivate ${roleLabel}`, body: `Deactivate this ${roleLabel.toLowerCase()}? They will lose access to the app.`, okLabel: 'Deactivate', okClass: 'btn-danger', icon: 'block', iconClass: 'danger' }
       );
       if (!ok) return;
       try {
@@ -6148,8 +6178,8 @@ ${logSection === 'chats' ? '' : `
       const newDisabled = !currentlyDisabled;
       const ok = await confirmDialog(
         newDisabled
-          ? { title: 'Disable Video Call', body: 'Disable video calling for this user? They will only be able to make audio calls.', okLabel: 'Disable', okClass: 'btn-danger', icon: '📵', iconClass: 'danger' }
-          : { title: 'Enable Video Call', body: 'Re-enable video calling for this user?', okLabel: 'Enable', okClass: 'btn-leaf', icon: '📹', iconClass: 'info' }
+          ? { title: 'Disable Video Call', body: 'Disable video calling for this user? They will only be able to make audio calls.', okLabel: 'Disable', okClass: 'btn-danger', icon: 'video-off', iconClass: 'danger' }
+          : { title: 'Enable Video Call', body: 'Re-enable video calling for this user?', okLabel: 'Enable', okClass: 'btn-leaf', icon: 'video', iconClass: 'info' }
       );
       if (!ok) return;
       try {
@@ -6241,7 +6271,7 @@ ${logSection === 'chats' ? '' : `
         body: `Permanently delete ${roleLabel.toLowerCase()} "${name}"? This will remove all their calls, chats, recordings, ratings, and sessions. This cannot be undone.`,
         okLabel: `Delete ${roleLabel}`,
         okClass: 'btn-danger',
-        icon: '🗑️',
+        icon: 'trash',
         iconClass: 'danger'
       });
       if (!ok) return;
