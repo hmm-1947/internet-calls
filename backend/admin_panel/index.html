@@ -6927,6 +6927,69 @@ ${logSection === 'chats' ? '' : `
           root.classList.remove('theme-switching');
         });
       });
+      // Existing Chart.js instances cache their colors at construction time,
+      // so toggling the theme left them showing the old palette until the
+      // next data fetch re-created them. Restyle any live charts in place so
+      // they match the rest of the UI immediately.
+      restyleChartsForTheme();
+    }
+
+    /**
+     * Re-applies the current theme's CSS custom properties to any live
+     * Chart.js instances, without destroying/recreating them. Keeps the
+     * calls/chats charts visually in sync with the cards around them the
+     * moment the theme toggles, instead of only on the next data refresh.
+     */
+    function restyleChartsForTheme() {
+      const instances = [callsChartInstance, chatsChartInstance].filter(Boolean);
+      if (!instances.length) return;
+
+      const cs = getComputedStyle(document.documentElement);
+      const accent = (cs.getPropertyValue('--leaf').trim()) || '#e63946';
+      const secondary = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
+      const gridColor = (cs.getPropertyValue('--line').trim()) || '#ecedf1';
+      const inkColor = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
+      const slateColor = (cs.getPropertyValue('--slate').trim()) || '#7c8493';
+      const cardColor = (cs.getPropertyValue('--white').trim()) || '#ffffff';
+      const hexToRgba = (hex, alpha) => {
+        const h = hex.replace('#', '');
+        const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+        const r = parseInt(full.substring(0, 2), 16);
+        const g = parseInt(full.substring(2, 4), 16);
+        const b = parseInt(full.substring(4, 6), 16);
+        return `rgba(${r},${g},${b},${alpha})`;
+      };
+      const lineColors = [accent, secondary];
+
+      instances.forEach(chart => {
+        chart.data.datasets.forEach((ds, i) => {
+          const color = lineColors[i] || lineColors[lineColors.length - 1];
+          ds.borderColor = color;
+          ds.backgroundColor = hexToRgba(color, 0.08);
+          ds.pointBackgroundColor = color;
+          ds.pointBorderColor = cardColor;
+          ds.pointHoverBackgroundColor = color;
+          ds.pointHoverBorderColor = cardColor;
+        });
+
+        const legend = chart.options.plugins.legend;
+        if (legend) legend.labels.color = slateColor;
+
+        const tooltip = chart.options.plugins.tooltip;
+        if (tooltip) {
+          tooltip.backgroundColor = cardColor;
+          tooltip.titleColor = inkColor;
+          tooltip.bodyColor = slateColor;
+          tooltip.borderColor = gridColor;
+        }
+
+        const yScale = chart.options.scales.y;
+        yScale.grid.color = gridColor;
+        yScale.ticks.color = slateColor;
+        chart.options.scales.x.ticks.color = slateColor;
+
+        chart.update();
+      });
     }
 
     function toggleTheme() {
