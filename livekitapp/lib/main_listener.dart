@@ -196,6 +196,8 @@ void main() async {
     const MaterialApp(debugShowCheckedModeBanner: false, home: SplashScreen()),
   );
 
+  CallkitService.instance.init();
+
   await dotenv.load(fileName: ".env");
   final isolateName = Isolate.current.debugName;
   print('[Callkit] main() started in isolate: $isolateName');
@@ -260,10 +262,10 @@ void main() async {
   // callkit path if the plugin ever fails to come up.
   unawaited(_initChatNotifications());
 
-  await AvatarCache.instance.init();
-  await ChatDraftCache().restore();
-  await ListenerDataCache().restore();
   runApp(const ListenerApp());
+  unawaited(AvatarCache.instance.init());
+  unawaited(ChatDraftCache().restore());
+  unawaited(ListenerDataCache().restore());
   _registerFcmToken();
 }
 
@@ -291,23 +293,14 @@ Future<void> _handleMessage(RemoteMessage message) async {
     );
   } else if (type == 'call_cancelled') {
     await CallkitService.instance.handleCallCancelled(message.data);
+  } else if (type == 'call_missed') {
+    await CallkitService.instance.handleMissedCallPush(message.data);
   }
 }
 
-/// Foreground-only rendering for pushes whose `notification` block would
-/// otherwise be suppressed by [setForegroundNotificationPresentationOptions].
-/// Background/killed delivery already shows these natively from the FCM
-/// notification block, so calling this there too would double them up.
 Future<void> _handleForegroundOnlyMessage(RemoteMessage message) async {
   final type = message.data['type'];
-  if (type == 'call_missed') {
-    final authToken = await LocalStorage().getToken();
-    if (authToken == null) return;
-    await ActivityNotificationService.instance.showMissedCall(
-      callId: int.tryParse('${message.data['call_id'] ?? ''}') ?? 0,
-      callerName: '${message.data['caller_name'] ?? 'Someone'}',
-    );
-  } else if (type == 'gift_received') {
+  if (type == 'gift_received') {
     final authToken = await LocalStorage().getToken();
     if (authToken == null) return;
     await ActivityNotificationService.instance.showGiftReceived(

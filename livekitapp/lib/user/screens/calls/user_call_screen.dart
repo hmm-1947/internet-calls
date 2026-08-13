@@ -445,11 +445,36 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   void _startRingingTimeout() {
-    _ringingTimer = Timer(const Duration(seconds: 30), () {
+    _ringingTimer = Timer(const Duration(seconds: 55), () {
       if (_phase == _CallPhase.ringing) {
-        _onCallMissed();
+        _confirmMissedWithServer();
       }
     });
+  }
+
+  Future<void> _confirmMissedWithServer() async {
+    if (_isEnding || _acceptHandled) return;
+    try {
+      final authToken = await _localStorage.getToken();
+      if (authToken != null) {
+        final data = await _repository.getCallStatus(authToken, widget.callId);
+        if (_isEnding || _acceptHandled) return;
+        if (data['status'] == 'accepted') {
+          final url = data['livekit_url'] as String?;
+          final token = data['token'] as String?;
+          if (url != null && token != null) {
+            _onCallAccepted(url, token);
+            return;
+          }
+        } else if (data['status'] == 'rejected') {
+          _onCallRejected();
+          return;
+        }
+      }
+    } catch (_) {}
+    if (_phase == _CallPhase.ringing) {
+      _onCallMissed();
+    }
   }
 
   Future<void> _onCallMissed() async {

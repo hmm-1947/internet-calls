@@ -230,10 +230,19 @@ class MainActivity : FlutterActivity() {
                     AvatarLoader.setBaseUrl(applicationContext, call.arguments as? String ?: "")
                     result.success(null)
                 }
-                // Mirrored so CallApi can reject a call without a Flutter engine.
+                // Mirrored so CallApi can accept/reject a call without a Flutter engine.
                 "setAuthToken" -> {
                     CallApi.setAuthToken(applicationContext, call.arguments as? String)
                     result.success(null)
+                }
+                // Credentials from an accept that native already completed while
+                // the app was cold starting. Returned exactly once.
+                "takeAcceptedCall" -> {
+                    result.success(CallApi.takeAccepted(applicationContext))
+                }
+                // Lets Dart wait for that request instead of issuing its own.
+                "isAcceptPending" -> {
+                    result.success(CallApi.isAcceptPending())
                 }
                 "showIncomingCall" -> {
                     val callId = call.argument<String>("callId") ?: ""

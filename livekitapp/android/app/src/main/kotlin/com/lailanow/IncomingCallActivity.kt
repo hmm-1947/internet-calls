@@ -367,6 +367,10 @@ class IncomingCallActivity : Activity() {
         clearCallkitNotification()
         CallLockscreen.setCallActive(true)
         val data = CallkitBridge.buildCallBundle(callId, callerName, callType, callerPhotoUrl)
+        // Ahead of openCallScreen so the accept request runs alongside the cold
+        // start rather than waiting for a Flutter engine that may take seconds
+        // to come up. CallApi parks the LiveKit credentials for Dart to collect.
+        CallApi.accept(applicationContext, callId, callerName, callType, callerPhotoUrl)
         CallkitBridge.openCallScreen(this)
         CallkitBridge.sendAccept(applicationContext, data)
         autoDismiss.postDelayed({ finishScreen() }, ACCEPT_CLOSE_DELAY_MS)

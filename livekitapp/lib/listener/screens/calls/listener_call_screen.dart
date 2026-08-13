@@ -65,6 +65,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
   Timer? _remoteVideoPoll;
   Timer? _remoteLeftTimer;
   bool _cameraRequestInFlight = false;
+  Timer? _statusPollTimer;
 
   @override
   void initState() {
@@ -117,6 +118,44 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
         _showMessage('User coins exceeded');
       }
     });
+    _startStatusPolling();
+  }
+
+  void _startStatusPolling() {
+    if (widget.callId == null) return;
+    _statusPollTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _pollCallStatus(),
+    );
+  }
+
+  static const _terminalCallStatuses = {
+    'ended',
+    'cancelled',
+    'rejected',
+    'missed',
+  };
+
+  /// Kept running for the whole call, not just until the room connects: the
+  /// disconnect signal (FCM push, or the LiveKit room/participant event) can
+  /// be delayed or dropped entirely while the listener's phone is locked, so
+  /// this is what actually ends the call on this side when that happens.
+  Future<void> _pollCallStatus() async {
+    if (!mounted || _isEnding) {
+      _statusPollTimer?.cancel();
+      return;
+    }
+    final token = await _localStorage.getToken();
+    if (token == null) return;
+    final status = await _repository.fetchListenerCallStatus(
+      token,
+      widget.callId!,
+    );
+    if (!mounted || _isEnding) return;
+    if (status != null && _terminalCallStatuses.contains(status)) {
+      _statusPollTimer?.cancel();
+      _hangUp(notifyBackend: false);
+    }
   }
 
   bool _readySignalled = false;
@@ -612,6 +651,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
   Future<void> _hangUp({bool notifyBackend = true}) async {
     if (_isEnding) return;
     _isEnding = true;
+    _statusPollTimer?.cancel();
     if (LockscreenService.instance.locked) {
       unawaited(LockscreenService.instance.leaveLockscreen());
     }
@@ -654,6 +694,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
       LockscreenService.instance.hideOverLockscreen();
     }
     _fcmSubscription?.cancel();
+    _statusPollTimer?.cancel();
     _giftSub?.cancel();
     _roomListener?.dispose();
     _room?.disconnect();

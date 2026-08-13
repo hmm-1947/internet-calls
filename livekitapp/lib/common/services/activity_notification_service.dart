@@ -112,6 +112,19 @@ class ActivityNotificationService {
     }
   }
 
+  /// Removes a missed-call notification. Used when a call turns out to have
+  /// been answered after all, which happens when the push that triggers the
+  /// notification and the accept cross paths.
+  Future<void> cancelMissedCall(int callId) async {
+    if (!Platform.isAndroid) return;
+    try {
+      if (!await init()) return;
+      await _plugin.cancel(_missedCallBaseId + callId);
+    } catch (error) {
+      debugPrint('[activity-notif] cancelMissedCall failed: $error');
+    }
+  }
+
   Future<void> showGiftReceived({
     required int fromUserId,
     required String fromUserName,
