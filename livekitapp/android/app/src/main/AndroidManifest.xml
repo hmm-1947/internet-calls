@@ -71,6 +71,11 @@
             android:name=".CallActionReceiver"
             android:exported="false" />
 
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:exported="false"
+            android:theme="@style/CropTheme" />
+
         <receiver
             android:name=".CallPushReceiver"
             android:exported="true"

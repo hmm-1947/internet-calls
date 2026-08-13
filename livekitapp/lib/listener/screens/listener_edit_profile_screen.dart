@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:livekitapp/common/utils/profile_image_crop.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -194,10 +195,15 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
       maxWidth: 1024,
     );
     if (picked == null) return;
+    final cropped = await cropProfileImage(
+      picked,
+      brandColor: _AppColors.brandRed,
+    );
+    if (cropped == null) return;
     setState(() => _uploadingPhoto = true);
     try {
       final token = await _localStorage.getToken();
-      final result = await _repository.updatePhoto(token!, picked.path);
+      final result = await _repository.updatePhoto(token!, cropped.path);
       ListenerDataCache().invalidateMe();
       if (mounted) setState(() => _photoUrl = result['photo_url']);
     } catch (e) {
