@@ -1499,6 +1499,75 @@
       font-size: 14px;
     }
 
+    /* ---- Skeleton loaders: shimmer placeholders shaped like the real
+       content, shown while a list/table is fetching, so nothing pops in
+       from an empty box and there is no layout shift once data lands. ---- */
+    @keyframes skeleton-shimmer {
+      0% { background-position: -240px 0; }
+      100% { background-position: calc(240px + 100%) 0; }
+    }
+
+    .skel {
+      display: inline-block;
+      border-radius: 6px;
+      background: linear-gradient(90deg, var(--line) 25%, var(--mint) 37%, var(--line) 63%);
+      background-size: 400px 100%;
+      animation: skeleton-shimmer 1.4s ease-in-out infinite;
+    }
+
+    [data-theme="dark"] .skel {
+      background: linear-gradient(90deg, #2a3142 25%, #343d54 37%, #2a3142 63%);
+      background-size: 400px 100%;
+    }
+
+    .skel-line { height: 12px; width: 100%; }
+
+    .skel-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .skel-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 4px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .skel-row:last-child {
+      border-bottom: none;
+    }
+
+    .skel-row-body {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .skel-table th {
+      color: transparent;
+    }
+
+    .skel-table td {
+      padding: 13px 8px;
+    }
+
+    .skel-card {
+      background: var(--white);
+      border-radius: 16px;
+      padding: 20px 22px;
+      border: 1px solid var(--line);
+    }
+
+    .skel-card + .skel-card {
+      margin-top: 14px;
+    }
+
     .detail-header {
       display: flex;
       justify-content: space-between;
@@ -2709,6 +2778,59 @@
     function getAdminToken() { return localStorage.getItem('adminToken') || ''; }
     function setAdminToken(t) { localStorage.setItem('adminToken', t); }
     function clearAdminToken() { localStorage.removeItem('adminToken'); }
+
+    // ─── Skeleton loaders ──────────────────────────────────────────────────
+    // Shape-matched placeholders shown the instant a loadXxx() starts, so a
+    // panel never flashes empty/blank while its fetch is in flight. Purely
+    // cosmetic markup - does not touch any fetch/data logic.
+    function skelWidth() { return 55 + Math.floor(Math.random() * 35); }
+
+    /** Row list with a leading avatar circle, for notification/activity-style feeds. */
+    function skelRows(count = 5) {
+      let html = '';
+      for (let i = 0; i < count; i++) {
+        html += `
+          <div class="skel-row">
+            <div class="skel skel-avatar"></div>
+            <div class="skel-row-body">
+              <div class="skel skel-line" style="width:${skelWidth()}%"></div>
+              <div class="skel skel-line" style="width:${skelWidth() - 20}%;height:9px;"></div>
+            </div>
+          </div>`;
+      }
+      return html;
+    }
+
+    /** Table skeleton matching a given column count, for the many admin tables. */
+    function skelTable(cols = 4, rows = 6) {
+      let body = '';
+      for (let r = 0; r < rows; r++) {
+        let tds = '';
+        for (let c = 0; c < cols; c++) {
+          tds += `<td><div class="skel skel-line" style="width:${skelWidth()}%"></div></td>`;
+        }
+        body += `<tr>${tds}</tr>`;
+      }
+      return `<table><tbody>${body}</tbody></table>`;
+    }
+
+    /** Matches the wallet panel's balance card + breakdown cards, to avoid any shift. */
+    function skelWallet() {
+      const statLine = () => `<div class="wallet-stat-row"><span class="skel skel-line" style="width:70%"></span><span class="skel skel-line" style="width:30px;"></span></div>`;
+      const card = (title, lines) => `
+        <div class="wallet-time-card">
+          <div class="wallet-time-title">${title}</div>
+          ${Array.from({ length: lines }).map(statLine).join('')}
+        </div>`;
+      return `
+        <div class="wallet-balance-card">
+          <div class="wallet-balance-label">TOTAL BALANCE</div>
+          <div class="skel skel-line" style="width:120px;height:22px;margin-top:6px;"></div>
+        </div>
+        <div class="wallet-breakdown-row">${card('EARNINGS BREAKDOWN', 4)}</div>
+        <div class="wallet-breakdown-row">${card('DAY TIME', 5)}${card('NIGHT TIME', 5)}</div>
+      `;
+    }
 
     const _origFetch = window.fetch;
     window.fetch = function (...args) {
@@ -3927,6 +4049,7 @@
 
     async function loadBillingPlans() {
       const wrap = document.getElementById('billingPlansList');
+      wrap.innerHTML = skelTable(7, 4);
       try {
         const res = await fetch(API_URL + '/admin/billing/plans', { headers: authHeaders() });
         const data = await res.json();
@@ -4097,6 +4220,7 @@
 
     async function loadGifts() {
       const wrap = document.getElementById('giftsList');
+      wrap.innerHTML = skelTable(4, 4);
       try {
         const res = await fetch(API_URL + '/gift/admin/list', { headers: authHeaders() });
         const data = await res.json();
@@ -4241,6 +4365,7 @@
 
     async function loadGiftTransactions() {
       const wrap = document.getElementById('giftTxnList');
+      wrap.innerHTML = skelTable(5, 6);
       try {
         const res = await fetch(API_URL + '/gift/admin/transactions', { headers: authHeaders() });
         const data = await res.json();
@@ -4326,6 +4451,7 @@
 
     async function loadSpecialOffers() {
       const wrap = document.getElementById('offersList');
+      wrap.innerHTML = skelTable(4, 3);
       try {
         const res = await fetch(API_URL + '/special-offers/admin/list', { headers: authHeaders() });
         const data = await res.json();
@@ -4440,6 +4566,8 @@
     let listenerTagsCache = [];
 
     async function loadListenerTags() {
+      const tagsWrap = document.getElementById('tagsListWrap');
+      if (tagsWrap) tagsWrap.innerHTML = skelRows(3);
       try {
         const res = await fetch(API_URL + '/admin/listener-tags', { headers: authHeaders() });
         const data = await res.json();
@@ -4764,6 +4892,7 @@
 
     async function loadWeeklyChallengeLeaderboard() {
       const wrap = document.getElementById('wcLeaderboardList');
+      if (wrap) wrap.innerHTML = skelTable(3, 5);
       try {
         const res = await fetch(API_URL + '/weekly-challenge/admin/leaderboard', { headers: authHeaders() });
         const data = await res.json();
@@ -4800,6 +4929,7 @@
     async function loadWeeklyChallengeCompletions() {
 
       const wrap = document.getElementById('wcCompletionsList');
+      if (wrap) wrap.innerHTML = skelTable(5, 5);
       try {
         const res = await fetch(API_URL + '/weekly-challenge/admin/completions', { headers: authHeaders() });
         const data = await res.json();
@@ -4834,6 +4964,7 @@
 
     async function loadWeeklyChallengeHistory() {
       const wrap = document.getElementById('wcHistoryList');
+      if (wrap) wrap.innerHTML = skelTable(6, 5);
       try {
         const res = await fetch(API_URL + '/weekly-challenge/admin/history', { headers: authHeaders() });
         const data = await res.json();
@@ -4894,7 +5025,7 @@
     async function loadUserAuditLog(page) {
       userAuditLogPage = page || 1;
       const wrap = document.getElementById('userAuditLogList');
-      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      wrap.innerHTML = skelTable(3, 6);
       try {
         const res = await fetch(
           API_URL + '/admin/audit-log/users?page=' + userAuditLogPage + '&page_size=' + AUDIT_LOG_PAGE_SIZE,
@@ -4911,7 +5042,7 @@
     async function loadListenerAuditLog(page) {
       listenerAuditLogPage = page || 1;
       const wrap = document.getElementById('listenerAuditLogList');
-      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      wrap.innerHTML = skelTable(3, 6);
       try {
         const res = await fetch(
           API_URL + '/admin/audit-log/listeners?page=' + listenerAuditLogPage + '&page_size=' + AUDIT_LOG_PAGE_SIZE,
@@ -4989,7 +5120,7 @@
     async function loadNotifications() {
       const wrap = document.getElementById('notificationsList');
       if (!wrap) return;
-      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      wrap.innerHTML = skelRows(6);
       try {
         const res = await fetch(API_URL + '/admin/notifications?skip=0&limit=200', { headers: authHeaders() });
         const data = await res.json();
@@ -5115,7 +5246,7 @@
     async function loadPendingWithdrawals() {
       const wrap = document.getElementById('pendingWithdrawalsList');
       if (!wrap) return;
-      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      wrap.innerHTML = skelTable(4, 5);
       try {
         const res = await fetch(
           API_URL + '/admin/withdrawals?status=pending&skip=0&limit=100',
@@ -5178,7 +5309,7 @@
       const wrap = document.getElementById('withdrawalLogList');
       const pager = document.getElementById('withdrawalLogPagination');
       if (!wrap) return;
-      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      wrap.innerHTML = skelTable(5, 6);
       if (pager) pager.innerHTML = '';
       try {
         const [approvedRes, rejectedRes] = await Promise.all([
@@ -5238,6 +5369,7 @@
 
     async function loadBillingAuditLog() {
       const wrap = document.getElementById('billingAuditLogList');
+      wrap.innerHTML = skelTable(5, 6);
       try {
         const res = await fetch(API_URL + '/admin/billing/plans/audit-log', { headers: authHeaders() });
         const data = await res.json();
@@ -5293,6 +5425,7 @@
 
     async function loadGiftAuditLog() {
       const wrap = document.getElementById('giftAuditLogList');
+      wrap.innerHTML = skelTable(5, 6);
       try {
         const res = await fetch(API_URL + '/gift/admin/audit-log', { headers: authHeaders() });
         const data = await res.json();
@@ -5383,6 +5516,7 @@
 
     async function loadBillingPurchases() {
       const wrap = document.getElementById('billingPurchasesList');
+      wrap.innerHTML = skelTable(7, 6);
       try {
         const res = await fetch(API_URL + '/admin/billing/purchases', { headers: authHeaders() });
         const data = await res.json();
@@ -5476,6 +5610,7 @@
 
     async function loadActiveCalls() {
       const wrap = document.getElementById('activeCallsWrap');
+      wrap.innerHTML = skelTable(6, 4);
       try {
         const res = await fetch(API_URL + '/admin/calls/active', { headers: authHeaders() });
         const data = await res.json();
@@ -5512,6 +5647,7 @@
 
     async function loadStats() {
       const wrap = document.getElementById('statsTableWrap');
+      wrap.innerHTML = skelTable(5, 6);
       try {
         const [uRes, lRes] = await Promise.all([
           fetch(API_URL + '/admin/stats/users', { headers: authHeaders() }),
@@ -5551,6 +5687,10 @@
     }
 
     async function loadPeople() {
+      const userListWrap = document.getElementById('userList');
+      const listenerListWrap = document.getElementById('listenerList');
+      if (userListWrap) userListWrap.innerHTML = skelRows(6);
+      if (listenerListWrap) listenerListWrap.innerHTML = skelRows(6);
       try {
         const [uRes, lRes] = await Promise.all([
           fetch(API_URL + '/admin/coins/users', { headers: authHeaders() }),
@@ -5746,7 +5886,7 @@ ${logSection === 'chats' ? '' : `
         return;
       }
       const wrap = document.getElementById('logTableWrap');
-      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      wrap.innerHTML = skelTable(5, 6);
       try {
         const endpoint = logSection === 'calls' ? '/admin/calls' : logSection === 'recordings' ? '/admin/recordings' : '/admin/chats';
         const res = await fetch(API_URL + endpoint, { headers: authHeaders() });
@@ -5763,7 +5903,7 @@ ${logSection === 'chats' ? '' : `
     async function loadListenerWallet() {
       const wrap = document.getElementById('walletWrap');
       if (!wrap) return;
-      wrap.innerHTML = '<div class="empty-state">Loading…</div>';
+      wrap.innerHTML = skelWallet();
       try {
         const res = await fetch(API_URL + '/admin/listener/' + selectedPerson.id + '/wallet', { headers: authHeaders() });
         const data = await res.json();
