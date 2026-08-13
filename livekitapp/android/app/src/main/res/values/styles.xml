@@ -22,4 +22,7 @@
         <item name="android:navigationBarColor">@color/incoming_call_background</item>
         <item name="android:windowShowWallpaper">false</item>
     </style>
+
+    <!-- image_cropper's UCropActivity requires an AppCompat theme. -->
+    <style name="CropTheme" parent="Theme.AppCompat.Light.NoActionBar" />
 </resources>

@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:livekitapp/common/utils/auth_validators.dart';
+import 'package:livekitapp/common/utils/profile_image_crop.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -140,7 +141,12 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
       maxWidth: 1024,
     );
     if (picked == null) return;
-    setState(() => _photo = File(picked.path));
+    final cropped = await cropProfileImage(
+      picked,
+      brandColor: const Color(0xFFE11D48),
+    );
+    if (cropped == null) return;
+    setState(() => _photo = cropped);
   }
 
   bool get _canSubmit =>

@@ -591,7 +591,6 @@ def auth_google(payload: GoogleSignIn, db: Session = Depends(get_db)):
     email = (decoded.get("email") or "").strip().lower() or None
     email_verified = decoded.get("email_verified", False)
     name = decoded.get("name") or (email.split("@")[0] if email else "User")
-    photo_url = decoded.get("picture")
 
     user = db.query(User).filter(User.google_uid == google_uid).first()
     if not user and email and email_verified:
@@ -608,7 +607,6 @@ def auth_google(payload: GoogleSignIn, db: Session = Depends(get_db)):
             email=email if email_verified else None,
             password_hash=None,
             google_uid=google_uid,
-            photo_url=photo_url,
         )
         db.add(user)
         db.flush()
