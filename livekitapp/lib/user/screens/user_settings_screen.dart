@@ -204,8 +204,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     _phone = cached['phone'] ?? '';
     _photoUrl = cached['photo_url'];
     _videoCallEnabled = cached['video_call_enabled'] ?? true;
-    _videoCallDisabledByAdmin =
-        cached['video_call_disabled_by_admin'] ?? false;
+    _videoCallDisabledByAdmin = cached['video_call_disabled_by_admin'] ?? false;
     _isGoogleAccount = cached['is_google_account'] ?? false;
     _loading = false;
   }
@@ -308,7 +307,11 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _videoCallEnabled = previous);
-      PillMessage.showError(context, 'Failed to update video call setting: $e', bottomOffset: 78);
+      PillMessage.showError(
+        context,
+        'Failed to update video call setting: $e',
+        bottomOffset: 78,
+      );
     } finally {
       if (mounted) setState(() => _savingVideoCallSetting = false);
     }
@@ -565,7 +568,6 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                   ]),
                   _SectionLabel('PREFERENCES'),
                   _SettingsCard([
-                    const Divider(height: 1, color: Colors.white12),
                     _SettingsTile(
                       icon: Icons.videocam_outlined,
                       title: _videoCallDisabledByAdmin
@@ -583,21 +585,9 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                                   : _toggleVideoCall),
                       ),
                     ),
-                    const Divider(height: 1, color: Colors.white12),
-                    _SettingsTile(
-                      icon: Icons.shield_outlined,
-                      title: 'Privacy & Security',
-                      onTap: () {},
-                    ),
                   ]),
                   _SectionLabel('SUPPORT'),
                   _SettingsCard([
-                    _SettingsTile(
-                      icon: Icons.help_outline,
-                      title: 'Help & Support',
-                      onTap: () {},
-                    ),
-                    const Divider(height: 1, color: Colors.white12),
                     _SettingsTile(
                       icon: Icons.description_outlined,
                       title: 'Terms of Service',

@@ -130,10 +130,10 @@ class RingtoneService : Service() {
             manager.createNotificationChannel(channel)
         }
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Ringing")
             .setSmallIcon(applicationInfo.icon)
             .setVisibility(Notification.VISIBILITY_SECRET)
             .setOngoing(true)
+            .setPriority(Notification.PRIORITY_MIN)
             .build()
     }
 

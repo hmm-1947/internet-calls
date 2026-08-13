@@ -199,6 +199,16 @@ class ListenerRepository {
     }
   }
 
+  Future<String?> fetchListenerCallStatus(String token, int callId) async {
+    final response = await _apiClient.get(
+      ApiConstants.callListenerStatus(callId),
+      token: token,
+    );
+    if (response.statusCode != 200) return null;
+    final data = jsonDecode(response.body);
+    return data['status'] as String?;
+  }
+
   Future<void> endCall(String token, int callId) async {
     final response = await _apiClient.post(
       ApiConstants.callEnd(callId),

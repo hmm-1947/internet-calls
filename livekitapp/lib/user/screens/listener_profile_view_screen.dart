@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -90,6 +92,7 @@ class ListenerProfileViewScreen extends StatefulWidget {
 class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   final _repository = UserRepository();
   final _localStorage = LocalStorage();
+  bool _callingListener = false;
   bool _loading = true;
   String? _error;
   late String _name = widget.initialName ?? '';
@@ -210,6 +213,41 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   }
 
   bool get _hasCachedProfile => _name.isNotEmpty || _createdAt != null;
+
+  Future<void> _callListener({bool video = false}) async {
+    if (_callingListener) return;
+    if (ActiveCallManager.instance.hasActiveCall) {
+      PillMessage.show(context, 'You are already on a call');
+      return;
+    }
+    final token = await _localStorage.getToken();
+    if (token == null) return;
+    setState(() => _callingListener = true);
+    try {
+      final result = await _repository.initiateCall(
+        token,
+        widget.listenerId,
+        callType: video ? 'video' : 'audio',
+      );
+      if (!mounted) return;
+      ActiveCallManager.instance.start(
+        ActiveCallInfo(
+          role: ActiveCallRole.user,
+          callId: result['call_id'],
+          otherPartyName: _name,
+          otherPartyPhotoUrl: _photoUrl,
+          isVideo: video,
+          listenerId: widget.listenerId,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _callingListener = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -345,6 +383,45 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _callingListener ? null : () => _callListener(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _AppColors.brandRed,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.call),
+                          label: const Text('Call'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _callingListener
+                              ? null
+                              : () => _callListener(video: true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _AppColors.cardBg,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: _AppColors.cardBorder),
+                            ),
+                          ),
+                          icon: const Icon(Icons.videocam),
+                          label: const Text('Video Call'),
+                        ),
+                      ),
+                    ],
                   ),
                   const _SectionLabel('AGE & OCCUPATION'),
                   Container(

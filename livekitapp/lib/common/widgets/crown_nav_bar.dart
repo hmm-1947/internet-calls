@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 class CrownNavBar extends StatefulWidget {
   final int selectedIndex;
@@ -41,6 +42,7 @@ class _CrownNavBarState extends State<CrownNavBar> {
     }
     _lastTapAt = now;
     if (index != widget.selectedIndex) {
+      HapticFeedback.selectionClick();
       widget.onDestinationSelected(index);
     }
   }

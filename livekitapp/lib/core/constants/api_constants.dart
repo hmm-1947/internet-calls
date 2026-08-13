@@ -56,6 +56,9 @@ class ApiConstants {
       '/user/listener/$listenerId';
 
   static String callStatus(int callId) => '/call/$callId/status';
+  static String callListenerStatus(int callId) =>
+      '/call/$callId/listener-status';
+
 
   static String callAccept(int callId) => '/call/$callId/accept';
   static String callReady(int callId) => '/call/$callId/ready';

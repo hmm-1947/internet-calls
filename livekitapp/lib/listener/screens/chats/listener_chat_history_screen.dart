@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
@@ -774,6 +775,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
               size: isNarrow ? 20 : 24,
             ),
             onPressed: () {
+              HapticFeedback.selectionClick();
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -794,7 +796,10 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
                 color: favorite ? _pink : Colors.white,
                 size: isNarrow ? 20 : 24,
               ),
-              onPressed: _toggleFavorite,
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                _toggleFavorite();
+              },
             ),
           ),
         ],

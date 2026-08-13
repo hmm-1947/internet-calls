@@ -352,7 +352,7 @@ async def timeout_call(call_id: int, db: Session = Depends(get_db), current_user
     listener = db.query(Listener).filter(Listener.id == call.callee_listener_id).first()
     if listener and listener.fcm_token:
         try:
-            send_call_missed(listener.fcm_token, call_id)
+            send_call_missed(listener.fcm_token, call_id, caller_name=current_user.name)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of missed call: {e}")
             _clear_invalid_fcm_token(db, listener, "fcm_token", e)
@@ -466,6 +466,19 @@ def call_status(call_id: int, db: Session = Depends(get_db), current_user: User 
     return response
 
 
+@router.get("/{call_id}/listener-status")
+def listener_call_status(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    """Lets the listener app confirm a call is still actually ringing before
+    showing the incoming-call UI — a `call` push can arrive after the ringing
+    window has already expired server-side (e.g. delivered late on reconnect
+    after being offline), and by then the call may already be `missed` or
+    `cancelled`."""
+    call = db.query(Call).filter(Call.id == call_id, Call.callee_listener_id == current_listener.id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    return {"status": call.status}
+
+
 @router.get("/{call_id}/coin-status")
 def coin_status(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
@@ -531,10 +544,11 @@ def user_call_history(before_id: int | None = None, limit: int = 25, db: Session
     result = []
     for c in calls:
         listener = listeners_by_id.get(c.callee_listener_id)
+        display_status = "not_answered" if c.status == "missed" else c.status
         result.append(CallHistoryOut(
             id=c.id, room_name=c.room_name, user_id=current_user.id, user_name=current_user.name,
             listener_id=c.callee_listener_id, listener_name=listener.name if listener else "Unknown",
-            call_type=c.call_type, status=c.status, duration_seconds=c.duration_seconds,
+            call_type=c.call_type, status=display_status, duration_seconds=c.duration_seconds,
             coins_deducted=c.coins_deducted, created_at=c.created_at, connected_at=c.connected_at,
             other_party_photo_url=listener.photo_url if listener else None,
             badge_tag=badge_tags_by_id.get(listener.badge_tag_id) if listener else None,
@@ -553,14 +567,16 @@ def listener_call_history(before_id: int | None = None, limit: int = 25, db: Ses
     result = []
     for c in calls:
         user = users_by_id.get(c.caller_user_id)
+        display_status = "missed" if c.status == "cancelled" else c.status
         result.append(CallHistoryOut(
             id=c.id, room_name=c.room_name, user_id=c.caller_user_id, user_name=user.name if user else "Unknown",
             listener_id=current_listener.id, listener_name=current_listener.name,
-            call_type=c.call_type, status=c.status, duration_seconds=c.duration_seconds,
+            call_type=c.call_type, status=display_status, duration_seconds=c.duration_seconds,
             coins_deducted=c.coins_deducted, created_at=c.created_at, connected_at=c.connected_at,
             other_party_photo_url=user.photo_url if user else None,
         ))
     return result
+
 
 @router.get("/{call_id}/summary", response_model=CallSummaryOut)
 def call_summary(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
