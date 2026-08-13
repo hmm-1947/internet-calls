@@ -2492,7 +2492,7 @@
 
   <div class="card">
     <div class="chart-head">
-      <h2 style="border:none;padding:0;margin:0;text-transform:none;letter-spacing:0;font-size:17px;color:var(--ink);font-weight:800">Calls Over Time</h2>
+      <h2>Calls Over Time</h2>
       <select class="range-select" id="callsRangeSelect" onchange="loadOverview()">
         <option value="day">Today</option>
         <option value="week">Last 1 Week</option>
@@ -2504,6 +2504,19 @@
     <canvas id="callsChart" height="90"></canvas>
   </div>
 
+  <div class="card">
+    <div class="chart-head">
+      <h2>Chats Over Time</h2>
+      <select class="range-select" id="chatsRangeSelect" onchange="loadChatsChart()">
+        <option value="day">Today</option>
+        <option value="week">Last 1 Week</option>
+        <option value="month" selected>Last 1 Month</option>
+        <option value="6months">Last 6 Months</option>
+        <option value="all">All Time</option>
+      </select>
+    </div>
+    <canvas id="chatsChart" height="90"></canvas>
+  </div>
 
   <div class="card">
     <h2>Invite New Admin</h2>
@@ -3176,6 +3189,7 @@
       loadActiveCalls();
       loadStats();
       loadOverview();
+      loadChatsChart();
       loadNotificationsUnreadCount();
       setAdminNameLabel();
       connectAdminWs();
@@ -3314,6 +3328,8 @@
         }
       }
       if (slider) slider.style.transition = 'none';
+      const menu = document.getElementById('adminMenu');
+      if (menu) menu.classList.remove('open');
       const collapsed = nav.classList.toggle('collapsed');
       localStorage.setItem('adminNavCollapsed', collapsed ? '1' : '0');
       const btn = document.getElementById('navToggleBtn');
@@ -3584,7 +3600,33 @@
 
 
     function toggleAdminMenu() {
-      document.getElementById('adminMenu').classList.toggle('open');
+      const menu = document.getElementById('adminMenu');
+      if (!menu) return;
+      const opening = !menu.classList.contains('open');
+      menu.classList.toggle('open', opening);
+
+      // When the rail is collapsed, .admin-menu's usual absolute
+      // positioning gets clipped by the side-nav's overflow-x:hidden
+      // (needed elsewhere to avoid a horizontal scrollbar). Switch the
+      // open menu to viewport-fixed coordinates, computed from the
+      // admin chip's own position, so it escapes that clip and shows
+      // up as a flyout next to the rail - same as the nav-item tooltips.
+      const nav = document.getElementById('sideNav');
+      if (opening && nav && nav.classList.contains('collapsed')) {
+        const chip = document.getElementById('navAdminChip');
+        const rect = chip.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.left = (rect.right + 12) + 'px';
+        menu.style.bottom = (window.innerHeight - rect.bottom) + 'px';
+        menu.style.top = 'auto';
+        menu.style.right = 'auto';
+      } else {
+        menu.style.position = '';
+        menu.style.left = '';
+        menu.style.bottom = '';
+        menu.style.top = '';
+        menu.style.right = '';
+      }
     }
 
     document.addEventListener('click', (e) => {
@@ -3594,6 +3636,7 @@
     });
 
     let callsChartInstance = null;
+    let chatsChartInstance = null;
 
     async function loadOverview() {
       const range = document.getElementById('callsRangeSelect').value;
@@ -3619,6 +3662,18 @@
       } catch (e) { }
     }
 
+    async function loadChatsChart() {
+      const range = document.getElementById('chatsRangeSelect').value;
+      try {
+        const res = await fetch(API_URL + '/admin/stats/overview?range=' + range, { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+
+        renderChatsChart(data.chats_series);
+      } catch (e) { }
+    }
+
+
     function setPresenceStats(which, online, offline) {
       const on = document.getElementById('statOnline' + which);
       const off = document.getElementById('statOffline' + which);
@@ -3642,35 +3697,135 @@
       }
     }
 
-    function renderCallsChart(series) {
-      const ctx = document.getElementById('callsChart');
-      const labels = series.map(s => s.label);
-      const counts = series.map(s => s.count);
-      if (callsChartInstance) callsChartInstance.destroy();
-      callsChartInstance = new Chart(ctx, {
+    /**
+     * Builds a themed two-line Chart.js line chart into `canvasId`, styled to
+     * match the dashboard cards (accent colors, grid, legend, tooltip,
+     * typography). Shared by the calls chart and the chats chart so both
+     * stay visually identical.
+     */
+    function buildTwoLineChart(canvasId, labels, seriesA, seriesB) {
+      const ctx = document.getElementById(canvasId);
+
+      // Pull the live theme values so the chart always matches the cards
+      // around it (including on dark-mode toggle, since this re-reads on
+      // every render rather than caching a stale color).
+      const cs = getComputedStyle(document.documentElement);
+      const accent = (cs.getPropertyValue('--leaf').trim()) || '#e63946';
+      const secondary = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
+      const gridColor = (cs.getPropertyValue('--line').trim()) || '#ecedf1';
+      const inkColor = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
+      const slateColor = (cs.getPropertyValue('--slate').trim()) || '#7c8493';
+      const cardColor = (cs.getPropertyValue('--white').trim()) || '#ffffff';
+      const chartFont = "'Segoe UI', Arial, sans-serif";
+      const hexToRgba = (hex, alpha) => {
+        const h = hex.replace('#', '');
+        const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+        const r = parseInt(full.substring(0, 2), 16);
+        const g = parseInt(full.substring(2, 4), 16);
+        const b = parseInt(full.substring(4, 6), 16);
+        return `rgba(${r},${g},${b},${alpha})`;
+      };
+      const lineDataset = (label, data, color) => ({
+        label,
+        data,
+        borderColor: color,
+        borderWidth: 2.5,
+        backgroundColor: hexToRgba(color, 0.08),
+        fill: true,
+        tension: 0.35,
+        pointBackgroundColor: color,
+        pointBorderColor: cardColor,
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: color,
+        pointHoverBorderColor: cardColor,
+        pointHoverBorderWidth: 2,
+      });
+
+      return new Chart(ctx, {
         type: 'line',
         data: {
           labels,
-          datasets: [{
-            label: 'Number of Calls',
-            data: counts,
-            borderColor: '#e63946',
-            backgroundColor: 'rgba(230,57,70,0.08)',
-            fill: true,
-            tension: 0.35,
-            pointBackgroundColor: '#e63946',
-            pointRadius: 4,
-          }]
+          datasets: [
+            lineDataset(seriesA.name, seriesA.data, accent),
+            lineDataset(seriesB.name, seriesB.data, secondary),
+          ]
         },
         options: {
           responsive: true,
-          plugins: { legend: { display: true, position: 'bottom' } },
+          interaction: { mode: 'index', intersect: false },
+          layout: { padding: { top: 4, right: 4, bottom: 0, left: 0 } },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: {
+                usePointStyle: true,
+                pointStyle: 'circle',
+                boxWidth: 8,
+                boxHeight: 8,
+                padding: 16,
+                color: slateColor,
+                font: { family: chartFont, size: 12, weight: '600' }
+              }
+            },
+            tooltip: {
+              backgroundColor: cardColor,
+              titleColor: inkColor,
+              bodyColor: slateColor,
+              borderColor: gridColor,
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 8,
+              displayColors: true,
+              usePointStyle: true,
+              boxWidth: 8,
+              boxHeight: 8,
+              boxPadding: 4,
+              titleFont: { family: chartFont, size: 12, weight: '700' },
+              bodyFont: { family: chartFont, size: 12, weight: '600' }
+            }
+          },
           scales: {
-            y: { beginAtZero: true, grid: { color: '#ecedf1' } },
-            x: { grid: { display: false } }
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor, drawBorder: false },
+              ticks: { color: slateColor, font: { family: chartFont, size: 11 }, padding: 6 }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: slateColor, font: { family: chartFont, size: 11 }, padding: 6 }
+            }
           }
         }
       });
+    }
+
+    function renderCallsChart(series) {
+      const labels = series.map(s => s.label);
+      const audioCounts = series.map(s => s.audio_count ?? s.count ?? 0);
+      const videoCounts = series.map(s => s.video_count ?? 0);
+      if (callsChartInstance) callsChartInstance.destroy();
+      callsChartInstance = buildTwoLineChart(
+        'callsChart',
+        labels,
+        { name: 'Audio Calls', data: audioCounts },
+        { name: 'Video Calls', data: videoCounts }
+      );
+    }
+
+    function renderChatsChart(series) {
+      const labels = series.map(s => s.label);
+      const textCounts = series.map(s => s.text_count ?? s.count ?? 0);
+      const voiceCounts = series.map(s => s.voice_count ?? 0);
+      if (chatsChartInstance) chatsChartInstance.destroy();
+      chatsChartInstance = buildTwoLineChart(
+        'chatsChart',
+        labels,
+        { name: 'Text Chats', data: textCounts },
+        { name: 'Voice Chats', data: voiceCounts }
+      );
     }
 
     function setLoginMsg(text, ok) {

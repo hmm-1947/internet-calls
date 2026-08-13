@@ -710,11 +710,6 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
     trunc_unit = {"hour": "hour", "day": "day", "week": "week", "month": "month"}[bucket]
     bucket_col = func.date_trunc(trunc_unit, Call.created_at)
 
-    q = db.query(bucket_col.label("bucket"), func.count(Call.id)).filter(Call.status == "ended")
-    if since is not None:
-        q = q.filter(Call.created_at >= since)
-    rows = q.group_by("bucket").order_by("bucket").all()
-
     def format_label(ts, bucket):
         if bucket == "hour":
             return ts.strftime("%Y-%m-%d %H:00")
@@ -725,7 +720,63 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
             return f"{iso[0]}-W{iso[1]:02d}"
         return ts.strftime("%Y-%m")
 
-    series = [{"label": format_label(ts, bucket), "count": count} for ts, count in rows]
+    def pivot_two_way(rows, primary_type):
+        """Turns (timestamp, type_value, count) rows into one ordered list of
+        labels plus a count-per-label dict for `primary_type` and one for
+        everything else, so a bucket with only one type still gets an
+        explicit 0 for the other (keeps both lines aligned on the same
+        x-axis points)."""
+        labels_seen = []
+        primary_by_label = {}
+        other_by_label = {}
+        for ts, type_value, count in rows:
+            label = format_label(ts, bucket)
+            if label not in primary_by_label and label not in other_by_label:
+                labels_seen.append(label)
+            if type_value == primary_type:
+                primary_by_label[label] = primary_by_label.get(label, 0) + count
+            else:
+                other_by_label[label] = other_by_label.get(label, 0) + count
+        return labels_seen, primary_by_label, other_by_label
+
+    call_rows = (
+        db.query(bucket_col.label("bucket"), Call.call_type, func.count(Call.id))
+        .filter(Call.status == "ended")
+    )
+    if since is not None:
+        call_rows = call_rows.filter(Call.created_at >= since)
+    call_rows = call_rows.group_by("bucket", Call.call_type).order_by("bucket").all()
+
+    call_labels, video_by_label, audio_by_label = pivot_two_way(call_rows, "video")
+    series = [
+        {
+            "label": label,
+            "count": audio_by_label.get(label, 0) + video_by_label.get(label, 0),
+            "audio_count": audio_by_label.get(label, 0),
+            "video_count": video_by_label.get(label, 0),
+        }
+        for label in call_labels
+    ]
+
+    chat_bucket_col = func.date_trunc(trunc_unit, ChatMessage.created_at)
+    chat_rows = (
+        db.query(chat_bucket_col.label("bucket"), ChatMessage.message_type, func.count(ChatMessage.id))
+        .filter(ChatMessage.message_type.in_(["text", "audio"]))
+    )
+    if since is not None:
+        chat_rows = chat_rows.filter(ChatMessage.created_at >= since)
+    chat_rows = chat_rows.group_by("bucket", ChatMessage.message_type).order_by("bucket").all()
+
+    chat_labels, voice_chats_by_label, text_chats_by_label = pivot_two_way(chat_rows, "audio")
+    chats_series = [
+        {
+            "label": label,
+            "count": text_chats_by_label.get(label, 0) + voice_chats_by_label.get(label, 0),
+            "text_count": text_chats_by_label.get(label, 0),
+            "voice_count": voice_chats_by_label.get(label, 0),
+        }
+        for label in chat_labels
+    ]
 
     return {
         "total_users": total_users,
@@ -740,7 +791,9 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
         "offline_listeners": offline_listeners,
         "avg_call_duration_seconds": round(avg_duration),
         "calls_series": series,
+        "chats_series": chats_series,
     }
+
 
 @router.get("/stats/users")
 def list_user_stats(db: Session = Depends(get_db), _=Depends(verify_admin)):
