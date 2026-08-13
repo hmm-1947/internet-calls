@@ -1915,30 +1915,112 @@
       color: var(--slate);
     }
 
-    .other-person-picker select {
+    .other-person-combo {
+      position: relative;
+    }
+
+    .other-person-search {
       padding: 7px 30px 7px 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background-color: var(--white);
-      background-size: 12px;
       color: var(--ink);
       font-size: 13px;
       font-weight: 600;
-      cursor: pointer;
+      width: 220px;
       transition: border-color .15s, background .15s;
     }
 
-    .other-person-picker select:hover {
+    .other-person-search:hover {
       border-color: #d8dae0;
     }
 
-    [data-theme="dark"] .other-person-picker select:hover {
+    [data-theme="dark"] .other-person-search:hover {
       border-color: #4c5468;
     }
 
-    .other-person-picker select:focus {
+    .other-person-search:focus {
       outline: none;
       border-color: var(--leaf);
+    }
+
+    .other-person-clear {
+      position: absolute;
+      top: 50%;
+      right: 6px;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--slate);
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .other-person-clear:hover {
+      background: var(--mint);
+      color: var(--ink);
+    }
+
+    .other-person-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      min-width: 220px;
+      max-height: 260px;
+      overflow-y: auto;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+      z-index: 30;
+      padding: 4px;
+    }
+
+    .other-person-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .other-person-option:hover {
+      background: var(--mint);
+    }
+
+    .other-person-option.selected {
+      background: var(--mint);
+      color: var(--leaf);
+    }
+
+    .other-person-option.other-person-empty {
+      color: var(--slate);
+      font-weight: 500;
+      cursor: default;
+    }
+
+    .other-person-option.other-person-empty:hover {
+      background: transparent;
+    }
+
+    .other-person-option-sub {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--slate);
+      white-space: nowrap;
     }
 
     .pair-arrow-row {
@@ -6108,9 +6190,14 @@
           </div>
           <div class="other-person-picker">
             <label>${p.type === 'user' ? 'Listener' : 'User'}</label>
-            <select id="otherPersonSelect" onchange="changeOtherPersonFilter()">
-              <option value="">All</option>
-            </select>
+            <div class="other-person-combo" id="otherPersonCombo">
+              <input type="text" class="other-person-search" id="otherPersonSearch" autocomplete="off"
+                placeholder="${p.type === 'user' ? 'Search by name or phone' : 'Search by name, username, phone or email'}"
+                value="${otherPersonFilter ? escapeHtml(otherPersonFilter) : ''}"
+                oninput="renderOtherPersonOptions()" onfocus="renderOtherPersonOptions()">
+              <button type="button" class="other-person-clear" id="otherPersonClear" onclick="clearOtherPersonFilter()" title="Clear" style="display:${otherPersonFilter ? 'inline-flex' : 'none'}">×</button>
+              <div class="other-person-dropdown" id="otherPersonDropdown"></div>
+            </div>
           </div>
           ${p.type === 'user' ? `
           <div style="display:flex;gap:6px;align-items:center">
@@ -6279,17 +6366,72 @@ ${logSection === 'chats' ? '' : `
     function applyOtherPersonFilter() {
       const otherField = selectedPerson.type === 'user' ? 'listener_name' : 'caller_name';
       logsCache = otherPersonFilter ? logsCacheAll.filter(row => row[otherField] === otherPersonFilter) : logsCacheAll;
-      renderOtherPersonSelect();
+      updateOtherPersonUI();
       renderLogTable();
     }
 
-    function renderOtherPersonSelect() {
-      const el = document.getElementById('otherPersonSelect');
-      if (!el) return;
-      const otherField = selectedPerson.type === 'user' ? 'listener_name' : 'caller_name';
-      const names = [...new Set(logsCacheAll.map(row => row[otherField]).filter(Boolean))];
-      el.innerHTML = '<option value="">All</option>' + names.map(n => `<option value="${n}" ${otherPersonFilter === n ? 'selected' : ''}>${n}</option>`).join('');
+    /** The full pool to search when picking a counterpart: all listeners
+     *  when a user is selected, all users when a listener is selected -
+     *  not just names that already show up in this pair's logs, so the
+     *  admin can look up any counterpart by name/phone (or, for users,
+     *  username/email too) even before they've ever interacted. */
+    function otherPersonCandidates() {
+      return selectedPerson.type === 'user' ? listenersCache : usersCache;
+    }
+
+    function otherPersonMatches(query) {
+      const q = query.trim().toLowerCase();
+      const list = otherPersonCandidates() || [];
+      if (!q) return list;
+      return list.filter(p => {
+        const fields = selectedPerson.type === 'user'
+          ? [p.name, p.phone]
+          : [p.name, p.username, p.phone, p.email];
+        return fields.some(f => (f || '').toString().toLowerCase().includes(q));
+      });
+    }
+
+    function renderOtherPersonOptions() {
+      const dd = document.getElementById('otherPersonDropdown');
+      const input = document.getElementById('otherPersonSearch');
+      if (!dd || !input) return;
+      const matches = otherPersonMatches(input.value).slice(0, 50);
+      const allLabel = selectedPerson.type === 'user' ? 'All Listeners' : 'All Users';
+      const allOption = `<div class="other-person-option${!otherPersonFilter ? ' selected' : ''}" onmousedown="pickOtherPerson(null)">${allLabel}</div>`;
+      const rows = matches.length
+        ? matches.map(p => {
+            const sub = selectedPerson.type === 'user'
+              ? escapeHtml(p.phone || '')
+              : [p.username ? '@' + p.username : '', p.phone, p.email].filter(Boolean).map(escapeHtml).join(' · ');
+            const safeName = String(p.name).replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+            return `<div class="other-person-option${otherPersonFilter === p.name ? ' selected' : ''}" onmousedown="pickOtherPerson('${safeName}')">`
+              + `<span class="other-person-option-name">${escapeHtml(p.name)}</span>`
+              + (sub ? `<span class="other-person-option-sub">${sub}</span>` : '')
+              + `</div>`;
+          }).join('')
+        : '<div class="other-person-option other-person-empty">No matches</div>';
+      dd.innerHTML = allOption + rows;
+      dd.style.display = 'block';
+    }
+
+    function pickOtherPerson(name) {
+      otherPersonFilter = name || null;
+      const input = document.getElementById('otherPersonSearch');
+      if (input) input.value = otherPersonFilter || '';
+      const dd = document.getElementById('otherPersonDropdown');
+      if (dd) dd.style.display = 'none';
+      applyOtherPersonFilter();
+    }
+
+    function clearOtherPersonFilter() {
+      pickOtherPerson(null);
+    }
+
+    function updateOtherPersonUI() {
+      const clearBtn = document.getElementById('otherPersonClear');
+      if (clearBtn) clearBtn.style.display = otherPersonFilter ? 'inline-flex' : 'none';
       const arrowRow = document.getElementById('pairArrowRow');
+      if (!arrowRow) return;
       if (otherPersonFilter) {
         arrowRow.style.display = 'flex';
         const leftEl = arrowRow.querySelector('.pair-left');
@@ -6305,10 +6447,13 @@ ${logSection === 'chats' ? '' : `
         arrowRow.style.display = 'none';
       }
     }
-    function changeOtherPersonFilter() {
-      otherPersonFilter = document.getElementById('otherPersonSelect').value || null;
-      applyOtherPersonFilter();
-    }
+
+    document.addEventListener('click', (e) => {
+      const combo = e.target.closest('.other-person-combo');
+      const dd = document.getElementById('otherPersonDropdown');
+      if (!combo && dd) dd.style.display = 'none';
+    });
+
 
     function renderLogTable() {
       const wrap = document.getElementById('logTableWrap');
