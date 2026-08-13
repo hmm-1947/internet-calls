@@ -77,6 +77,8 @@ async def _save_voice_upload(file: UploadFile) -> str:
     await run_in_threadpool(_write_voice_file_sync, filepath, data)
     return filename
 
+CALL_DISCONNECT_GRACE_SECONDS = 20
+
 async def _finalize_active_calls_for_user(user_id: int, db: Session):
     from app.routers.call import finalize_abandoned_call
     calls = db.query(Call).filter(
@@ -94,6 +96,28 @@ async def _finalize_active_calls_for_listener(listener_id: int, db: Session):
     ).all()
     for call in calls:
         await finalize_abandoned_call(db, call)
+
+async def _finalize_active_calls_for_user_after_grace(user_id: int):
+    from app.core.database import SessionLocal
+    await asyncio.sleep(CALL_DISCONNECT_GRACE_SECONDS)
+    if manager.is_user_online(user_id):
+        return
+    db = SessionLocal()
+    try:
+        await _finalize_active_calls_for_user(user_id, db)
+    finally:
+        db.close()
+
+async def _finalize_active_calls_for_listener_after_grace(listener_id: int):
+    from app.core.database import SessionLocal
+    await asyncio.sleep(CALL_DISCONNECT_GRACE_SECONDS)
+    if manager.is_listener_online(listener_id):
+        return
+    db = SessionLocal()
+    try:
+        await _finalize_active_calls_for_listener(listener_id, db)
+    finally:
+        db.close()
 
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -812,7 +836,7 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
             await manager.send_to_listener(target_listener_id, {"type": "typing", "user_id": user_id, "is_typing": False})
         typing_targets.clear()
         await manager.disconnect_user(user_id, websocket)
-        await _finalize_active_calls_for_user(user_id, db)
+        asyncio.create_task(_finalize_active_calls_for_user_after_grace(user_id))
         if manager.is_user_online(user_id):
             return
 
@@ -893,7 +917,7 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
             await manager.send_to_user(target_user_id, {"type": "typing", "listener_id": listener_id, "is_typing": False})
         typing_targets.clear()
         await manager.disconnect_listener(listener_id, websocket)
-        await _finalize_active_calls_for_listener(listener_id, db)
+        asyncio.create_task(_finalize_active_calls_for_listener_after_grace(listener_id))
         if manager.is_listener_online(listener_id):
             return
 
