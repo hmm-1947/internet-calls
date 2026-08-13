@@ -69,7 +69,8 @@ class _CallScreenState extends State<CallScreen> {
   bool _speakerOn = false;
   final ValueNotifier<double> _remoteAudioLevel = ValueNotifier<double>(0);
   bool _remoteJoined = false;
-  bool get _fullyConnected => _phase == _CallPhase.connected && _remoteJoined;
+  bool get _fullyConnected =>
+      _phase == _CallPhase.connected && _remoteJoined && !_reconnecting;
   Timer? _audioLevelTimer;
   ConnectionQuality _connectionQuality = ConnectionQuality.unknown;
   VideoTrack? _localVideoTrack;
@@ -87,6 +88,11 @@ class _CallScreenState extends State<CallScreen> {
   Timer? _durationTimer;
   final ValueNotifier<int> _callDurationSeconds = ValueNotifier<int>(0);
   Timer? _remoteLeftTimer;
+  // True while LiveKit is attempting to re-establish a dropped connection
+  // (our own network blip, not the remote leaving). Suppresses the normal
+  // "connected" UI so the user sees why the call looks stuck instead of a
+  // frozen screen.
+  bool _reconnecting = false;
   // Closes the "No answer" screen when the user does not pick either action.
   Timer? _noAnswerTimer;
   static const _noAnswerAutoCloseDelay = Duration(seconds: 10);
@@ -377,7 +383,7 @@ class _CallScreenState extends State<CallScreen> {
 
   void _publishStatus() {
     ActiveCallManager.instance.updateStatus(
-      _phase == _CallPhase.connected ? '' : _statusText(),
+      _phase == _CallPhase.connected && !_reconnecting ? '' : _statusText(),
     );
   }
 
@@ -677,7 +683,41 @@ class _CallScreenState extends State<CallScreen> {
     roomListener.on<ParticipantDisconnectedEvent>((event) {
       _onRemoteParticipantLeft(room);
     });
+    // Our own network dropped and LiveKit is trying to re-establish the
+    // session - either a quick "resume" or, if that fails, a full restart.
+    // Both RoomReconnectingEvent and RoomResumingEvent share the
+    // ReconnectingEvent mixin, so listening on that catches whichever path
+    // LiveKit actually takes (a plain WiFi toggle almost always resumes,
+    // not restarts). Surfacing this stops the call from looking frozen or
+    // silently dead while it works.
+    roomListener.on<ReconnectingEvent>((event) {
+      if (!mounted) return;
+      setState(() => _reconnecting = true);
+      _publishStatus();
+    });
+    // RoomReconnectedEvent only fires for the resume path; a full restart
+    // instead re-completes the whole connect handshake and comes back as
+    // RoomConnectedEvent. Clearing on either keeps the "Reconnecting..."
+    // text from getting stuck forever when LiveKit had to fall back to a
+    // full restart.
+    roomListener.on<RoomReconnectedEvent>((event) {
+      if (!mounted) return;
+      setState(() => _reconnecting = false);
+      _publishStatus();
+    });
+    roomListener.on<RoomConnectedEvent>((event) {
+      if (!mounted || !_reconnecting) return;
+      setState(() => _reconnecting = false);
+      _publishStatus();
+    });
     roomListener.on<RoomDisconnectedEvent>((event) {
+      // A disconnect that follows a failed reconnection attempt is a network
+      // failure, not a hang-up - the other side never chose to leave, so say
+      // so instead of just cutting to the summary screen with no explanation.
+      if (event.reason == DisconnectReason.reconnectAttemptsExceeded ||
+          event.reason == DisconnectReason.signalingConnectionFailure) {
+        _showMessage('Call ended due to a network issue');
+      }
       _hangUp();
     });
     roomListener.on<TrackSubscribedEvent>((event) {
@@ -720,9 +760,13 @@ class _CallScreenState extends State<CallScreen> {
   /// backend as well, so nothing is lost by waiting this out.
   void _onRemoteParticipantLeft(Room room) {
     _remoteLeftTimer?.cancel();
-    _remoteLeftTimer = Timer(const Duration(seconds: 5), () {
+    _remoteLeftTimer = Timer(const Duration(seconds: 25), () {
       if (!mounted || _isEnding) return;
       if (room.remoteParticipants.isNotEmpty) return;
+      if (_reconnecting) {
+        _onRemoteParticipantLeft(room);
+        return;
+      }
       _hangUp();
     });
   }
@@ -1339,6 +1383,7 @@ class _CallScreenState extends State<CallScreen> {
       case _CallPhase.connecting:
         return 'Connecting...';
       case _CallPhase.connected:
+        if (_reconnecting) return 'Reconnecting...';
         return _remoteJoined ? _connectionQualityText() : 'Connecting...';
       case _CallPhase.noAnswer:
         return 'No Answer';

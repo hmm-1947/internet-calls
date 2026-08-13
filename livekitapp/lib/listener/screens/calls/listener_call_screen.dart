@@ -192,7 +192,49 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     roomListener.on<ParticipantDisconnectedEvent>((event) {
       _onRemoteParticipantLeft(room);
     });
+    // Our own network dropped and LiveKit is trying to re-establish the
+    // session - either a quick "resume" or, if that fails, a full restart.
+    // Both RoomReconnectingEvent and RoomResumingEvent share the
+    // ReconnectingEvent mixin, so listening on that catches whichever path
+    // LiveKit actually takes (a plain WiFi toggle almost always resumes,
+    // not restarts). Surfacing this stops the call from looking frozen or
+    // silently dead while it works.
+    roomListener.on<ReconnectingEvent>((event) {
+      if (!mounted) return;
+      setState(() => _status = 'Reconnecting...');
+      ActiveCallManager.instance.updateStatus(_status);
+    });
+    // RoomReconnectedEvent only fires for the resume path; a full restart
+    // instead re-completes the whole connect handshake and comes back as
+    // RoomConnectedEvent. Clearing on either keeps the "Reconnecting..."
+    // text from getting stuck forever when LiveKit had to fall back to a
+    // full restart.
+    roomListener.on<RoomReconnectedEvent>((event) {
+      if (!mounted) return;
+      setState(
+        () => _status = room.remoteParticipants.isEmpty
+            ? 'Connecting...'
+            : '',
+      );
+      ActiveCallManager.instance.updateStatus(_status);
+    });
+    roomListener.on<RoomConnectedEvent>((event) {
+      if (!mounted || _status != 'Reconnecting...') return;
+      setState(
+        () => _status = room.remoteParticipants.isEmpty
+            ? 'Connecting...'
+            : '',
+      );
+      ActiveCallManager.instance.updateStatus(_status);
+    });
     roomListener.on<RoomDisconnectedEvent>((event) {
+      // A disconnect that follows a failed reconnection attempt is a network
+      // failure, not a hang-up - the other side never chose to leave, so say
+      // so instead of just cutting the call with no explanation.
+      if (event.reason == DisconnectReason.reconnectAttemptsExceeded ||
+          event.reason == DisconnectReason.signalingConnectionFailure) {
+        _showMessage('Call ended due to a network issue');
+      }
       _hangUp();
     });
     roomListener.on<TrackSubscribedEvent>((event) {
@@ -227,17 +269,15 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
     return roomListener;
   }
 
-  /// The caller also disappears for a moment when their app has to rejoin the
-  /// room outright - a network handover, or Android freezing a backgrounded
-  /// app. LiveKit reports that as a disconnect immediately followed by a
-  /// reconnect, and tearing the call down on the first blip is why calls were
-  /// dropping seconds after they started. A genuine hang-up is pushed by the
-  /// backend as well, so nothing is lost by waiting this out.
   void _onRemoteParticipantLeft(Room room) {
     _remoteLeftTimer?.cancel();
-    _remoteLeftTimer = Timer(const Duration(seconds: 5), () {
+    _remoteLeftTimer = Timer(const Duration(seconds: 25), () {
       if (!mounted || _isEnding) return;
       if (room.remoteParticipants.isNotEmpty) return;
+      if (_status == 'Reconnecting...') {
+        _onRemoteParticipantLeft(room);
+        return;
+      }
       _hangUp();
     });
   }
