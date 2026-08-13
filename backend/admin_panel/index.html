@@ -5445,7 +5445,6 @@
                 <td style="font-family:monospace;font-size:12px;">${p.razorpay_order_id || '—'}</td>
                 <td>
                   <span class="badge ${PURCHASE_STATUS_BADGE[p.status] || 'badge-pending'}">${PURCHASE_STATUS_LABELS[p.status] || p.status}</span>
-                  ${p.status === 'failed' && p.failure_reason ? `<div style="font-size:11px;color:var(--danger);margin-top:2px;">${p.failure_reason}</div>` : ''}
                   ${p.refunded_amount_paise ? `<div style="font-size:11px;color:var(--danger);margin-top:2px;">₹${(p.refunded_amount_paise / 100).toFixed(2)} refunded — coins not deducted</div>` : ''}
                 </td>
                 <td style="font-size:12px;color:var(--slate);white-space:nowrap;">${formatPurchaseDate(p.created_at)}</td>
