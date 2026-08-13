@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/weekly_challenge_repository.dart';
 
@@ -20,6 +21,8 @@ class WeeklyChallengeScreen extends StatefulWidget {
 }
 
 class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
+  static const _progressCacheKey = 'listener_weekly_challenge_snapshot';
+
   final _repository = WeeklyChallengeRepository();
   final _localStorage = LocalStorage();
 
@@ -30,12 +33,28 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadFromCacheThenRefresh();
+  }
+
+  Future<void> _loadFromCacheThenRefresh() async {
+    try {
+      final cached = await HomeCache().getJson(_progressCacheKey);
+      if (cached is Map && mounted && _progress == null) {
+        setState(() {
+          _progress = WeeklyChallengeProgress.fromJson(
+            Map<String, dynamic>.from(cached),
+          );
+          _loading = false;
+        });
+      }
+    } catch (_) {}
+    await _load();
   }
 
   Future<void> _load() async {
+    final hasCachedData = _progress != null;
     setState(() {
-      _loading = true;
+      _loading = !hasCachedData;
       _error = null;
     });
     try {
@@ -47,10 +66,25 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
         _progress = progress;
         _loading = false;
       });
+      HomeCache().setJson(_progressCacheKey, {
+        'active': progress.active,
+        'talk_seconds': progress.talkSeconds,
+        'goals': progress.goals
+            .map(
+              (g) => {
+                'minutes': g.minutes,
+                'completed': g.completed,
+                'completed_at': g.completedAt?.toIso8601String(),
+              },
+            )
+            .toList(),
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        if (_progress == null) {
+          _error = e.toString().replaceFirst('Exception: ', '');
+        }
         _loading = false;
       });
     }
@@ -77,12 +111,12 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       backgroundColor: _AppColors.bg,
       appBar: AppBar(
         backgroundColor: _AppColors.bg,
+        foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
           'Weekly Challenge',
-          style: TextStyle(color: _AppColors.brandRed, fontWeight: FontWeight.w700),
+          style: TextStyle(color: Colors.white, fontSize: 20),
         ),
-        iconTheme: const IconThemeData(color: _AppColors.brandRed),
       ),
       body: SafeArea(
         child: _loading
@@ -90,19 +124,19 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                 child: CircularProgressIndicator(color: _AppColors.brandRed),
               )
             : _error != null
-                ? _buildError()
-                : RefreshIndicator(
-                    color: _AppColors.brandRed,
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        _buildHeaderCard(),
-                        const SizedBox(height: 20),
-                        _buildProgressCard(),
-                      ],
-                    ),
-                  ),
+            ? _buildError()
+            : RefreshIndicator(
+                color: _AppColors.brandRed,
+                onRefresh: _load,
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    _buildHeaderCard(),
+                    const SizedBox(height: 20),
+                    _buildProgressCard(),
+                  ],
+                ),
+              ),
       ),
     );
   }
@@ -114,7 +148,11 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: _AppColors.textMuted, size: 40),
+            const Icon(
+              Icons.error_outline,
+              color: _AppColors.textMuted,
+              size: 40,
+            ),
             const SizedBox(height: 12),
             Text(
               _error!,
@@ -124,7 +162,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _load,
-              style: ElevatedButton.styleFrom(backgroundColor: _AppColors.brandRed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _AppColors.brandRed,
+              ),
               child: const Text('Retry'),
             ),
           ],
@@ -154,7 +194,11 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
               shape: BoxShape.circle,
               color: _AppColors.brandRed,
             ),
-            child: const Icon(Icons.emoji_events, color: Colors.white, size: 26),
+            child: const Icon(
+              Icons.emoji_events,
+              color: Colors.white,
+              size: 26,
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -172,7 +216,10 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'talked this week · $completedCount of ${goals.length} goals done',
-                  style: const TextStyle(color: _AppColors.textSecondary, fontSize: 13),
+                  style: const TextStyle(
+                    color: _AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -204,7 +251,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
     final maxGoalSeconds = goals.last.minutes * 60;
     double progressFraction;
     if (goals.length == 1) {
-      progressFraction = maxGoalSeconds == 0 ? 0.0 : (talkSeconds / maxGoalSeconds).clamp(0.0, 1.0);
+      progressFraction = maxGoalSeconds == 0
+          ? 0.0
+          : (talkSeconds / maxGoalSeconds).clamp(0.0, 1.0);
     } else {
       progressFraction = 0.0;
       for (var i = 0; i < goals.length - 1; i++) {
@@ -214,7 +263,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
         if (talkSeconds >= segEnd) {
           progressFraction = (i + 1) * segFractionOfTrack;
         } else if (talkSeconds > segStart) {
-          final segProgress = segEnd == segStart ? 0.0 : (talkSeconds - segStart) / (segEnd - segStart);
+          final segProgress = segEnd == segStart
+              ? 0.0
+              : (talkSeconds - segStart) / (segEnd - segStart);
           progressFraction = (i + segProgress) * segFractionOfTrack;
           break;
         } else {
@@ -280,7 +331,11 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                     ),
                     for (var i = 0; i < goals.length; i++)
                       Positioned(
-                        left: (trackWidth * (goals.length == 1 ? 0.0 : i / (goals.length - 1)))
+                        left:
+                            (trackWidth *
+                                    (goals.length == 1
+                                        ? 0.0
+                                        : i / (goals.length - 1)))
                                 .clamp(0.0, trackWidth) -
                             12,
                         top: 18,
@@ -303,12 +358,16 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                     textAlign: goal == goals.first
                         ? TextAlign.start
                         : goal == goals.last
-                            ? TextAlign.end
-                            : TextAlign.center,
+                        ? TextAlign.end
+                        : TextAlign.center,
                     style: TextStyle(
-                      color: goal.completed ? Colors.white : _AppColors.textMuted,
+                      color: goal.completed
+                          ? Colors.white
+                          : _AppColors.textMuted,
                       fontSize: 12,
-                      fontWeight: goal.completed ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: goal.completed
+                          ? FontWeight.w700
+                          : FontWeight.w500,
                     ),
                   ),
                 ),
@@ -404,7 +463,11 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
           if (goal.completed)
             const Text(
               'Completed',
-              style: TextStyle(color: _AppColors.brandRed, fontSize: 12, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: _AppColors.brandRed,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
         ],
       ),
