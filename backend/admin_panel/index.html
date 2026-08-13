@@ -1420,6 +1420,102 @@
       border-color: #4c5468;
     }
 
+    .tags-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 22px;
+    }
+
+    .tags-grid .tags-grid-card {
+      margin-bottom: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tags-grid .tags-grid-card.tags-create-card {
+      justify-content: center;
+    }
+
+    .tags-list-scroll {
+      flex: 1;
+      min-height: 120px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    @media (max-width: 860px) {
+      .tags-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .tag-color-picker {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tag-color-swatch {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #E11D48;
+      border: 3px solid var(--white);
+      box-shadow: 0 0 0 1px var(--line), 0 3px 8px rgba(20, 20, 30, .12);
+      cursor: pointer;
+      transition: transform .15s ease, box-shadow .15s ease;
+      overflow: hidden;
+    }
+
+    .tag-color-swatch:hover {
+      transform: scale(1.08) rotate(-2deg);
+      box-shadow: 0 0 0 1px var(--leaf), 0 5px 14px rgba(20, 20, 30, .2);
+    }
+
+    [data-theme="dark"] .tag-color-swatch {
+      border-color: var(--white);
+      box-shadow: 0 0 0 1px var(--line), 0 3px 8px rgba(0, 0, 0, .4);
+    }
+
+    .tag-color-swatch input[type="color"] {
+      position: absolute;
+      inset: -6px;
+      width: calc(100% + 12px);
+      height: calc(100% + 12px);
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      opacity: 0;
+    }
+
+    .tag-color-presets {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+      max-width: 210px;
+    }
+
+    .tag-color-preset {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid var(--white);
+      box-shadow: 0 0 0 1px var(--line);
+      transition: transform .12s ease, box-shadow .12s ease;
+      padding: 0;
+    }
+
+    .tag-color-preset:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 0 1px var(--leaf);
+    }
+
     .tag-listener-row {
       display: flex;
       align-items: center;
@@ -2755,35 +2851,45 @@
   </div>
 
   <div id="page-tags" style="display:none;">
-    <div class="card">
-      <h2 id="tagFormTitle">Create Tag</h2>
-      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
-        Tags appear as a small badge on top of a listener's profile picture everywhere users see it.
-      </p>
-      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-        <div style="flex:1;min-width:180px;">
-          <label style="font-size:13px;color:var(--slate);font-weight:600">Tag name</label>
-          <input id="tagNameInput" placeholder="e.g. Top Rated" maxlength="24">
+    <div class="tags-grid">
+      <div class="card tags-grid-card tags-create-card">
+        <h2 id="tagFormTitle">Create Tag</h2>
+        <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+          Tags appear as a small badge on top of a listener's profile picture everywhere users see it.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:13px;color:var(--slate);font-weight:600">Tag name</label>
+            <input id="tagNameInput" placeholder="e.g. Top Rated" maxlength="24" style="width:100%;">
+          </div>
+          <div>
+            <label style="font-size:13px;color:var(--slate);font-weight:600">Color</label>
+            <div class="tag-color-picker">
+              <div class="tag-color-swatch" id="tagColorSwatch" title="Click to pick a custom color">
+                <input id="tagColorInput" type="color" value="#E11D48" oninput="setTagColor(this.value)">
+              </div>
+              <div class="tag-color-presets" id="tagColorPresets"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button id="tagFormSubmitBtn" class="btn btn-leaf" onclick="submitListenerTagForm()" style="height:38px;">Create Tag</button>
+            <button id="tagFormCancelBtn" class="btn" onclick="cancelEditListenerTag()" style="height:38px;display:none;">Cancel</button>
+          </div>
         </div>
-        <div>
-          <label style="font-size:13px;color:var(--slate);font-weight:600">Color</label>
-          <input id="tagColorInput" type="color" value="#E11D48" style="width:56px;height:38px;padding:2px;border-radius:8px;cursor:pointer;">
-        </div>
-        <button id="tagFormSubmitBtn" class="btn btn-leaf" onclick="submitListenerTagForm()" style="height:38px;">Create Tag</button>
-        <button id="tagFormCancelBtn" class="btn" onclick="cancelEditListenerTag()" style="height:38px;display:none;">Cancel</button>
+        <div id="tagCreateMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
       </div>
-      <div id="tagCreateMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+
+      <div class="card tags-grid-card">
+        <h2>All Tags</h2>
+        <div id="tagsListWrap" class="tags-list-scroll" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>All Tags</h2>
-      <div id="tagsListWrap" style="display:flex;flex-direction:column;gap:8px;"></div>
-    </div>
 
     <div class="card">
       <h2>Assign Tag to Listener</h2>
       <label style="font-size:13px;color:var(--slate);font-weight:600">Search listeners</label>
-      <input class="search-box" id="tagListenerSearch" placeholder="Search by name…" oninput="onTagListenerSearchInput()">
+      <input class="search-box" id="tagListenerSearch" placeholder="Search by name or tag…" oninput="onTagListenerSearchInput()">
       <div id="tagListenerResults" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:420px;overflow-y:auto;"></div>
     </div>
   </div>
@@ -3113,6 +3219,7 @@
         loadTermsPrivacy();
       }
       if (page === 'tags') {
+        renderTagColorPresets();
         loadListenerTags();
         loadTagListenerSearch('');
       }
@@ -4644,12 +4751,30 @@
 
     let editingTagId = null;
 
+    const TAG_COLOR_PRESETS = ['#E11D48', '#F97316', '#F59E0B', '#22C55E', '#14B8A6', '#3B82F6', '#8B5CF6', '#EC4899'];
+
+    function renderTagColorPresets() {
+      const wrap = document.getElementById('tagColorPresets');
+      if (!wrap) return;
+      wrap.innerHTML = TAG_COLOR_PRESETS.map(hex =>
+        `<button type="button" class="tag-color-preset" style="background:${hex};" title="${hex}" onclick="setTagColor('${hex}')"></button>`
+      ).join('');
+    }
+
+    /** Keeps the swatch preview and the underlying <input type="color"> in
+     *  sync, whether the color came from the native picker, a preset dot,
+     *  or a programmatic reset (edit/cancel). */
+    function setTagColor(hex) {
+      document.getElementById('tagColorInput').value = hex;
+      document.getElementById('tagColorSwatch').style.background = hex;
+    }
+
     function startEditListenerTag(tagId) {
       const tag = listenerTagsCache.find(t => t.id === tagId);
       if (!tag) return;
       editingTagId = tagId;
       document.getElementById('tagNameInput').value = tag.name;
-      document.getElementById('tagColorInput').value = tag.color;
+      setTagColor(tag.color);
       document.getElementById('tagFormTitle').textContent = 'Edit Tag';
       document.getElementById('tagFormSubmitBtn').textContent = 'Save Changes';
       document.getElementById('tagFormCancelBtn').style.display = '';
@@ -4660,7 +4785,7 @@
     function cancelEditListenerTag() {
       editingTagId = null;
       document.getElementById('tagNameInput').value = '';
-      document.getElementById('tagColorInput').value = '#E11D48';
+      setTagColor('#E11D48');
       document.getElementById('tagFormTitle').textContent = 'Create Tag';
       document.getElementById('tagFormSubmitBtn').textContent = 'Create Tag';
       document.getElementById('tagFormCancelBtn').style.display = 'none';

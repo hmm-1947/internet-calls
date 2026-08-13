@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Query, UploadFile, File
 
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from app.core.database import get_db
 from app.core.config import settings
@@ -307,10 +307,18 @@ def delete_listener_tag(tag_id: int, db: Session = Depends(get_db), _=Depends(ve
 
 @router.get("/listener-tags/search-listeners")
 def search_listeners_for_tag(q: str = Query("", alias="q"), db: Session = Depends(get_db), _=Depends(verify_admin)):
-    query = db.query(Listener).order_by(Listener.name)
+    query = db.query(Listener).outerjoin(
+        ListenerBadgeTag, Listener.badge_tag_id == ListenerBadgeTag.id
+    ).order_by(Listener.name)
     term = (q or "").strip()
     if term:
-        query = query.filter(func.lower(Listener.name).contains(term.lower()))
+        like = f"%{term.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Listener.name).like(like),
+                func.lower(ListenerBadgeTag.name).like(like),
+            )
+        )
     listeners = query.limit(50).all()
     tag_ids = {l.badge_tag_id for l in listeners if l.badge_tag_id}
     tags_by_id = {}
