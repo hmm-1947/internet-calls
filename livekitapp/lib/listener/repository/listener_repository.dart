@@ -144,6 +144,21 @@ class ListenerRepository {
     }
   }
 
+  /// Checks only whether [currentPassword] is correct. Does not change
+  /// anything. Callers should call this first and surface any failure
+  /// before evaluating confirm-password or password-rules checks.
+  Future<void> verifyCurrentPassword(String token, String currentPassword) async {
+    final response = await _apiClient.post(
+      ApiConstants.listenerVerifyPassword,
+      {'current_password': currentPassword},
+      token: token,
+    );
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Current password is incorrect');
+    }
+  }
+
   Future<void> changePassword(
     String token,
     String currentPassword,

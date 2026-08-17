@@ -13,12 +13,8 @@ def validate_password_strength(v: str) -> str:
     v = v or ""
     if len(v) < 8:
         raise ValueError("Password must be at least 8 characters long")
-    if " " in v:
-        raise ValueError("Password must not contain spaces")
-    if not re.search(r"[A-Z]", v):
-        raise ValueError("Password must contain at least one uppercase letter")
-    if not re.search(r"[a-z]", v):
-        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"[A-Za-z]", v):
+        raise ValueError("Password must contain at least one alphabet")
     if not re.search(r"[0-9]", v):
         raise ValueError("Password must contain at least one number")
     if not re.search(r"[^A-Za-z0-9]", v):
@@ -466,11 +462,19 @@ class UserForgotPasswordReset(BaseModel):
 class UserChangePassword(BaseModel):
     current_password: str
     new_password: str
+    # Strength is validated inside the route handler, after the current
+    # password is confirmed to be correct - not here at request-parse time -
+    # so a wrong current password is always reported before a weak new one.
 
-    @field_validator("new_password")
-    @classmethod
-    def password_strength(cls, v: str) -> str:
-        return validate_password_strength(v)
+
+class CurrentPasswordCheck(BaseModel):
+    """Body for the dedicated 'verify current password' endpoints. These do
+    not change anything; they let the client confirm the current password
+    before evaluating confirm-password / strength rules, so the current
+    password's correctness is always the first thing the user is told about.
+    """
+
+    current_password: str
 
 class ListenerLogin(BaseModel):
     phone: str
@@ -479,11 +483,8 @@ class ListenerLogin(BaseModel):
 class ListenerChangePassword(BaseModel):
     current_password: str
     new_password: str
-
-    @field_validator("new_password")
-    @classmethod
-    def password_strength(cls, v: str) -> str:
-        return validate_password_strength(v)
+    # Strength is validated inside the route handler, after the current
+    # password is confirmed to be correct - see UserChangePassword above.
 
 class ListenerCreate(BaseModel):
     name: str
@@ -803,4 +804,12 @@ class AdminProfileUpdate(BaseModel):
         if not PHONE_PATTERN.match(compact):
             raise ValueError("Enter a valid phone number (7-15 digits, optional leading +)")
         return compact
+
+
+class AdminChangePassword(BaseModel):
+    current_password: str
+    new_password: str
+    # Strength is validated inside the route handler, after the current
+    # password is confirmed to be correct - see UserChangePassword above.
+
 

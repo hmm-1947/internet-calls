@@ -25,6 +25,9 @@ from app.schemas.schemas import (
     AdminAuthResponse,
     AdminProfileOut,
     AdminProfileUpdate,
+    AdminChangePassword,
+    CurrentPasswordCheck,
+    validate_password_strength,
 )
 
 from app.utils.email_otp import generate_otp_code, send_otp_email
@@ -204,6 +207,47 @@ def update_admin_profile(
     db.refresh(admin)
 
     return _profile_out(admin)
+
+
+@router.post("/me/verify-password")
+def verify_admin_current_password(
+    payload: CurrentPasswordCheck,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(verify_admin),
+):
+    """Checks only whether the current password is correct. Used by the admin
+    panel to surface that error before evaluating confirm-password / rules."""
+    admin = db.query(AdminUser).filter(AdminUser.id == current_admin.id).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    if not verify_password(payload.current_password, admin.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    return {"status": "ok"}
+
+
+@router.post("/me/change-password")
+def change_admin_password(
+    payload: AdminChangePassword,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(verify_admin),
+):
+    admin = db.query(AdminUser).filter(AdminUser.id == current_admin.id).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    if not verify_password(payload.current_password, admin.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if verify_password(payload.new_password, admin.password_hash):
+        raise HTTPException(status_code=400, detail="New password must be different from your current password")
+    try:
+        validate_password_strength(payload.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    admin.password_hash = hash_password(payload.new_password)
+    db.query(SessionModel).filter(SessionModel.admin_id == admin.id).delete()
+    db.commit()
+    return {"status": "password_changed"}
 
 
 def _find_admin_by_email(db: Session, email: str) -> Optional[AdminUser]:

@@ -76,7 +76,7 @@ class AuthCard extends StatelessWidget {
 
 /// A text field styled to match [AuthCard], with a slightly translucent
 /// fill instead of a plain outline so it reads well on the dark card.
-class AuthTextField extends StatelessWidget {
+class AuthTextField extends StatefulWidget {
   final TextEditingController controller;
   final String label;
   final bool obscureText;
@@ -99,21 +99,28 @@ class AuthTextField extends StatelessWidget {
   });
 
   @override
+  State<AuthTextField> createState() => _AuthTextFieldState();
+}
+
+class _AuthTextFieldState extends State<AuthTextField> {
+  late bool _obscured = widget.obscureText;
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      textAlign: textAlign,
-      maxLength: maxLength,
+      controller: widget.controller,
+      obscureText: widget.obscureText && _obscured,
+      keyboardType: widget.keyboardType,
+      textAlign: widget.textAlign,
+      maxLength: widget.maxLength,
       style: TextStyle(
         color: Colors.white,
-        letterSpacing: letterSpacing,
-        fontSize: fontSize,
-        fontWeight: letterSpacing != null ? FontWeight.w600 : null,
+        letterSpacing: widget.letterSpacing,
+        fontSize: widget.fontSize,
+        fontWeight: widget.letterSpacing != null ? FontWeight.w600 : null,
       ),
       decoration: InputDecoration(
-        labelText: label,
+        labelText: widget.label,
         labelStyle: const TextStyle(color: Colors.white60),
         counterText: '',
         filled: true,
@@ -130,6 +137,15 @@ class AuthTextField extends StatelessWidget {
           horizontal: 16,
           vertical: 14,
         ),
+        suffixIcon: widget.obscureText
+            ? IconButton(
+                icon: Icon(
+                  _obscured ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.white60,
+                ),
+                onPressed: () => setState(() => _obscured = !_obscured),
+              )
+            : null,
       ),
     );
   }

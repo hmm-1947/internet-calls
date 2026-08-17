@@ -9,19 +9,14 @@ class PasswordRule {
 final List<PasswordRule> passwordRules = [
   PasswordRule('At least 8 characters', (p) => p.length >= 8),
   PasswordRule(
-    'At least one uppercase letter',
-    (p) => p.contains(RegExp(r'[A-Z]')),
-  ),
-  PasswordRule(
-    'At least one lowercase letter',
-    (p) => p.contains(RegExp(r'[a-z]')),
+    'At least one alphabet',
+    (p) => p.contains(RegExp(r'[A-Za-z]')),
   ),
   PasswordRule('At least one number', (p) => p.contains(RegExp(r'[0-9]'))),
   PasswordRule(
     'At least one special character',
     (p) => p.contains(RegExp(r'[^A-Za-z0-9]')),
   ),
-  PasswordRule('Must not contain spaces', (p) => !p.contains(' ')),
 ];
 
 bool isPasswordValid(String password) {

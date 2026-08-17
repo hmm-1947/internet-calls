@@ -281,6 +281,10 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                 Navigator.of(context).push(
                   slideRoute(
                     ChangePasswordScreen(
+                      onVerifyCurrentPassword: (current) async {
+                        final token = await _localStorage.getToken();
+                        await _repository.verifyCurrentPassword(token!, current);
+                      },
                       onSubmit: (current, next) async {
                         final token = await _localStorage.getToken();
                         await _repository.changePassword(token!, current, next);

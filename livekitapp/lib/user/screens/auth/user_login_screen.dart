@@ -12,7 +12,6 @@ import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_register_screen.dart';
 import 'package:livekitapp/user/screens/auth/user_forgot_password_screen.dart';
-import 'package:livekitapp/user/screens/auth/user_phone_otp_screen.dart';
 import 'package:livekitapp/user/screens/auth/user_profile_setup_screen.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
@@ -31,6 +30,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   final _localStorage = LocalStorage();
   bool _loading = false;
   bool _googleLoading = false;
+  bool _obscurePassword = true;
   @override
   void dispose() {
     _identifierController.dispose();
@@ -49,20 +49,21 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
 
     setState(() => _loading = true);
     try {
-      // The password is checked first; the backend then texts an OTP to the
-      // number on the account, which the next screen collects.
-      final otpPhone = await _repository.loginInitiate(
+      final auth = await _repository.loginInitiate(
         phone,
         _passwordController.text,
       );
+      UserDataCache().clear();
+      await ChatStorage().clearAll();
+      await _localStorage.saveSession(auth.token, auth.id, auth.name);
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await _repository.updateFcmToken(auth.token, fcmToken);
+      }
       if (!mounted) return;
-      await Navigator.of(context).push(
-        fadeRoute(
-          UserPhoneOtpScreen(
-            phone: otpPhone,
-            password: _passwordController.text,
-          ),
-        ),
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const UserMainScreen()),
+        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
@@ -183,7 +184,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
-                obscureText: true,
+                obscureText: _obscurePassword,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Password',
@@ -195,6 +196,14 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   focusedBorder: OutlineInputBorder(
                     borderSide: const BorderSide(color: Colors.red, width: 2),
                     borderRadius: BorderRadius.circular(8),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.white70,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
               ),

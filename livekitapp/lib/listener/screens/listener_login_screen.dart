@@ -20,6 +20,7 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
   bool _loading = false;
+  bool _obscurePassword = true;
   @override
   void dispose() {
     _phoneController.dispose();
@@ -127,7 +128,7 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
-                obscureText: true,
+                obscureText: _obscurePassword,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Password',
@@ -135,6 +136,14 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
                   prefixIcon: const Icon(
                     Icons.lock_outline,
                     color: Colors.white54,
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.white54,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   filled: true,
                   fillColor: fieldBg,

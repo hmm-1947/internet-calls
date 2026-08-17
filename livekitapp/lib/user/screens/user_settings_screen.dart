@@ -285,6 +285,10 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChangePasswordScreen(
+          onVerifyCurrentPassword: (current) async {
+            final token = await _localStorage.getToken();
+            await _repository.verifyCurrentPassword(token!, current);
+          },
           onSubmit: (current, next) async {
             final token = await _localStorage.getToken();
             await _repository.changePassword(token!, current, next);

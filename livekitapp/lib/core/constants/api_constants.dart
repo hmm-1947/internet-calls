@@ -21,12 +21,14 @@ class ApiConstants {
   static const String userLogout = '/user/logout';
   static const String userDeleteAccount = '/user/delete-account';
   static const String userChangePassword = '/user/change-password';
+  static const String userVerifyPassword = '/user/verify-password';
   static const String userListeners = '/user/listeners';
   static const String listenerLogin = '/listener/login';
   static const String listenerSessionCheck = '/listener/session/check';
   static const String listenerStatus = '/listener/status';
   static const String listenerLogout = '/listener/logout';
   static const String listenerChangePassword = '/listener/change-password';
+  static const String listenerVerifyPassword = '/listener/verify-password';
   static const String callInitiate = '/call/initiate';
   static const String userChatSend = '/chat/user/send';
   static const String listenerChatSend = '/chat/listener/send';

@@ -11,7 +11,16 @@ class ChangePasswordScreen extends StatefulWidget {
   final Future<void> Function(String currentPassword, String newPassword)
   onSubmit;
 
-  const ChangePasswordScreen({super.key, required this.onSubmit});
+  /// Called first, before confirm-password or password-rules are checked.
+  /// Should call the backend's verify-password endpoint and throw an
+  /// Exception (e.g. "Current password is incorrect") if it's wrong.
+  final Future<void> Function(String currentPassword) onVerifyCurrentPassword;
+
+  const ChangePasswordScreen({
+    super.key,
+    required this.onSubmit,
+    required this.onVerifyCurrentPassword,
+  });
 
   @override
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -60,16 +69,31 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       _showError('Please fill in all password fields');
       return;
     }
+
+    // Whether the current password is correct is checked first, against the
+    // backend, before anything about the new password (confirm match or
+    // rules) is evaluated - so a wrong current password is always the first
+    // error the user sees.
+    setState(() => _loading = true);
+    try {
+      await widget.onVerifyCurrentPassword(currentPassword);
+    } catch (e) {
+      _showError(e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
     if (newPassword != confirmPassword) {
       _showError('Passwords do not match');
+      if (mounted) setState(() => _loading = false);
       return;
     }
     if (!isPasswordValid(newPassword)) {
       _showError('Please satisfy all password rules');
+      if (mounted) setState(() => _loading = false);
       return;
     }
 
-    setState(() => _loading = true);
     try {
       await widget.onSubmit(currentPassword, newPassword);
       if (!mounted) return;

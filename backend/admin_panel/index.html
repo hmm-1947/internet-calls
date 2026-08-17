@@ -2137,6 +2137,46 @@
       border: 1px solid var(--line);
     }
 
+    .pw-field {
+      position: relative;
+    }
+
+    .pw-field input {
+      width: 100%;
+      padding-right: 40px;
+      box-sizing: border-box;
+    }
+
+    .pw-toggle {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--slate);
+      opacity: 0.7;
+    }
+
+    .pw-toggle:hover {
+      opacity: 1;
+    }
+
+    .pw-toggle svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
     .pw-rule {
       display: flex;
       align-items: center;
@@ -2275,6 +2315,11 @@
       margin-bottom: 5px;
     }
     .profile-field input { width: 100%; margin: 0; }
+
+    /* Change-password popup: opens on top of Edit Profile (higher z-index),
+       but still sits below the plain "Are you sure?" confirm dialog that
+       appears above it once the form is valid. */
+    .change-password-overlay { z-index: 9995; }
 
     /* The box itself and a plain input share the same --white surface, so
        without an explicit fill an unfocused field is nearly invisible,
@@ -2462,8 +2507,39 @@
       <button class="btn btn-ghost" onclick="closeEditProfile()">Cancel</button>
       <button class="btn btn-primary" id="profileSaveBtn" onclick="submitEditProfile()">Confirm</button>
     </div>
+
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:center;">
+      <a href="#" id="changePasswordToggle" style="font-size:13px;font-weight:600;" onclick="openChangePasswordModal();return false;">Change password</a>
+    </div>
   </div>
 </div>
+
+<!-- Change admin password popup (opens on top of Edit Profile, not appended into it) -->
+<div class="confirm-overlay change-password-overlay" id="changePasswordOverlay" style="display:none;">
+  <div class="confirm-box profile-box">
+    <div class="confirm-icon info"><svg viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Zm10-10V7a4 4 0 0 0-8 0v2"/></svg></div>
+    <div class="confirm-title">Change Password</div>
+    <div class="pw-field">
+      <input id="profileCurrentPassword" placeholder="Current password" type="password">
+      <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+    <div class="pw-field">
+      <input id="profileNewPassword" placeholder="New password" type="password">
+      <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+    <div id="profilePwRules" class="pw-rules"></div>
+    <div class="pw-field">
+      <input id="profileConfirmPassword" placeholder="Confirm new password" type="password">
+      <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+    <div id="changePasswordMsg" style="font-weight:600;font-size:13px;text-align:center;min-height:18px;margin-bottom:8px;"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeChangePasswordModal()">Cancel</button>
+      <button class="btn btn-primary" id="changePasswordBtn" onclick="submitChangeAdminPassword()">Update password</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- Coin Settings: add-coins drawer for a searched user/listener -->
 <div class="confirm-overlay profile-overlay" id="coinAdjustOverlay" style="display:none;">
@@ -2507,7 +2583,10 @@
     <div class="card">
       <h2>Admin Login</h2>
       <input id="loginIdentifier" placeholder="Username or Email">
-      <input id="loginPassword" placeholder="Password" type="password">
+      <div class="pw-field">
+        <input id="loginPassword" placeholder="Password" type="password">
+        <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
       <div id="loginRecaptcha" style="margin:10px 0;"></div>
       <button class="btn btn-primary" onclick="doAdminLogin()">Login</button>
       <div style="margin-top:8px;text-align:right;">
@@ -2530,9 +2609,15 @@
         <button class="btn btn-primary" id="forgotVerifyBtn" onclick="verifyForgotOtp()">Verify code</button>
       </div>
       <div id="forgotStepReset" style="display:none;">
-        <input id="forgotNewPassword" placeholder="New password" type="password">
+        <div class="pw-field">
+          <input id="forgotNewPassword" placeholder="New password" type="password">
+          <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
         <div id="forgotPwRules" class="pw-rules"></div>
-        <input id="forgotConfirmPassword" placeholder="Confirm password" type="password">
+        <div class="pw-field">
+          <input id="forgotConfirmPassword" placeholder="Confirm password" type="password">
+          <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
         <button class="btn btn-primary" id="forgotResetBtn" onclick="resetForgotPassword()">Reset password</button>
       </div>
       <div id="forgotMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
@@ -2556,7 +2641,10 @@
       </div>
       <div id="setupStepCreds" style="display:none;">
         <input id="setupUsername" placeholder="Choose a username">
-        <input id="setupPassword" placeholder="Choose a password" type="password">
+        <div class="pw-field">
+          <input id="setupPassword" placeholder="Choose a password" type="password">
+          <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
         <div id="setupPwRules" class="pw-rules"></div>
         <button class="btn btn-primary" id="setupCompleteBtn" onclick="completeSetup()">Create account</button>
       </div>
@@ -2747,7 +2835,10 @@
       <h2>Register Listener</h2>
       <input id="name" placeholder="Name">
       <input id="phone" placeholder="Phone">
-      <input id="password" placeholder="Password" type="password">
+      <div class="pw-field">
+        <input id="password" placeholder="Password" type="password">
+        <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
       <button class="btn btn-primary" onclick="registerListener()">Register Listener</button>
       <div class="msg-box" id="listenersMsgBox"></div>
     </div>
@@ -3189,12 +3280,26 @@
 
     const PASSWORD_RULES = [
       { label: 'At least 8 characters', test: p => p.length >= 8 },
-      { label: 'At least one uppercase letter', test: p => /[A-Z]/.test(p) },
-      { label: 'At least one lowercase letter', test: p => /[a-z]/.test(p) },
+      { label: 'At least one alphabet', test: p => /[A-Za-z]/.test(p) },
       { label: 'At least one number', test: p => /[0-9]/.test(p) },
       { label: 'At least one special character', test: p => /[^A-Za-z0-9]/.test(p) },
-      { label: 'Must not contain spaces', test: p => !/\s/.test(p) },
     ];
+
+    // Toggles a password input between hidden and visible when its eye icon
+    // is clicked. `btn` is the icon button sitting next to the input inside
+    // a `.pw-field` wrapper.
+    function togglePasswordVisibility(btn) {
+      const field = btn.closest('.pw-field');
+      const input = field && field.querySelector('input');
+      if (!input) return;
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.innerHTML = showing ? EYE_ICON : EYE_OFF_ICON;
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    }
+
+    const EYE_ICON = '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const EYE_OFF_ICON = '<svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
     function isPasswordValidAdmin(password) {
       return !!password && PASSWORD_RULES.every(r => r.test(password));
@@ -4143,6 +4248,10 @@
       _pendingAdminPhotoFile = null;
       updateAdminAvatar(_adminProfile.photo_url || localStorage.getItem('adminPhotoUrl') || '');
       setProfileMsg('Loading your details…', null);
+      // The change-password section always starts closed and cleared, so
+      // reopening Edit Profile never shows stale fields or leftover errors
+      // from a previous attempt.
+      resetChangePasswordSection();
       overlay.style.display = 'flex';
       requestAnimationFrame(() => overlay.classList.add('show'));
       loadAdminProfile();
@@ -4153,6 +4262,7 @@
       overlay.classList.remove('show');
       setTimeout(() => { overlay.style.display = 'none'; }, 180);
       setProfileMsg('', null);
+      resetChangePasswordSection();
     }
 
     // Close on backdrop click
@@ -4254,6 +4364,107 @@
         setProfileMsg('✗ ' + e.message, false);
       } finally {
         document.getElementById('profileSaveBtn').disabled = false;
+      }
+    }
+
+    function openChangePasswordModal() {
+      const overlay = document.getElementById('changePasswordOverlay');
+      resetChangePasswordSection();
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('show'));
+    }
+
+    function closeChangePasswordModal() {
+      const overlay = document.getElementById('changePasswordOverlay');
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 180);
+      resetChangePasswordSection();
+    }
+
+    // Close on backdrop click
+    document.getElementById('changePasswordOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeChangePasswordModal();
+    });
+
+    function resetChangePasswordSection() {
+      document.getElementById('profileCurrentPassword').value = '';
+      document.getElementById('profileNewPassword').value = '';
+      document.getElementById('profileConfirmPassword').value = '';
+      document.getElementById('profilePwRules').innerHTML = '';
+      const msg = document.getElementById('changePasswordMsg');
+      msg.textContent = '';
+      msg.className = '';
+    }
+
+    function setChangePasswordMsg(text, ok) {
+      const el = document.getElementById('changePasswordMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function submitChangeAdminPassword() {
+      const currentPassword = document.getElementById('profileCurrentPassword').value;
+      const newPassword = document.getElementById('profileNewPassword').value;
+      const confirmPassword = document.getElementById('profileConfirmPassword').value;
+      if (!currentPassword || !newPassword) { setChangePasswordMsg('Fill in both password fields.', false); return; }
+
+      // Whether the current password is correct is checked first, against
+      // the backend, before anything about the new password (rules or
+      // confirm match) is evaluated - so a wrong current password is always
+      // the first error shown.
+      setChangePasswordMsg('Checking current password…', null);
+      document.getElementById('changePasswordBtn').disabled = true;
+      try {
+        const verifyRes = await fetch(API_URL + '/admin/auth/me/verify-password', {
+          method: 'POST', headers: authHeaders(true),
+          body: JSON.stringify({ current_password: currentPassword })
+        });
+        const verifyData = await readResponseBody(verifyRes);
+        if (!verifyRes.ok) throw new Error(detailMessage(verifyData && verifyData.detail) || 'Current password is incorrect');
+      } catch (e) {
+        setChangePasswordMsg('✗ ' + e.message, false);
+        document.getElementById('changePasswordBtn').disabled = false;
+        return;
+      }
+      document.getElementById('changePasswordBtn').disabled = false;
+
+      // The rules checklist is a snapshot taken at submit time - it does not
+      // live-update while typing, matching the user/listener apps.
+      renderPasswordRules('profilePwRules', newPassword);
+
+      if (!isPasswordValidAdmin(newPassword)) { setChangePasswordMsg('Please satisfy all password rules.', false); return; }
+      if (newPassword !== confirmPassword) { setChangePasswordMsg('New passwords do not match.', false); return; }
+
+      const ok = await confirmDialog({
+        title: 'Change password',
+        body: 'You will be logged out on all devices and need to sign in again with the new password. Continue?',
+        okLabel: 'Yes, change it',
+        okClass: 'btn-primary',
+        icon: 'edit',
+        iconClass: 'warning'
+      });
+      if (!ok) return;
+
+      setChangePasswordMsg('Updating…', null);
+      document.getElementById('changePasswordBtn').disabled = true;
+      try {
+        const res = await fetch(API_URL + '/admin/auth/me/change-password', {
+          method: 'POST', headers: authHeaders(true),
+          body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+        });
+        const data = await readResponseBody(res);
+        if (!res.ok) throw new Error(detailMessage(data && data.detail) || 'Failed to change password');
+        setChangePasswordMsg('✓ Password changed. Redirecting to login…', true);
+        setTimeout(() => {
+          clearAdminToken();
+          closeEditProfile();
+          document.getElementById('panelRoot').style.display = 'none';
+          showLoginScreen();
+        }, 1200);
+      } catch (e) {
+        setChangePasswordMsg('✗ ' + e.message, false);
+      } finally {
+        document.getElementById('changePasswordBtn').disabled = false;
       }
     }
 

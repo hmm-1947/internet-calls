@@ -28,6 +28,7 @@ from app.schemas.schemas import (
     UserForgotPasswordVerifyOtp,
     UserForgotPasswordReset,
     UserChangePassword,
+    CurrentPasswordCheck,
     UserContactChangeRequest,
     UserContactChangeVerify,
     UserProfileUpdate,
@@ -35,6 +36,7 @@ from app.schemas.schemas import (
     AccountDeletionRequestCreate,
     detect_identifier,
     validate_username,
+    validate_password_strength,
 )
 
 from app.core.database import get_db
@@ -495,10 +497,11 @@ def register_complete(payload: UserRegisterComplete, db: Session = Depends(get_d
 
 @router.post(
     "/login/initiate",
+    response_model=AuthResponse,
     dependencies=[Depends(rate_limit("login_initiate", limit=10, window_seconds=60))],
 )
 def login_initiate(payload: UserLoginInitiate, db: Session = Depends(get_db)):
-    """Login step 1: check the password, then send the SMS OTP.
+    """Login: check the identifier/password and start a session immediately.
 
     Password login is phone-only. Google accounts come in through
     `/user/auth/google` instead and have no password to check here.
@@ -520,18 +523,12 @@ def login_initiate(payload: UserLoginInitiate, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    try:
-        otp_phone = normalize_indian_phone(user.phone)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="This account has an invalid phone number. Please contact support.")
-    enforce_rate_limit("login_otp_send", otp_phone, MAX_OTP_SENDS, OTP_SEND_WINDOW_SECONDS)
-    code = generate_sms_otp_code()
-    user.reset_otp_code = code
-    user.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
-    user.reset_otp_attempts = 0
+    token = generate_session_token()
+    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
+    record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
-    send_otp_sms(otp_phone, code)
-    return {"channel": "phone", "status": "credentials_ok", "phone": otp_phone}
+    db.refresh(user)
+    return AuthResponse(token=token, id=user.id, name=user.name)
 
 
 @router.post("/login/verify", response_model=AuthResponse)
@@ -763,6 +760,17 @@ def forgot_password_reset(payload: UserForgotPasswordReset, db: Session = Depend
     return {"status": "password_reset"}
 
 
+@router.post("/verify-password")
+def verify_current_password(payload: CurrentPasswordCheck, current_user: User = Depends(get_current_user)):
+    """Checks only whether the current password is correct. Used by the app
+    to surface that error before evaluating confirm-password / rules."""
+    if not current_user.password_hash:
+        raise HTTPException(status_code=400, detail=GOOGLE_ACCOUNT_PASSWORD_MESSAGE)
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    return {"status": "ok"}
+
+
 @router.post("/change-password")
 def change_password(payload: UserChangePassword, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not current_user.password_hash:
@@ -771,6 +779,10 @@ def change_password(payload: UserChangePassword, db: Session = Depends(get_db), 
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     if verify_password(payload.new_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="New password must be different from your current password")
+    try:
+        validate_password_strength(payload.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     current_user.password_hash = hash_password(payload.new_password)
     db.commit()
     return {"status": "password_changed"}

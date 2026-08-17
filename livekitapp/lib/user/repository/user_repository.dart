@@ -159,9 +159,9 @@ class UserRepository {
     return AuthResponse.fromJson(data);
   }
 
-  /// Login step 1: the password is checked and an OTP is texted to the number
-  /// on the account. Returns that number, which [loginVerify] needs.
-  Future<String> loginInitiate(String identifier, String password) async {
+  /// Logs in with a phone number and password. No OTP step - a correct
+  /// password is sufficient to start a session.
+  Future<AuthResponse> loginInitiate(String identifier, String password) async {
     final response = await _apiClient.post(ApiConstants.userLoginInitiate, {
       'identifier': identifier,
       'password': password,
@@ -170,7 +170,7 @@ class UserRepository {
     if (response.statusCode != 200) {
       throw Exception(_detail(data) ?? 'Login failed');
     }
-    return data['phone'] as String;
+    return AuthResponse.fromJson(data);
   }
 
   /// Signs in with a Firebase ID token obtained from Google Sign-In. The
@@ -285,6 +285,19 @@ class UserRepository {
     if (response.statusCode != 200) {
       final data = jsonDecode(response.body);
       throw Exception(_detail(data) ?? 'Failed to request account deletion');
+    }
+  }
+
+  /// Checks only whether [currentPassword] is correct. Does not change
+  /// anything. Callers should call this first and surface any failure
+  /// before evaluating confirm-password or password-rules checks.
+  Future<void> verifyCurrentPassword(String token, String currentPassword) async {
+    final response = await _apiClient.post(ApiConstants.userVerifyPassword, {
+      'current_password': currentPassword,
+    }, token: token);
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(_detail(data) ?? 'Current password is incorrect');
     }
   }
 
