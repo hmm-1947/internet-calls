@@ -124,16 +124,13 @@ def send_call_rejected(fcm_token: str, call_id: int):
     )
 
 def send_call_missed(fcm_token: str, call_id: int, caller_name: str = ""):
-    """Notify the listener that they missed a call (did not respond in time)."""
-    _send_with_notification(
+    _send_data_only(
         token=fcm_token,
         data={
             "type": "call_missed",
             "call_id": str(call_id),
             "caller_name": caller_name or "",
         },
-        title="Missed Call",
-        body=f"You missed a call from {caller_name}." if caller_name else "You missed a call.",
     )
 
 

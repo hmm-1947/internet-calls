@@ -5,7 +5,7 @@ rtc:
   port_range_start: 52000
   port_range_end: 52100
   use_external_ip: false
-  node_ip: 192.168.45.132
+  node_ip: 192.168.220.25
   turn_servers:
     - host: global.relay.metered.ca
       port: 80

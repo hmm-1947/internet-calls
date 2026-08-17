@@ -43,6 +43,11 @@ class CallActionReceiver : BroadcastReceiver() {
             ACTION_ACCEPT -> {
                 CallLockscreen.setCallActive(true)
                 IncomingCallActivity.dismiss(app, handled = true)
+                // Fired before the activity is launched so the request travels
+                // in parallel with the cold start instead of after it. The
+                // callkit event below is still sent, but is dropped whenever no
+                // Flutter engine has attached a listener yet.
+                CallApi.accept(app, callId, callerName, callType, photoUrl)
                 CallkitBridge.openCallScreen(app)
                 CallkitBridge.sendAccept(app, data)
             }

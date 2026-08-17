@@ -175,11 +175,19 @@ class ListenerRepository {
     }
   }
 
-  Future<Map<String, dynamic>> acceptCall(String token, int callId) async {
+  /// [timeout] is widened by the cold-start accept path, where the first
+  /// request after the process was killed also pays for DNS, the TLS handshake
+  /// and a radio waking from Doze.
+  Future<Map<String, dynamic>> acceptCall(
+    String token,
+    int callId, {
+    Duration? timeout,
+  }) async {
     final res = await _apiClient.post(
       ApiConstants.callAccept(callId),
       {},
       token: token,
+      timeout: timeout,
     );
     final data = jsonDecode(res.body);
     if (res.statusCode != 200) {

@@ -61,7 +61,6 @@ class ApiConstants {
   static String callListenerStatus(int callId) =>
       '/call/$callId/listener-status';
 
-
   static String callAccept(int callId) => '/call/$callId/accept';
   static String callReady(int callId) => '/call/$callId/ready';
   static String callReject(int callId) => '/call/$callId/reject';

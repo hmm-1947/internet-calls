@@ -140,6 +140,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
 
   void _onTabSelected(int i) {
     if (i == _index) return;
+    _homeKey.currentState?.unfocusSearch();
     _revealNavBarForPage(i);
     _pageController.animateToPage(
       i,
@@ -151,6 +152,9 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   void _onPageChanged(int i) {
     setState(() => _index = i);
     _revealNavBarForPage(i);
+    if (i != 0) {
+      _homeKey.currentState?.unfocusSearch();
+    }
     if (i == 1) {
       chatMessageNotifier.value = 0;
     }
@@ -214,13 +218,16 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
                   Positioned(
                     right: 16,
                     bottom: navBarHeight + 16,
-                    child: _WeeklyChallengeFab(
-                      onTap: () async {
-                        await Navigator.of(
-                          context,
-                        ).push(fadeRoute(const WeeklyChallengeScreen()));
-                        _refreshWeeklyChallengeStatus();
-                      },
+                    child: AutoHideNavBar(
+                      visible: _navBarVisible,
+                      child: _WeeklyChallengeFab(
+                        onTap: () async {
+                          await Navigator.of(
+                            context,
+                          ).push(slideRoute(const WeeklyChallengeScreen()));
+                          _refreshWeeklyChallengeStatus();
+                        },
+                      ),
                     ),
                   ),
               ],

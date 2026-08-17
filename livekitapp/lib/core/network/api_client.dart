@@ -51,6 +51,16 @@ class ApiClient {
   static Stream<void> get sessionInvalidated =>
       _sessionInvalidatedController.stream;
 
+  /// One client for the whole isolate so requests reuse the same keep-alive
+  /// connection. The top-level `http.get`/`http.post` helpers open (and throw
+  /// away) a connection per call, which means a fresh DNS lookup and TLS
+  /// handshake every time — cheap against a LAN server over plain HTTP, but
+  /// several hundred milliseconds each against an HTTPS host, and far worse on
+  /// a radio that just woke from Doze while the app is cold starting.
+  static final http.Client _client = http.Client();
+
+  static const Duration _defaultTimeout = Duration(seconds: 10);
+
   void _checkAuthStatus(http.Response response) {
     if (response.statusCode == 401) {
       _sessionInvalidatedController.add(null);
@@ -88,17 +98,18 @@ class ApiClient {
     String path,
     Map<String, dynamic> body, {
     String? token,
+    Duration? timeout,
   }) async {
     return _guard(() async {
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse('${ApiConstants.baseUrl}$path'),
             headers: headers,
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(timeout ?? _defaultTimeout);
       _checkAuthStatus(response);
       return response;
     });
@@ -124,22 +135,26 @@ class ApiClient {
           contentType: _mediaTypeForPath(filePath),
         ),
       );
-      final streamed = await request.send().timeout(
-        const Duration(seconds: 20),
-      );
+      final streamed = await _client
+          .send(request)
+          .timeout(const Duration(seconds: 20));
       final response = await http.Response.fromStream(streamed);
       _checkAuthStatus(response);
       return response;
     });
   }
 
-  Future<http.Response> get(String path, {String? token}) async {
+  Future<http.Response> get(
+    String path, {
+    String? token,
+    Duration? timeout,
+  }) async {
     return _guard(() async {
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      final response = await http
+      final response = await _client
           .get(Uri.parse('${ApiConstants.baseUrl}$path'), headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(timeout ?? _defaultTimeout);
       _checkAuthStatus(response);
       return response;
     });
@@ -149,29 +164,34 @@ class ApiClient {
     String path,
     Map<String, dynamic> body, {
     String? token,
+    Duration? timeout,
   }) async {
     return _guard(() async {
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      final response = await http
+      final response = await _client
           .put(
             Uri.parse('${ApiConstants.baseUrl}$path'),
             headers: headers,
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(timeout ?? _defaultTimeout);
       _checkAuthStatus(response);
       return response;
     });
   }
 
-  Future<http.Response> delete(String path, {String? token}) async {
+  Future<http.Response> delete(
+    String path, {
+    String? token,
+    Duration? timeout,
+  }) async {
     return _guard(() async {
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      final response = await http
+      final response = await _client
           .delete(Uri.parse('${ApiConstants.baseUrl}$path'), headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(timeout ?? _defaultTimeout);
       _checkAuthStatus(response);
       return response;
     });

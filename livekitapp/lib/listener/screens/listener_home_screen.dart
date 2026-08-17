@@ -36,6 +36,7 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
   bool _refreshInFlight = false;
   String _search = '';
   Timer? _searchDebounce;
+  final _searchFocusNode = FocusNode();
 
   @override
   bool get wantKeepAlive => true;
@@ -184,11 +185,16 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
     ]);
   }
 
+  void unfocusSearch() {
+    _searchFocusNode.unfocus();
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _socketSub?.cancel();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -201,71 +207,75 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
     super.build(context);
     return Scaffold(
       backgroundColor: bg,
-      body: RefreshIndicator(
-        color: pink,
-        backgroundColor: bg,
-        onRefresh: _onRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildSearchBar(),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Users',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => _searchFocusNode.unfocus(),
+        child: RefreshIndicator(
+          color: pink,
+          backgroundColor: bg,
+          onRefresh: _onRefresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
             ),
-            if (_loadingUsers || _visibleUsers.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 32),
-                  child: Center(
-                    child: _loadingUsers
-                        ? const CircularProgressIndicator(color: pink)
-                        : const Text(
-                            'No users found',
-                            style: TextStyle(color: dimText),
-                          ),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildSearchBar(),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Users',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              )
-            else
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  12,
-                  20,
-                  20 + 78 + MediaQuery.paddingOf(context).bottom,
-                ),
-                sliver: SliverList.separated(
-                  itemCount: _visibleUsers.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final user = _visibleUsers[index];
-                    return RepaintBoundary(
-                      key: ValueKey<Object?>(user['id']),
-                      child: _buildUserTile(user),
-                    );
-                  },
-                ),
               ),
-          ],
+              if (_loadingUsers || _visibleUsers.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 32),
+                    child: Center(
+                      child: _loadingUsers
+                          ? const CircularProgressIndicator(color: pink)
+                          : const Text(
+                              'No users found',
+                              style: TextStyle(color: dimText),
+                            ),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    12,
+                    20,
+                    20 + 78 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  sliver: SliverList.separated(
+                    itemCount: _visibleUsers.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final user = _visibleUsers[index];
+                      return RepaintBoundary(
+                        key: ValueKey<Object?>(user['id']),
+                        child: _buildUserTile(user),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -285,6 +295,7 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
+              focusNode: _searchFocusNode,
               style: const TextStyle(color: Colors.white, fontSize: 16),
               decoration: const InputDecoration(
                 hintText: 'Search users...',

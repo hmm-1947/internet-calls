@@ -337,8 +337,13 @@ async def timeout_call(call_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=404, detail="Call not found")
     if call.status in ("rejected", "ended", "cancelled", "missed", "accepted"):
         return {"status": call.status}
-    call.status = "missed"
+    updated = db.query(Call).filter(Call.id == call_id, Call.status == "ringing").update(
+        {"status": "missed"}, synchronize_session=False
+    )
     db.commit()
+    if not updated:
+        db.refresh(call)
+        return {"status": call.status}
     delete_room_background(call.room_name)
     from app.routers.chat import record_call_message
     await record_call_message(

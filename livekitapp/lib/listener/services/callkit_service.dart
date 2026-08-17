@@ -9,11 +9,11 @@ import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
 import 'package:livekitapp/common/services/native_call_bridge.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/core/network/api_client.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
-
 
 class PendingCallNav {
   final String url;
@@ -43,23 +43,48 @@ class CallkitService {
   String? _lastShownCallId;
   PendingCallNav? _pendingCallNav;
   StreamSubscription? _eventSub;
+  final Set<int> _answeredCallIds = {};
+  final Set<int> _cancelledCallIds = {};
 
   static const _lockscreenChannel = MethodChannel('livekitapp/lockscreen');
+
+  /// How long the cold-start recovery keeps looking while nothing yet suggests
+  /// a call is waiting. Covers the gap between the app's first frame and the
+  /// accept broadcast being persisted by the callkit plugin, without stalling
+  /// an ordinary launch for more than a couple of seconds.
+  static const _blindNavRetries = 6;
+  static const _blindNavRetryDelay = Duration(milliseconds: 400);
+  static const _navRetryDelay = Duration(milliseconds: 500);
+
+  /// A cold-start accept pays for DNS, the TLS handshake and a radio waking
+  /// from Doze on top of the request itself, so it gets a wider budget and a
+  /// couple of retries instead of the single 10s shot every other call gets.
+  /// Against a LAN backend none of this shows; against a remote HTTPS host a
+  /// single timeout used to lose the call outright.
+  static const _acceptTimeout = Duration(seconds: 20);
+  static const _acceptRetryDelays = <Duration>[
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+  ];
 
   Future<void> warmup() async {
     await AvatarCache.instance.init();
     try {
-      await _lockscreenChannel.invokeMethod('setApiBaseUrl', ApiConstants.baseUrl);
+      await _lockscreenChannel.invokeMethod(
+        'setApiBaseUrl',
+        ApiConstants.baseUrl,
+      );
     } catch (_) {}
     // Refreshed on every start so a decline handled purely natively (app killed,
     // lock screen) can still reach the backend and stop the caller ringing.
     await NativeCallBridge.setAuthToken(await LocalStorage().getToken());
   }
 
-  String? _syncLocalAvatarPath(String? url) => AvatarCache.instance.localPathSync(url);
+  String? _syncLocalAvatarPath(String? url) =>
+      AvatarCache.instance.localPathSync(url);
 
-  Future<String?> _localAvatarPath(String? url) => AvatarCache.instance.ensureCached(url);
-
+  Future<String?> _localAvatarPath(String? url) =>
+      AvatarCache.instance.ensureCached(url);
 
   Future<void> _playCustomRingtone({
     String callId = '',
@@ -68,22 +93,19 @@ class CallkitService {
     String callerPhotoUrl = '',
   }) async {
     try {
-      await const MethodChannel('livekitapp/ringtone').invokeMethod(
-        'startNativeRingtone',
-        {
-          'callId': callId,
-          'callerName': callerName,
-          'callType': callType,
-          'callerPhotoUrl': callerPhotoUrl,
-        },
-      );
+      await const MethodChannel(
+        'livekitapp/ringtone',
+      ).invokeMethod('startNativeRingtone', {
+        'callId': callId,
+        'callerName': callerName,
+        'callType': callType,
+        'callerPhotoUrl': callerPhotoUrl,
+      });
     } catch (_) {}
   }
 
-
   Future<void> _stopCustomRingtone() async {
     try {
-
       await const MethodChannel(
         'livekitapp/ringtone',
       ).invokeMethod('stopNativeRingtone');
@@ -95,8 +117,6 @@ class CallkitService {
     await LockscreenService.instance.dismissIncomingCall();
     await LockscreenService.instance.hideOverLockscreen();
   }
-
-
 
   void init() {
     print('[Callkit] init called in UI Isolate');
@@ -142,8 +162,7 @@ class CallkitService {
         FlutterCallkitIncoming.endAllCalls();
       }
 
-
-if (event is CallEventActionCallAccept) {
+      if (event is CallEventActionCallAccept) {
         final extra = event.callKitParams.extra;
         final callId = int.tryParse(extra?['call_id'] ?? '');
         final isVideo = extra?['call_type'] == 'video';
@@ -153,7 +172,12 @@ if (event is CallEventActionCallAccept) {
         LockscreenService.instance.dismissIncomingCall();
         LockscreenService.instance.showOverLockscreen();
         if (callId != null && _acceptingCallId != callId) {
-          _acceptCallFromSystem(callId, isVideo, callerName: callerName, callerPhotoUrl: callerPhotoUrl);
+          _acceptCallFromSystem(
+            callId,
+            isVideo,
+            callerName: callerName,
+            callerPhotoUrl: callerPhotoUrl,
+          );
         }
       }
 
@@ -167,7 +191,6 @@ if (event is CallEventActionCallAccept) {
           _rejectCallFromSystem(callId);
         }
       }
-
     });
   }
 
@@ -177,7 +200,11 @@ if (event is CallEventActionCallAccept) {
     _stopCustomRingtone();
   }
 
-  Future<void> flushPendingNav({int retriesLeft = 6}) async {
+  Future<void> flushPendingNav({
+    int retriesLeft = 20,
+    int blindRetriesLeft = _blindNavRetries,
+    bool probeStorage = true,
+  }) async {
     print(
       '[Callkit] flushPendingNav called. _pendingCallNav is ${_pendingCallNav != null ? "NOT null" : "null"}',
     );
@@ -186,41 +213,80 @@ if (event is CallEventActionCallAccept) {
       return;
     }
 
-    final localStorage = LocalStorage();
-    final activeCall = await localStorage.getActiveCall();
-    if (activeCall != null) {
-      print(
-        '[Callkit] flushPendingNav: found active call in LocalStorage: ${activeCall['callId']}',
-      );
-      final nav = PendingCallNav(
-        url: activeCall['url'],
-        token: activeCall['token'],
-        callId: activeCall['callId'],
-        isVideo: activeCall['isVideo'] ?? false,
-        callerName: activeCall['callerName'] ?? 'User',
-        callerPhotoUrl: activeCall['callerPhotoUrl'],
-      );
-      _navigateToCallScreen(nav);
-      return;
+    // Only worth reading once per cycle: it is six secure-storage decrypts, and
+    // anything written to it later in this cycle also lands in _pendingCallNav.
+    if (probeStorage) {
+      final activeCall = await LocalStorage().getActiveCall();
+      if (activeCall != null) {
+        print(
+          '[Callkit] flushPendingNav: found active call in LocalStorage: ${activeCall['callId']}',
+        );
+        final nav = PendingCallNav(
+          url: activeCall['url'],
+          token: activeCall['token'],
+          callId: activeCall['callId'],
+          isVideo: activeCall['isVideo'] ?? false,
+          callerName: activeCall['callerName'] ?? 'User',
+          callerPhotoUrl: activeCall['callerPhotoUrl'],
+        );
+        _navigateToCallScreen(nav);
+        return;
+      }
     }
 
+    // Android accepts from the lock screen itself now, so on a cold start the
+    // credentials are usually already waiting here and no request has to be
+    // made during boot at all.
+    if (await _adoptNativeAccept()) return;
+
     if (_acceptingCallId != null) {
+      if (retriesLeft <= 0) {
+        print(
+          '[Callkit] flushPendingNav: accept for callId=$_acceptingCallId never settled, giving up',
+        );
+        return;
+      }
       print(
         '[Callkit] flushPendingNav: accept in flight for callId=$_acceptingCallId, will retry shortly',
       );
       await Future.delayed(const Duration(milliseconds: 800));
-      await flushPendingNav();
+      // Decrementing matters: this used to recurse with the default budget, so
+      // an accept that never settled looped forever.
+      await flushPendingNav(
+        retriesLeft: retriesLeft - 1,
+        blindRetriesLeft: blindRetriesLeft,
+        probeStorage: false,
+      );
       return;
     }
 
     if (retriesLeft <= 0) {
-      print('[Callkit] flushPendingNav: no pending nav found after retries, giving up');
+      print(
+        '[Callkit] flushPendingNav: no pending nav found after retries, giving up',
+      );
       return;
     }
 
+    // Native is still waiting on /accept. Sit tight rather than racing it with
+    // a duplicate request from here.
+    if (await NativeCallBridge.isAcceptPending()) {
+      print(
+        '[Callkit] flushPendingNav: native accept still in flight, waiting',
+      );
+      await Future.delayed(_blindNavRetryDelay);
+      await flushPendingNav(
+        retriesLeft: retriesLeft - 1,
+        blindRetriesLeft: blindRetriesLeft,
+        probeStorage: false,
+      );
+      return;
+    }
+
+    var sawActiveCall = false;
     try {
       final active = await FlutterCallkitIncoming.activeCalls();
       if (active.isNotEmpty) {
+        sawActiveCall = true;
         final callData = active.first;
         final extra = callData.extra;
         final isAccepted = callData.isAccepted;
@@ -243,13 +309,85 @@ if (event is CallEventActionCallAccept) {
         print(
           '[Callkit] flushPendingNav: native activeCalls reports a call but Dart state is empty (cold-start race), retrying ($retriesLeft left)',
         );
-        await Future.delayed(const Duration(milliseconds: 500));
-        await flushPendingNav(retriesLeft: retriesLeft - 1);
-        return;
       }
     } catch (e) {
       print('[Callkit] flushPendingNav: activeCalls() check failed: $e');
     }
+
+    // An empty activeCalls() used to end the search for good, which lost the
+    // call whenever the accept broadcast had not been persisted yet — the exact
+    // race a cold start hits. Keep looking for a short, bounded window instead,
+    // so an ordinary launch with no call still settles in about a second.
+    if (!sawActiveCall) {
+      if (blindRetriesLeft <= 0) {
+        print('[Callkit] flushPendingNav: nothing pending, stopping');
+        return;
+      }
+      await Future.delayed(_blindNavRetryDelay);
+      await flushPendingNav(
+        retriesLeft: retriesLeft,
+        blindRetriesLeft: blindRetriesLeft - 1,
+        probeStorage: false,
+      );
+      return;
+    }
+
+    await Future.delayed(_navRetryDelay);
+    await flushPendingNav(
+      retriesLeft: retriesLeft - 1,
+      blindRetriesLeft: blindRetriesLeft,
+      probeStorage: false,
+    );
+  }
+
+  /// Picks up a call that the Android layer already accepted while this engine
+  /// was still booting, so the cold start does not have to make the request
+  /// itself. Returns true once the call screen has been driven from it.
+  Future<bool> _adoptNativeAccept() async {
+    final accepted = await NativeCallBridge.takeAcceptedCall();
+    if (accepted == null) return false;
+    final callId = int.tryParse('${accepted['call_id'] ?? ''}');
+    final url = '${accepted['livekit_url'] ?? ''}';
+    final token = '${accepted['token'] ?? ''}';
+    if (callId == null || url.isEmpty || token.isEmpty) {
+      print('[Callkit] _adoptNativeAccept: incomplete payload, ignoring');
+      return false;
+    }
+    // Adopted even when a Dart accept is already in flight for the same call:
+    // these credentials are in hand, that request may still fail, and
+    // _navigateToCallScreen collapses the duplicate into an expand().
+    if (ActiveCallManager.instance.hasActiveCall) return false;
+    print(
+      '[Callkit] _adoptNativeAccept: native already accepted callId=$callId, skipping the boot-time request',
+    );
+    _acceptingCallId = callId;
+    final callerName = '${accepted['caller_name'] ?? ''}';
+    final callerPhotoUrl = '${accepted['caller_photo_url'] ?? ''}';
+    final nav = PendingCallNav(
+      url: url,
+      token: token,
+      callId: callId,
+      isVideo: accepted['call_type'] == 'video',
+      callerName: callerName.isEmpty ? 'User' : callerName,
+      callerPhotoUrl: callerPhotoUrl.isEmpty ? null : callerPhotoUrl,
+    );
+    _pendingCallNav = nav;
+    _rememberAnswered(callId);
+    _stopCustomRingtone();
+    await LockscreenService.instance.dismissIncomingCall();
+    await LockscreenService.instance.showOverLockscreen();
+    _navigateToCallScreen(nav);
+    unawaited(
+      LocalStorage().saveActiveCall(
+        callId,
+        nav.url,
+        nav.token,
+        isVideo: nav.isVideo,
+        callerName: nav.callerName,
+        callerPhotoUrl: nav.callerPhotoUrl,
+      ),
+    );
+    return true;
   }
 
   bool isDuplicateMessage(String? messageId) {
@@ -263,6 +401,14 @@ if (event is CallEventActionCallAccept) {
   }
 
   void _navigateToCallScreen(PendingCallNav nav) {
+    if (_cancelledCallIds.contains(nav.callId)) {
+      print(
+        '[Callkit] _navigateToCallScreen: callId=${nav.callId} was cancelled while starting up, skipping',
+      );
+      _pendingCallNav = null;
+      unawaited(_forceEndCall(_callIdToUuid(nav.callId.toString())));
+      return;
+    }
     final state = navigatorKey.currentState;
     print(
       '[Callkit] _navigateToCallScreen: navigatorState is ${state != null ? "NOT null" : "null"}',
@@ -318,36 +464,76 @@ if (event is CallEventActionCallAccept) {
       _acceptingCallId = null;
       return;
     }
-    try {
-      final result = await ListenerRepository().acceptCall(authToken, callId);
-      final nav = PendingCallNav(
-        url: result['livekit_url'],
-        token: result['token'],
-        callId: callId,
-        isVideo: result['call_type'] == 'video' ? true : isVideo,
-        callerName: callerName,
-        callerPhotoUrl: callerPhotoUrl,
-      );
-      _pendingCallNav = nav;
-      if (navigatorKey.currentState != null) {
-        _navigateToCallScreen(nav);
+    final repository = ListenerRepository();
+    Map<String, dynamic>? result;
+    for (var attempt = 0; attempt <= _acceptRetryDelays.length; attempt++) {
+      if (attempt > 0) {
+        await Future.delayed(_acceptRetryDelays[attempt - 1]);
+        print(
+          '[Callkit] Retrying accept for call $callId (attempt ${attempt + 1})',
+        );
       }
-      // Persisting the call for cold-start recovery is a secure-storage write
-      // that nothing here waits on, so it happens after navigation rather than
-      // delaying the LiveKit connect.
-      unawaited(localStorage.saveActiveCall(
+      try {
+        result = await repository.acceptCall(
+          authToken,
+          callId,
+          timeout: _acceptTimeout,
+        );
+        break;
+      } on ServerUnreachableException catch (e) {
+        // Transient: DNS, TLS or a read timeout while the device is still
+        // waking up. Worth another go — one of these used to drop the call.
+        print(
+          '[Callkit] Accept for call $callId could not reach the server: $e',
+        );
+      } catch (e) {
+        // The backend answered and refused (cancelled, timed out, already
+        // ended). Retrying cannot change that.
+        print('[Callkit] Failed to accept call $callId: $e');
+        break;
+      }
+    }
+
+    if (result == null) {
+      _acceptingCallId = null;
+      await _releaseLockscreen();
+      // Clear the plugin's accepted-but-unhandled entry so the next app start
+      // does not find it and try to join a call that never happened.
+      try {
+        await endCall(callId.toString());
+      } catch (_) {}
+      return;
+    }
+
+    final nav = PendingCallNav(
+      url: result['livekit_url'],
+      token: result['token'],
+      callId: callId,
+      isVideo: result['call_type'] == 'video' ? true : isVideo,
+      callerName: callerName,
+      callerPhotoUrl: callerPhotoUrl,
+    );
+    _pendingCallNav = nav;
+    _rememberAnswered(callId);
+    if (navigatorKey.currentState != null) {
+      _navigateToCallScreen(nav);
+    }
+    // This engine handled the call, so the native copy of the same accept is
+    // now redundant and must not linger for a later start to adopt.
+    unawaited(NativeCallBridge.clearAcceptedCall());
+    // Persisting the call for cold-start recovery is a secure-storage write
+    // that nothing here waits on, so it happens after navigation rather than
+    // delaying the LiveKit connect.
+    unawaited(
+      localStorage.saveActiveCall(
         callId,
         nav.url,
         nav.token,
         isVideo: nav.isVideo,
         callerName: callerName,
         callerPhotoUrl: callerPhotoUrl,
-      ));
-    } catch (e) {
-      print('[Callkit] Failed to accept call $callId: $e');
-      _acceptingCallId = null;
-      await _releaseLockscreen();
-    }
+      ),
+    );
   }
 
   Future<void> _forceEndCall(String uuid) async {
@@ -389,6 +575,13 @@ if (event is CallEventActionCallAccept) {
     final callId = data['call_id']?.toString() ?? '';
     final uuid = _callIdToUuid(callId);
     print('[Callkit] handleCallCancelled: callId=$callId uuid=$uuid');
+    final parsedCallId = int.tryParse(callId);
+    if (parsedCallId != null) {
+      _cancelledCallIds.add(parsedCallId);
+      if (_cancelledCallIds.length > 20) {
+        _cancelledCallIds.remove(_cancelledCallIds.first);
+      }
+    }
     final activeCall = ActiveCallManager.instance.activeCall;
     if (activeCall != null && activeCall.callId.toString() != callId) {
       print(
@@ -400,6 +593,7 @@ if (event is CallEventActionCallAccept) {
     _lastShownCallId = null;
     _stopCustomRingtone();
     await _releaseLockscreen();
+    await NativeCallBridge.clearAcceptedCall();
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
@@ -409,7 +603,6 @@ if (event is CallEventActionCallAccept) {
         state.mounted) {
       print(
         '[Callkit] handleCallCancelled: navigatorState found, pushing home',
-
       );
       state.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const ListenerMainScreen()),
@@ -447,6 +640,7 @@ if (event is CallEventActionCallAccept) {
   Future<void> _rejectCallFromSystem(int callId) async {
     if (_rejectingCallId == callId) return;
     _rejectingCallId = callId;
+    await NativeCallBridge.clearAcceptedCall();
     await _forceEndCall(_callIdToUuid(callId.toString()));
     await _releaseLockscreen();
     final state = navigatorKey.currentState;
@@ -466,31 +660,113 @@ if (event is CallEventActionCallAccept) {
     } catch (e) {}
   }
 
-  Future<bool> _isStillRinging(int callId) async {
+  /// Server-side statuses that mean somebody picked the call up. None of these
+  /// is a missed call, and none of them can be rejected.
+  static const _answeredStatuses = {
+    'accepted',
+    'connected',
+    'ended',
+    'completed',
+  };
+
+  /// Statuses where the caller never got through, so the listener should see a
+  /// missed-call notification. `rejected` is deliberately absent: the listener
+  /// declined on purpose and does not need telling.
+  static const _missedStatuses = {'missed', 'cancelled', 'timeout'};
+
+  /// `null` when the status could not be read, which is treated as "still
+  /// ringing" so a network blip never suppresses a real incoming call.
+  Future<String?> _fetchCallStatus(int callId) async {
     try {
       final token = await LocalStorage().getToken();
-      if (token == null) return true;
-      final status = await ListenerRepository().fetchListenerCallStatus(
-        token,
-        callId,
-      );
-      if (status == null) return true;
-      return status == 'ringing';
+      if (token == null) return null;
+      return await ListenerRepository().fetchListenerCallStatus(token, callId);
     } catch (_) {
-      return true;
+      return null;
     }
   }
 
-  Future<void> _dropStaleCall(String callId, String callerName) async {
-    print(
-      '[Callkit] showIncomingCall: dropping stale/already-resolved call $callId',
-    );
+  /// True once this device has answered [callId]. Checked across isolates via
+  /// the stored active call, because the push that races the accept is often
+  /// handled by the FCM background isolate while the accept happened in the UI
+  /// one (or natively, before any engine was up).
+  Future<bool> _wasAnsweredHere(int callId) async {
+    if (_acceptingCallId == callId) return true;
+    if (_answeredCallIds.contains(callId)) return true;
+    final active = ActiveCallManager.instance.activeCall;
+    if (active != null && active.callId == callId) return true;
+    final stored = await LocalStorage().getActiveCall();
+    return stored != null && stored['callId'] == callId;
+  }
+
+  void _rememberAnswered(int callId) {
+    _answeredCallIds.add(callId);
+    if (_answeredCallIds.length > 20) {
+      _answeredCallIds.remove(_answeredCallIds.first);
+    }
+    // The push that declares the call missed can land a moment before the
+    // accept does, so clear anything already on screen for it.
+    unawaited(ActivityNotificationService.instance.cancelMissedCall(callId));
+  }
+
+  /// Cleans up a call that is no longer ringing, and tells the listener they
+  /// missed it only when that is actually what happened. Previously every
+  /// non-ringing status took this path and produced a "Missed Call"
+  /// notification — including `accepted`, so answering a call that then got a
+  /// second push notified the listener that they had missed the call they were
+  /// on. The reject that went with it was refused by the server (a 400 on an
+  /// accepted call), which is why the call itself survived.
+  Future<void> _resolveNonRingingCall(
+    String callId,
+    String callerName,
+    String? status,
+  ) async {
     final incomingCallId = int.tryParse(callId);
+    print(
+      '[Callkit] showIncomingCall: call $callId is no longer ringing (status=${status ?? 'unknown'})',
+    );
+    if (incomingCallId != null && _answeredStatuses.contains(status)) {
+      print(
+        '[Callkit] showIncomingCall: call $callId was answered — no reject, no missed notification',
+      );
+      await ActivityNotificationService.instance.cancelMissedCall(
+        incomingCallId,
+      );
+      await LockscreenService.instance.dismissIncomingCall();
+      return;
+    }
     if (incomingCallId != null) await _rejectBusyCall(incomingCallId);
+    // An unknown status keeps the old behaviour: the push looked stale, so the
+    // listener is told about it.
+    if (status != null && !_missedStatuses.contains(status)) return;
+    if (incomingCallId != null && await _wasAnsweredHere(incomingCallId)) {
+      print(
+        '[Callkit] showIncomingCall: call $callId was answered on this device — suppressing missed notification',
+      );
+      return;
+    }
     await ActivityNotificationService.instance.showMissedCall(
       callId: incomingCallId ?? 0,
       callerName: callerName,
     );
+  }
+
+  /// A push that arrived long after it was sent is treated the same as a
+  /// non-ringing call: reject it if still parked server-side and tell the
+  /// listener only if they genuinely missed it.
+  Future<void> _dropStaleCall(String callId, String callerName) async {
+    final status = await _fetchCallStatus(int.tryParse(callId) ?? -1);
+    await _resolveNonRingingCall(callId, callerName, status ?? 'missed');
+  }
+
+  /// Confirms with the backend that [callId] is still ringing before the
+  /// incoming-call UI is shown, so a push delivered late on reconnect does
+  /// not raise a call that has already been answered/missed/cancelled
+  /// elsewhere. `null` from `_fetchCallStatus` means "could not check" and
+  /// is treated as still ringing.
+  Future<bool> _isStillRinging(int callId) async {
+    final status = await _fetchCallStatus(callId);
+    return status == null || status == 'ringing';
   }
 
   Future<void> showIncomingCall(
@@ -528,7 +804,9 @@ if (event is CallEventActionCallAccept) {
     if (_lastShownCallId == callId.toString()) return;
     _lastShownCallId = callId.toString();
     final callType = data['call_type'] ?? 'audio';
-    final remoteCallerPhotoUrl = ApiConstants.resolveMediaUrl(data['caller_photo_url'] as String?);
+    final remoteCallerPhotoUrl = ApiConstants.resolveMediaUrl(
+      data['caller_photo_url'] as String?,
+    );
     if (_syncLocalAvatarPath(remoteCallerPhotoUrl) == null) {
       // ignore: unawaited_futures
       _localAvatarPath(remoteCallerPhotoUrl);
@@ -536,6 +814,9 @@ if (event is CallEventActionCallAccept) {
     _acceptingCallId = null;
     _rejectingCallId = null;
     _pendingCallNav = null;
+    // A new call starts from a clean slate: anything native parked for an
+    // earlier one must not be picked up by this call's cold start.
+    await NativeCallBridge.clearAcceptedCall();
     await LockscreenService.instance.showOverLockscreen();
     final micStatus = await Permission.microphone.status;
     if (!micStatus.isGranted) {
@@ -556,6 +837,19 @@ if (event is CallEventActionCallAccept) {
       callerPhotoUrl: remoteCallerPhotoUrl,
     );
   }
+
+  Future<void> handleMissedCallPush(Map<String, dynamic> data) async {
+    final callId = int.tryParse('${data['call_id'] ?? ''}');
+    final callerName = '${data['caller_name'] ?? 'Someone'}';
+    if (callId != null && await _wasAnsweredHere(callId)) {
+      return;
+    }
+    await ActivityNotificationService.instance.showMissedCall(
+      callId: callId ?? 0,
+      callerName: callerName,
+    );
+  }
+
   Future<void> setCallConnected(String callId) async {
     try {
       await FlutterCallkitIncoming.setCallConnected(_callIdToUuid(callId));
@@ -581,9 +875,9 @@ if (event is CallEventActionCallAccept) {
     _lastShownCallId = null;
     _stopCustomRingtone();
 
+    await NativeCallBridge.clearAcceptedCall();
     await _forceEndCall(_callIdToUuid(callId));
     await _releaseLockscreen();
-
 
     final state = navigatorKey.currentState;
     if (!ActiveCallManager.instance.hasActiveCall &&
@@ -600,6 +894,7 @@ if (event is CallEventActionCallAccept) {
     _acceptingCallId = null;
     _pendingCallNav = null;
     _stopCustomRingtone();
+    await NativeCallBridge.clearAcceptedCall();
     await FlutterCallkitIncoming.endCall(_callIdToUuid(callId));
   }
 
@@ -607,6 +902,7 @@ if (event is CallEventActionCallAccept) {
     _acceptingCallId = null;
     _pendingCallNav = null;
     _stopCustomRingtone();
+    await NativeCallBridge.clearAcceptedCall();
     await FlutterCallkitIncoming.endAllCalls();
   }
 }

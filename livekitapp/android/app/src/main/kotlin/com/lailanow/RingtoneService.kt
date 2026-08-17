@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -22,7 +24,7 @@ class RingtoneService : Service() {
         private const val LEGACY_CHANNEL_ID = "ringtone_playback"
         private const val CHANNEL_ID = "ringtone_playback_silent"
         private const val NOTIFICATION_ID = 8811
-        private const val MAX_RING_MS = 45_000L
+        private const val MAX_RING_MS = 30_000L
         const val ACTION_START = "com.example.livekitapp.action.RINGTONE_START"
         const val ACTION_START_APP = "com.example.livekitapp.action.RINGTONE_START_APP"
         const val ACTION_STOP = "com.example.livekitapp.action.RINGTONE_STOP"
@@ -146,13 +148,19 @@ class RingtoneService : Service() {
         }
         try {
             val player = MediaPlayer()
-            val afd = resources.openRawResourceFd(R.raw.ringtone_default)
-            if (afd != null) {
-                player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                afd.close()
+            val systemRingtoneUri: Uri? =
+                RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE)
+            if (systemRingtoneUri != null) {
+                player.setDataSource(this, systemRingtoneUri)
             } else {
-                Log.w(TAG, "No bundled default ringtone found")
-                return
+                val afd = resources.openRawResourceFd(R.raw.ringtone_default)
+                if (afd != null) {
+                    player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
+                } else {
+                    Log.w(TAG, "No system or bundled default ringtone found")
+                    return
+                }
             }
             player.setAudioAttributes(
                 AudioAttributes.Builder()
