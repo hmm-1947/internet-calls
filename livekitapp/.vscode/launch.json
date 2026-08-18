@@ -39,7 +39,7 @@
             "type": "dart",
             "request": "launch",
             "program": "lib/main_listener.dart",
-            "deviceId": "ZY322M9MNH",
+            "deviceId": "RZGL71BXT9J",
             "args": [
                 "--flavor",
                 "listener"

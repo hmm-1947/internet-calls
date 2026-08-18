@@ -7,6 +7,7 @@ import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
+import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 
 class _AppColors {
@@ -97,6 +98,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   String? _error;
   late String _name = widget.initialName ?? '';
   late bool _isOnline = widget.initialIsOnline ?? false;
+  bool _listenerVideoCallEnabled = true;
   String _about = '';
   List<String> _tags = [];
   List<String> _languages = [];
@@ -106,6 +108,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   int _ratingCount = 0;
   String? _createdAt;
   late String? _photoUrl = widget.initialPhotoUrl;
+  bool _freshProfileLoaded = false;
+  Completer<void>? _freshLoadCompleter;
 
   @override
   void initState() {
@@ -127,6 +131,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
     setState(() {
       _name = map['name'] ?? '';
       _isOnline = map['is_online'] == true;
+      _listenerVideoCallEnabled = map['video_call_enabled'] != false;
       _about = map['about'] ?? '';
       _tags = List<String>.from(map['tags'] ?? []);
       _languages = List<String>.from(map['languages'] ?? []);
@@ -157,6 +162,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       final newSnapshot = {
         'name': data['name'] ?? '',
         'is_online': data['is_online'] == true,
+        'video_call_enabled': data['video_call_enabled'] != false,
         'about': data['about'] ?? '',
         'tags': List<String>.from(data['tags'] ?? []),
         'languages': List<String>.from(data['languages'] ?? []),
@@ -171,6 +177,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       final oldSnapshot = {
         'name': _name,
         'is_online': _isOnline,
+        'video_call_enabled': _listenerVideoCallEnabled,
         'about': _about,
         'tags': _tags,
         'languages': _languages,
@@ -185,6 +192,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         setState(() {
           _name = newSnapshot['name'] as String;
           _isOnline = newSnapshot['is_online'] as bool;
+          _listenerVideoCallEnabled = newSnapshot['video_call_enabled'] as bool;
           _about = newSnapshot['about'] as String;
           _tags = newSnapshot['tags'] as List<String>;
           _languages = newSnapshot['languages'] as List<String>;
@@ -199,7 +207,12 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       } else if (_loading) {
         setState(() => _loading = false);
       }
+      _freshProfileLoaded = true;
+      _freshLoadCompleter?.complete();
+      _freshLoadCompleter = null;
     } catch (e) {
+      _freshLoadCompleter?.complete();
+      _freshLoadCompleter = null;
       if (!mounted) return;
       setState(() {
         // A failed refresh must never replace a profile that was already
@@ -223,6 +236,13 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
     final token = await _localStorage.getToken();
     if (token == null) return;
     setState(() => _callingListener = true);
+    if (!_freshProfileLoaded) {
+      final completer = _freshLoadCompleter ??= Completer<void>();
+      try {
+        await completer.future.timeout(const Duration(seconds: 4));
+      } catch (_) {}
+    }
+    if (!mounted) return;
     try {
       final result = await _repository.initiateCall(
         token,
@@ -407,10 +427,18 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _callingListener
                               ? null
-                              : () => _callListener(video: true),
+                              : (!_listenerVideoCallEnabled
+                                    ? () => PillMessage.show(
+                                        context,
+                                        'This listener has their video call disabled',
+                                        bottomOffset: 78,
+                                      )
+                                    : () => _callListener(video: true)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _AppColors.cardBg,
-                            foregroundColor: Colors.white,
+                            foregroundColor: !_listenerVideoCallEnabled
+                                ? Colors.white38
+                                : Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),

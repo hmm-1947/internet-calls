@@ -440,6 +440,9 @@ class UserContactChangeVerify(BaseModel):
 class UserVideoCallSettingUpdate(BaseModel):
     enabled: bool
 
+class ListenerVideoCallSettingUpdate(BaseModel):
+    enabled: bool
+
 class UserForgotPasswordRequestOtp(BaseModel):
     """`identifier` is the phone number registered on the account."""
 

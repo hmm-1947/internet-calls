@@ -21,6 +21,7 @@ import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/core/network/voice_note_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
+import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/user/widgets/gift_sheet.dart';
 import 'package:uuid/uuid.dart';
 
@@ -29,6 +30,7 @@ class ChatHistoryScreen extends StatefulWidget {
   final String listenerName;
   final String? listenerPhotoUrl;
   final Map<String, dynamic>? listenerBadgeTag;
+  final bool? initialListenerVideoCallEnabled;
 
   const ChatHistoryScreen({
     super.key,
@@ -36,6 +38,7 @@ class ChatHistoryScreen extends StatefulWidget {
     required this.listenerName,
     this.listenerPhotoUrl,
     this.listenerBadgeTag,
+    this.initialListenerVideoCallEnabled,
   });
 
   @override
@@ -73,6 +76,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   late final ValueNotifier<List<Map<String, dynamic>>> _messages;
   late final ValueNotifier<bool> _favorite;
   late final ValueNotifier<bool> _videoCallAvailable;
+  late final ValueNotifier<bool> _listenerVideoCallEnabled;
   late final ValueNotifier<UnreadSnapshot> _unread;
   final _atBottom = ValueNotifier<bool>(true);
 
@@ -133,6 +137,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       (me?['video_call_enabled'] ?? true) == true &&
           (me?['video_call_disabled_by_admin'] ?? false) != true,
     );
+    _listenerVideoCallEnabled = ValueNotifier<bool>(
+      widget.initialListenerVideoCallEnabled ?? true,
+    );
     _scrollController.addListener(_onScroll);
     // Drops any stacked notification for this chat and keeps new messages from
     // notifying while the conversation is on screen.
@@ -156,6 +163,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     _messages.dispose();
     _favorite.dispose();
     _videoCallAvailable.dispose();
+    _listenerVideoCallEnabled.dispose();
     _unread.dispose();
     _atBottom.dispose();
     super.dispose();
@@ -188,7 +196,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     await _refreshMessages();
     _refreshProfile();
     _refreshThread();
-    _refreshPresence();
+    _refreshPresence(force: true);
     _flushPending();
   }
 
@@ -322,11 +330,12 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   static final _presenceFetchedAt = <int, DateTime>{};
   static const _presenceTtl = Duration(seconds: 20);
 
-  Future<void> _refreshPresence() async {
+  Future<void> _refreshPresence({bool force = false}) async {
     final token = _token;
     if (token == null) return;
     final lastFetch = _presenceFetchedAt[widget.listenerId];
-    if (lastFetch != null &&
+    if (!force &&
+        lastFetch != null &&
         DateTime.now().difference(lastFetch) < _presenceTtl) {
       return;
     }
@@ -340,6 +349,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
         widget.listenerId,
         profile['is_online'] == true,
       );
+      _listenerVideoCallEnabled.value = profile['video_call_enabled'] != false;
     } catch (_) {}
   }
 
@@ -752,7 +762,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
 
   void _showInsufficientCoins() {
     if (!mounted) return;
-    PillMessage.show(context, 'Not enough coins to send this message');
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+    );
   }
 
   Future<void> _toggleFavorite() async {
@@ -808,6 +820,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
           listenerId: widget.listenerId,
         ),
       );
+    } on InsufficientCoinsException {
+      if (mounted) _showInsufficientCoins();
     } catch (e) {
       if (mounted) {
         PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
@@ -949,17 +963,28 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
           if (!isVeryNarrow)
             ValueListenableBuilder<bool>(
               valueListenable: _videoCallAvailable,
-              builder: (context, available, _) => available
-                  ? IconButton(
-                      style: iconButtonStyle,
-                      icon: Icon(
-                        Icons.videocam,
-                        color: Colors.white,
-                        size: isNarrow ? 20 : 24,
+              builder: (context, available, _) => !available
+                  ? const SizedBox.shrink()
+                  : ValueListenableBuilder<bool>(
+                      valueListenable: _listenerVideoCallEnabled,
+                      builder: (context, listenerEnabled, _) => IconButton(
+                        style: iconButtonStyle,
+                        icon: Icon(
+                          Icons.videocam,
+                          color: listenerEnabled
+                              ? Colors.white
+                              : Colors.white38,
+                          size: isNarrow ? 20 : 24,
+                        ),
+                        onPressed: !listenerEnabled
+                            ? () => PillMessage.show(
+                                context,
+                                'This listener has their video call disabled',
+                                bottomOffset: 78,
+                              )
+                            : () => _callListener(video: true),
                       ),
-                      onPressed: () => _callListener(video: true),
-                    )
-                  : const SizedBox.shrink(),
+                    ),
             ),
           IconButton(
             style: iconButtonStyle,

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import json
 from app.models.models import ChatMessage
 from app.core.ws_manager import manager
-from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate, ListenerChangePassword, CurrentPasswordCheck, validate_password_strength
+from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate, ListenerChangePassword, CurrentPasswordCheck, validate_password_strength, ListenerVideoCallSettingUpdate
 from app.utils.security import verify_password, generate_session_token, hash_password, session_expiry
 from app.utils.audit import record_audit_event
 from app.core.deps import get_current_listener
@@ -55,6 +55,7 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         # settings toggle keeps its position across restarts and reconnects.
         "is_online": bool(current_listener.is_online),
         "is_connected": manager.is_listener_online(current_listener.id),
+        "video_call_enabled": bool(current_listener.video_call_enabled),
         "about": current_listener.about,
         "tags": _parse_list(current_listener.tags),
         "languages": _parse_list(current_listener.languages),
@@ -215,6 +216,17 @@ async def update_status(payload: ListenerStatusUpdate, db: Session = Depends(get
         payload_out["last_seen"] = current_listener.last_seen.isoformat()
     await manager.broadcast_to_all_users(payload_out)
     return {"status": "updated", "is_online": current_listener.is_online}
+
+
+@router.post("/video-call-setting")
+def update_video_call_setting(payload: ListenerVideoCallSettingUpdate, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    """Let the listener turn their own video-calling feature on/off."""
+    current_listener.video_call_enabled = payload.enabled
+    db.commit()
+    return {
+        "status": "updated",
+        "video_call_enabled": current_listener.video_call_enabled,
+    }
 
 
 @router.post("/logout")

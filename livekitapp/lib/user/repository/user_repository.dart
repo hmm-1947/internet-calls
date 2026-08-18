@@ -356,6 +356,9 @@ class UserRepository {
     }, token: token);
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
+      if (response.statusCode == 402) {
+        throw InsufficientCoinsException(data['detail']);
+      }
       throw Exception(data['detail'] ?? 'Call failed');
     }
     // The listener is now someone the user has called, which changes where
