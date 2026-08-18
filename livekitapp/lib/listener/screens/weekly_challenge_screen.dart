@@ -30,6 +30,13 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
   String? _error;
   WeeklyChallengeProgress? _progress;
 
+  // The "previous weeks" section loads and fails independently of the
+  // current-week progress above it: a history hiccup shouldn't blank out
+  // this week's challenge, and vice versa.
+  bool _historyLoading = true;
+  String? _historyError;
+  List<WeeklyChallengeHistoryEntry>? _history;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +59,10 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
   }
 
   Future<void> _load() async {
+    await Future.wait([_loadProgress(), _loadHistory()]);
+  }
+
+  Future<void> _loadProgress() async {
     final hasCachedData = _progress != null;
     setState(() {
       _loading = !hasCachedData;
@@ -86,6 +97,31 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
           _error = e.toString().replaceFirst('Exception: ', '');
         }
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() {
+      _historyLoading = _history == null;
+      _historyError = null;
+    });
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) throw Exception('Not logged in');
+      final history = await _repository.getHistory(token);
+      if (!mounted) return;
+      setState(() {
+        _history = history;
+        _historyLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (_history == null) {
+          _historyError = e.toString().replaceFirst('Exception: ', '');
+        }
+        _historyLoading = false;
       });
     }
   }
@@ -131,12 +167,191 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
-                    _buildHeaderCard(),
-                    const SizedBox(height: 20),
-                    _buildProgressCard(),
+                    if (_progress?.active == true) ...[
+                      _buildHeaderCard(),
+                      const SizedBox(height: 20),
+                      _buildProgressCard(),
+                    ] else
+                      _buildNoChallengeCard(),
+                    const SizedBox(height: 28),
+                    _buildHistorySection(),
                   ],
                 ),
               ),
+      ),
+    );
+  }
+
+  /// Shown in place of the header/progress cards when the admin hasn't set
+  /// a challenge for this week (or the previous one has expired).
+  Widget _buildNoChallengeCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _AppColors.cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: _AppColors.trackInactive,
+            ),
+            child: const Icon(
+              Icons.emoji_events_outlined,
+              color: _AppColors.textMuted,
+              size: 26,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'No weekly challenge for this week yet',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Check back soon - a new challenge may be added by the team. In the meantime, here\'s how you did in previous weeks.',
+            style: TextStyle(color: _AppColors.textSecondary, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatWeekRange(DateTime start, DateTime end) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final s = '${months[start.month - 1]} ${start.day}';
+    final e = '${months[end.month - 1]} ${end.day}';
+    return '$s - $e';
+  }
+
+  Widget _buildHistorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Previous weeks',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_historyLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: _AppColors.brandRed,
+                ),
+              ),
+            ),
+          )
+        else if (_historyError != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _AppColors.cardBg,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _AppColors.cardBorder),
+            ),
+            child: Text(
+              _historyError!,
+              style: const TextStyle(color: _AppColors.textSecondary),
+            ),
+          )
+        else if (_history == null || _history!.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _AppColors.cardBg,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _AppColors.cardBorder),
+            ),
+            child: const Text(
+              'No previous weeks to show yet.',
+              style: TextStyle(color: _AppColors.textSecondary, fontSize: 13),
+            ),
+          )
+        else
+          ..._history!.map(_buildHistoryRow).expand((w) => [w, const SizedBox(height: 10)]),
+      ],
+    );
+  }
+
+  Widget _buildHistoryRow(WeeklyChallengeHistoryEntry entry) {
+    final allCompleted =
+        entry.goalsTotal > 0 && entry.goalsCompleted == entry.goalsTotal;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: allCompleted
+                  ? _AppColors.brandRed
+                  : _AppColors.trackInactive,
+            ),
+            child: Icon(
+              allCompleted ? Icons.emoji_events : Icons.emoji_events_outlined,
+              color: allCompleted ? Colors.white : _AppColors.textMuted,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatWeekRange(entry.weekStart, entry.weekEnd),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${_formatTalktime(entry.talkSeconds)} talked · ${entry.goalsCompleted} of ${entry.goalsTotal} goals',
+                  style: const TextStyle(
+                    color: _AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

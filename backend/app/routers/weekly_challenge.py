@@ -144,8 +144,9 @@ def _serialize_goals(settings: WeeklyChallengeSettings, progress: ListenerWeekly
 @router.get("/progress")
 def get_my_progress(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     """Listener-facing endpoint: current week's talktime + the 3 admin-set
-    goals, plus whether a challenge is currently active. The Flutter app
-    should hide the weekly-challenge icon entirely when active is false."""
+    goals, plus whether a challenge is currently active. The weekly-challenge
+    screen is always reachable from the bottom nav; when active is false it
+    shows a "no challenge this week" message instead of hiding the icon."""
     settings = _get_settings(db)
     active = _is_challenge_active(db, settings)
     if not active:
@@ -166,6 +167,39 @@ def get_my_progress(db: Session = Depends(get_db), current_listener: Listener = 
         "goals": _serialize_goals(settings, progress),
     }
 
+
+
+@router.get("/my-history")
+def get_my_history(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    """Listener-facing endpoint: this listener's own results for previous
+    weeks (the current, still-live week is excluded - it's shown separately
+    by /progress). Shown below the current challenge regardless of whether
+    one is active right now, so a listener can always see how they did in
+    past weeks."""
+    settings = _get_settings(db)
+    week_start_now = _current_week_start()
+    rows = (
+        db.query(ListenerWeeklyChallengeProgress)
+        .filter(ListenerWeeklyChallengeProgress.listener_id == current_listener.id)
+        .filter(ListenerWeeklyChallengeProgress.week_start < week_start_now)
+        .order_by(ListenerWeeklyChallengeProgress.week_start.desc())
+        .limit(12)
+        .all()
+    )
+    result = []
+    for progress in rows:
+        goals = _serialize_goals(settings, progress)
+        result.append(
+            {
+                "week_start": progress.week_start.isoformat(),
+                "week_end": (progress.week_start + timedelta(days=6)).isoformat(),
+                "talk_seconds": progress.talk_seconds,
+                "goals": goals,
+                "goals_completed": sum(1 for g in goals if g["completed"]),
+                "goals_total": len(goals),
+            }
+        )
+    return result
 
 
 @router.get("/admin/goals")
@@ -246,7 +280,7 @@ def update_goals(
 
 @router.get("/admin/leaderboard")
 def get_leaderboard(db: Session = Depends(get_db), _=Depends(get_current_admin)):
-    """Top 3 listeners this week by talktime, for the admin panel."""
+    """Top 10 listeners this week by talktime, for the admin panel."""
     settings = _get_settings(db)
     week_start = _current_week_start()
     rows = (
@@ -254,7 +288,7 @@ def get_leaderboard(db: Session = Depends(get_db), _=Depends(get_current_admin))
         .filter(ListenerWeeklyChallengeProgress.week_start == week_start)
         .filter(ListenerWeeklyChallengeProgress.talk_seconds > 0)
         .order_by(ListenerWeeklyChallengeProgress.talk_seconds.desc())
-        .limit(3)
+        .limit(10)
         .all()
     )
     result = []

@@ -3068,13 +3068,13 @@
     </div>
 
     <div class="card">
-      <h2>Top 3 Listeners This Week</h2>
+      <h2>Top 10 Listeners This Week</h2>
       <div id="wcLeaderboardList"></div>
     </div>
 
     <div class="card">
       <h2>This Week's Completions</h2>
-      <div id="wcCompletionsList"></div>
+      <div id="wcCompletionsList" style="max-height:380px;overflow-y:auto;"></div>
     </div>
 
     <div class="card">
@@ -5590,7 +5590,7 @@
 
     async function loadWeeklyChallengeLeaderboard() {
       const wrap = document.getElementById('wcLeaderboardList');
-      if (wrap) wrap.innerHTML = skelTable(3, 5);
+      if (wrap) wrap.innerHTML = skelTable(10, 5);
       try {
         const res = await fetch(API_URL + '/weekly-challenge/admin/leaderboard', { headers: authHeaders() });
         const data = await res.json();

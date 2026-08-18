@@ -125,6 +125,7 @@ class ApiConstants {
   static const String specialOffers = '/special-offers';
 
   static const String weeklyChallengeProgress = '/weekly-challenge/progress';
+  static const String weeklyChallengeMyHistory = '/weekly-challenge/my-history';
 
   static String resolveMediaUrl(String? path) {
     if (path == null || path.isEmpty) return '';

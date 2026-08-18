@@ -5,8 +5,6 @@ import 'package:livekitapp/listener/screens/listener_home_screen.dart';
 import 'package:livekitapp/listener/screens/chats/listener_chats_list_screen.dart';
 import 'package:livekitapp/listener/screens/listener_settings_screen.dart';
 import 'package:livekitapp/listener/screens/weekly_challenge_screen.dart';
-import 'package:livekitapp/listener/repository/weekly_challenge_repository.dart';
-import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/main_listener.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/crown_nav_bar.dart';
@@ -32,9 +30,6 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
 
   final _settingsKey = GlobalKey<ListenerSettingsScreenState>();
   final _homeKey = GlobalKey<ListenerHomeScreenState>();
-  final _weeklyChallengeRepository = WeeklyChallengeRepository();
-  final _localStorage = LocalStorage();
-  bool _weeklyChallengeActive = false;
   late final PageController _pageController = PageController(
     initialPage: _index,
   );
@@ -103,39 +98,16 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   }
 
   late final List<Widget> _screens = [
-    ListenerHomeScreen(
-      key: _homeKey,
-      onRefresh: _refreshWeeklyChallengeStatus,
-    ),
+    ListenerHomeScreen(key: _homeKey),
     const ListenerChatsListScreen(),
     const ListenerCallHistoryScreen(),
     ListenerSettingsScreen(key: _settingsKey),
   ];
 
   @override
-  void initState() {
-    super.initState();
-    _refreshWeeklyChallengeStatus();
-  }
-
-  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
-  }
-
-  Future<void> _refreshWeeklyChallengeStatus() async {
-    try {
-      final token = await _localStorage.getToken();
-      if (token == null) return;
-      final progress = await _weeklyChallengeRepository.getProgress(token);
-      if (!mounted) return;
-      setState(() => _weeklyChallengeActive = progress.active);
-    } catch (_) {
-      // If the check fails, keep the icon hidden rather than risk showing
-      // it for an expired/non-existent challenge.
-      if (mounted) setState(() => _weeklyChallengeActive = false);
-    }
   }
 
   void _onTabSelected(int i) {
@@ -163,7 +135,6 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
     }
     if (i == 0) {
       _homeKey.currentState?.refresh();
-      _refreshWeeklyChallengeStatus();
     }
   }
 
@@ -171,8 +142,6 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final navBarHeight = 78 + bottomInset;
     return Scaffold(
       backgroundColor: Colors.black,
       extendBody: true,
@@ -214,22 +183,6 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
                   ],
                 ),
 
-                if (_index == 0 && _weeklyChallengeActive)
-                  Positioned(
-                    right: 16,
-                    bottom: navBarHeight + 16,
-                    child: AutoHideNavBar(
-                      visible: _navBarVisible,
-                      child: _WeeklyChallengeFab(
-                        onTap: () async {
-                          await Navigator.of(
-                            context,
-                          ).push(slideRoute(const WeeklyChallengeScreen()));
-                          _refreshWeeklyChallengeStatus();
-                        },
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -241,8 +194,9 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
         child: CrownNavBar(
           selectedIndex: _index,
           onDestinationSelected: _onTabSelected,
-          onCrownTap: () {},
-          showCrown: false,
+          onCrownTap: () {
+            Navigator.of(context).push(slideRoute(const WeeklyChallengeScreen()));
+          },
           labels: const ['Home', 'Chat', 'Calls', 'Settings'],
           icons: [
             const Icon(Icons.grid_view_rounded),
@@ -277,33 +231,4 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
   }
 }
 
-class _WeeklyChallengeFab extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _WeeklyChallengeFab({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: const Color(0xFFE53950),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFE53950).withOpacity(0.55),
-              blurRadius: 16,
-              spreadRadius: 2,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.emoji_events, color: Colors.white, size: 26),
-      ),
-    );
-  }
-}
 
