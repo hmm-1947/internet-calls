@@ -2579,7 +2579,7 @@
   </div>
 </div>
 
-  <div id="loginScreen" style="max-width:380px;margin:80px auto;">
+  <div id="loginScreen" style="max-width:380px;margin:80px auto;display:none;">
     <div class="card">
       <h2>Admin Login</h2>
       <input id="loginIdentifier" placeholder="Username or Email">
@@ -6474,14 +6474,32 @@
     }
 
     function selectPerson(type, person) {
+      const otherType = type === 'user' ? 'listener' : 'user';
       selectedPerson = { type, id: person.id, name: person.name, phone: person.phone, username: person.username, contact: personContact(person, type), raw: person };
       logSection = 'calls';
       logPage = 1;
       otherPersonFilter = null;
       renderPersonList(type);
+      // The other role's list may still be showing a stale "selected"
+      // highlight from an earlier pick, now that selectedPerson has moved on.
+      renderPersonList(otherType);
       renderPersonContent();
+      // The other role's detail panel (if it was ever opened) still has its
+      // own search box/dropdown/buttons in the DOM - hidden, not removed,
+      // when its page isn't active - and every one of those was wired to the
+      // single global `selectedPerson`. Now that selectedPerson points at a
+      // different type, that leftover panel is stale: reset it to the
+      // default empty state so it can't be interacted with (which is what
+      // caused the dropdown to sometimes load the wrong data after
+      // switching between the Users and Listeners sections) until the admin
+      // picks a person from that list again.
+      const otherContent = document.getElementById(otherType === 'user' ? 'userContent' : 'listenerContent');
+      if (otherContent) {
+        otherContent.innerHTML = '<div class="empty-state">Select a ' + otherType + ' from the list to view their call logs, recordings, chats and coins.</div>';
+      }
       loadPersonLogs();
     }
+
 
     function renderPersonContent() {
       const p = selectedPerson;
@@ -6496,13 +6514,13 @@
           </div>
           <div class="other-person-picker">
             <label>${p.type === 'user' ? 'Listener' : 'User'}</label>
-            <div class="other-person-combo" id="otherPersonCombo">
-              <input type="text" class="other-person-search" id="otherPersonSearch" autocomplete="off"
+            <div class="other-person-combo" id="otherPersonCombo-${p.type}">
+              <input type="text" class="other-person-search" id="otherPersonSearch-${p.type}" autocomplete="off"
                 placeholder="${p.type === 'user' ? 'Search by name or phone' : 'Search by name, username, phone or email'}"
                 value="${otherPersonFilter ? escapeHtml(otherPersonFilter) : ''}"
                 oninput="renderOtherPersonOptions()" onfocus="renderOtherPersonOptions()">
-              <button type="button" class="other-person-clear" id="otherPersonClear" onclick="clearOtherPersonFilter()" title="Clear" style="display:${otherPersonFilter ? 'inline-flex' : 'none'}">×</button>
-              <div class="other-person-dropdown" id="otherPersonDropdown"></div>
+              <button type="button" class="other-person-clear" id="otherPersonClear-${p.type}" onclick="clearOtherPersonFilter()" title="Clear" style="display:${otherPersonFilter ? 'inline-flex' : 'none'}">×</button>
+              <div class="other-person-dropdown" id="otherPersonDropdown-${p.type}"></div>
             </div>
           </div>
           ${p.type === 'user' ? `
@@ -6698,8 +6716,8 @@ ${logSection === 'chats' ? '' : `
     }
 
     function renderOtherPersonOptions() {
-      const dd = document.getElementById('otherPersonDropdown');
-      const input = document.getElementById('otherPersonSearch');
+      const dd = document.getElementById('otherPersonDropdown-' + selectedPerson.type);
+      const input = document.getElementById('otherPersonSearch-' + selectedPerson.type);
       if (!dd || !input) return;
       const matches = otherPersonMatches(input.value).slice(0, 50);
       const allLabel = selectedPerson.type === 'user' ? 'All Listeners' : 'All Users';
@@ -6722,9 +6740,9 @@ ${logSection === 'chats' ? '' : `
 
     function pickOtherPerson(name) {
       otherPersonFilter = name || null;
-      const input = document.getElementById('otherPersonSearch');
+      const input = document.getElementById('otherPersonSearch-' + selectedPerson.type);
       if (input) input.value = otherPersonFilter || '';
-      const dd = document.getElementById('otherPersonDropdown');
+      const dd = document.getElementById('otherPersonDropdown-' + selectedPerson.type);
       if (dd) dd.style.display = 'none';
       applyOtherPersonFilter();
     }
@@ -6734,7 +6752,7 @@ ${logSection === 'chats' ? '' : `
     }
 
     function updateOtherPersonUI() {
-      const clearBtn = document.getElementById('otherPersonClear');
+      const clearBtn = document.getElementById('otherPersonClear-' + selectedPerson.type);
       if (clearBtn) clearBtn.style.display = otherPersonFilter ? 'inline-flex' : 'none';
       const arrowRow = document.getElementById('pairArrowRow');
       if (!arrowRow) return;
@@ -6754,11 +6772,17 @@ ${logSection === 'chats' ? '' : `
       }
     }
 
+    // Both the Users and Listeners detail panels can have their combo mounted
+    // at once (the inactive page is only hidden, not removed from the DOM),
+    // so close every dropdown whose own combo wasn't the click target instead
+    // of relying on a single fixed id.
     document.addEventListener('click', (e) => {
-      const combo = e.target.closest('.other-person-combo');
-      const dd = document.getElementById('otherPersonDropdown');
-      if (!combo && dd) dd.style.display = 'none';
+      document.querySelectorAll('.other-person-dropdown').forEach(dd => {
+        const combo = dd.closest('.other-person-combo');
+        if (!combo || !combo.contains(e.target)) dd.style.display = 'none';
+      });
     });
+
 
 
     function renderLogTable() {
