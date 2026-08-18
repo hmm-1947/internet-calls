@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:livekitapp/core/network/api_client.dart';
+import 'package:livekitapp/user/repository/user_repository.dart' show InsufficientCoinsException;
 
 class CoinRepository {
   final ApiClient _apiClient = ApiClient();
@@ -55,6 +56,9 @@ class CoinRepository {
     );
     final data = jsonDecode(response.body);
     if (response.statusCode != 200) {
+      if (response.statusCode == 402) {
+        throw InsufficientCoinsException(data['detail']);
+      }
       throw Exception(data['detail'] ?? 'Failed to send gift');
     }
     return data;

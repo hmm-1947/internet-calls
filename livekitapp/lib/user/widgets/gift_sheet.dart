@@ -4,6 +4,8 @@ import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/coin_repository.dart';
+import 'package:livekitapp/user/repository/user_repository.dart' show InsufficientCoinsException;
+import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/common/widgets/gift_success_popup.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 
@@ -151,10 +153,18 @@ class _GiftSheetState extends State<GiftSheet> {
     }
   }
 
+  void _goToUpgrade() {
+    if (!mounted) return;
+    Navigator.of(context).pop(); // close the gift sheet first
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+    );
+  }
+
   Future<void> _send(Map<String, dynamic> gift) async {
     final cost = gift['coins'] as int;
     if (_balance < cost) {
-      PillMessage.showError(context, 'Not enough coins');
+      _goToUpgrade();
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -209,6 +219,8 @@ class _GiftSheetState extends State<GiftSheet> {
           'You sent $giftName',
         );
       }
+    } on InsufficientCoinsException {
+      _goToUpgrade();
     } catch (e) {
       if (mounted) {
         PillMessage.showError(
@@ -375,7 +387,7 @@ class _GiftSheetState extends State<GiftSheet> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-                onPressed: () {},
+                onPressed: _goToUpgrade,
                 child: const Text(
                   'Top up',
                   style: TextStyle(
