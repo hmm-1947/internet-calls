@@ -110,6 +110,18 @@ class ListenerRepository {
     }
   }
 
+  Future<void> updateVideoCallSetting(String token, bool enabled) async {
+    final response = await _apiClient.post(ApiConstants.listenerVideoCallSetting, {
+      'enabled': enabled,
+    }, token: token);
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to update video call setting');
+    }
+    ListenerDataCache().invalidateMe();
+  }
+
   Future<void> updateProfile(
     String token, {
     String? about,

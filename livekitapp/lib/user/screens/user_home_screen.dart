@@ -20,6 +20,7 @@ import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_settings_screen.dart';
+import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
@@ -580,6 +581,12 @@ class UserHomeScreenState extends State<UserHomeScreen>
           listenerId: listenerId,
         ),
       );
+    } on InsufficientCoinsException {
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const UpgradeScreen()));
+      }
     } catch (e) {
       if (mounted) {
         PillMessage.showError(
@@ -597,6 +604,14 @@ class UserHomeScreenState extends State<UserHomeScreen>
     PillMessage.show(
       context,
       'Admin has disabled video calls for your account',
+      bottomOffset: 78,
+    );
+  }
+
+  void _showListenerVideoDisabled() {
+    PillMessage.show(
+      context,
+      'This listener has their video call disabled',
       bottomOffset: 78,
     );
   }
@@ -693,6 +708,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
               onAudioCall: () => _callListener(listener['id']),
               onVideoCall: () => _callListener(listener['id'], video: true),
               onVideoBlocked: _showVideoDisabledByAdmin,
+              onListenerVideoBlocked: _showListenerVideoDisabled,
             );
           },
         ),
@@ -907,6 +923,7 @@ class _ListenerCard extends StatelessWidget {
   final VoidCallback onAudioCall;
   final VoidCallback onVideoCall;
   final VoidCallback onVideoBlocked;
+  final VoidCallback onListenerVideoBlocked;
 
   const _ListenerCard({
     super.key,
@@ -920,6 +937,7 @@ class _ListenerCard extends StatelessWidget {
     required this.onAudioCall,
     required this.onVideoCall,
     required this.onVideoBlocked,
+    required this.onListenerVideoBlocked,
   });
 
   @override
@@ -1009,7 +1027,7 @@ class _ListenerCard extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          '${listener['age']?.toString() ?? '...'} · '
+          'Age: ${listener['age']?.toString() ?? '...'} · '
           '${occupation != null && occupation.isNotEmpty ? occupation : '...'}',
           style: const TextStyle(fontSize: 12, color: _AppColors.textMuted),
           overflow: TextOverflow.ellipsis,
@@ -1052,23 +1070,29 @@ class _ListenerCard extends StatelessWidget {
 
   Widget _videoButton() {
     if (isCalling) return const SizedBox(width: 40, height: 40);
+    final bool listenerVideoEnabled = listener['video_call_enabled'] != false;
+    final bool blocked = videoCallDisabledByAdmin || !listenerVideoEnabled;
     return InkWell(
       onTap: !canAct
           ? null
-          : (videoCallDisabledByAdmin ? onVideoBlocked : onVideoCall),
+          : (videoCallDisabledByAdmin
+                ? onVideoBlocked
+                : (!listenerVideoEnabled
+                      ? onListenerVideoBlocked
+                      : onVideoCall)),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: videoCallDisabledByAdmin
+          color: blocked
               ? _AppColors.brandRed.withValues(alpha: 0.2)
               : _AppColors.brandRed.withValues(alpha: canAct ? 0.85 : 0.3),
           shape: BoxShape.circle,
         ),
         child: Icon(
           Icons.videocam,
-          color: videoCallDisabledByAdmin ? Colors.white38 : Colors.white,
+          color: blocked ? Colors.white38 : Colors.white,
           size: 18,
         ),
       ),

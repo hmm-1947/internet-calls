@@ -129,7 +129,9 @@ class _ChatComposerState extends State<ChatComposer> {
     final hasText = text.trim().isNotEmpty;
     // Only the send/record button depends on this, so repaint just the composer
     // and only when the flag actually flips.
-    if (hasText != _hasText) setState(() => _hasText = hasText);
+    if (hasText != _hasText || widget.maxLength != null) {
+      setState(() => _hasText = hasText);
+    }
     ChatDraftCache().write(widget.draftKey, text);
     widget.onTextChanged?.call(text);
   }
@@ -220,9 +222,12 @@ class _ChatComposerState extends State<ChatComposer> {
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  padding: const EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 8,
+                    bottom: 2,
                   ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A2032),
@@ -238,25 +243,49 @@ class _ChatComposerState extends State<ChatComposer> {
                                     ?.triggerPause()
                               : null,
                         )
-                      : TextField(
-                          controller: _controller,
-                          maxLength: widget.maxLength,
-                          buildCounter:
-                              (
-                                context, {
-                                required currentLength,
-                                required isFocused,
-                                maxLength,
-                              }) => null,
-                          style: const TextStyle(color: Colors.white),
-                          textInputAction: TextInputAction.send,
-                          decoration: const InputDecoration(
-                            hintText: 'Type a message',
-                            hintStyle: TextStyle(color: Colors.white54),
-                            border: InputBorder.none,
-                            isDense: true,
-                          ),
-                          onSubmitted: (_) => _submit(),
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: SingleChildScrollView(
+                                reverse: true,
+                                child: TextField(
+                                  controller: _controller,
+                                  maxLength: widget.maxLength,
+                                  maxLines: null,
+                                  buildCounter:
+                                      (
+                                        context, {
+                                        required currentLength,
+                                        required isFocused,
+                                        maxLength,
+                                      }) => null,
+                                  style: const TextStyle(color: Colors.white),
+                                  textInputAction: TextInputAction.newline,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Type a message',
+                                    hintStyle: TextStyle(color: Colors.white54),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onSubmitted: (_) => _submit(),
+                                ),
+                              ),
+                            ),
+                            if (widget.maxLength != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2, bottom: 4),
+                                child: Text(
+                                  '${_controller.text.length}/${widget.maxLength}',
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                 ),
               ),

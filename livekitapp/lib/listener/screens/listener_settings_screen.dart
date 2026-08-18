@@ -111,6 +111,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   String? _photoUrl;
   Map<String, dynamic>? _badgeTag;
   bool _statusOnline = true;
+  bool _videoCallEnabled = true;
 
   @override
   void initState() {
@@ -127,6 +128,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     _photoUrl = cached['photo_url'];
     _badgeTag = cached['badge_tag'] as Map<String, dynamic>?;
     if (cached['is_online'] is bool) _statusOnline = cached['is_online'];
+    if (cached['video_call_enabled'] is bool) _videoCallEnabled = cached['video_call_enabled'];
   }
 
   Future<void> refresh() async {
@@ -141,6 +143,9 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
         _badgeTag = data['badge_tag'] as Map<String, dynamic>?;
         if (data['is_online'] is bool) {
           _statusOnline = data['is_online'] as bool;
+        }
+        if (data['video_call_enabled'] is bool) {
+          _videoCallEnabled = data['video_call_enabled'] as bool;
         }
       });
     } catch (_) {}
@@ -163,6 +168,25 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
         PillMessage.showError(
           context,
           'Failed to update status: $e',
+          bottomOffset: 78,
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleVideoCall(bool value) async {
+    final previous = _videoCallEnabled;
+    setState(() => _videoCallEnabled = value);
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      await _repository.updateVideoCallSetting(token, value);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _videoCallEnabled = previous);
+        PillMessage.showError(
+          context,
+          'Failed to update video call setting: $e',
           bottomOffset: 78,
         );
       }
@@ -316,6 +340,17 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                 value: _statusOnline,
                 activeColor: Colors.green,
                 onChanged: _toggleStatus,
+              ),
+            ),
+            const Divider(height: 1, color: Colors.white12),
+            _SettingsTile(
+              icon: Icons.videocam_outlined,
+              title: 'Video Call',
+              subtitle: 'allow users to video call you',
+              trailing: Switch(
+                value: _videoCallEnabled,
+                activeColor: Colors.green,
+                onChanged: _toggleVideoCall,
               ),
             ),
           ]),

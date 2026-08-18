@@ -829,6 +829,7 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
         last_call_at = last_call_by_listener.get(l.id)
         result.append({
             "id": l.id, "name": l.name, "is_online": bool(l.is_online) and manager.is_listener_online(l.id),
+            "video_call_enabled": bool(l.video_call_enabled),
             "tags": tags,
             "avg_rating": round(avg_rating, 1) if avg_rating else None,
             "rating_count": rating_count or 0,
@@ -881,6 +882,7 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
         "id": l.id,
         "name": l.name,
         "is_online": bool(l.is_online) and manager.is_listener_online(l.id),
+        "video_call_enabled": bool(l.video_call_enabled),
         "about": l.about,
         "tags": tags,
         "languages": languages,

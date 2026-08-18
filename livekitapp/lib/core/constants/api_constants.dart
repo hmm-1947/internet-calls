@@ -26,6 +26,7 @@ class ApiConstants {
   static const String listenerLogin = '/listener/login';
   static const String listenerSessionCheck = '/listener/session/check';
   static const String listenerStatus = '/listener/status';
+  static const String listenerVideoCallSetting = '/listener/video-call-setting';
   static const String listenerLogout = '/listener/logout';
   static const String listenerChangePassword = '/listener/change-password';
   static const String listenerVerifyPassword = '/listener/verify-password';

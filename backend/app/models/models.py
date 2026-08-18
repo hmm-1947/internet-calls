@@ -68,6 +68,7 @@ class Listener(Base):
     coins = Column(Integer, default=0, nullable=False)
     photo_url = Column(String, nullable=True)
     badge_tag_id = Column(Integer, ForeignKey("listener_badge_tags.id"), nullable=True)
+    video_call_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
