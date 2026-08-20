@@ -6467,7 +6467,7 @@
     function personContact(p, type) {
       if (type !== 'user') return escapeHtml(p.phone || '') || '<span class="contact-missing">No phone added</span>';
       const parts = [
-        p.email ? escapeHtml(p.email) : '<span class="contact-missing">No email added</span>',
+        p.email ? escapeHtml(" "+ p.email) : '<span class="contact-missing">No email added</span>',
         p.phone ? escapeHtml(p.phone) : '<span class="contact-missing">No phone added</span>',
       ];
       return parts.join(' · ');
