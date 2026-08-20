@@ -555,15 +555,32 @@ def list_chats(limit: int = Query(5000, le=20000), db: Session = Depends(get_db)
     return result
 
 @router.get("/listener/{listener_id}/wallet")
-def admin_listener_wallet(listener_id: int, db: Session = Depends(get_db), _=Depends(verify_admin)):
+def admin_listener_wallet(
+    listener_id: int,
+    from_date: str = None,
+    to_date: str = None,
+    db: Session = Depends(get_db),
+    _=Depends(verify_admin),
+):
     """Same breakdown as the listener app's own /listener/wallet screen, for
-    any listener the admin selects — read-only, no coins are touched."""
+    any listener the admin selects — read-only, no coins are touched.
+    from_date/to_date (YYYY-MM-DD) optionally scope the day/night breakdown
+    to a date range; totals at the top are always all-time."""
+    from datetime import datetime, timedelta
     from app.models.models import ListenerCoinTransaction, GiftTransaction
     from sqlalchemy import extract, func as sa_func
 
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
+
+    def in_date_range(time_col, filters):
+        if from_date:
+            filters = filters + [time_col >= datetime.strptime(from_date, "%Y-%m-%d")]
+        if to_date:
+            filters = filters + [time_col < datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)]
+        return filters
+
 
     def split_sum(amount_col, time_col, filters):
         day_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
@@ -604,23 +621,23 @@ def admin_listener_wallet(listener_id: int, db: Session = Depends(get_db), _=Dep
 
     audio_seconds_day, audio_seconds_night = split_sum(
         Call.duration_seconds, Call.created_at,
-        [Call.callee_listener_id == listener.id, Call.call_type == "audio"],
+        in_date_range(Call.created_at, [Call.callee_listener_id == listener.id, Call.call_type == "audio"]),
     )
     video_seconds_day, video_seconds_night = split_sum(
         Call.duration_seconds, Call.created_at,
-        [Call.callee_listener_id == listener.id, Call.call_type == "video"],
+        in_date_range(Call.created_at, [Call.callee_listener_id == listener.id, Call.call_type == "video"]),
     )
     text_msgs_day, text_msgs_night = split_count(
         ChatMessage, ChatMessage.created_at,
-        [ChatMessage.listener_id == listener.id, ChatMessage.sender_type == "user", ChatMessage.message_type == "text"],
+        in_date_range(ChatMessage.created_at, [ChatMessage.listener_id == listener.id, ChatMessage.sender_type == "user", ChatMessage.message_type == "text"]),
     )
     voice_msgs_day, voice_msgs_night = split_count(
         ChatMessage, ChatMessage.created_at,
-        [ChatMessage.listener_id == listener.id, ChatMessage.sender_type == "user", ChatMessage.message_type == "audio"],
+        in_date_range(ChatMessage.created_at, [ChatMessage.listener_id == listener.id, ChatMessage.sender_type == "user", ChatMessage.message_type == "audio"]),
     )
     gift_coins_day, gift_coins_night = split_sum(
         GiftTransaction.coins, GiftTransaction.created_at,
-        [GiftTransaction.listener_id == listener.id],
+        in_date_range(GiftTransaction.created_at, [GiftTransaction.listener_id == listener.id]),
     )
     gift_coins_total = db.query(sa_func.coalesce(sa_func.sum(GiftTransaction.coins), 0)).filter(
         GiftTransaction.listener_id == listener.id,
