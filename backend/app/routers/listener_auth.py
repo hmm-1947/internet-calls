@@ -138,6 +138,9 @@ def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depen
         GiftTransaction.listener_id == current_listener.id,
     ).scalar()
 
+    from app.utils.wallet_stats import current_and_previous_week
+    weekly = current_and_previous_week(db, current_listener.id)
+
     return {
         "coins": current_listener.coins,
         "audio_call_coins": int(audio_coins),
@@ -146,6 +149,7 @@ def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depen
         "video_call_minutes": (int(video_seconds_day) + int(video_seconds_night)) // 60,
         "chat_coins": int(chat_coins),
         "gift_coins": int(gift_coins_total),
+        # All-time totals, kept for existing callers (e.g. the withdraw screen).
         "day": {
             "audio_call_minutes": audio_seconds_day // 60,
             "video_call_minutes": video_seconds_day // 60,
@@ -160,6 +164,9 @@ def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depen
             "voice_messages": voice_msgs_night,
             "gift_coins": gift_coins_night,
         },
+        # Calendar-week (Mon-Sun) breakdown shown on the wallet screen.
+        "current_week": weekly["current_week"],
+        "previous_week": weekly["previous_week"],
     }
 
 

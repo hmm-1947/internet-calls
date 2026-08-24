@@ -439,6 +439,10 @@ class AdminNotification(Base):
     subject_type = Column(String, nullable=True)  # "user" | "listener"
     subject_id = Column(Integer, nullable=True, index=True)
     subject_name = Column(String, nullable=True)  # snapshot in case the account is later removed
+    # Id of a related row the panel needs to look the notification up by,
+    # e.g. the withdrawal_requests.id for a "withdrawal_request" notification
+    # (subject_id/subject_type point at the listener, not the request).
+    related_id = Column(Integer, nullable=True)
     is_read = Column(Boolean, default=False, nullable=False, server_default="false")
     is_done = Column(Boolean, default=False, nullable=False, server_default="false")
     done_at = Column(DateTime(timezone=True), nullable=True)

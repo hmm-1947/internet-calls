@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
-import 'package:livekitapp/listener/screens/listener_withdrawal_screen.dart';
-import 'package:livekitapp/common/utils/fade_page_route.dart';
+import 'package:livekitapp/common/widgets/pill_message.dart';
 
 class ListenerWalletScreen extends StatefulWidget {
   const ListenerWalletScreen({super.key});
@@ -16,39 +15,108 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
   final _repository = ListenerRepository();
   final _localStorage = LocalStorage();
   bool _loading = true;
-  int _coins = 0;
+  bool _submittingWithdrawal = false;
 
-  Map<String, dynamic> _day = {};
-  Map<String, dynamic> _night = {};
+  Map<String, dynamic> _currentWeekDay = {};
+  Map<String, dynamic> _currentWeekNight = {};
+  Map<String, dynamic> _previousWeekDay = {};
+  Map<String, dynamic> _previousWeekNight = {};
+
   @override
   void initState() {
     super.initState();
     final cached = ListenerDataCache().cachedWallet;
     if (cached != null) {
-      _coins = cached['coins'] ?? 0;
-      _day = cached['day'] ?? {};
-      _night = cached['night'] ?? {};
+      _applyData(cached);
       _loading = false;
     }
     _load();
+  }
+
+  void _applyData(Map<String, dynamic> data) {
+    final currentWeek = data['current_week'] ?? {};
+    final previousWeek = data['previous_week'] ?? {};
+    _currentWeekDay = currentWeek['day'] ?? {};
+    _currentWeekNight = currentWeek['night'] ?? {};
+    _previousWeekDay = previousWeek['day'] ?? {};
+    _previousWeekNight = previousWeek['night'] ?? {};
   }
 
   Future<void> _load() async {
     try {
       final token = await _localStorage.getToken();
       if (token == null) return;
-      final data = await _repository.getWallet(token);
+      final data = await _repository.getWallet(token, forceRefresh: true);
       if (!mounted) return;
       setState(() {
-        _coins = data['coins'] ?? 0;
-        _day = data['day'] ?? {};
-        _night = data['night'] ?? {};
+        _applyData(data);
         _loading = false;
       });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  Future<void> _confirmAndSendWithdrawRequest() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text(
+          'Send Withdrawal Request',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'This will send a withdrawal request to the admin for review. '
+          'Continue?',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(
+              'Send Request',
+              style: TextStyle(color: Color(0xFFE53950)),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _sendWithdrawRequest();
+  }
+
+  Future<void> _sendWithdrawRequest() async {
+    setState(() => _submittingWithdrawal = true);
+    try {
+      final token = await _localStorage.getToken();
+      if (token == null) return;
+      final wallet = await _repository.getWallet(token, forceRefresh: true);
+      final coins = wallet['coins'] ?? 0;
+      await _repository.createWithdrawalRequest(token, coins);
+      if (mounted) {
+        PillMessage.showSuccess(context, 'Withdrawal request sent to admin');
+      }
+      _load();
+    } catch (e) {
+      if (mounted) {
+        PillMessage.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submittingWithdrawal = false);
+    }
+  }
+
 
   Widget _buildTimeSection(String title, Map<String, dynamic> data) {
     return Container(
@@ -140,49 +208,12 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'TOTAL BALANCE',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            _coins.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'COINS',
-                            style: TextStyle(
-                              color: Color(0xFFE53950),
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () async {
-                            await Navigator.of(
-                              context,
-                            ).push(fadeRoute(const ListenerWithdrawalScreen()));
-                            _load();
-                          },
+                          onPressed: _submittingWithdrawal
+                              ? null
+                              : _confirmAndSendWithdrawRequest,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFE53950),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -190,24 +221,58 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text(
-                            'Withdraw',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          child: _submittingWithdrawal
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Withdraw',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                _buildTimeSection('DAY TIME', _day),
+                const Text(
+                  'THIS WEEK',
+                  style: TextStyle(
+                    color: Colors.white38,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildTimeSection('DAY TIME', _currentWeekDay),
                 const SizedBox(height: 16),
-                _buildTimeSection('NIGHT TIME', _night),
+                _buildTimeSection('NIGHT TIME', _currentWeekNight),
+                const SizedBox(height: 24),
+                const Text(
+                  'LAST WEEK',
+                  style: TextStyle(
+                    color: Colors.white38,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildTimeSection('DAY TIME', _previousWeekDay),
+                const SizedBox(height: 16),
+                _buildTimeSection('NIGHT TIME', _previousWeekNight),
               ],
             ),
     );
   }
 }
+

@@ -704,6 +704,7 @@ class AdminNotificationOut(BaseModel):
     subject_type: Optional[str] = None
     subject_id: Optional[int] = None
     subject_name: Optional[str] = None
+    related_id: Optional[int] = None
     is_read: bool
     is_done: bool
     done_at: Optional[datetime] = None

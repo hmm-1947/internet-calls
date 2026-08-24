@@ -2611,6 +2611,22 @@
   </div>
 </div>
 
+<!-- Withdrawal request details popup (opens when a withdrawal_request notification is clicked) -->
+<div class="confirm-overlay profile-overlay" id="withdrawalPopupOverlay" style="display:none;">
+  <div class="confirm-box profile-box">
+    <div class="confirm-icon info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.5 2.5 0 0 1 2.5-1.8c1.4 0 2.5.9 2.5 2s-1 1.5-2.5 2-2.5 1-2.5 2c0 1.1 1.1 2 2.5 2a2.5 2.5 0 0 0 2.5-1.8M12 6.5v1.1M12 16.4v1.1"/></svg></div>
+    <div class="confirm-title">Withdrawal Request</div>
+    <div class="profile-username" id="withdrawalPopupSubtitle"></div>
+    <div id="withdrawalPopupBody" style="font-size:13px;color:var(--slate);margin:8px 0;"></div>
+    <div id="withdrawalPopupMsg" style="font-weight:600;font-size:13px;text-align:center;min-height:18px;margin-bottom:4px;"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeWithdrawalPopup()">Close</button>
+      <button class="btn btn-danger" id="withdrawalPopupRejectBtn" onclick="decideWithdrawalFromPopup('reject')">Reject</button>
+      <button class="btn btn-leaf" id="withdrawalPopupAcceptBtn" onclick="decideWithdrawalFromPopup('approve')">Accept</button>
+    </div>
+  </div>
+</div>
+
 <!-- Assign tag to a listener (opens when a listener row is clicked) -->
 <div class="confirm-overlay profile-overlay" id="tagAssignOverlay" style="display:none;">
   <div class="confirm-box profile-box">
@@ -2853,6 +2869,7 @@
       <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
         Requests and events raised from the apps. Tick a notification to mark it as done and remove it from this list.
       </p>
+      <input class="search-box" id="notificationSearch" placeholder="Search withdrawal requests by listener name" oninput="renderNotifications()">
       <div id="notificationsList"></div>
     </div>
   </div>
@@ -5938,8 +5955,22 @@
         return;
       }
 
+      const searchInput = document.getElementById('notificationSearch');
+      const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+      const filtered = query
+        ? notificationsCache.filter(n =>
+            n.type === 'withdrawal_request' &&
+            (n.subject_name || '').toLowerCase().includes(query)
+          )
+        : notificationsCache;
+
+      if (!filtered.length) {
+        wrap.innerHTML = '<div class="empty-state">No withdrawal requests match that name.</div>';
+        return;
+      }
+
       // Newest first, then split into day buckets so each day gets one header.
-      const items = [...notificationsCache].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const items = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       const groups = [];
       items.forEach(n => {
         const label = notificationDateLabel(n.created_at);
@@ -5951,8 +5982,8 @@
       wrap.innerHTML = groups.map(g => `
         <div class="notif-date-sep"><span>${escapeHtml(g.label)}</span></div>
         ${g.items.map(n => `
-          <div class="notif-row ${n.is_read ? '' : 'unread'}" id="notifRow${n.id}">
-            <button class="notif-tick" title="Mark as done" onclick="confirmNotificationDone(${n.id})">✓</button>
+          <div class="notif-row ${n.is_read ? '' : 'unread'}" id="notifRow${n.id}" ${n.type === 'withdrawal_request' && !n.is_done ? `onclick="openWithdrawalPopup(${n.id})" style="cursor:pointer;"` : ''}>
+            <button class="notif-tick" title="Mark as done" onclick="event.stopPropagation(); confirmNotificationDone(${n.id})">✓</button>
             <div class="notif-body">
               <div class="notif-title">
                 <span>${escapeHtml(n.title)}</span>
@@ -6133,7 +6164,136 @@
       }
     }
 
+    // ─── Withdrawal request popup (opened from a notification click) ────────
+    let _withdrawalPopup = { notificationId: null, requestId: null };
+
+    function setWithdrawalPopupMsg(text, ok) {
+      const el = document.getElementById('withdrawalPopupMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    function weeklyStatLine(label, day, night) {
+      return `
+        <div style="display:flex;justify-content:space-between;padding:3px 0;">
+          <span>${label}</span>
+          <span>Day: ${day} · Night: ${night}</span>
+        </div>
+      `;
+    }
+
+    async function openWithdrawalPopup(notificationId) {
+      const notif = notificationsCache.find(n => n.id === notificationId);
+      if (!notif || !notif.related_id) return;
+      _withdrawalPopup = { notificationId, requestId: notif.related_id };
+
+      document.getElementById('withdrawalPopupSubtitle').textContent = 'Loading…';
+      document.getElementById('withdrawalPopupBody').innerHTML = '';
+      setWithdrawalPopupMsg('', null);
+      document.getElementById('withdrawalPopupAcceptBtn').disabled = true;
+      document.getElementById('withdrawalPopupRejectBtn').disabled = true;
+
+      const overlay = document.getElementById('withdrawalPopupOverlay');
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('show'));
+
+      try {
+        const res = await fetch(API_URL + '/admin/withdrawals/' + notif.related_id + '/details', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load withdrawal request details');
+
+        const req = data.request;
+        document.getElementById('withdrawalPopupSubtitle').textContent =
+          `${data.listener_name} · Requesting ${req.coins} coins`;
+
+        const week = data.current_week || {};
+        const day = week.day || {};
+        const night = week.night || {};
+        document.getElementById('withdrawalPopupBody').innerHTML = `
+          <div style="font-weight:600;color:var(--ink);margin-bottom:4px;">This week</div>
+          ${weeklyStatLine('Audio calls', (day.audio_call_minutes ?? 0) + ' min', (night.audio_call_minutes ?? 0) + ' min')}
+          ${weeklyStatLine('Video calls', (day.video_call_minutes ?? 0) + ' min', (night.video_call_minutes ?? 0) + ' min')}
+          ${weeklyStatLine('Chat messages', day.chat_messages ?? 0, night.chat_messages ?? 0)}
+          ${weeklyStatLine('Voice chats', day.voice_messages ?? 0, night.voice_messages ?? 0)}
+          ${weeklyStatLine('Gift coins', day.gift_coins ?? 0, night.gift_coins ?? 0)}
+        `;
+
+        const isPending = req.status === 'pending';
+        document.getElementById('withdrawalPopupAcceptBtn').disabled = !isPending;
+        document.getElementById('withdrawalPopupRejectBtn').disabled = !isPending;
+        if (!isPending) {
+          setWithdrawalPopupMsg(`Already ${req.status}.`, req.status === 'approved');
+        }
+      } catch (e) {
+        document.getElementById('withdrawalPopupSubtitle').textContent = '';
+        setWithdrawalPopupMsg(e.message || 'Failed to load request details', false);
+      }
+    }
+
+    function closeWithdrawalPopup() {
+      const overlay = document.getElementById('withdrawalPopupOverlay');
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 180);
+      _withdrawalPopup = { notificationId: null, requestId: null };
+    }
+
+    document.getElementById('withdrawalPopupOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeWithdrawalPopup();
+    });
+
+    async function decideWithdrawalFromPopup(action) {
+      const { notificationId, requestId } = _withdrawalPopup;
+      if (!requestId) return;
+      const verb = action === 'approve' ? 'accept' : 'reject';
+      const confirmed = await confirmDialog({
+        title: action === 'approve' ? 'Accept withdrawal' : 'Reject withdrawal',
+        body: `Are you sure you want to ${verb} this withdrawal request?`,
+        okLabel: action === 'approve' ? 'Accept' : 'Reject',
+        okClass: action === 'approve' ? 'btn-leaf' : 'btn-danger',
+        icon: 'coin',
+        iconClass: action === 'approve' ? 'info' : 'danger',
+      });
+      if (!confirmed) return;
+
+      document.getElementById('withdrawalPopupAcceptBtn').disabled = true;
+      document.getElementById('withdrawalPopupRejectBtn').disabled = true;
+      try {
+        const res = await fetch(API_URL + '/admin/withdrawals/' + requestId + '/' + action, {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to update withdrawal request');
+
+        setWithdrawalPopupMsg(action === 'approve' ? 'Accepted — coins deducted.' : 'Rejected.', true);
+
+        // The panel's own pending/log views and the notification feed should
+        // all reflect the decision immediately.
+        loadPendingWithdrawals();
+        loadWithdrawalLog(1);
+        if (notificationId != null) {
+          try {
+            await fetch(API_URL + '/admin/notifications/' + notificationId + '/done', {
+              method: 'POST',
+              headers: authHeaders(),
+            });
+            const removed = notificationsCache.find(n => n.id === notificationId);
+            notificationsCache = notificationsCache.filter(n => n.id !== notificationId);
+            if (removed && !removed.is_read) setNotificationsBadge(notificationsUnread - 1);
+            renderNotifications();
+          } catch (e) { /* notification feed also polls on open, not fatal */ }
+        }
+        setTimeout(closeWithdrawalPopup, 700);
+      } catch (e) {
+        document.getElementById('withdrawalPopupAcceptBtn').disabled = false;
+        document.getElementById('withdrawalPopupRejectBtn').disabled = false;
+        setWithdrawalPopupMsg(e.message || 'Failed to update withdrawal request', false);
+      }
+    }
+
     async function loadBillingAuditLog() {
+
       const wrap = document.getElementById('billingAuditLogList');
       wrap.innerHTML = skelTable(5, 6);
       try {

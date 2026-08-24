@@ -29,6 +29,7 @@ async def create_admin_notification(
     subject_type: str | None = None,
     subject_id: int | None = None,
     subject_name: str | None = None,
+    related_id: int | None = None,
 ) -> AdminNotification:
     """Stores a notification and pushes it to every connected admin panel.
 
@@ -42,6 +43,7 @@ async def create_admin_notification(
         subject_type=subject_type,
         subject_id=subject_id,
         subject_name=subject_name,
+        related_id=related_id,
     )
     db.add(notification)
     db.commit()

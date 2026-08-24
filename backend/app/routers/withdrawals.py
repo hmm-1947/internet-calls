@@ -25,29 +25,24 @@ async def create_withdrawal_request(
     db: Session = Depends(get_db),
     listener: Listener = Depends(get_current_listener),
 ):
-    if payload.coins <= 0:
-        raise HTTPException(status_code=400, detail="Coins must be greater than zero")
+    if payload.coins < 0:
+        raise HTTPException(status_code=400, detail="Coins cannot be negative")
 
-    # Lock the row so a concurrent second request can't be created against
-    # the same coins before this one is committed (coins are only actually
-    # deducted on approval, but requested totals still shouldn't silently
-    # exceed the wallet balance).
+    # Lock the row so a concurrent second request can't slip in between the
+    # pending-request check below and the insert.
     locked_listener = db.query(Listener).filter(Listener.id == listener.id).with_for_update().first()
     if not locked_listener:
         raise HTTPException(status_code=404, detail="Listener not found")
 
-    already_pending = (
+    has_pending = (
         db.query(WithdrawalRequest)
         .filter(WithdrawalRequest.listener_id == listener.id, WithdrawalRequest.status == "pending")
-        .with_entities(WithdrawalRequest.coins)
-        .all()
+        .first()
     )
-    pending_total = sum(c for (c,) in already_pending)
-
-    if payload.coins + pending_total > locked_listener.coins:
+    if has_pending:
         raise HTTPException(
             status_code=400,
-            detail="Requested coins exceed your available wallet balance (including other pending requests)",
+            detail="You already have a withdrawal request pending admin review",
         )
 
     request = WithdrawalRequest(
@@ -67,6 +62,7 @@ async def create_withdrawal_request(
         subject_type="listener",
         subject_id=listener.id,
         subject_name=listener.name,
+        related_id=request.id,
     )
 
     out = WithdrawalRequestOut.model_validate(request)
@@ -118,6 +114,35 @@ def list_withdrawal_requests(
         out.listener_name = listener_name
         result.append(out)
     return result
+
+
+@admin_router.get("/{request_id}/details")
+def get_withdrawal_request_details(
+    request_id: int,
+    db: Session = Depends(get_db),
+    _admin: AdminUser = Depends(verify_admin),
+):
+    """Listener name + current-week day/night activity, for the admin panel's
+    accept/reject popup opened from a withdrawal_request notification."""
+    request = db.query(WithdrawalRequest).filter(WithdrawalRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Withdrawal request not found")
+    listener = db.query(Listener).filter(Listener.id == request.listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+
+    from app.utils.wallet_stats import day_night_breakdown, week_bounds
+    start, end = week_bounds(weeks_ago=0)
+    current_week = day_night_breakdown(db, listener.id, start, end)
+
+    out = WithdrawalRequestOut.model_validate(request)
+    out.listener_name = listener.name
+    return {
+        "request": out,
+        "listener_id": listener.id,
+        "listener_name": listener.name,
+        "current_week": current_week,
+    }
 
 
 @admin_router.get("/count")
