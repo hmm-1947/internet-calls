@@ -2935,19 +2935,11 @@
 
     <div class="card">
       <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <span>Pending Withdrawal Requests</span>
-        <button class="btn btn-ghost" onclick="loadPendingWithdrawals()">Refresh</button>
-      </h2>
-      <div id="pendingWithdrawalsList"></div>
-    </div>
-
-    <div class="card">
-      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <span>Withdrawal Decision Log</span>
         <button class="btn btn-ghost" onclick="loadWithdrawalLog(1)">Refresh</button>
       </h2>
       <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
-        Every approved/rejected withdrawal request. Showing the 10 latest per page.
+        Every approved/rejected withdrawal request. Showing the 10 latest per page. Pending requests are handled from the Notifications section.
       </p>
       <div id="withdrawalLogList"></div>
       <div id="withdrawalLogPagination" style="display:flex;align-items:center;gap:10px;margin-top:12px;"></div>
@@ -3578,7 +3570,6 @@
       }
       if (page === 'listeners') {
         loadListenerAuditLog();
-        loadPendingWithdrawals();
         loadWithdrawalLog();
       }
       updateNavSlider(instant);
@@ -6040,67 +6031,6 @@
     let withdrawalLogCache = [];
     let withdrawalLogPage = 1;
 
-    async function loadPendingWithdrawals() {
-      const wrap = document.getElementById('pendingWithdrawalsList');
-      if (!wrap) return;
-      wrap.innerHTML = skelTable(4, 5);
-      try {
-        const res = await fetch(
-          API_URL + '/admin/withdrawals?status=pending&skip=0&limit=100',
-          { headers: authHeaders() }
-        );
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to load withdrawal requests');
-        renderPendingWithdrawals(wrap, data);
-      } catch (e) {
-        wrap.innerHTML = '<div class="empty-state">Failed to load pending withdrawal requests.</div>';
-      }
-    }
-
-    function renderPendingWithdrawals(wrap, items) {
-      if (!items.length) {
-        wrap.innerHTML = '<div class="empty-state">No pending withdrawal requests.</div>';
-        return;
-      }
-      wrap.innerHTML = `
-        <table>
-          <thead><tr><th>Listener</th><th>Coins</th><th>Requested</th><th>Action</th></tr></thead>
-          <tbody>
-            ${items.map(r => `
-              <tr>
-                <td>${r.listener_name || ('#' + r.listener_id)}</td>
-                <td>${r.coins}</td>
-                <td style="white-space:nowrap;">${formatPurchaseDate(r.created_at)}</td>
-                <td style="display:flex;gap:8px;">
-                  <button class="btn btn-leaf" onclick="decideWithdrawal(${r.id}, 'approve')">Approve</button>
-                  <button class="btn btn-ghost" onclick="decideWithdrawal(${r.id}, 'reject')">Reject</button>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-    }
-
-    async function decideWithdrawal(requestId, action) {
-      const verb = action === 'approve' ? 'approve' : 'reject';
-      const confirmed = window.confirm('Are you sure you want to ' + verb + ' this withdrawal request?');
-      if (!confirmed) return;
-      try {
-        const res = await fetch(API_URL + '/admin/withdrawals/' + requestId + '/' + action, {
-          method: 'POST',
-          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to update withdrawal request');
-        loadPendingWithdrawals();
-        loadWithdrawalLog(1);
-      } catch (e) {
-        alert(e.message || 'Failed to update withdrawal request');
-      }
-    }
-
     async function loadWithdrawalLog(page) {
       withdrawalLogPage = page || 1;
       const wrap = document.getElementById('withdrawalLogList');
@@ -6268,9 +6198,8 @@
 
         setWithdrawalPopupMsg(action === 'approve' ? 'Accepted — coins deducted.' : 'Rejected.', true);
 
-        // The panel's own pending/log views and the notification feed should
+        // The panel's own log view and the notification feed should
         // all reflect the decision immediately.
-        loadPendingWithdrawals();
         loadWithdrawalLog(1);
         if (notificationId != null) {
           try {
