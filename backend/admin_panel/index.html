@@ -497,32 +497,6 @@
       transform: translateX(12px);
     }
 
-    .notif-tick {
-      flex: 0 0 auto;
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      border: 1.5px solid var(--line);
-      background: transparent;
-      color: #1c9a5b;
-      font-size: 15px;
-      line-height: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .notif-tick:hover {
-      background: #e6f7ee;
-      border-color: #1c9a5b;
-    }
-
-    .notif-tick:disabled {
-      opacity: .5;
-      cursor: default;
-    }
-
     .notif-body {
       flex: 1;
       min-width: 0;
@@ -2867,7 +2841,7 @@
         <button class="btn btn-ghost" onclick="loadNotifications()">↻ Refresh</button>
       </h2>
       <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
-        Requests and events raised from the apps. Tick a notification to mark it as done and remove it from this list.
+        Requests and events raised from the apps.
       </p>
       <input class="search-box" id="notificationSearch" placeholder="Search withdrawal requests by listener name" oninput="renderNotifications()">
       <div id="notificationsList"></div>
@@ -5974,7 +5948,6 @@
         <div class="notif-date-sep"><span>${escapeHtml(g.label)}</span></div>
         ${g.items.map(n => `
           <div class="notif-row ${n.is_read ? '' : 'unread'}" id="notifRow${n.id}" ${n.type === 'withdrawal_request' && !n.is_done ? `onclick="openWithdrawalPopup(${n.id})" style="cursor:pointer;"` : ''}>
-            <button class="notif-tick" title="Mark as done" onclick="event.stopPropagation(); confirmNotificationDone(${n.id})">✓</button>
             <div class="notif-body">
               <div class="notif-title">
                 <span>${escapeHtml(n.title)}</span>
@@ -5986,45 +5959,6 @@
           </div>
         `).join('')}
       `).join('');
-    }
-
-    async function confirmNotificationDone(id) {
-      const ok = await confirmDialog({
-        title: 'Mark as done',
-        body: 'Mark this notification as done? It will be removed from the list.',
-        okLabel: 'Mark as done',
-        okClass: 'btn-leaf',
-        icon: 'check',
-        iconClass: 'info'
-      });
-      if (!ok) return;
-
-      const btn = document.querySelector('#notifRow' + id + ' .notif-tick');
-      if (btn) btn.disabled = true;
-      try {
-        const res = await fetch(API_URL + '/admin/notifications/' + id + '/done', {
-          method: 'POST',
-          headers: authHeaders(),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to mark notification as done');
-
-        const removed = notificationsCache.find(n => n.id === id);
-        notificationsCache = notificationsCache.filter(n => n.id !== id);
-        if (removed && !removed.is_read) setNotificationsBadge(notificationsUnread - 1);
-
-        // Fade the row out before the list is rebuilt, so it doesn't jump.
-        const row = document.getElementById('notifRow' + id);
-        if (row) {
-          row.classList.add('leaving');
-          setTimeout(renderNotifications, 180);
-        } else {
-          renderNotifications();
-        }
-      } catch (e) {
-        if (btn) btn.disabled = false;
-        alert(e.message || 'Failed to mark notification as done');
-      }
     }
 
     const WITHDRAWAL_LOG_PAGE_SIZE = 10;
