@@ -485,7 +485,11 @@ def register_complete(payload: UserRegisterComplete, db: Session = Depends(get_d
             or USERNAME_TAKEN_MESSAGE,
         )
 
+    from app.routers.special_offers import credit_signup_offer_if_eligible
+    credit_signup_offer_if_eligible(db, user)
+
     db.delete(pending)
+
 
     token = generate_session_token()
     db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
@@ -607,6 +611,9 @@ def auth_google(payload: GoogleSignIn, db: Session = Depends(get_db)):
         )
         db.add(user)
         db.flush()
+
+        from app.routers.special_offers import credit_signup_offer_if_eligible
+        credit_signup_offer_if_eligible(db, user)
     elif not user.is_active:
         raise HTTPException(status_code=401, detail="This account has been deactivated")
 

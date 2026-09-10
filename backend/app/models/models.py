@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, Text
+
 from sqlalchemy.sql import func
 from app.core.database import Base
 from sqlalchemy import Index
@@ -237,6 +238,21 @@ class WeeklyChallengeSettings(Base):
     goal3_minutes = Column(Integer, default=120, nullable=False)
     is_active = Column(Boolean, default=False, nullable=False, server_default="0")
     activated_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class SignupOfferSettings(Base):
+    """Single-row admin config: new users who register while today's date
+    falls inside [from_date, to_date] (inclusive) are credited `coin_amount`
+    coins once, at account-creation time. Both dates are calendar dates
+    (no time-of-day), compared in UTC."""
+    __tablename__ = "signup_offer_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    from_date = Column(Date, nullable=True)
+    to_date = Column(Date, nullable=True)
+    coin_amount = Column(Integer, default=0, nullable=False, server_default="0")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
 
 
 class ListenerWeeklyChallengeProgress(Base):

@@ -3082,6 +3082,21 @@
       <h2>Special Offers</h2>
       <div id="offersList"></div>
     </div>
+
+    <div class="card">
+      <h2>Signup Offer</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Users who create an account between the from and to dates (inclusive) are automatically credited the coin amount below, once, at signup. Accounts created outside this date range get nothing.
+      </p>
+      <label style="font-size:13px;color:var(--slate);font-weight:600">From date</label>
+      <input id="signupOfferFromDate" type="date">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">To date</label>
+      <input id="signupOfferToDate" type="date">
+      <label style="font-size:13px;color:var(--slate);font-weight:600">Coin amount</label>
+      <input id="signupOfferCoinAmount" placeholder="0" type="number" min="0" value="0">
+      <button class="btn btn-leaf" onclick="saveSignupOffer()">Save Signup Offer</button>
+      <div id="signupOfferMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
   </div>
 
   <div id="page-weeklychallenges" style="display:none;">
@@ -3483,6 +3498,7 @@
       loadGiftAuditLog();
       loadGiftTransactions();
       loadSpecialOffers();
+      loadSignupOffer();
       loadWeeklyChallengeGoals();
       loadWeeklyChallengeLeaderboard();
       loadWeeklyChallengeHistory();
@@ -5267,6 +5283,52 @@
 
     function setOfferMsg(text, ok) {
       const el = document.getElementById('offerMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function loadSignupOffer() {
+      try {
+        const res = await fetch(API_URL + '/special-offers/admin/signup-offer', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load signup offer');
+        document.getElementById('signupOfferFromDate').value = data.from_date || '';
+        document.getElementById('signupOfferToDate').value = data.to_date || '';
+        document.getElementById('signupOfferCoinAmount').value = data.coin_amount ?? 0;
+      } catch (e) {
+        setSignupOfferMsg('✗ ' + e.message, false);
+      }
+    }
+
+    async function saveSignupOffer() {
+      const fromDate = document.getElementById('signupOfferFromDate').value;
+      const toDate = document.getElementById('signupOfferToDate').value;
+      const coinAmount = parseInt(document.getElementById('signupOfferCoinAmount').value) || 0;
+      if (!fromDate || !toDate) {
+        setSignupOfferMsg('Please choose both a from and a to date.', false);
+        return;
+      }
+      if (toDate < fromDate) {
+        setSignupOfferMsg("'To' date cannot be before 'From' date.", false);
+        return;
+      }
+      setSignupOfferMsg('Saving…', null);
+      try {
+        const params = new URLSearchParams({ from_date: fromDate, to_date: toDate, coin_amount: coinAmount });
+        const res = await fetch(API_URL + '/special-offers/admin/signup-offer?' + params.toString(), {
+          method: 'PUT',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to save signup offer');
+        setSignupOfferMsg('✓ Signup offer saved', true);
+      } catch (e) {
+        setSignupOfferMsg('✗ ' + e.message, false);
+      }
+    }
+
+    function setSignupOfferMsg(text, ok) {
+      const el = document.getElementById('signupOfferMsg');
       el.textContent = text;
       el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
     }
