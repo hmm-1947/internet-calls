@@ -135,88 +135,97 @@ class _UserMainScreenState extends State<UserMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F1A2E),
-      extendBody: true,
-      body: Column(
-        children: [
-          Container(
-            color: Colors.black,
-            child: SafeArea(
-              bottom: false,
-              child: ValueListenableBuilder<int?>(
-                valueListenable: userCoinsNotifier,
-                builder: (context, coins, _) => HomeHeader(
-                  coins: coins,
-                  title: _titles[_index],
-                  isHome: _index == 0,
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        // Not on the home tab: back button just takes the user home
+        // instead of exiting the app.
+        _onTabSelected(0);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F1A2E),
+        extendBody: true,
+        body: Column(
+          children: [
+            Container(
+              color: Colors.black,
+              child: SafeArea(
+                bottom: false,
+                child: ValueListenableBuilder<int?>(
+                  valueListenable: userCoinsNotifier,
+                  builder: (context, coins, _) => HomeHeader(
+                    coins: coins,
+                    title: _titles[_index],
+                    isHome: _index == 0,
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            // Listened to per page rather than around the whole PageView, so a
-            // notification can be attributed to the tab it came from.
-            child: PageView(
-              controller: _pageController,
-              physics: const ClampingScrollPhysics(),
-              onPageChanged: _onPageChanged,
-              children: [
-                for (var i = 0; i < _screens.length; i++)
-                  KeepAlivePage(
-                    child: RepaintBoundary(
-                      child: NotificationListener<ScrollMetricsNotification>(
-                        onNotification: (n) => _onScrollMetrics(i, n),
-                        child: NotificationListener<ScrollNotification>(
-                          onNotification: (n) => _onScrollNotification(i, n),
-                          child: _screens[i],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: AutoHideNavBar(
-        visible: _navBarVisible,
-        child: CrownNavBar(
-          selectedIndex: _index,
-          onDestinationSelected: _onTabSelected,
-          crownImageAsset: 'assets/images/rupee_icon.png',
-          crownSize: 85,
-          onCrownTap: () {
-            Navigator.of(context).push(fadeRoute(const UpgradeScreen()));
-          },
-          labels: const ['Home', 'Chat', 'Calls', 'Profile'],
-          icons: [
-            const Icon(Icons.grid_view_rounded),
-            ValueListenableBuilder<bool>(
-              valueListenable: userChatDotNotifier,
-              builder: (context, hasDot, _) => Stack(
-                clipBehavior: Clip.none,
+            Expanded(
+              // Listened to per page rather than around the whole PageView, so a
+              // notification can be attributed to the tab it came from.
+              child: PageView(
+                controller: _pageController,
+                physics: const ClampingScrollPhysics(),
+                onPageChanged: _onPageChanged,
                 children: [
-                  const Icon(Icons.chat_bubble_outline),
-                  if (hasDot)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
+                  for (var i = 0; i < _screens.length; i++)
+                    KeepAlivePage(
+                      child: RepaintBoundary(
+                        child: NotificationListener<ScrollMetricsNotification>(
+                          onNotification: (n) => _onScrollMetrics(i, n),
+                          child: NotificationListener<ScrollNotification>(
+                            onNotification: (n) => _onScrollNotification(i, n),
+                            child: _screens[i],
+                          ),
                         ),
                       ),
                     ),
                 ],
               ),
             ),
-            const Icon(Icons.call_outlined),
-            const Icon(Icons.settings_outlined),
           ],
+        ),
+        bottomNavigationBar: AutoHideNavBar(
+          visible: _navBarVisible,
+          child: CrownNavBar(
+            selectedIndex: _index,
+            onDestinationSelected: _onTabSelected,
+            crownImageAsset: 'assets/images/rupee_icon.png',
+            crownSize: 85,
+            onCrownTap: () {
+              Navigator.of(context).push(fadeRoute(const UpgradeScreen()));
+            },
+            labels: const ['Home', 'Chat', 'Calls', 'Profile'],
+            icons: [
+              const Icon(Icons.grid_view_rounded),
+              ValueListenableBuilder<bool>(
+                valueListenable: userChatDotNotifier,
+                builder: (context, hasDot, _) => Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.chat_bubble_outline),
+                    if (hasDot)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.call_outlined),
+              const Icon(Icons.settings_outlined),
+            ],
+          ),
         ),
       ),
     );

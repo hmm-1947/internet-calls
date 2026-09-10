@@ -142,89 +142,96 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      extendBody: true,
-      body: Column(
-        children: [
-          Container(
-            color: Colors.black,
-            child: SafeArea(
-              bottom: false,
-              child: ListenerHomeHeader(
-                title: _titles[_index],
-                isHome: _index == 0,
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        // Not on the home tab: back button just takes the listener home
+        // instead of exiting the app.
+        _onTabSelected(0);
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        extendBody: true,
+        body: Column(
+          children: [
+            Container(
+              color: Colors.black,
+              child: SafeArea(
+                bottom: false,
+                child: ListenerHomeHeader(
+                  title: _titles[_index],
+                  isHome: _index == 0,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                // Listened to per page rather than around the whole PageView,
-                // so a notification can be attributed to the tab it came from.
-                PageView(
-                  controller: _pageController,
-                  physics: const ClampingScrollPhysics(),
-                  onPageChanged: _onPageChanged,
-                  children: [
-                    for (var i = 0; i < _screens.length; i++)
-                      KeepAlivePage(
-                        child: RepaintBoundary(
-                          child: NotificationListener<ScrollMetricsNotification>(
-                            onNotification: (n) => _onScrollMetrics(i, n),
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: (n) =>
-                                  _onScrollNotification(i, n),
-                              child: _screens[i],
+            Expanded(
+              child: Stack(
+                children: [
+                  // Listened to per page rather than around the whole PageView,
+                  // so a notification can be attributed to the tab it came from.
+                  PageView(
+                    controller: _pageController,
+                    physics: const ClampingScrollPhysics(),
+                    onPageChanged: _onPageChanged,
+                    children: [
+                      for (var i = 0; i < _screens.length; i++)
+                        KeepAlivePage(
+                          child: RepaintBoundary(
+                            child: NotificationListener<ScrollMetricsNotification>(
+                              onNotification: (n) => _onScrollMetrics(i, n),
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification: (n) =>
+                                    _onScrollNotification(i, n),
+                                child: _screens[i],
+                              ),
                             ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: AutoHideNavBar(
+          visible: _navBarVisible,
+          child: CrownNavBar(
+            selectedIndex: _index,
+            onDestinationSelected: _onTabSelected,
+            onCrownTap: () {
+              Navigator.of(context).push(slideRoute(const WeeklyChallengeScreen()));
+            },
+            labels: const ['Home', 'Chat', 'Calls', 'Settings'],
+            icons: [
+              const Icon(Icons.grid_view_rounded),
+              ValueListenableBuilder<int>(
+                valueListenable: chatMessageNotifier,
+                builder: (context, count, _) => Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.chat_bubble_outline),
+                    if (count > 0)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
                           ),
                         ),
                       ),
                   ],
                 ),
-
-              ],
-            ),
-          ),
-        ],
-      ),
-
-      bottomNavigationBar: AutoHideNavBar(
-        visible: _navBarVisible,
-        child: CrownNavBar(
-          selectedIndex: _index,
-          onDestinationSelected: _onTabSelected,
-          onCrownTap: () {
-            Navigator.of(context).push(slideRoute(const WeeklyChallengeScreen()));
-          },
-          labels: const ['Home', 'Chat', 'Calls', 'Settings'],
-          icons: [
-            const Icon(Icons.grid_view_rounded),
-            ValueListenableBuilder<int>(
-              valueListenable: chatMessageNotifier,
-              builder: (context, count, _) => Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(Icons.chat_bubble_outline),
-                  if (count > 0)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
               ),
-            ),
-            const Icon(Icons.call_outlined),
-            const Icon(Icons.settings_outlined),
-          ],
+              const Icon(Icons.call_outlined),
+              const Icon(Icons.settings_outlined),
+            ],
+          ),
         ),
       ),
     );

@@ -135,6 +135,29 @@ def get_withdrawal_request_details(
     start, end = week_bounds(weeks_ago=0)
     current_week = day_night_breakdown(db, listener.id, start, end)
 
+    from app.routers.weekly_challenge import (
+        _get_settings as _wc_get_settings,
+        _current_week_start as _wc_current_week_start,
+        _serialize_goals as _wc_serialize_goals,
+    )
+    from app.models.models import ListenerWeeklyChallengeProgress
+
+    wc_settings = _wc_get_settings(db)
+    wc_week_start = _wc_current_week_start()
+    wc_progress = (
+        db.query(ListenerWeeklyChallengeProgress)
+        .filter(
+            ListenerWeeklyChallengeProgress.listener_id == listener.id,
+            ListenerWeeklyChallengeProgress.week_start == wc_week_start,
+        )
+        .first()
+    )
+    weekly_challenge = {
+        "week_start": wc_week_start.isoformat(),
+        "talk_seconds": wc_progress.talk_seconds if wc_progress else 0,
+        "goals": _wc_serialize_goals(wc_settings, wc_progress),
+    }
+
     out = WithdrawalRequestOut.model_validate(request)
     out.listener_name = listener.name
     return {
@@ -142,6 +165,7 @@ def get_withdrawal_request_details(
         "listener_id": listener.id,
         "listener_name": listener.name,
         "current_week": current_week,
+        "weekly_challenge": weekly_challenge,
     }
 
 

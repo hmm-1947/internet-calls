@@ -6073,6 +6073,19 @@
         const week = data.current_week || {};
         const day = week.day || {};
         const night = week.night || {};
+
+        const wc = data.weekly_challenge || {};
+        const wcGoals = wc.goals || [];
+        const wcMinutes = Math.floor((wc.talk_seconds ?? 0) / 60);
+        const wcGoalsHtml = wcGoals.length
+          ? wcGoals.map((g, i) => `
+              <div style="display:flex;justify-content:space-between;padding:2px 0;">
+                <span>Goal ${i + 1} (${g.minutes} min)</span>
+                <span>${g.completed ? '✅ Completed' : '— Not reached'}</span>
+              </div>
+            `).join('')
+          : '<div style="color:var(--slate);">No weekly challenge goals set for this week.</div>';
+
         document.getElementById('withdrawalPopupBody').innerHTML = `
           <div style="font-weight:600;color:var(--ink);margin-bottom:4px;">This week</div>
           ${weeklyStatLine('Audio calls', (day.audio_call_minutes ?? 0) + ' min', (night.audio_call_minutes ?? 0) + ' min')}
@@ -6080,6 +6093,12 @@
           ${weeklyStatLine('Chat messages', day.chat_messages ?? 0, night.chat_messages ?? 0)}
           ${weeklyStatLine('Voice chats', day.voice_messages ?? 0, night.voice_messages ?? 0)}
           ${weeklyStatLine('Gift coins', day.gift_coins ?? 0, night.gift_coins ?? 0)}
+          <div style="font-weight:600;color:var(--ink);margin:10px 0 4px;">Weekly challenge</div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;">
+            <span>Talktime this week</span>
+            <span>${wcMinutes} min</span>
+          </div>
+          ${wcGoalsHtml}
         `;
 
         const isPending = req.status === 'pending';
