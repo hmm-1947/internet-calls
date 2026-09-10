@@ -211,6 +211,13 @@ async def accept_call(call_id: int, db: Session = Depends(get_db), current_liste
         raise HTTPException(status_code=408, detail="Call timed out")
     call.status = "accepted"
     db.commit()
+    # Tell every user's home screen this listener is now busy, so other users
+    # see "In call" instead of "Online" while this call is ongoing.
+    await manager.broadcast_to_all_users({
+        "type": "listener_call_status",
+        "listener_id": current_listener.id,
+        "is_in_call": True,
+    })
     listener_token = generate_token(call.room_name, f"listener-{current_listener.id}", current_listener.name)
     await _notify_caller_accepted(db, call)
     return {"room_name": call.room_name, "token": listener_token, "livekit_url": settings.livekit_url, "call_type": call.call_type}
@@ -390,6 +397,7 @@ async def finalize_abandoned_call(
     notify_listener: bool = True,
 ):
     already_ended = call.status == "ended"
+    prev_status = call.status
     claimed = db.query(Call).filter(Call.id == call.id, Call.status != "ended").update(
         {"status": "ended"}, synchronize_session=False
     )
@@ -397,6 +405,16 @@ async def finalize_abandoned_call(
     if claimed == 0 and not (already_ended and override_seconds is not None):
         return False
     db.refresh(call)
+
+    if claimed and prev_status == "accepted":
+        # The listener was showing as "In call" to other users while this call
+        # was live — flip them back to their normal online/offline status now
+        # that it has ended.
+        await manager.broadcast_to_all_users({
+            "type": "listener_call_status",
+            "listener_id": call.callee_listener_id,
+            "is_in_call": False,
+        })
 
     duration = 0
     if call.connected_at:

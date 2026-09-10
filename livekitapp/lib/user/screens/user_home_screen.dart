@@ -444,6 +444,18 @@ class UserHomeScreenState extends State<UserHomeScreen>
         _listeners[idx]['is_online'] = online;
         _reorder();
       });
+    } else if (type == 'listener_call_status') {
+      // A listener just accepted or ended a call — flip their card between
+      // "In call" and their normal online/offline status.
+      final listenerId = data['listener_id'];
+      if (listenerId == null) return;
+      final inCall = data['is_in_call'] == true;
+      final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+      if (idx == -1) return;
+      if (_listeners[idx]['is_in_call'] == inCall) return;
+      setState(() {
+        _listeners[idx]['is_in_call'] = inCall;
+      });
     } else if (type == 'listener_rating_updated') {
       final listenerId = data['listener_id'];
       if (listenerId == null) return;
@@ -943,6 +955,7 @@ class _ListenerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isOnline = listener['is_online'] == true;
+    final bool isInCall = isOnline && listener['is_in_call'] == true;
     final tags = (listener['tags'] as List?) ?? const [];
 
     return RepaintBoundary(
@@ -980,9 +993,11 @@ class _ListenerCard extends StatelessWidget {
                         width: 16,
                         height: 16,
                         decoration: BoxDecoration(
-                          color: isOnline
-                              ? _AppColors.online
-                              : Colors.grey.shade600,
+                          color: isInCall
+                              ? Colors.orange
+                              : (isOnline
+                                    ? _AppColors.online
+                                    : Colors.grey.shade600),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: const Color(0xFF050E17),
@@ -995,7 +1010,7 @@ class _ListenerCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: _details(isOnline, tags)),
+              Expanded(child: _details(isOnline, isInCall, tags)),
               const SizedBox(width: 8),
               if (videoCallEnabled) ...[
                 _videoButton(),
@@ -1009,7 +1024,7 @@ class _ListenerCard extends StatelessWidget {
     );
   }
 
-  Widget _details(bool isOnline, List<dynamic> tags) {
+  Widget _details(bool isOnline, bool isInCall, List<dynamic> tags) {
     final occupation = listener['occupation'] as String?;
     final rating = listener['avg_rating'];
     return Column(
@@ -1039,11 +1054,13 @@ class _ListenerCard extends StatelessWidget {
           runSpacing: 4,
           children: [
             Text(
-              isOnline ? 'Online now' : 'Offline',
+              isInCall ? 'In call' : (isOnline ? 'Online now' : 'Offline'),
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 13,
-                color: isOnline ? _AppColors.online : _AppColors.textMuted,
+                color: isInCall
+                    ? Colors.orange
+                    : (isOnline ? _AppColors.online : _AppColors.textMuted),
               ),
             ),
             if (rating != null)

@@ -187,6 +187,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   PaintingBinding.instance.imageCache.maximumSizeBytes = 160 << 20;
   PaintingBinding.instance.imageCache.maximumSize = 800;
+  // The whole app is portrait-only — home screen, chat, and call UI aren't
+  // laid out for landscape, so lock rotation here instead of per-screen.
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   // Paint the splash screen the instant Flutter can draw a frame, before any
   // async startup work runs. On slow devices the init below (Firebase, FCM

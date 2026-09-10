@@ -819,6 +819,15 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
         for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(badge_tag_ids)).all():
             badge_tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
 
+    # Listeners currently on an active (accepted, not yet ended) call, so the
+    # home screen can show "In call" instead of "Online" for them.
+    busy_listener_ids = {
+        row[0]
+        for row in db.query(Call.callee_listener_id)
+        .filter(Call.status == "accepted", Call.callee_listener_id.in_(listener_ids))
+        .all()
+    }
+
     result = []
     for l in listeners:
         avg_rating, rating_count = ratings_by_listener.get(l.id, (None, 0))
@@ -829,6 +838,7 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
         last_call_at = last_call_by_listener.get(l.id)
         result.append({
             "id": l.id, "name": l.name, "is_online": bool(l.is_online) and manager.is_listener_online(l.id),
+            "is_in_call": l.id in busy_listener_ids,
             "video_call_enabled": bool(l.video_call_enabled),
             "tags": tags,
             "avg_rating": round(avg_rating, 1) if avg_rating else None,
@@ -878,10 +888,12 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
         t = db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id == l.badge_tag_id).first()
         if t:
             badge_tag = {"id": t.id, "name": t.name, "color": t.color}
+    is_in_call = db.query(Call).filter(Call.callee_listener_id == l.id, Call.status == "accepted").first() is not None
     return {
         "id": l.id,
         "name": l.name,
         "is_online": bool(l.is_online) and manager.is_listener_online(l.id),
+        "is_in_call": is_in_call,
         "video_call_enabled": bool(l.video_call_enabled),
         "about": l.about,
         "tags": tags,
