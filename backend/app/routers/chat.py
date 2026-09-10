@@ -730,7 +730,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
-            is_online=bool(listener.is_online) and manager.is_listener_online(lid),
+            is_online=bool(listener.is_online),
             last_seen=listener.last_seen,
             photo_url=listener.photo_url,
             badge_tag=badge_tags_by_id.get(listener.badge_tag_id),
@@ -930,8 +930,15 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
             # must not silently flip their switch off.
             listener.last_seen = datetime.now(timezone.utc)
             db.commit()
-        for uid in manager.get_online_user_ids(user_ids):
-            await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
+        # Users only care about the listener's manual availability switch, not
+        # the transient socket connection, so only tell them the listener went
+        # offline if the switch itself is actually off. Otherwise a background/
+        # kill/reconnect blip while the switch is still on must not disable
+        # their call buttons.
+        if not (listener and listener.is_online):
+            for uid in manager.get_online_user_ids(user_ids):
+                await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
+
 
 
 

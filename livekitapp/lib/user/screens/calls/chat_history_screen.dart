@@ -951,14 +951,26 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
           ),
         ),
         actions: [
-          IconButton(
-            style: iconButtonStyle,
-            icon: Icon(
-              Icons.call,
-              color: Colors.white,
-              size: isNarrow ? 20 : 24,
-            ),
-            onPressed: () => _callListener(),
+          ValueListenableBuilder<bool?>(
+            valueListenable: PresenceCache().listener(widget.listenerId),
+            builder: (context, online, _) {
+              final bool listenerOnline = online == true;
+              return IconButton(
+                style: iconButtonStyle,
+                icon: Icon(
+                  Icons.call,
+                  color: listenerOnline ? Colors.white : Colors.white38,
+                  size: isNarrow ? 20 : 24,
+                ),
+                onPressed: !listenerOnline
+                    ? () => PillMessage.show(
+                        context,
+                        'This listener is currently offline',
+                        bottomOffset: 78,
+                      )
+                    : () => _callListener(),
+              );
+            },
           ),
           if (!isVeryNarrow)
             ValueListenableBuilder<bool>(
@@ -967,22 +979,36 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                   ? const SizedBox.shrink()
                   : ValueListenableBuilder<bool>(
                       valueListenable: _listenerVideoCallEnabled,
-                      builder: (context, listenerEnabled, _) => IconButton(
-                        style: iconButtonStyle,
-                        icon: Icon(
-                          Icons.videocam,
-                          color: listenerEnabled
-                              ? Colors.white
-                              : Colors.white38,
-                          size: isNarrow ? 20 : 24,
-                        ),
-                        onPressed: !listenerEnabled
-                            ? () => PillMessage.show(
-                                context,
-                                'This listener has their video call disabled',
-                                bottomOffset: 78,
-                              )
-                            : () => _callListener(video: true),
+                      builder: (context, listenerEnabled, _) =>
+                          ValueListenableBuilder<bool?>(
+                        valueListenable:
+                            PresenceCache().listener(widget.listenerId),
+                        builder: (context, online, _) {
+                          final bool listenerOnline = online == true;
+                          final bool enabled =
+                              listenerOnline && listenerEnabled;
+                          return IconButton(
+                            style: iconButtonStyle,
+                            icon: Icon(
+                              Icons.videocam,
+                              color: enabled ? Colors.white : Colors.white38,
+                              size: isNarrow ? 20 : 24,
+                            ),
+                            onPressed: !listenerOnline
+                                ? () => PillMessage.show(
+                                    context,
+                                    'This listener is currently offline',
+                                    bottomOffset: 78,
+                                  )
+                                : (!listenerEnabled
+                                    ? () => PillMessage.show(
+                                        context,
+                                        'This listener has their video call disabled',
+                                        bottomOffset: 78,
+                                      )
+                                    : () => _callListener(video: true)),
+                          );
+                        },
                       ),
                     ),
             ),

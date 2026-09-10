@@ -712,7 +712,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
               key: ValueKey<Object?>(listener['id']),
               listener: listener,
               isCalling: _callingListenerId == listener['id'],
-              canAct: _callingListenerId == null,
+              canAct: _callingListenerId == null &&
+                  listener['is_online'] == true,
               videoCallEnabled: _videoCallEnabled,
               videoCallDisabledByAdmin: _videoCallDisabledByAdmin,
               onOpenChat: () => _openChat(listener),

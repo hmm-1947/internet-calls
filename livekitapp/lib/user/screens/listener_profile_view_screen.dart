@@ -409,9 +409,19 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: _callingListener ? null : () => _callListener(),
+                          onPressed: _callingListener
+                              ? null
+                              : (!_isOnline
+                                    ? () => PillMessage.show(
+                                        context,
+                                        'This listener is currently offline',
+                                        bottomOffset: 78,
+                                      )
+                                    : () => _callListener()),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _AppColors.brandRed,
+                            backgroundColor: !_isOnline
+                                ? _AppColors.brandRed.withValues(alpha: 0.3)
+                                : _AppColors.brandRed,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
@@ -427,16 +437,22 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _callingListener
                               ? null
-                              : (!_listenerVideoCallEnabled
+                              : (!_isOnline
                                     ? () => PillMessage.show(
                                         context,
-                                        'This listener has their video call disabled',
+                                        'This listener is currently offline',
                                         bottomOffset: 78,
                                       )
-                                    : () => _callListener(video: true)),
+                                    : (!_listenerVideoCallEnabled
+                                        ? () => PillMessage.show(
+                                            context,
+                                            'This listener has their video call disabled',
+                                            bottomOffset: 78,
+                                          )
+                                        : () => _callListener(video: true))),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _AppColors.cardBg,
-                            foregroundColor: !_listenerVideoCallEnabled
+                            foregroundColor: (!_listenerVideoCallEnabled || !_isOnline)
                                 ? Colors.white38
                                 : Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),

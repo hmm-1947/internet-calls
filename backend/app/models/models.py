@@ -57,7 +57,7 @@ class Listener(Base):
     phone = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     fcm_token = Column(String, nullable=True)
-    is_online = Column(Boolean, default=False)
+    is_online = Column(Boolean, default=True, nullable=False, server_default="1")
     is_active = Column(Boolean, default=True)
     last_seen = Column(DateTime(timezone=True), nullable=True)
     about = Column(String, nullable=True)
