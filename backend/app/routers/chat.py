@@ -731,7 +731,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
-            is_online=bool(listener.is_online),
+            is_online=manager.is_listener_reachable(listener),
             last_seen=listener.last_seen,
             photo_url=listener.photo_url,
             badge_tag=badge_tags_by_id.get(listener.badge_tag_id),

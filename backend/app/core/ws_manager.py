@@ -70,6 +70,21 @@ class ConnectionManager:
     def is_listener_online(self, listener_id: int) -> bool:
         return listener_id in self.listener_connections
 
+    def is_listener_reachable(self, listener) -> bool:
+        """Whether a listener can actually be called or shown online right now.
+
+        Requires BOTH the listener's own availability switch (`Listener.is_online`,
+        set from the settings toggle, survives restarts/reconnects) AND a live
+        websocket (`is_listener_online`, cleared on disconnect). Either one alone
+        is not enough: a listener who never logged in still has the switch on by
+        default, and a listener whose switch is off must never show as reachable
+        even if a stray socket is still connected. This is the single source of
+        truth for listener reachability -- every endpoint that shows or acts on a
+        listener's online status should call this instead of checking either flag
+        alone, so the toggle, the browse list, the admin panel, and call
+        initiation never disagree with each other."""
+        return bool(getattr(listener, "is_online", False)) and self.is_listener_online(listener.id)
+
     async def send_to_user(self, user_id: int, data: dict):
         ws = self.user_connections.get(user_id)
         if ws:

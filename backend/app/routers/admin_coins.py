@@ -47,7 +47,7 @@ def adjust_coins(payload: CoinAdjust, db: Session = Depends(get_db), _=Depends(v
 @router.get("/listeners")
 def list_listeners(db: Session = Depends(get_db), _=Depends(verify_admin)):
     listeners = db.query(Listener).all()
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "coins": l.coins, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "coins": l.coins, "is_active": l.is_active, "is_online": manager.is_listener_reachable(l), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 

@@ -193,7 +193,7 @@ def list_listeners(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None
     if tag_ids:
         for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(tag_ids)).all():
             tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id)} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_reachable(l), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id)} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -705,11 +705,13 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
     active_listeners = db.query(func.count(Listener.id)).filter(Listener.is_active == True).scalar() or 0
     inactive_listeners = total_listeners - active_listeners
 
-    # Presence is the live websocket, not the `is_online` column, so it matches
-    # what the people lists show and can never go stale after a restart.
+    # User presence is the live websocket, so it can never go stale after a
+    # restart. Listener presence uses the same combined switch-AND-socket check
+    # as the browse list and admin listener list, so this count never disagrees
+    # with what those screens show.
     online_users = sum(1 for (uid,) in db.query(User.id).all() if manager.is_user_online(uid))
     offline_users = total_users - online_users
-    online_listeners = sum(1 for (lid,) in db.query(Listener.id).all() if manager.is_listener_online(lid))
+    online_listeners = sum(1 for l in db.query(Listener.id, Listener.is_online).all() if manager.is_listener_reachable(l))
     offline_listeners = total_listeners - online_listeners
 
     avg_duration = db.query(func.coalesce(func.avg(Call.duration_seconds), 0)).filter(Call.status == "ended").scalar() or 0

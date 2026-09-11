@@ -16,6 +16,21 @@ class InsufficientCoinsException implements Exception {
   String toString() => message;
 }
 
+/// Thrown when `/call/initiate` rejects because the listener isn't actually
+/// reachable (switch off, or their app isn't connected) even though the
+/// cached listener list the user was looking at still showed them online -
+/// e.g. they went offline in the moment between opening the profile and
+/// tapping call. Callers should show a friendly message and refresh the
+/// listener's card instead of a generic error.
+class ListenerOfflineException implements Exception {
+  final String message;
+
+  const ListenerOfflineException([this.message = 'Listener is offline']);
+
+  @override
+  String toString() => message;
+}
+
 /// Result of a sign-up availability lookup (username or email/phone).
 /// [reason] is a user-facing message explaining why it cannot be used, null
 /// when available.
@@ -358,6 +373,13 @@ class UserRepository {
     if (response.statusCode != 200) {
       if (response.statusCode == 402) {
         throw InsufficientCoinsException(data['detail']);
+      }
+      if (response.statusCode == 409 && data['detail'] == 'Listener is offline') {
+        // The cached list the user tapped from is stale - the listener went
+        // offline in between. Drop the cache so the next read shows them
+        // correctly and the call button greys out.
+        UserDataCache().invalidateListeners();
+        throw ListenerOfflineException(data['detail']);
       }
       throw Exception(data['detail'] ?? 'Call failed');
     }
