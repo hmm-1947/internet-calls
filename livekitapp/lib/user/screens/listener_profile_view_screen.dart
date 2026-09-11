@@ -102,7 +102,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   // long as their switch is on and they're reachable via FCM push. The call
   // buttons should key off this, not _isOnline, or a listener whose app is
   // merely backgrounded/closed would show as callable nowhere.
-  bool _canCall = widget.initialIsOnline ?? false;
+  late bool _canCall = widget.initialIsOnline ?? false;
   bool _listenerVideoCallEnabled = true;
   String _about = '';
   List<String> _tags = [];
