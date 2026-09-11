@@ -127,13 +127,24 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
     listener = db.query(Listener).filter(Listener.id == payload.listener_id).first()
     if not listener or not listener.is_active:
         raise HTTPException(status_code=404, detail="Listener not found")
-    # Enforced here, not just hidden by disabling the call button client-side:
-    # a stale client list, a direct API call, or a listener going offline
-    # between opening the profile and tapping call must all be rejected the
-    # same way, so this uses the same switch-AND-socket definition of
-    # reachability as everywhere else the listener's online status is shown.
-    if not manager.is_listener_reachable(listener):
+    # Deliberately NOT manager.is_listener_reachable() here. That check also
+    # requires a live websocket, which is exactly what's missing when the
+    # listener has the app swiped from recents (or otherwise backgrounded
+    # hard enough to drop the socket) -- the app is fully closed but the
+    # listener never turned their own availability switch off. Gating calls
+    # on the socket would reject the call before the FCM push below ever
+    # gets a chance to run, which defeats the point of having a push-based
+    # wake-up at all. So call initiation only requires the listener's own
+    # switch (`is_online`) plus a way to actually reach them: either a live
+    # socket (send the ringing event immediately) or a registered FCM token
+    # (wake the app via push). Reachability for *display* purposes (browse
+    # list, admin panel, chat threads) is unaffected -- those still use
+    # manager.is_listener_reachable() and will correctly keep showing the
+    # listener as offline.
+    if not listener.is_online:
         raise HTTPException(status_code=409, detail="Listener is offline")
+    if not manager.is_listener_online(listener.id) and not listener.fcm_token:
+        raise HTTPException(status_code=409, detail="Listener is unreachable")
     call_type = payload.call_type if payload.call_type in ("audio", "video") else "audio"
     if call_type == "video" and current_user.video_call_disabled_by_admin:
         raise HTTPException(status_code=403, detail="Admin has disabled video calls for your account")
