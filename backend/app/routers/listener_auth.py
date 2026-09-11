@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File
+import asyncio
 import os
 import uuid
 from sqlalchemy.orm import Session
@@ -228,17 +229,58 @@ def login(payload: ListenerLogin, db: Session = Depends(get_db), x_app_version: 
     db.commit()
     return AuthResponse(token=token, id=listener.id, name=listener.name)
 
+LISTENER_ONLINE_BROADCAST_TIMEOUT_SECONDS = 5.0
+
+async def _broadcast_listener_online_when_reachable(listener_id: int):
+    """The client calls POST /status before opening its websocket, so the
+    switch flips in the DB a moment before the socket exists. Broadcasting
+    `listener_online` immediately would tell every user's browse list the
+    listener is reachable while `manager.is_listener_reachable()` still
+    says otherwise, which is what let users tap "Call" into a guaranteed
+    409. Wait (briefly) for the socket to actually show up before telling
+    anyone, so the notification is never ahead of reality.
+
+    If the socket never shows up (crashed client, connection failure) this
+    still broadcasts once the timeout elapses, matching the old
+    fire-immediately behavior exactly as a fallback -- nothing regresses,
+    it only gets to be accurate first when it can.
+    """
+    from app.core.database import SessionLocal
+    waited = 0.0
+    while waited < LISTENER_ONLINE_BROADCAST_TIMEOUT_SECONDS:
+        if manager.is_listener_online(listener_id):
+            break
+        await asyncio.sleep(0.1)
+        waited += 0.1
+    db = SessionLocal()
+    try:
+        listener = db.query(Listener).filter(Listener.id == listener_id).first()
+        # Re-check: the listener may have toggled back off (or logged out)
+        # during the wait, in which case there is nothing to announce.
+        if not listener or not listener.is_online:
+            return
+        await manager.broadcast_to_all_users({"type": "listener_online", "listener_id": listener_id})
+        await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": manager.is_listener_reachable(listener)})
+    except Exception as e:
+        print(f"[STATUS ERROR] listener_online broadcast for {listener_id} failed: {e}")
+    finally:
+        db.close()
+
 @router.post("/status")
 async def update_status(payload: ListenerStatusUpdate, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     current_listener.is_online = payload.is_online
     if not payload.is_online:
         current_listener.last_seen = datetime.now(timezone.utc)
     db.commit()
-    event_type = "listener_online" if payload.is_online else "listener_offline"
-    payload_out = {"type": event_type, "listener_id": current_listener.id}
-    if not payload.is_online:
-        payload_out["last_seen"] = current_listener.last_seen.isoformat()
-    await manager.broadcast_to_all_users(payload_out)
+    if payload.is_online:
+        asyncio.create_task(_broadcast_listener_online_when_reachable(current_listener.id))
+    else:
+        await manager.broadcast_to_all_users({
+            "type": "listener_offline",
+            "listener_id": current_listener.id,
+            "last_seen": current_listener.last_seen.isoformat(),
+        })
+        await manager.broadcast_to_admins({"type": "listener_status", "id": current_listener.id, "is_online": False})
     return {"status": "updated", "is_online": current_listener.is_online}
 
 
@@ -270,6 +312,7 @@ async def logout(authorization: str = Header(...), db: Session = Depends(get_db)
         "listener_id": current_listener.id,
         "last_seen": current_listener.last_seen.isoformat(),
     })
+    await manager.broadcast_to_admins({"type": "listener_status", "id": current_listener.id, "is_online": False})
     return {"status": "logged_out"}
 
 @router.post("/verify-password")

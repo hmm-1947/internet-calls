@@ -7561,6 +7561,13 @@ ${logSection === 'chats' ? '' : `
     function connectAdminWs() {
       const wsUrl = API_URL.replace('http', 'ws') + '/admin/ws?token=' + encodeURIComponent(getAdminToken());
       adminWs = new WebSocket(wsUrl);
+      adminWs.onopen = () => {
+        // Any status changes that happened while this socket was down (a
+        // network blip, or the backend restarting) were missed entirely, so
+        // pull a fresh snapshot every time the connection (re)opens instead
+        // of trusting the cache to still be accurate.
+        loadPeople();
+      };
       adminWs.onmessage = (evt) => {
         try {
           const data = JSON.parse(evt.data);

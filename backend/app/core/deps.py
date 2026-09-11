@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.models import Session as SessionModel, User, Listener, AdminUser, AppSettings
 from app.utils.versioning import is_outdated
+from app.core.ws_manager import manager
 
 def _extract_token(authorization: str) -> str:
     if not authorization.startswith("Bearer "):
@@ -28,7 +29,7 @@ def get_current_user(authorization: str = Header(...), db: Session = Depends(get
         raise HTTPException(status_code=401, detail="Invalid session")
     return user
 
-def get_current_listener(
+async def get_current_listener(
     authorization: str = Header(...),
     x_app_version: str | None = Header(None, alias="X-App-Version"),
     db: Session = Depends(get_db),
@@ -55,6 +56,7 @@ def get_current_listener(
         if listener.is_online:
             listener.is_online = False
             db.commit()
+            await manager.broadcast_to_admins({"type": "listener_status", "id": listener.id, "is_online": False})
         raise HTTPException(
             status_code=426,
             detail={
