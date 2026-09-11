@@ -2714,6 +2714,7 @@
       <div class="nav-item" id="navSpecialOffers" data-label="Special Offers" onclick="switchPage('specialoffers')"><span class="nav-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M9 12.5 7 21l5-3 5 3-2-8.5"/></svg></span><span class="nav-label">Special Offers</span></div>
       <div class="nav-item" id="navWeeklyChallenges" data-label="Weekly Challenges" onclick="switchPage('weeklychallenges')"><span class="nav-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 9h18"/></svg></span><span class="nav-label">Weekly Challenges</span></div>
       <div class="nav-item" id="navTermsPrivacy" data-label="Terms &amp; Privacy" onclick="switchPage('termsprivacy')"><span class="nav-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg></span><span class="nav-label">Terms &amp; Privacy</span></div>
+      <div class="nav-item" id="navAppVersion" data-label="App Update" onclick="switchPage('appversion')"><span class="nav-ic"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M9 6h6"/></svg></span><span class="nav-label">App Update</span></div>
       <div class="nav-item" id="navTags" data-label="Tags" onclick="switchPage('tags')"><span class="nav-ic"><svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.59z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span><span class="nav-label">Tags</span></div>
 
       <div class="admin-chip nav-admin-chip" id="navAdminChip" onclick="toggleAdminMenu()">
@@ -3164,6 +3165,50 @@
     </div>
   </div>
 
+  <div id="page-appversion" style="display:none;">
+    <div class="card">
+      <h2>User App Update</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        Set the latest version number for each store. Any user on an older build is blocked from using the app and redirected to the store link to update — there is no "optional" update, the latest version is always the required one.
+      </p>
+
+      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;">
+        <div style="flex:1;min-width:280px;">
+          <h3 style="margin-bottom:10px;">Android</h3>
+          <label style="font-size:13px;color:var(--slate);font-weight:600">Latest version</label>
+          <input id="avAndroidVersion" placeholder="e.g. 2.5.0" style="width:100%;margin-bottom:12px;">
+          <label style="font-size:13px;color:var(--slate);font-weight:600">Play Store URL</label>
+          <input id="avAndroidUrl" placeholder="https://play.google.com/store/apps/details?id=..." style="width:100%;">
+        </div>
+        <div style="flex:1;min-width:280px;">
+          <h3 style="margin-bottom:10px;">iOS</h3>
+          <label style="font-size:13px;color:var(--slate);font-weight:600">Latest version</label>
+          <input id="avIosVersion" placeholder="e.g. 2.5.0" style="width:100%;margin-bottom:12px;">
+          <label style="font-size:13px;color:var(--slate);font-weight:600">App Store URL</label>
+          <input id="avIosUrl" placeholder="https://apps.apple.com/app/id..." style="width:100%;">
+        </div>
+      </div>
+
+      <button class="btn btn-leaf" onclick="saveAppVersion()" style="margin-top:16px;">Save</button>
+      <div id="avMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2>Listener App Update</h2>
+      <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
+        The listener app isn't distributed through any store, so there's no redirect link — a listener on an older build is simply shown an "update required" screen and cannot go online, receive calls, or receive chats until they install the new build. From the user's side, that listener behaves exactly as if offline until they update.
+      </p>
+
+      <div style="max-width:280px;margin-top:10px;">
+        <label style="font-size:13px;color:var(--slate);font-weight:600">Latest version</label>
+        <input id="avListenerVersion" placeholder="e.g. 2.5.0" style="width:100%;">
+      </div>
+
+      <button class="btn btn-leaf" onclick="saveListenerVersion()" style="margin-top:16px;">Save</button>
+      <div id="avListenerMsg" style="margin-top:8px;font-weight:600;font-size:13px;"></div>
+    </div>
+  </div>
+
   <div id="page-tags" style="display:none;">
     <div class="tags-grid">
       <div class="card tags-grid-card tags-create-card">
@@ -3485,7 +3530,7 @@
       document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = '';
       applyStoredNavCollapse();
-      const validPages = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy', 'tags'];
+      const validPages = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy', 'appversion', 'tags'];
       const lastPage = localStorage.getItem('adminActivePage');
       switchPage(validPages.includes(lastPage) ? lastPage : 'dashboard', true);
       loadPeople();
@@ -3526,6 +3571,7 @@
       document.getElementById('page-specialoffers').style.display = page === 'specialoffers' ? '' : 'none';
       document.getElementById('page-weeklychallenges').style.display = page === 'weeklychallenges' ? '' : 'none';
       document.getElementById('page-termsprivacy').style.display = page === 'termsprivacy' ? '' : 'none';
+      document.getElementById('page-appversion').style.display = page === 'appversion' ? '' : 'none';
       document.getElementById('page-tags').style.display = page === 'tags' ? '' : 'none';
       document.getElementById('navDashboard').classList.toggle('active', page === 'dashboard');
       document.getElementById('navUsers').classList.toggle('active', page === 'users');
@@ -3536,8 +3582,9 @@
       document.getElementById('navSpecialOffers').classList.toggle('active', page === 'specialoffers');
       document.getElementById('navWeeklyChallenges').classList.toggle('active', page === 'weeklychallenges');
       document.getElementById('navTermsPrivacy').classList.toggle('active', page === 'termsprivacy');
+      document.getElementById('navAppVersion').classList.toggle('active', page === 'appversion');
       document.getElementById('navTags').classList.toggle('active', page === 'tags');
-      const titles = { dashboard: 'Dashboard', notifications: 'Notifications', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges', termsprivacy: 'Terms & Privacy', tags: 'Tags' };
+      const titles = { dashboard: 'Dashboard', notifications: 'Notifications', users: 'Users', listeners: 'Listeners', coinsettings: 'Coin Settings', billing: 'Billing', gifts: 'Gifts', specialoffers: 'Special Offers', weeklychallenges: 'Weekly Challenges', termsprivacy: 'Terms & Privacy', appversion: 'App Update', tags: 'Tags' };
       if (page === 'notifications') openNotificationsPage();
       if (page === 'weeklychallenges') {
         loadWeeklyChallengeGoals();
@@ -3547,6 +3594,9 @@
       }
       if (page === 'termsprivacy') {
         loadTermsPrivacy();
+      }
+      if (page === 'appversion') {
+        loadAppVersion();
       }
       if (page === 'tags') {
         renderTagColorPresets();
@@ -3567,8 +3617,8 @@
     }
 
     // Visual order of the nav items, top to bottom, matching the markup.
-    const NAV_ORDER = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy', 'tags'];
-    const NAV_IDS = ['navDashboard', 'navNotifications', 'navUsers', 'navListeners', 'navCoinSettings', 'navBilling', 'navGifts', 'navSpecialOffers', 'navWeeklyChallenges', 'navTermsPrivacy', 'navTags'];
+    const NAV_ORDER = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy', 'appversion', 'tags'];
+    const NAV_IDS = ['navDashboard', 'navNotifications', 'navUsers', 'navListeners', 'navCoinSettings', 'navBilling', 'navGifts', 'navSpecialOffers', 'navWeeklyChallenges', 'navTermsPrivacy', 'navAppVersion', 'navTags'];
 
     function shakeItemsInTheWay(prevPageId, page) {
       if (!prevPageId) return;
@@ -3815,6 +3865,80 @@
         const res = await fetch(API_URL + '/app-settings/admin/terms-privacy', {
           method: 'PUT', headers: authHeaders(true),
           body: JSON.stringify({ terms_of_service, privacy_policy })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to save');
+        msgEl.textContent = '✓ Saved';
+        msgEl.style.color = '#1c9a5b';
+      } catch (e) {
+        msgEl.textContent = '✗ ' + e.message;
+        msgEl.style.color = '#d9435e';
+      }
+    }
+
+    let avLoaded = false;
+    async function loadAppVersion() {
+      if (avLoaded) return;
+      try {
+        const res = await fetch(API_URL + '/app-settings/version-check');
+        const data = await res.json();
+        const u = data.user || {};
+        document.getElementById('avAndroidVersion').value = (u.android && u.android.latest_version) || '';
+        document.getElementById('avAndroidUrl').value = (u.android && u.android.store_url) || '';
+        document.getElementById('avIosVersion').value = (u.ios && u.ios.latest_version) || '';
+        document.getElementById('avIosUrl').value = (u.ios && u.ios.store_url) || '';
+        document.getElementById('avListenerVersion').value = (data.listener && data.listener.latest_version) || '';
+        avLoaded = true;
+      } catch (e) { }
+    }
+
+    async function saveAppVersion() {
+      const msgEl = document.getElementById('avMsg');
+      const androidVersion = document.getElementById('avAndroidVersion').value.trim();
+      const androidUrl = document.getElementById('avAndroidUrl').value.trim();
+      const iosVersion = document.getElementById('avIosVersion').value.trim();
+      const iosUrl = document.getElementById('avIosUrl').value.trim();
+
+      if (androidVersion && !androidUrl) {
+        msgEl.textContent = '✗ Set the Play Store URL before saving an Android version';
+        msgEl.style.color = '#d9435e';
+        return;
+      }
+      if (iosVersion && !iosUrl) {
+        msgEl.textContent = '✗ Set the App Store URL before saving an iOS version';
+        msgEl.style.color = '#d9435e';
+        return;
+      }
+
+      const payload = {
+        latest_app_version_android: androidVersion || null,
+        android_store_url: androidUrl || null,
+        latest_app_version_ios: iosVersion || null,
+        ios_store_url: iosUrl || null,
+      };
+      try {
+        const res = await fetch(API_URL + '/app-settings/admin/version-check', {
+          method: 'PUT', headers: authHeaders(true),
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to save');
+        msgEl.textContent = '✓ Saved';
+        msgEl.style.color = '#1c9a5b';
+      } catch (e) {
+        msgEl.textContent = '✗ ' + e.message;
+        msgEl.style.color = '#d9435e';
+      }
+    }
+
+    async function saveListenerVersion() {
+      const msgEl = document.getElementById('avListenerMsg');
+      const listenerVersion = document.getElementById('avListenerVersion').value.trim();
+      const payload = { latest_app_version_listener: listenerVersion || null };
+      try {
+        const res = await fetch(API_URL + '/app-settings/admin/version-check', {
+          method: 'PUT', headers: authHeaders(true),
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to save');

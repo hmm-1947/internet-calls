@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
 from app.core.database import get_db
-from app.models.models import Listener, Session as SessionModel, Call, CallRating, ListenerBadgeTag
+from app.models.models import Listener, Session as SessionModel, Call, CallRating, ListenerBadgeTag, AppSettings
 from datetime import datetime, timezone
 import json
 from app.models.models import ChatMessage
@@ -12,6 +12,7 @@ from app.core.ws_manager import manager
 from app.schemas.schemas import ListenerLogin, AuthResponse, ListenerStatusUpdate, FcmTokenUpdate, ListenerProfileUpdate, ListenerChangePassword, CurrentPasswordCheck, validate_password_strength, ListenerVideoCallSettingUpdate
 from app.utils.security import verify_password, generate_session_token, hash_password, session_expiry
 from app.utils.audit import record_audit_event
+from app.utils.versioning import is_outdated
 from app.core.deps import get_current_listener
 
 router = APIRouter(prefix="/listener", tags=["listener-auth"])
@@ -198,12 +199,25 @@ async def update_photo(file: UploadFile = File(...), db: Session = Depends(get_d
     return {"status": "updated", "photo_url": current_listener.photo_url}
 
 @router.post("/login", response_model=AuthResponse)
-def login(payload: ListenerLogin, db: Session = Depends(get_db)):
+def login(payload: ListenerLogin, db: Session = Depends(get_db), x_app_version: str | None = Header(None, alias="X-App-Version")):
     listener = db.query(Listener).filter(Listener.phone == payload.phone).first()
     if not listener or not verify_password(payload.password, listener.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not listener.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    settings_row = db.query(AppSettings).first()
+    required_version = settings_row.latest_app_version_listener if settings_row else None
+    if is_outdated(x_app_version, required_version):
+        raise HTTPException(
+            status_code=426,
+            detail={
+                "code": "app_update_required",
+                "message": "This version of the app is no longer supported. Please update to continue.",
+                "required_version": required_version,
+            },
+        )
+
     token = generate_session_token()
     db.add(SessionModel(token=token, listener_id=listener.id, expires_at=session_expiry()))
     # `is_online` is the listener's own availability switch and must not be

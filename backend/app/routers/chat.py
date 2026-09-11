@@ -10,10 +10,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
-from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call, ListenerBadgeTag
+from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call, ListenerBadgeTag, AppSettings
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary, send_async
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
+from app.utils.versioning import is_outdated
 from app.core.ws_manager import manager
 
 ACTIVE_CALL_STATUSES = ("ringing", "accepted")
@@ -864,7 +865,7 @@ async def _handle_user_ws_event(raw: dict, user_id: int, db: Session, typing_tar
         pass
 
 @router.websocket("/ws/listener")
-async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
+async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), app_version: str | None = Query(None), db: Session = Depends(get_db)):
     session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.listener_id.isnot(None)).first()
     if not session:
         await websocket.close(code=4001)
@@ -879,6 +880,20 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
     if not listener_check or not listener_check.is_active:
         await websocket.close(code=4003)
         return
+
+    # Same rule as the REST side (see get_current_listener): an outdated
+    # listener build never gets a live connection, which is what call/chat
+    # delivery is actually gated on, so this alone makes them unreachable
+    # everywhere without needing changes anywhere else.
+    settings_row = db.query(AppSettings).first()
+    required_version = settings_row.latest_app_version_listener if settings_row else None
+    if is_outdated(app_version, required_version):
+        if listener_check.is_online:
+            listener_check.is_online = False
+            db.commit()
+        await websocket.close(code=4010, reason="app_update_required")
+        return
+
     await manager.connect_listener(listener_id, websocket)
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
     await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": bool(listener and listener.is_online)})

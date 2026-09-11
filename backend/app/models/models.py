@@ -226,6 +226,11 @@ class AppSettings(Base):
     upgrade_banner_url = Column(String, nullable=True)
     terms_of_service = Column(Text, nullable=True)
     privacy_policy = Column(Text, nullable=True)
+    latest_app_version_android = Column(String, nullable=True)
+    android_store_url = Column(String, nullable=True)
+    latest_app_version_ios = Column(String, nullable=True)
+    ios_store_url = Column(String, nullable=True)
+    latest_app_version_listener = Column(String, nullable=True)
 
 
 
