@@ -98,6 +98,11 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   String? _error;
   late String _name = widget.initialName ?? '';
   late bool _isOnline = widget.initialIsOnline ?? false;
+  // Looser than _isOnline: true even with the listener's socket down, as
+  // long as their switch is on and they're reachable via FCM push. The call
+  // buttons should key off this, not _isOnline, or a listener whose app is
+  // merely backgrounded/closed would show as callable nowhere.
+  bool _canCall = widget.initialIsOnline ?? false;
   bool _listenerVideoCallEnabled = true;
   String _about = '';
   List<String> _tags = [];
@@ -131,6 +136,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
     setState(() {
       _name = map['name'] ?? '';
       _isOnline = map['is_online'] == true;
+      _canCall = map['can_call'] == true;
       _listenerVideoCallEnabled = map['video_call_enabled'] != false;
       _about = map['about'] ?? '';
       _tags = List<String>.from(map['tags'] ?? []);
@@ -162,6 +168,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       final newSnapshot = {
         'name': data['name'] ?? '',
         'is_online': data['is_online'] == true,
+        'can_call': data['can_call'] == true,
         'video_call_enabled': data['video_call_enabled'] != false,
         'about': data['about'] ?? '',
         'tags': List<String>.from(data['tags'] ?? []),
@@ -177,6 +184,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       final oldSnapshot = {
         'name': _name,
         'is_online': _isOnline,
+        'can_call': _canCall,
         'video_call_enabled': _listenerVideoCallEnabled,
         'about': _about,
         'tags': _tags,
@@ -192,6 +200,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         setState(() {
           _name = newSnapshot['name'] as String;
           _isOnline = newSnapshot['is_online'] as bool;
+          _canCall = newSnapshot['can_call'] as bool;
           _listenerVideoCallEnabled = newSnapshot['video_call_enabled'] as bool;
           _about = newSnapshot['about'] as String;
           _tags = newSnapshot['tags'] as List<String>;

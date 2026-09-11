@@ -134,16 +134,16 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
     # listener never turned their own availability switch off. Gating calls
     # on the socket would reject the call before the FCM push below ever
     # gets a chance to run, which defeats the point of having a push-based
-    # wake-up at all. So call initiation only requires the listener's own
-    # switch (`is_online`) plus a way to actually reach them: either a live
-    # socket (send the ringing event immediately) or a registered FCM token
-    # (wake the app via push). Reachability for *display* purposes (browse
-    # list, admin panel, chat threads) is unaffected -- those still use
-    # manager.is_listener_reachable() and will correctly keep showing the
-    # listener as offline.
+    # wake-up at all. manager.is_listener_callable() is the shared switch-OR-
+    # push definition of callability (see its docstring); the client's call
+    # button is enabled off the same definition (`can_call` field), so this
+    # check should only ever fail here on a stale/cached client list.
+    # Reachability for *display* purposes (browse list, admin panel, chat
+    # threads) is unaffected -- those still use manager.is_listener_reachable()
+    # and will correctly keep showing the listener as offline.
     if not listener.is_online:
         raise HTTPException(status_code=409, detail="Listener is offline")
-    if not manager.is_listener_online(listener.id) and not listener.fcm_token:
+    if not manager.is_listener_callable(listener):
         raise HTTPException(status_code=409, detail="Listener is unreachable")
     call_type = payload.call_type if payload.call_type in ("audio", "video") else "audio"
     if call_type == "video" and current_user.video_call_disabled_by_admin:

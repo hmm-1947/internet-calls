@@ -372,7 +372,11 @@ async def user_send_voice(
     await manager.send_to_user(current_user.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if listener.fcm_token and not _is_muted(db, "listener", listener.id, current_user.id):
         try:
-            send_async(send_chat_message, listener.fcm_token, current_user.name, "🎤 Voice message", current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
+            if listener_online:
+                send_async(send_chat_message, listener.fcm_token, current_user.name, "🎤 Voice message", current_user.id, listener.id, "user", msg.id, msg.client_id, current_user.photo_url)
+            else:
+                payload_msgs = _undelivered_summary_payload(db, current_user.id, listener.id, "user")
+                send_async(send_chat_summary, listener.fcm_token, current_user.name, payload_msgs, current_user.id, listener.id, "user", current_user.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify listener {listener.id} of voice message: {e}")
     return msg
@@ -410,7 +414,11 @@ async def listener_send_voice(
     await manager.send_to_listener(current_listener.id, {"type": "message_status", "id": msg.id, "client_id": msg.client_id, "status": msg.status})
     if user.fcm_token and not _is_muted(db, "user", user.id, current_listener.id):
         try:
-            send_async(send_chat_message, user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
+            if user_online:
+                send_async(send_chat_message, user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
+            else:
+                payload_msgs = _undelivered_summary_payload(db, user.id, current_listener.id, "listener")
+                send_async(send_chat_summary, user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener", current_listener.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of voice message: {e}")
     return msg

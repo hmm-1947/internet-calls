@@ -442,6 +442,13 @@ class UserHomeScreenState extends State<UserHomeScreen>
       if (_listeners[idx]['is_online'] == online) return;
       setState(() {
         _listeners[idx]['is_online'] = online;
+        // This event only ever fires from an explicit switch toggle or
+        // logout (see backend), never from a bare socket drop, so `online`
+        // here always matches the listener's actual switch state and it's
+        // safe to drive can_call off it too: switch off means definitely not
+        // callable, and switch on means the backend already confirmed
+        // reachability (live socket or FCM token) before broadcasting.
+        _listeners[idx]['can_call'] = online;
         _reorder();
       });
     } else if (type == 'listener_call_status') {
@@ -712,8 +719,12 @@ class UserHomeScreenState extends State<UserHomeScreen>
               key: ValueKey<Object?>(listener['id']),
               listener: listener,
               isCalling: _callingListenerId == listener['id'],
+              // can_call is intentionally looser than is_online: a listener
+              // whose switch is on but whose app is backgrounded/closed can
+              // still be reached via FCM push, so the button should stay
+              // enabled for them even though the "online" dot shows offline.
               canAct: _callingListenerId == null &&
-                  listener['is_online'] == true,
+                  listener['can_call'] == true,
               videoCallEnabled: _videoCallEnabled,
               videoCallDisabledByAdmin: _videoCallDisabledByAdmin,
               onOpenChat: () => _openChat(listener),

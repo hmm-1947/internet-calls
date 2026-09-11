@@ -85,6 +85,27 @@ class ConnectionManager:
         initiation never disagree with each other."""
         return bool(getattr(listener, "is_online", False)) and self.is_listener_online(listener.id)
 
+    def is_listener_callable(self, listener) -> bool:
+        """Whether a user should be allowed to initiate a call to this listener.
+
+        Deliberately looser than `is_listener_reachable`: a live websocket is
+        NOT required here. A listener whose availability switch is on but whose
+        app is fully closed (socket dropped) can still be woken via FCM push,
+        so gating call initiation on the socket would block a call that could
+        otherwise succeed. This requires the switch (`is_online`) plus a way to
+        actually reach them: either a live socket (ring immediately) or a
+        registered FCM token (wake the app via push).
+
+        This is the single source of truth for "can a user call this listener
+        right now" -- both the call-initiation endpoint and any client-facing
+        field describing button enablement should use this, so they never
+        disagree. It intentionally has a different answer than
+        `is_listener_reachable`, which is for *display* (browse list dot,
+        admin panel) and should keep requiring a live socket."""
+        return bool(getattr(listener, "is_online", False)) and (
+            self.is_listener_online(listener.id) or bool(getattr(listener, "fcm_token", None))
+        )
+
     async def send_to_user(self, user_id: int, data: dict):
         ws = self.user_connections.get(user_id)
         if ws:

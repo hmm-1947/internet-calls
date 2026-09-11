@@ -845,6 +845,12 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
         last_call_at = last_call_by_listener.get(l.id)
         result.append({
             "id": l.id, "name": l.name, "is_online": manager.is_listener_reachable(l),
+            # Looser than is_online: true even with the listener's socket
+            # down, as long as their switch is on and they can be woken via
+            # FCM push. Drives whether the call button is enabled -- is_online
+            # alone would incorrectly disable it whenever the listener's app
+            # is merely backgrounded/closed.
+            "can_call": manager.is_listener_callable(l),
             "is_in_call": l.id in busy_listener_ids,
             "video_call_enabled": bool(l.video_call_enabled),
             "tags": tags,
@@ -900,6 +906,8 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
         "id": l.id,
         "name": l.name,
         "is_online": manager.is_listener_reachable(l),
+        # See list endpoint above: looser than is_online, drives the call button.
+        "can_call": manager.is_listener_callable(l),
         "is_in_call": is_in_call,
         "video_call_enabled": bool(l.video_call_enabled),
         "about": l.about,
