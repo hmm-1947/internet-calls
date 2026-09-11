@@ -33,6 +33,8 @@ import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
+import 'package:livekitapp/core/utils/app_version.dart';
+import 'package:livekitapp/common/screens/update_required_screen.dart';
 
 /// Top-level function — runs in a separate isolate when the app is
 /// background or killed. Must be a top-level (not a class method).
@@ -205,6 +207,10 @@ void main() async {
   CallkitService.instance.init();
 
   await dotenv.load(fileName: ".env");
+  // Must happen before any network call (login, /me, the chat websocket,
+  // etc.) — the backend treats a request with no version header as
+  // outdated the moment an admin configures a minimum listener version.
+  await AppVersion.load();
   final isolateName = Isolate.current.debugName;
   print('[Callkit] main() started in isolate: $isolateName');
   if (isolateName != 'main') {
@@ -378,7 +384,9 @@ class ListenerApp extends StatefulWidget {
 class _ListenerAppState extends State<ListenerApp> {
   StreamSubscription? _chatSub;
   StreamSubscription? _sessionSub;
+  StreamSubscription? _updateRequiredSub;
   bool _loggingOut = false;
+  bool _updateRequiredShown = false;
 
   late final Future<String?> _initialToken = LocalStorage().getToken();
 
@@ -396,6 +404,8 @@ class _ListenerAppState extends State<ListenerApp> {
         chatMessageNotifier.value++;
       } else if (data['type'] == 'force_logout') {
         _forceLogout();
+      } else if (data['type'] == 'update_required') {
+        _showUpdateRequired(null);
       } else if (data['type'] == 'gift_received') {
         _showGiftToast(data);
       }
@@ -403,6 +413,30 @@ class _ListenerAppState extends State<ListenerApp> {
     _sessionSub = ApiClient.sessionInvalidated.listen((_) {
       _forceLogout();
     });
+    _updateRequiredSub = ApiClient.updateRequired.listen((detail) {
+      _showUpdateRequired(detail?['required_version'] as String?);
+    });
+  }
+
+  /// Shows the blocking update screen once. Session/token are left intact —
+  /// this is not a logout, the listener just needs a newer build before
+  /// they can do anything else. Guarded by [_updateRequiredShown] since both
+  /// the REST path (426) and the chat socket (close code 4010) can fire
+  /// this around the same time.
+  void _showUpdateRequired(String? requiredVersion) {
+    if (_updateRequiredShown) return;
+    _updateRequiredShown = true;
+    ChatSocketService().disconnect();
+    final ctx = CallkitService.instance.navigatorKey.currentState;
+    if (ctx != null) {
+      ctx.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) =>
+              UpdateRequiredScreen(requiredVersion: requiredVersion),
+        ),
+        (route) => false,
+      );
+    }
   }
 
   void _showGiftToast(Map<String, dynamic> data) {
@@ -438,6 +472,7 @@ class _ListenerAppState extends State<ListenerApp> {
   void dispose() {
     _chatSub?.cancel();
     _sessionSub?.cancel();
+    _updateRequiredSub?.cancel();
     super.dispose();
   }
 

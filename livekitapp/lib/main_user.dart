@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -23,6 +24,9 @@ import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/onboarding_screen.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
+import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/core/utils/app_version.dart';
+import 'package:livekitapp/common/screens/update_required_screen.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
@@ -213,6 +217,7 @@ void main() async {
   );
 
   await dotenv.load(fileName: ".env");
+  await AppVersion.load();
   await AvatarCache.instance.init();
   FlavorConfig.set(AppFlavor.user);
   LockscreenService.instance.init();
@@ -267,12 +272,31 @@ class UserApp extends StatefulWidget {
 
 final userNavigatorKey = GlobalKey<NavigatorState>();
 
+class _VersionCheckResult {
+  const _VersionCheckResult({
+    this.outdated = false,
+    this.requiredVersion,
+    this.storeUrl,
+  });
+
+  final bool outdated;
+  final String? requiredVersion;
+  final String? storeUrl;
+}
+
+
 class _UserAppState extends State<UserApp> {
   StreamSubscription? _chatSub;
   StreamSubscription? _sessionSub;
   bool _loggingOut = false;
 
   late final Future<String?> _initialToken = LocalStorage().getToken();
+
+  /// Resolves before the app decides whether to show login or the home
+  /// screen. If the installed build is behind the store version, the
+  /// person is sent straight to the blocking update screen — they never
+  /// reach login or anything else in the app until they update.
+  late final Future<_VersionCheckResult> _versionCheck = _checkAppVersion();
 
   @override
   void initState() {
@@ -290,6 +314,40 @@ class _UserAppState extends State<UserApp> {
     _sessionSub = ApiClient.sessionInvalidated.listen((_) {
       _forceLogout();
     });
+  }
+
+  /// The backend never force-blocks the user app the way it does the
+  /// listener app (it's store-distributed — see `get_version_check`'s
+  /// docstring), so this is entirely client-side: compare the installed
+  /// version against `/app-settings/version-check`'s per-platform
+  /// `latest_version`. Best-effort — any failure (offline, no row
+  /// configured yet) resolves to "not outdated" so a network hiccup never
+  /// locks someone out of an app that's actually fine.
+  Future<_VersionCheckResult> _checkAppVersion() async {
+    try {
+      final response = await ApiClient().get(ApiConstants.appVersionCheck);
+      if (response.statusCode != 200) return const _VersionCheckResult();
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final platformKey = Platform.isIOS ? 'ios' : 'android';
+      final platformData =
+          (data['user'] as Map<String, dynamic>?)?[platformKey]
+              as Map<String, dynamic>?;
+      final latestVersion = platformData?['latest_version'] as String?;
+      final storeUrl = platformData?['store_url'] as String?;
+      if (latestVersion == null || storeUrl == null) {
+        return const _VersionCheckResult();
+      }
+      if (!isVersionOutdated(AppVersion.current, latestVersion)) {
+        return const _VersionCheckResult();
+      }
+      return _VersionCheckResult(
+        outdated: true,
+        requiredVersion: latestVersion,
+        storeUrl: storeUrl,
+      );
+    } catch (_) {
+      return const _VersionCheckResult();
+    }
   }
 
   Future<void> _forceLogout() async {
@@ -361,14 +419,27 @@ class _UserAppState extends State<UserApp> {
             scaffoldBackgroundColor: const Color(0xFF0B0B0B),
             appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),
           ),
-          home: FutureBuilder<String?>(
-            future: _initialToken,
+          home: FutureBuilder<List<Object?>>(
+            // Version check resolves first (or ties) — either way, both are
+            // awaited together so an outdated build never flashes the login
+            // screen before redirecting. Login/home are only ever reached
+            // once we know the installed build is current.
+            future: Future.wait([_versionCheck, _initialToken]),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const SplashScreen();
               }
-              if (snapshot.data != null) {
-                return _UserSessionGate(token: snapshot.data!);
+              final versionResult =
+                  snapshot.data![0] as _VersionCheckResult;
+              if (versionResult.outdated) {
+                return UpdateRequiredScreen(
+                  requiredVersion: versionResult.requiredVersion,
+                  storeUrl: versionResult.storeUrl,
+                );
+              }
+              final token = snapshot.data![1] as String?;
+              if (token != null) {
+                return _UserSessionGate(token: token);
               }
               return const UserLoginScreen();
             },

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:path/path.dart' as p;
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/core/utils/app_version.dart';
 
 /// package:http defaults every multipart file to `application/octet-stream`,
 /// which servers that validate the part's content type reject. Map the common
@@ -51,6 +52,29 @@ class ApiClient {
   static Stream<void> get sessionInvalidated =>
       _sessionInvalidatedController.stream;
 
+  /// Fires when the backend responds 426 (app_update_required). Distinct
+  /// from [sessionInvalidated]: the session is still valid, the installed
+  /// build is just below the admin-configured minimum, so listeners should
+  /// route to a blocking "update required" screen instead of logging out.
+  static final StreamController<Map<String, dynamic>?>
+  _updateRequiredController = StreamController<Map<String, dynamic>?>.broadcast();
+  static Stream<Map<String, dynamic>?> get updateRequired =>
+      _updateRequiredController.stream;
+
+  /// Standard headers for every request: JSON content type, the bearer
+  /// token when present, and the installed app version so the backend's
+  /// version gate (see `get_current_listener` / `is_outdated`) can evaluate
+  /// this build. Missing/null [AppVersion.current] is sent as no header at
+  /// all, which the backend already treats the same as "outdated" once a
+  /// minimum version is configured.
+  Map<String, String> _headers(String? token) {
+    final headers = {'Content-Type': 'application/json'};
+    if (token != null) headers['Authorization'] = 'Bearer $token';
+    final version = AppVersion.current;
+    if (version != null) headers['X-App-Version'] = version;
+    return headers;
+  }
+
   /// One client for the whole isolate so requests reuse the same keep-alive
   /// connection. The top-level `http.get`/`http.post` helpers open (and throw
   /// away) a connection per call, which means a fresh DNS lookup and TLS
@@ -64,6 +88,18 @@ class ApiClient {
   void _checkAuthStatus(http.Response response) {
     if (response.statusCode == 401) {
       _sessionInvalidatedController.add(null);
+    } else if (response.statusCode == 426) {
+      Map<String, dynamic>? detail;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['detail'] is Map) {
+          detail = Map<String, dynamic>.from(decoded['detail'] as Map);
+        }
+      } catch (_) {
+        // Body wasn't the expected JSON shape; still surface the event so
+        // the app can show a generic "update required" screen.
+      }
+      _updateRequiredController.add(detail);
     }
   }
 
@@ -101,12 +137,10 @@ class ApiClient {
     Duration? timeout,
   }) async {
     return _guard(() async {
-      final headers = {'Content-Type': 'application/json'};
-      if (token != null) headers['Authorization'] = 'Bearer $token';
       final response = await _client
           .post(
             Uri.parse('${ApiConstants.baseUrl}$path'),
-            headers: headers,
+            headers: _headers(token),
             body: jsonEncode(body),
           )
           .timeout(timeout ?? _defaultTimeout);
@@ -125,7 +159,7 @@ class ApiClient {
     return _guard(() async {
       final uri = Uri.parse('${ApiConstants.baseUrl}$path');
       final request = http.MultipartRequest('POST', uri);
-      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      request.headers.addAll(_headers(token)..remove('Content-Type'));
       request.fields.addAll(fields);
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -150,10 +184,8 @@ class ApiClient {
     Duration? timeout,
   }) async {
     return _guard(() async {
-      final headers = {'Content-Type': 'application/json'};
-      if (token != null) headers['Authorization'] = 'Bearer $token';
       final response = await _client
-          .get(Uri.parse('${ApiConstants.baseUrl}$path'), headers: headers)
+          .get(Uri.parse('${ApiConstants.baseUrl}$path'), headers: _headers(token))
           .timeout(timeout ?? _defaultTimeout);
       _checkAuthStatus(response);
       return response;
@@ -167,12 +199,10 @@ class ApiClient {
     Duration? timeout,
   }) async {
     return _guard(() async {
-      final headers = {'Content-Type': 'application/json'};
-      if (token != null) headers['Authorization'] = 'Bearer $token';
       final response = await _client
           .put(
             Uri.parse('${ApiConstants.baseUrl}$path'),
-            headers: headers,
+            headers: _headers(token),
             body: jsonEncode(body),
           )
           .timeout(timeout ?? _defaultTimeout);
@@ -187,10 +217,8 @@ class ApiClient {
     Duration? timeout,
   }) async {
     return _guard(() async {
-      final headers = {'Content-Type': 'application/json'};
-      if (token != null) headers['Authorization'] = 'Bearer $token';
       final response = await _client
-          .delete(Uri.parse('${ApiConstants.baseUrl}$path'), headers: headers)
+          .delete(Uri.parse('${ApiConstants.baseUrl}$path'), headers: _headers(token))
           .timeout(timeout ?? _defaultTimeout);
       _checkAuthStatus(response);
       return response;

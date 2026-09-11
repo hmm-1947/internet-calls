@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/core/utils/app_version.dart';
 
 class ChatSocketService {
   static final ChatSocketService _instance = ChatSocketService._internal();
@@ -59,9 +60,15 @@ class ChatSocketService {
     _opening = true;
     final wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws');
     final path = _role == 'user' ? '/chat/ws/user' : '/chat/ws/listener';
+    // Only the listener endpoint currently gates on this (see
+    // `listener_chat_ws` server-side), but it's harmless to always send it.
+    final version = AppVersion.current;
+    final versionParam = version != null
+        ? '&app_version=${Uri.encodeQueryComponent(version)}'
+        : '';
     try {
       _channel = WebSocketChannel.connect(
-        Uri.parse('$wsUrl$path?token=$_token'),
+        Uri.parse('$wsUrl$path?token=$_token$versionParam'),
       );
       await _channel!.ready;
     } catch (_) {
@@ -93,6 +100,14 @@ class ChatSocketService {
           _stopAndForceLogout();
           return;
         }
+        if (code == 4010) {
+          // app_update_required (see listener_chat_ws server-side). The
+          // session is still valid — don't log out — but retrying would
+          // just get closed again with the same code, so stop and let the
+          // app show a blocking "update required" screen instead.
+          _stopAndRequireUpdate();
+          return;
+        }
         _scheduleReconnect();
       },
       onError: (_) => _scheduleReconnect(),
@@ -111,6 +126,16 @@ class ChatSocketService {
     _pingTimer?.cancel();
     _reconnectTimer?.cancel();
     _controller?.add({'type': 'force_logout'});
+  }
+
+  void _stopAndRequireUpdate() {
+    _manuallyDisconnected = true;
+    _connected = false;
+    _opening = false;
+    _channel = null;
+    _pingTimer?.cancel();
+    _reconnectTimer?.cancel();
+    _controller?.add({'type': 'update_required'});
   }
 
   void send(Map<String, dynamic> data) {
@@ -174,14 +199,22 @@ class ChatSocketService {
         final path = role == 'user'
             ? ApiConstants.userSessionCheck
             : ApiConstants.listenerSessionCheck;
+        final version = AppVersion.current;
         final response = await http
             .get(
               Uri.parse('${ApiConstants.baseUrl}$path'),
-              headers: {'Authorization': 'Bearer $token'},
+              headers: {
+                'Authorization': 'Bearer $token',
+                if (version != null) 'X-App-Version': version,
+              },
             )
             .timeout(const Duration(seconds: 8));
         if (response.statusCode == 401) {
           _stopAndForceLogout();
+          return;
+        }
+        if (response.statusCode == 426) {
+          _stopAndRequireUpdate();
           return;
         }
       } catch (_) {
