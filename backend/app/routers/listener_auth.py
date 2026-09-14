@@ -206,10 +206,7 @@ def login(payload: ListenerLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = generate_session_token()
     db.add(SessionModel(token=token, listener_id=listener.id, expires_at=session_expiry()))
-    # `is_online` is the listener's own availability switch and must not be
-    # forced on here — logging in should not silently re-enable a listener
-    # who had deliberately switched themselves off. It only changes via the
-    # explicit /status toggle.
+    listener.is_online = True
     record_audit_event(db, "listener", listener.id, listener.name, "login")
     db.commit()
     return AuthResponse(token=token, id=listener.id, name=listener.name)

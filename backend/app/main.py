@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
@@ -17,6 +19,24 @@ os.makedirs("ringtones", exist_ok=True)
 os.makedirs("upgrade_banners", exist_ok=True)
 os.makedirs("special_offers", exist_ok=True)
 
+
+def _configure_app_logging() -> None:
+    """Make the app's own presence/websocket loggers visible on the uvicorn
+    console. Without a handler Python only surfaces WARNING and above, so the
+    INFO lines for "user X connected/disconnected" were silently dropped.
+    uvicorn itself (websockets sans-I/O backend) logs "connection open" but
+    never "connection closed", so these are the only disconnect logs there are."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+    for name in ("chat_ws", "ws_manager"):
+        app_logger = logging.getLogger(name)
+        if not app_logger.handlers:
+            app_logger.addHandler(handler)
+        app_logger.setLevel(logging.INFO)
+        app_logger.propagate = False
+
+
+_configure_app_logging()
 
 app = FastAPI(title="Calling App Backend")
 

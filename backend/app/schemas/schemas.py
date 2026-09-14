@@ -599,6 +599,7 @@ class ChatThreadOut(BaseModel):
     is_archived: bool = False
     is_muted: bool = False
     is_online: bool = False
+    presence_online: bool = False
     last_seen: Optional[datetime] = None
     photo_url: Optional[str] = None
     badge_tag: Optional[dict] = None

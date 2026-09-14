@@ -161,9 +161,15 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       if (listenerId is! int) return;
       final online = type == 'listener_online';
       if (!online) TypingCache().setListenerTyping(listenerId, false);
-      PresenceCache().setListenerOnline(listenerId, online);
       final index = _threads.indexWhere((t) => t['listener_id'] == listenerId);
       if (index != -1) _threads[index]['is_online'] = online;
+    } else if (type == 'listener_presence') {
+      final listenerId = data['listener_id'];
+      if (listenerId is! int) return;
+      PresenceCache().setListenerOnline(
+        listenerId,
+        data['presence_online'] == true,
+      );
     } else if (type == 'coins_updated') {
       final coins = data['coins'];
       if (coins is int) UserDataCache().updateCoins(coins);

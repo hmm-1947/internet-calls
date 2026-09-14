@@ -98,7 +98,7 @@ class ChatSocketService {
       onError: (_) => _scheduleReconnect(),
     );
     _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+    _pingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       send({'type': 'ping'});
     });
   }

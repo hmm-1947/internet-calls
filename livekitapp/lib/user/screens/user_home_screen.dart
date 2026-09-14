@@ -390,8 +390,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
         final aInteracted = _lastInteractedAt(a) != null;
         final bInteracted = _lastInteractedAt(b) != null;
         if (aInteracted != bInteracted) return aInteracted ? -1 : 1;
-        final aOnline = a['is_online'] == true;
-        final bOnline = b['is_online'] == true;
+        final aOnline = a['presence_online'] == true;
+        final bOnline = b['presence_online'] == true;
         if (aOnline != bOnline) return aOnline ? -1 : 1;
         return 0;
       },
@@ -439,9 +439,27 @@ class UserHomeScreenState extends State<UserHomeScreen>
       }
       final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
       if (idx == -1) return;
-      if (_listeners[idx]['is_online'] == online) return;
+      if (_listeners[idx]['is_online'] == online &&
+          _listeners[idx]['presence_online'] == online) {
+        return;
+      }
       setState(() {
         _listeners[idx]['is_online'] = online;
+        _listeners[idx]['presence_online'] = online;
+        _reorder();
+      });
+    } else if (type == 'listener_presence') {
+      final listenerId = data['listener_id'];
+      if (listenerId == null) return;
+      final presenceOnline = data['presence_online'] == true;
+      if (listenerId is int) {
+        PresenceCache().setListenerOnline(listenerId, presenceOnline);
+      }
+      final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+      if (idx == -1) return;
+      if (_listeners[idx]['presence_online'] == presenceOnline) return;
+      setState(() {
+        _listeners[idx]['presence_online'] = presenceOnline;
         _reorder();
       });
     } else if (type == 'listener_call_status') {
@@ -712,7 +730,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
               key: ValueKey<Object?>(listener['id']),
               listener: listener,
               isCalling: _callingListenerId == listener['id'],
-              canAct: _callingListenerId == null &&
+                  canAct: _callingListenerId == null &&
                   listener['is_online'] == true,
               videoCallEnabled: _videoCallEnabled,
               videoCallDisabledByAdmin: _videoCallDisabledByAdmin,
@@ -955,7 +973,7 @@ class _ListenerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isOnline = listener['is_online'] == true;
+    final bool isOnline = listener['presence_online'] == true;
     final bool isInCall = isOnline && listener['is_in_call'] == true;
     final tags = (listener['tags'] as List?) ?? const [];
 

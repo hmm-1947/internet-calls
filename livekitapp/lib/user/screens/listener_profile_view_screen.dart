@@ -98,6 +98,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   String? _error;
   late String _name = widget.initialName ?? '';
   late bool _isOnline = widget.initialIsOnline ?? false;
+  bool _canCall = false;
   bool _listenerVideoCallEnabled = true;
   String _about = '';
   List<String> _tags = [];
@@ -130,7 +131,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
     final map = Map<String, dynamic>.from(cached as Map);
     setState(() {
       _name = map['name'] ?? '';
-      _isOnline = map['is_online'] == true;
+      _isOnline = map['presence_online'] == true;
+      _canCall = map['is_online'] == true;
       _listenerVideoCallEnabled = map['video_call_enabled'] != false;
       _about = map['about'] ?? '';
       _tags = List<String>.from(map['tags'] ?? []);
@@ -161,7 +163,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       );
       final newSnapshot = {
         'name': data['name'] ?? '',
-        'is_online': data['is_online'] == true,
+        'is_online': data['presence_online'] == true,
+        'can_call': data['is_online'] == true,
         'video_call_enabled': data['video_call_enabled'] != false,
         'about': data['about'] ?? '',
         'tags': List<String>.from(data['tags'] ?? []),
@@ -177,6 +180,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       final oldSnapshot = {
         'name': _name,
         'is_online': _isOnline,
+        'can_call': _canCall,
         'video_call_enabled': _listenerVideoCallEnabled,
         'about': _about,
         'tags': _tags,
@@ -192,6 +196,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         setState(() {
           _name = newSnapshot['name'] as String;
           _isOnline = newSnapshot['is_online'] as bool;
+          _canCall = newSnapshot['can_call'] as bool;
           _listenerVideoCallEnabled = newSnapshot['video_call_enabled'] as bool;
           _about = newSnapshot['about'] as String;
           _tags = newSnapshot['tags'] as List<String>;
@@ -411,7 +416,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _callingListener
                               ? null
-                              : (!_isOnline
+                              : (!_canCall
                                     ? () => PillMessage.show(
                                         context,
                                         'This listener is currently offline',
@@ -419,7 +424,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                                       )
                                     : () => _callListener()),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: !_isOnline
+                            backgroundColor: !_canCall
                                 ? _AppColors.brandRed.withValues(alpha: 0.3)
                                 : _AppColors.brandRed,
                             foregroundColor: Colors.white,
@@ -437,7 +442,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _callingListener
                               ? null
-                              : (!_isOnline
+                              : (!_canCall
                                     ? () => PillMessage.show(
                                         context,
                                         'This listener is currently offline',
@@ -452,7 +457,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                                         : () => _callListener(video: true))),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _AppColors.cardBg,
-                            foregroundColor: (!_listenerVideoCallEnabled || !_isOnline)
+                            foregroundColor: (!_listenerVideoCallEnabled || !_canCall)
                                 ? Colors.white38
                                 : Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),

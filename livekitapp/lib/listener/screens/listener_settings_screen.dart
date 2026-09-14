@@ -334,12 +334,12 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
           _SettingsCard([
             _SettingsTile(
               icon: Icons.podcasts,
-              title: 'Status',
-              subtitle: 'online/offline',
+              title: 'Invisible',
+              subtitle: 'hide yourself and block incoming calls',
               trailing: Switch(
-                value: _statusOnline,
+                value: !_statusOnline,
                 activeColor: Colors.green,
-                onChanged: _toggleStatus,
+                onChanged: (value) => _toggleStatus(!value),
               ),
             ),
             const Divider(height: 1, color: Colors.white12),

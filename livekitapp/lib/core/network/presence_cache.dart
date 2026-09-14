@@ -47,7 +47,7 @@ class PresenceCache {
   void seedFromUserThreads(List<Map<String, dynamic>> threads) {
     for (final thread in threads) {
       final id = thread['listener_id'];
-      if (id is int) setListenerOnline(id, thread['is_online'] == true);
+      if (id is int) setListenerOnline(id, thread['presence_online'] == true);
     }
   }
 
@@ -62,7 +62,7 @@ class PresenceCache {
   void seedFromListenerCatalogue(List<Map<String, dynamic>> listeners) {
     for (final listener in listeners) {
       final id = listener['id'];
-      if (id is int) setListenerOnline(id, listener['is_online'] == true);
+      if (id is int) setListenerOnline(id, listener['presence_online'] == true);
     }
   }
 

@@ -77,6 +77,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
   late final ValueNotifier<bool> _favorite;
   late final ValueNotifier<bool> _videoCallAvailable;
   late final ValueNotifier<bool> _listenerVideoCallEnabled;
+  final _listenerCallable = ValueNotifier<bool>(true);
   late final ValueNotifier<UnreadSnapshot> _unread;
   final _atBottom = ValueNotifier<bool>(true);
 
@@ -164,6 +165,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     _favorite.dispose();
     _videoCallAvailable.dispose();
     _listenerVideoCallEnabled.dispose();
+    _listenerCallable.dispose();
     _unread.dispose();
     _atBottom.dispose();
     super.dispose();
@@ -347,8 +349,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       _presenceFetchedAt[widget.listenerId] = DateTime.now();
       PresenceCache().setListenerOnline(
         widget.listenerId,
-        profile['is_online'] == true,
+        profile['presence_online'] == true,
       );
+      _listenerCallable.value = profile['is_online'] == true;
       _listenerVideoCallEnabled.value = profile['video_call_enabled'] != false;
     } catch (_) {}
   }
@@ -494,7 +497,14 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
         if (data['listener_id'] != widget.listenerId) return;
         final online = type == 'listener_online';
         if (!online) _setPeerTyping(false);
-        PresenceCache().setListenerOnline(widget.listenerId, online);
+        _listenerCallable.value = online;
+        return;
+      case 'listener_presence':
+        if (data['listener_id'] != widget.listenerId) return;
+        PresenceCache().setListenerOnline(
+          widget.listenerId,
+          data['presence_online'] == true,
+        );
         return;
       case 'message_status':
         final clientId = data['client_id'];
@@ -951,10 +961,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
           ),
         ),
         actions: [
-          ValueListenableBuilder<bool?>(
-            valueListenable: PresenceCache().listener(widget.listenerId),
-            builder: (context, online, _) {
-              final bool listenerOnline = online == true;
+          ValueListenableBuilder<bool>(
+            valueListenable: _listenerCallable,
+            builder: (context, listenerOnline, _) {
               return IconButton(
                 style: iconButtonStyle,
                 icon: Icon(
@@ -980,11 +989,9 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                   : ValueListenableBuilder<bool>(
                       valueListenable: _listenerVideoCallEnabled,
                       builder: (context, listenerEnabled, _) =>
-                          ValueListenableBuilder<bool?>(
-                        valueListenable:
-                            PresenceCache().listener(widget.listenerId),
-                        builder: (context, online, _) {
-                          final bool listenerOnline = online == true;
+                          ValueListenableBuilder<bool>(
+                        valueListenable: _listenerCallable,
+                        builder: (context, listenerOnline, _) {
                           final bool enabled =
                               listenerOnline && listenerEnabled;
                           return IconButton(

@@ -1,11 +1,13 @@
 #chat.py
 import asyncio
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Form
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import os
 import uuid
+from starlette.websockets import WebSocketState
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.core.database import get_db
@@ -15,6 +17,8 @@ from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMe
 from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary, send_async
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
 from app.core.ws_manager import manager
+
+logger = logging.getLogger("chat_ws")
 
 ACTIVE_CALL_STATUSES = ("ringing", "accepted")
 
@@ -78,6 +82,58 @@ async def _save_voice_upload(file: UploadFile) -> str:
     return filename
 
 CALL_DISCONNECT_GRACE_SECONDS = 20
+
+# Presence heartbeat. The apps send {"type": "ping"} every 10s while they are
+# alive. If nothing at all arrives for WS_IDLE_TIMEOUT_SECONDS we send our own
+# ping (so a merely quiet client keeps the socket warm), and after
+# WS_MAX_IDLE_CYCLES consecutive silent windows we declare the peer gone.
+#
+# This is what catches "internet switched off" / "phone died": in those cases
+# the OS never sends a TCP FIN, so receive() would otherwise block forever and
+# the listener/user would stay marked online. A killed app or a clean close
+# does send a FIN and is detected instantly regardless of these values.
+WS_IDLE_TIMEOUT_SECONDS = 12
+WS_MAX_IDLE_CYCLES = 2  # -> declared dead after ~24s of total silence
+
+
+async def _run_ws_loop(websocket: WebSocket, handle_event) -> str:
+    """Pump events off `websocket` until it dies and return *why*, as a short
+    human-readable reason for the disconnect log. Never raises.
+
+    Whatever ends the loop, the caller must run its offline cleanup: every
+    return path here means this socket is no longer usable for presence.
+    """
+    idle_cycles = 0
+    while True:
+        try:
+            raw = await asyncio.wait_for(websocket.receive_json(), timeout=WS_IDLE_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            idle_cycles += 1
+            if idle_cycles >= WS_MAX_IDLE_CYCLES:
+                silent_for = idle_cycles * WS_IDLE_TIMEOUT_SECONDS
+                return f"no heartbeat for {silent_for}s (network lost or app killed without closing)"
+            try:
+                await websocket.send_json({"type": "ping"})
+            except Exception as exc:
+                return f"ping failed: {exc!r}"
+            continue
+        except WebSocketDisconnect as exc:
+            return f"client closed (code={exc.code})"
+        except RuntimeError as exc:
+            # Starlette raises RuntimeError from receive_json() once *we* have
+            # closed this socket, which only happens when the same account
+            # opened a newer connection and ConnectionManager evicted this one.
+            if websocket.application_state == WebSocketState.DISCONNECTED:
+                return "superseded by a newer connection from the same account"
+            return f"error: {exc!r}"
+        except Exception as exc:
+            return f"error: {exc!r}"
+        idle_cycles = 0
+        try:
+            await handle_event(raw)
+        except Exception as exc:
+            return f"error handling {raw.get('type')!r} event: {exc!r}"
+
 
 async def _finalize_active_calls_for_user(user_id: int, db: Session):
     from app.routers.call import finalize_abandoned_call
@@ -731,6 +787,7 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
             is_online=bool(listener.is_online),
+            presence_online=manager.is_listener_online(lid) and bool(listener.is_online),
             last_seen=listener.last_seen,
             photo_url=listener.photo_url,
             badge_tag=badge_tags_by_id.get(listener.badge_tag_id),
@@ -816,6 +873,7 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
         await websocket.close(code=4003, reason="deactivated")
         return
     await manager.connect_user(user_id, websocket)
+    logger.info(f"WebSocket user={user_id} connected -> online")
     await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": True})
     user = db.query(User).filter(User.id == user_id).first()
     if user and not user.is_online:
@@ -823,29 +881,25 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
         db.commit()
     await manager.broadcast_to_all_listeners({"type": "user_online", "user_id": user_id})
     typing_targets: set[int] = set()
-    try:
-        while True:
-            try:
-                raw = await asyncio.wait_for(websocket.receive_json(), timeout=15)
-            except asyncio.TimeoutError:
-                await websocket.send_json({"type": "ping"})
-                continue
-            await _handle_user_ws_event(raw, user_id, db, typing_targets)
-    except Exception:
-        for target_listener_id in typing_targets:
-            await manager.send_to_listener(target_listener_id, {"type": "typing", "user_id": user_id, "is_typing": False})
-        typing_targets.clear()
-        await manager.disconnect_user(user_id, websocket)
-        asyncio.create_task(_finalize_active_calls_for_user_after_grace(user_id))
-        if manager.is_user_online(user_id):
-            return
 
-        await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": False})
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            user.is_online = False
-            db.commit()
-        await manager.broadcast_to_all_listeners({"type": "user_offline", "user_id": user_id})
+    reason = await _run_ws_loop(websocket, lambda raw: _handle_user_ws_event(raw, user_id, db, typing_targets))
+
+    for target_listener_id in typing_targets:
+        await manager.send_to_listener(target_listener_id, {"type": "typing", "user_id": user_id, "is_typing": False})
+    typing_targets.clear()
+    await manager.disconnect_user(user_id, websocket)
+    asyncio.create_task(_finalize_active_calls_for_user_after_grace(user_id))
+    if manager.is_user_online(user_id):
+        logger.info(f"WebSocket user={user_id} disconnected: {reason} (another connection is still open, stays online)")
+        return
+
+    logger.info(f"WebSocket user={user_id} disconnected: {reason} -> offline")
+    await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": False})
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.is_online = False
+        db.commit()
+    await manager.broadcast_to_all_listeners({"type": "user_offline", "user_id": user_id})
 
 async def _handle_user_ws_event(raw: dict, user_id: int, db: Session, typing_targets: set | None = None):
     etype = raw.get("type")
@@ -881,11 +935,17 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
         return
     await manager.connect_listener(listener_id, websocket)
     listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    logger.info(
+        f"WebSocket listener={listener_id} connected -> presence online "
+        f"(availability switch is_online={bool(listener and listener.is_online)})"
+    )
     await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": bool(listener and listener.is_online)})
     user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
     if listener and listener.is_online:
         for uid in manager.get_online_user_ids(user_ids):
             await manager.send_to_user(uid, {"type": "listener_online", "listener_id": listener_id})
+    for uid in manager.get_online_user_ids(user_ids):
+        await manager.send_to_user(uid, {"type": "listener_presence", "listener_id": listener_id, "presence_online": bool(listener and listener.is_online)})
 
 
     pending_gifts = db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id, GiftTransaction.notified == False).order_by(GiftTransaction.created_at.asc()).all()
@@ -904,40 +964,38 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
     if pending_gifts:
         db.commit()
     typing_targets: set[int] = set()
-    try:
-        while True:
-            try:
-                raw = await asyncio.wait_for(websocket.receive_json(), timeout=15)
-            except asyncio.TimeoutError:
-                await websocket.send_json({"type": "ping"})
-                continue
-            await _handle_listener_ws_event(raw, listener_id, db, typing_targets)
-    except Exception:
-        for target_user_id in typing_targets:
-            await manager.send_to_user(target_user_id, {"type": "typing", "listener_id": listener_id, "is_typing": False})
-        typing_targets.clear()
-        await manager.disconnect_listener(listener_id, websocket)
-        asyncio.create_task(_finalize_active_calls_for_listener_after_grace(listener_id))
-        if manager.is_listener_online(listener_id):
-            return
 
-        await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": False})
-        listener = db.query(Listener).filter(Listener.id == listener_id).first()
-        if listener:
-            # Only the socket went away. `is_online` is the listener's own
-            # availability switch and is deliberately left untouched here: a
-            # dropped socket (app backgrounded during a call, network blip)
-            # must not silently flip their switch off.
-            listener.last_seen = datetime.now(timezone.utc)
-            db.commit()
-        # Users only care about the listener's manual availability switch, not
-        # the transient socket connection, so only tell them the listener went
-        # offline if the switch itself is actually off. Otherwise a background/
-        # kill/reconnect blip while the switch is still on must not disable
-        # their call buttons.
-        if not (listener and listener.is_online):
-            for uid in manager.get_online_user_ids(user_ids):
-                await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
+    reason = await _run_ws_loop(websocket, lambda raw: _handle_listener_ws_event(raw, listener_id, db, typing_targets))
+
+    for target_user_id in typing_targets:
+        await manager.send_to_user(target_user_id, {"type": "typing", "listener_id": listener_id, "is_typing": False})
+    typing_targets.clear()
+    await manager.disconnect_listener(listener_id, websocket)
+    asyncio.create_task(_finalize_active_calls_for_listener_after_grace(listener_id))
+    if manager.is_listener_online(listener_id):
+        logger.info(f"WebSocket listener={listener_id} disconnected: {reason} (another connection is still open, stays online)")
+        return
+
+    logger.info(f"WebSocket listener={listener_id} disconnected: {reason} -> presence offline")
+    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": False})
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    if listener:
+        # Only the socket went away. `is_online` is the listener's own
+        # availability switch and is deliberately left untouched here: a
+        # dropped socket (app backgrounded during a call, network blip)
+        # must not silently flip their switch off.
+        listener.last_seen = datetime.now(timezone.utc)
+        db.commit()
+    # Users only care about the listener's manual availability switch, not
+    # the transient socket connection, so only tell them the listener went
+    # offline if the switch itself is actually off. Otherwise a background/
+    # kill/reconnect blip while the switch is still on must not disable
+    # their call buttons.
+    if not (listener and listener.is_online):
+        for uid in manager.get_online_user_ids(user_ids):
+            await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
+    for uid in manager.get_online_user_ids(user_ids):
+        await manager.send_to_user(uid, {"type": "listener_presence", "listener_id": listener_id, "presence_online": False})
 
 
 

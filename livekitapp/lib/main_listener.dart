@@ -571,6 +571,8 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // ignore: avoid_print
+    print('[Presence] lifecycle=$state');
     if (state == AppLifecycleState.resumed) {
       _offlineTimer?.cancel();
       _reconnectSocket();
@@ -578,16 +580,10 @@ class _AppLifecycleReporterState extends State<AppLifecycleReporter>
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _offlineTimer?.cancel();
-      _offlineTimer = Timer(const Duration(seconds: 15), () async {
-        if (ActiveCallManager.instance.hasActiveCall) return;
-        final activeCall = await _localStorage.getActiveCall();
-        if (activeCall != null) return;
-        // Only drop the socket. Users already see the listener as offline the
-        // moment presence is gone, and the availability switch stays where the
-        // listener left it instead of being turned off behind their back after
-        // a call or any other trip through the background.
-        ChatSocketService().disconnect();
-      });
+      if (ActiveCallManager.instance.hasActiveCall) return;
+      // ignore: avoid_print
+      print('[Presence] disconnecting socket due to $state');
+      ChatSocketService().disconnect();
     }
   }
 
