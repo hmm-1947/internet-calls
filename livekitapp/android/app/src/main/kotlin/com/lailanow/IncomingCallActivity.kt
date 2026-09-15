@@ -123,12 +123,11 @@ class IncomingCallActivity : Activity() {
                 getIntent(context, callId, callerName, callType, callerPhotoUrl),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            val acceptIntent = PendingIntent.getBroadcast(
+            val acceptIntent = PendingIntent.getActivity(
                 context,
                 NOTIFICATION_ID + 1,
-                CallActionReceiver.intentFor(
+                MainActivity.acceptFromNotificationIntent(
                     context,
-                    CallActionReceiver.ACTION_ACCEPT,
                     callId,
                     callerName,
                     callType,

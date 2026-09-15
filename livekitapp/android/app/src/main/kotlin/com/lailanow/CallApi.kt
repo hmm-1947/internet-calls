@@ -50,7 +50,19 @@ object CallApi {
     // waiting. The incoming-call screen gives up after 45s and the server
     // stops honouring an accept after 60s, so anything older is dead.
     private const val ACCEPTED_TTL_MS = 90 * 1000L
-    private val ACCEPT_RETRY_DELAYS_MS = longArrayOf(0, 1_000, 2_000, 4_000)
+    // A "retryable" failure here almost always means base_url/auth token are
+    // not mirrored into native prefs yet, which only happens once the Dart
+    // engine has booted far enough to call setApiBaseUrl/setAuthToken. On a
+    // fully-killed process (cold start from the notification's Answer
+    // action, no existing task), that boot can take well past a few seconds
+    // on a throttled/Doze'd device — the old 0/1s/2s/4s schedule (~7s total)
+    // routinely lost that race and gave up long before Dart was ready, which
+    // silently dropped the accept: postAccept was never retried again, so
+    // takeAccepted() had nothing for flushPendingNav() to adopt. Keep trying
+    // for close to the full ACCEPTED_TTL_MS window instead.
+    private val ACCEPT_RETRY_DELAYS_MS = longArrayOf(
+        0, 1_000, 2_000, 3_000, 5_000, 5_000, 8_000, 8_000, 10_000, 10_000, 15_000, 15_000
+    )
 
     private val executor = Executors.newSingleThreadExecutor()
 

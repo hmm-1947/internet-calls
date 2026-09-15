@@ -25,9 +25,32 @@ class MainActivity : FlutterActivity() {
         const val ENGINE_ID = "livekitapp.main.engine"
         const val EXTRA_OPEN_ACTIVE_CALL = "open_active_call"
         const val EXTRA_FROM_LOCKSCREEN = "from_lockscreen"
+        const val EXTRA_ACCEPT_CALL_ID = "accept_call_id"
+        const val EXTRA_ACCEPT_CALLER_NAME = "accept_caller_name"
+        const val EXTRA_ACCEPT_CALL_TYPE = "accept_call_type"
+        const val EXTRA_ACCEPT_CALLER_PHOTO_URL = "accept_caller_photo_url"
         const val CALL_FG_CHANNEL = "livekitapp/callforeground"
 
         private var isInCallState = false
+
+        fun acceptFromNotificationIntent(
+            context: Context,
+            callId: String,
+            callerName: String,
+            callType: String,
+            callerPhotoUrl: String
+        ): Intent = Intent(Intent.ACTION_MAIN).apply {
+            setClassName(context.packageName, MainActivity::class.java.name)
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            putExtra(EXTRA_ACCEPT_CALL_ID, callId)
+            putExtra(EXTRA_ACCEPT_CALLER_NAME, callerName)
+            putExtra(EXTRA_ACCEPT_CALL_TYPE, callType)
+            putExtra(EXTRA_ACCEPT_CALLER_PHOTO_URL, callerPhotoUrl)
+            putExtra(EXTRA_FROM_LOCKSCREEN, true)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        }
     }
 
     private val CHANNEL = "livekitapp/lockscreen"
@@ -68,6 +91,7 @@ class MainActivity : FlutterActivity() {
         resetStaleIncomingCallChannel()
         registerLockStateReceiver()
         applyPipParams()
+        handleAcceptFromNotificationIntent(intent)
         handleOpenActiveCallIntent(intent)
     }
 
@@ -78,8 +102,10 @@ class MainActivity : FlutterActivity() {
             CallLockscreen.setCallActive(true)
         }
         applyLockscreenMode()
+        handleAcceptFromNotificationIntent(intent)
         handleOpenActiveCallIntent(intent)
     }
+
 
     override fun onResume() {
         super.onResume()
@@ -173,6 +199,27 @@ class MainActivity : FlutterActivity() {
             MethodChannel(it.dartExecutor.binaryMessenger, CALL_FG_CHANNEL)
                 .invokeMethod("openActiveCall", null)
         }
+    }
+
+    private fun handleAcceptFromNotificationIntent(intent: Intent?) {
+        val callId = intent?.getStringExtra(EXTRA_ACCEPT_CALL_ID) ?: return
+        intent.removeExtra(EXTRA_ACCEPT_CALL_ID)
+        val callerName = intent.getStringExtra(EXTRA_ACCEPT_CALLER_NAME) ?: "Unknown"
+        val callType = intent.getStringExtra(EXTRA_ACCEPT_CALL_TYPE) ?: "audio"
+        val photoUrl = intent.getStringExtra(EXTRA_ACCEPT_CALLER_PHOTO_URL) ?: ""
+        intent.removeExtra(EXTRA_ACCEPT_CALLER_NAME)
+        intent.removeExtra(EXTRA_ACCEPT_CALL_TYPE)
+        intent.removeExtra(EXTRA_ACCEPT_CALLER_PHOTO_URL)
+
+        RingtoneService.stop(applicationContext)
+        IncomingCallActivity.cancelNotification(applicationContext)
+        CallkitBridge.cancelIncomingNotification(applicationContext, CallkitBridge.callIdToUuid(callId))
+        CallLockscreen.setCallActive(true)
+        IncomingCallActivity.dismiss(applicationContext, handled = true)
+
+        CallApi.accept(applicationContext, callId, callerName, callType, photoUrl)
+        val data = CallkitBridge.buildCallBundle(callId, callerName, callType, photoUrl)
+        CallkitBridge.sendAccept(applicationContext, data)
     }
 
     // Notification channels are immutable once created on-device — if the

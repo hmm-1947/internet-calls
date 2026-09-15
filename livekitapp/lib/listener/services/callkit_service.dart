@@ -50,11 +50,22 @@ class CallkitService {
 
   /// How long the cold-start recovery keeps looking while nothing yet suggests
   /// a call is waiting. Covers the gap between the app's first frame and the
-  /// accept broadcast being persisted by the callkit plugin, without stalling
-  /// an ordinary launch for more than a couple of seconds.
-  static const _blindNavRetries = 6;
-  static const _blindNavRetryDelay = Duration(milliseconds: 400);
-  static const _navRetryDelay = Duration(milliseconds: 500);
+  /// accept broadcast being persisted by the callkit plugin.
+  ///
+  /// This has to outlast CallApi.kt's own accept retry loop (~82s, bounded by
+  /// ACCEPTED_TTL_MS=90s there), not just the gap to the first frame: a fully
+  /// killed process launched from the notification's Answer action can take
+  /// several seconds just to get a Flutter frame up, and native's HTTP accept
+  /// can itself still be waiting on a radio to wake from Doze after that. The
+  /// old budget (6 * 400ms =~ 2.4s) gave up on the "nothing pending yet"
+  /// branch long before either of those finished, which is what silently
+  /// stranded the listener on the lock screen until they reopened the app by
+  /// hand. An ordinary launch with no call still exits on the first check
+  /// (see the early '_pendingCallNav'/LocalStorage/native-accept checks
+  /// above), so widening this only costs time on an actual cold-start call.
+  static const _blindNavRetries = 40;
+  static const _blindNavRetryDelay = Duration(milliseconds: 2000);
+  static const _navRetryDelay = Duration(milliseconds: 2000);
 
   /// A cold-start accept pays for DNS, the TLS handshake and a radio waking
   /// from Doze on top of the request itself, so it gets a wider budget and a
