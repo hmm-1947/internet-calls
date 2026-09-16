@@ -670,7 +670,6 @@ class UserHomeScreenState extends State<UserHomeScreen>
     final bottomPadding = 32 + MediaQuery.paddingOf(context).bottom + 90;
     return Scaffold(
       backgroundColor: _AppColors.bg,
-      endDrawer: _buildProfileDrawer(),
       body: RefreshIndicator(
         onRefresh: _pullToRefresh,
         child: CustomScrollView(
