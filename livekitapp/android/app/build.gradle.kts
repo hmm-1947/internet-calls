@@ -11,7 +11,10 @@ android {
     buildTypes {
         getByName("debug") {}
     }
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler_android 14.1.0 compiles against SDK 37, which is higher
+    // than flutter.compileSdkVersion (36) as of this Flutter release. AGP requires
+    // the app to compile against at least the highest SDK any dependency uses.
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     ndkVersion = flutter.ndkVersion
     buildFeatures {
         resValues = true

@@ -37,7 +37,7 @@ class ActivityNotificationService {
     );
     try {
       await _plugin.initialize(
-        const InitializationSettings(
+        settings: const InitializationSettings(
           android: android,
           iOS: darwin,
           macOS: darwin,
@@ -92,10 +92,10 @@ class ActivityNotificationService {
     try {
       if (!await init()) return;
       await _plugin.show(
-        _missedCallBaseId + callId,
-        'Missed Call',
-        '$callerName tried to reach you',
-        const NotificationDetails(
+        id: _missedCallBaseId + callId,
+        title: 'Missed Call',
+        body: '$callerName tried to reach you',
+        notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             _callsChannelId,
             _callsChannelName,
@@ -119,7 +119,7 @@ class ActivityNotificationService {
     if (!Platform.isAndroid) return;
     try {
       if (!await init()) return;
-      await _plugin.cancel(_missedCallBaseId + callId);
+      await _plugin.cancel(id: _missedCallBaseId + callId);
     } catch (error) {
       debugPrint('[activity-notif] cancelMissedCall failed: $error');
     }
@@ -135,10 +135,10 @@ class ActivityNotificationService {
     try {
       if (!await init()) return;
       await _plugin.show(
-        _giftBaseId + fromUserId,
-        'You received a gift!',
-        '$fromUserName sent you $giftName · +$creditedCoins coins',
-        const NotificationDetails(
+        id: _giftBaseId + fromUserId,
+        title: 'You received a gift!',
+        body: '$fromUserName sent you $giftName · +$creditedCoins coins',
+        notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             _giftsChannelId,
             _giftsChannelName,

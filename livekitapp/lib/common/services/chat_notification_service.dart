@@ -132,7 +132,7 @@ class ChatNotificationService {
     );
     try {
       await _plugin.initialize(
-        const InitializationSettings(
+        settings: const InitializationSettings(
           android: android,
           iOS: darwin,
           macOS: darwin,
@@ -358,10 +358,10 @@ class ChatNotificationService {
     );
 
     await _plugin.show(
-      _baseNotificationId + otherId,
-      senderName,
-      '${merged.last['t']}',
-      NotificationDetails(
+      id: _baseNotificationId + otherId,
+      title: senderName,
+      body: '${merged.last['t']}',
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
           _channelName,
@@ -406,7 +406,7 @@ class ChatNotificationService {
   /// next message starts a fresh stack (and alerts again).
   Future<void> cancelConversation(int otherId) async {
     try {
-      if (await init()) await _plugin.cancel(_baseNotificationId + otherId);
+      if (await init()) await _plugin.cancel(id: _baseNotificationId + otherId);
       await _serialise(() async {
         final state = await _readState();
         (state['chats'] as Map<String, dynamic>).remove('$otherId');

@@ -537,7 +537,7 @@ private fun closeIncomingCallScreen() {
     val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
     try {
         for (task in am.appTasks) {
-            val className = task.taskInfo.topActivity?.className ?: continue
+            val className = task.taskInfo?.topActivity?.className ?: continue
             android.util.Log.d("Callkit", "closeIncomingCallScreen: found task activity=$className")
             if (className.contains("CallkitIncomingActivity")) {
                 task.finishAndRemoveTask()
