@@ -1,0 +1,38 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - final
+
+jobs:
+  build:
+    name: Build Flutter APKs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: livekitapp
+        run: flutter pub get
+
+      - name: Analyze Flutter project
+        working-directory: livekitapp
+        run: flutter analyze
+
+      - name: Build user APK
+        working-directory: livekitapp
+        run: flutter build apk --release --flavor user -t lib/main_user.dart
+
+      - name: Build listener APK
+        working-directory: livekitapp
+        run: flutter build apk --release --flavor listener -t lib/main_listener.dart
