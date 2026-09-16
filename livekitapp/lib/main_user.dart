@@ -14,6 +14,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/flavors/flavor_config.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/services/app_version_service.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
 import 'package:livekitapp/common/services/lockscreen_service.dart';
@@ -22,6 +23,7 @@ import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/onboarding_screen.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
+import 'package:livekitapp/common/widgets/update_required_screen.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 import 'package:livekitapp/user/screens/calls/user_call_screen.dart';
@@ -213,6 +215,15 @@ void main() async {
   );
 
   await dotenv.load(fileName: ".env");
+
+  // Blocking version check: an outdated build never proceeds past this
+  // point — no Firebase, no caches, nothing else initializes.
+  final versionBlock = await AppVersionService.checkForUser();
+  if (versionBlock != null) {
+    runApp(UpdateRequiredScreen(storeUrl: versionBlock.storeUrl));
+    return;
+  }
+
   await AvatarCache.instance.init();
   FlavorConfig.set(AppFlavor.user);
   LockscreenService.instance.init();

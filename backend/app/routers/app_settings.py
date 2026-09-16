@@ -1,7 +1,7 @@
 import os
 import re
 import uuid
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -26,6 +26,34 @@ def _get_or_create_settings(db: Session) -> AppSettings:
 def get_upgrade_banner(db: Session = Depends(get_db)):
     settings_row = _get_or_create_settings(db)
     return {"upgrade_banner_url": settings_row.upgrade_banner_url}
+
+
+@router.get("/version-check")
+def get_version_check(db: Session = Depends(get_db)):
+    """Public endpoint both apps can call on launch to check for a required
+    update. The latest version IS the minimum required version: any
+    installed build below it is considered outdated.
+
+    The user app is distributed through the stores, so it gets a store_url
+    to redirect to. The listener app is sideloaded (not on any store), so
+    it only gets a required version number.
+    """
+    settings_row = _get_or_create_settings(db)
+    return {
+        "user": {
+            "android": {
+                "latest_version": settings_row.latest_app_version_android,
+                "store_url": settings_row.android_store_url,
+            },
+            "ios": {
+                "latest_version": settings_row.latest_app_version_ios,
+                "store_url": settings_row.ios_store_url,
+            },
+        },
+        "listener": {
+            "latest_version": settings_row.latest_app_version_listener,
+        },
+    }
 
 
 @router.get("/enroll-contact")
@@ -84,6 +112,54 @@ def get_terms_privacy(db: Session = Depends(get_db)):
     return {
         "terms_of_service": settings_row.terms_of_service or "",
         "privacy_policy": settings_row.privacy_policy or "",
+    }
+
+
+class VersionCheckPayload(BaseModel):
+    latest_app_version_android: str | None = None
+    android_store_url: str | None = None
+    latest_app_version_ios: str | None = None
+    ios_store_url: str | None = None
+    latest_app_version_listener: str | None = None
+
+
+@router.put("/admin/version-check")
+def admin_set_version_check(
+    payload: VersionCheckPayload,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(verify_admin),
+):
+    settings_row = _get_or_create_settings(db)
+    updates = payload.model_dump(exclude_unset=True)
+
+    resulting_android_version = updates.get("latest_app_version_android", settings_row.latest_app_version_android)
+    resulting_android_url = updates.get("android_store_url", settings_row.android_store_url)
+    if resulting_android_version and not resulting_android_url:
+        raise HTTPException(status_code=400, detail="Set the Play Store URL before saving an Android version")
+
+    resulting_ios_version = updates.get("latest_app_version_ios", settings_row.latest_app_version_ios)
+    resulting_ios_url = updates.get("ios_store_url", settings_row.ios_store_url)
+    if resulting_ios_version and not resulting_ios_url:
+        raise HTTPException(status_code=400, detail="Set the App Store URL before saving an iOS version")
+
+    for field, value in updates.items():
+        setattr(settings_row, field, value)
+    db.commit()
+    db.refresh(settings_row)
+    return {
+        "user": {
+            "android": {
+                "latest_version": settings_row.latest_app_version_android,
+                "store_url": settings_row.android_store_url,
+            },
+            "ios": {
+                "latest_version": settings_row.latest_app_version_ios,
+                "store_url": settings_row.ios_store_url,
+            },
+        },
+        "listener": {
+            "latest_version": settings_row.latest_app_version_listener,
+        },
     }
 
 

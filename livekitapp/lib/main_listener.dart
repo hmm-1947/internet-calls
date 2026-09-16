@@ -24,6 +24,7 @@ import 'package:livekitapp/listener/services/callkit_service.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_screen.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/activity_notification_service.dart';
+import 'package:livekitapp/common/services/app_version_service.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/services/chat_notification_service.dart';
@@ -32,6 +33,7 @@ import 'package:livekitapp/common/services/voice_message_player.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/widgets/active_call_bar.dart';
 import 'package:livekitapp/common/widgets/splash_screen.dart';
+import 'package:livekitapp/common/widgets/update_required_screen.dart';
 import 'package:livekitapp/core/network/chat_message_cache.dart';
 
 /// Top-level function — runs in a separate isolate when the app is
@@ -211,6 +213,15 @@ void main() async {
     print(
       '[Callkit] Skipping UI and runApp initialization in background isolate: $isolateName',
     );
+    return;
+  }
+
+  // Blocking version check: an outdated build never proceeds past this
+  // point — no Firebase, no FCM, nothing else initializes. The listener app
+  // is sideloaded, so this is just an "update required" screen, no store link.
+  final versionBlock = await AppVersionService.checkForListener();
+  if (versionBlock != null) {
+    runApp(const UpdateRequiredScreen());
     return;
   }
 
