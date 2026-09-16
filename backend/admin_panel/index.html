@@ -7196,7 +7196,11 @@ ${logSection === 'chats' ? '' : `
             <thead><tr><th>ID</th><th>Caller</th><th>Listener</th><th>Status</th><th>Started</th><th>Ended</th><th>Play</th></tr></thead>
             <tbody>
               ${pageItems.map(r => {
-          const audio = r.file_path ? `<audio controls src="${API_URL}/recordings/${r.file_path}"></audio>` : '';
+          // r.file_path is now a full, signed, time-limited path (e.g.
+          // /media/recordings/xxx.ogg?expires=...&sig=...) minted fresh by
+          // /admin/recordings on every load - no longer a bare filename
+          // under the old public /recordings/ mount.
+          const audio = r.file_path ? `<audio controls src="${API_URL}${r.file_path}"></audio>` : '';
           return `
                 <tr>
                   <td>${r.id}</td>

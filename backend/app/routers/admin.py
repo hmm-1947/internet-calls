@@ -21,6 +21,11 @@ from datetime import timedelta
 from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, ListenerBadgeTagCreate, ListenerTagAssign
 from app.utils.security import hash_password
 from app.utils.uploads import read_and_validate_image, write_file
+from app.utils.media_urls import sign_media_url
+
+# Admin recording playback links only need to stay valid for the length of a
+# viewing session on the panel, not forever.
+RECORDING_URL_TTL_SECONDS = 60 * 60
 
 from app.core.ws_manager import manager
 #admin
@@ -492,11 +497,17 @@ def list_recordings(db: Session = Depends(get_db), _=Depends(verify_admin)):
     )
     result = []
     for r, call, caller, listener in rows:
+        filename = r.file_path.replace("/out/", "") if r.file_path else None
+        # Signed fresh on every request (this endpoint is only reachable by a
+        # verified admin session already), rather than stored once, so the
+        # link naturally expires instead of being a permanent public URL if
+        # this JSON response ever leaked.
+        file_url = sign_media_url("recordings", filename, RECORDING_URL_TTL_SECONDS) if filename else None
         result.append({
             "id": r.id,
             "call_id": r.call_id,
             "room_name": r.room_name,
-            "file_path": r.file_path.replace("/out/", "") if r.file_path else None,
+            "file_path": file_url,
             "status": r.status,
             "started_at": r.started_at,
             "ended_at": r.ended_at,

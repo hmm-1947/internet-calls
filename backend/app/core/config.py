@@ -22,6 +22,13 @@ class Settings(BaseSettings):
 
     renflair_api_key: str = ""
 
+    # HMAC secret for signing time-limited media URLs (recordings, voice
+    # notes) so those files aren't reachable by guessing/leaking a filename.
+    # Falls back to admin_secret if not set explicitly, so existing deployments
+    # don't need an .env change to pick this fix up.
+    media_url_secret: str = ""
+
+
     class Config:
         env_file = ".env"
         extra = "ignore"

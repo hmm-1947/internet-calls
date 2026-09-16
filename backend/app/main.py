@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
-from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing, app_settings, special_offers, weekly_challenge, withdrawals, notifications
+from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth, call, chat, listener_notes, gift, billing, app_settings, special_offers, weekly_challenge, withdrawals, notifications, media
 from fastapi.staticfiles import StaticFiles
 from app.core.database import SessionLocal
 from app.models.models import User, Listener
@@ -40,8 +40,10 @@ _configure_app_logging()
 
 app = FastAPI(title="Calling App Backend")
 
-app.mount("/recordings", StaticFiles(directory=r"recordings"), name="recordings")
-app.mount("/voice_notes", StaticFiles(directory="voice_notes"), name="voice_notes")
+# /recordings and /voice_notes used to be public StaticFiles mounts here -
+# anyone who obtained/guessed a filename could download that call's audio or
+# a voice note directly, no login required. Both are now served only through
+# app.routers.media, behind a signed, time-limited URL (see media_urls.py).
 app.mount("/profile_photos", StaticFiles(directory="profile_photos"), name="profile_photos")
 app.mount("/gift_icons", StaticFiles(directory="gift_icons"), name="gift_icons")
 app.mount("/ringtones", StaticFiles(directory="ringtones"), name="ringtones")
@@ -75,6 +77,7 @@ app.include_router(billing.router)
 app.include_router(app_settings.router)
 app.include_router(special_offers.router)
 app.include_router(weekly_challenge.router)
+app.include_router(media.router)
 
 @app.get("/health")
 def health():

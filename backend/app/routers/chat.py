@@ -16,6 +16,7 @@ from app.models.models import ChatMessage, User, Listener, Session as SessionMod
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
 from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary, send_async
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
+from app.utils.media_urls import sign_media_url
 from app.core.ws_manager import manager
 
 logger = logging.getLogger("chat_ws")
@@ -36,6 +37,11 @@ GENERIC_UPLOAD_CONTENT_TYPES = {
     "application/octet-stream", "binary/octet-stream", "application/binary",
 }
 MAX_VOICE_NOTE_BYTES = 10 * 1024 * 1024  # 10 MB
+# Voice notes are chat history, potentially replayed years later, so this is
+# effectively permanent rather than a short-lived link - the point is only to
+# require a valid signature (i.e. that the backend actually issued this URL to
+# a real conversation participant), not to force re-authentication on replay.
+VOICE_NOTE_URL_TTL_SECONDS = 20 * 365 * 24 * 60 * 60
 
 
 def _validate_voice_upload(file: UploadFile) -> str:
@@ -414,7 +420,7 @@ async def user_send_voice(
         sender_type="user",
         message="",
         message_type="audio",
-        audio_url=f"/voice_notes/{filename}",
+        audio_url=sign_media_url("voice_notes", filename, VOICE_NOTE_URL_TTL_SECONDS),
         audio_duration=duration,
         status="delivered" if listener_online else "sent",
         delivered_at=datetime.now(timezone.utc) if listener_online else None,
@@ -453,7 +459,7 @@ async def listener_send_voice(
         sender_type="listener",
         message="",
         message_type="audio",
-        audio_url=f"/voice_notes/{filename}",
+        audio_url=sign_media_url("voice_notes", filename, VOICE_NOTE_URL_TTL_SECONDS),
         audio_duration=duration,
         status="delivered" if user_online else "sent",
         delivered_at=datetime.now(timezone.utc) if user_online else None,
