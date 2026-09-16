@@ -582,27 +582,35 @@ def admin_listener_wallet(
         return filters
 
 
+    # created_at is stored in UTC; the day/night split is meant in IST, so
+    # shift the column by the IST offset before pulling out the hour (same
+    # fix as app/utils/wallet_stats.py, which the listener-facing wallet
+    # screen uses).
+    IST_OFFSET = timedelta(hours=5, minutes=30)
+
     def split_sum(amount_col, time_col, filters):
+        ist_hour = extract('hour', time_col + IST_OFFSET)
         day_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
             *filters,
-            extract('hour', time_col) >= 5,
-            extract('hour', time_col) < 21,
+            ist_hour >= 5,
+            ist_hour < 21,
         ).scalar()
         night_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
             *filters,
-            (extract('hour', time_col) < 5) | (extract('hour', time_col) >= 21),
+            (ist_hour < 5) | (ist_hour >= 21),
         ).scalar()
         return int(day_sum), int(night_sum)
 
     def split_count(model, time_col, filters):
+        ist_hour = extract('hour', time_col + IST_OFFSET)
         day_count = db.query(sa_func.count(model.id)).filter(
             *filters,
-            extract('hour', time_col) >= 5,
-            extract('hour', time_col) < 21,
+            ist_hour >= 5,
+            ist_hour < 21,
         ).scalar()
         night_count = db.query(sa_func.count(model.id)).filter(
             *filters,
-            (extract('hour', time_col) < 5) | (extract('hour', time_col) >= 21),
+            (ist_hour < 5) | (ist_hour >= 21),
         ).scalar()
         return int(day_count), int(night_count)
 

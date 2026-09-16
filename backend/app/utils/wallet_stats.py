@@ -14,6 +14,13 @@ from sqlalchemy.orm import Session
 DAY_START_HOUR = 5
 DAY_END_HOUR = 21
 
+# Timestamps are stored in UTC (see models.py `created_at` columns), but the
+# day/night split is meant in IST — the same convention already used for the
+# weekly-challenge boundary (see routers/weekly_challenge.py). Shifting the
+# column by the IST offset before calling extract('hour', ...) turns the UTC
+# instant into the equivalent IST wall-clock hour.
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
 
 def week_bounds(reference: datetime | None = None, weeks_ago: int = 0):
     """Returns (start, end) datetimes [inclusive, exclusive) for the Monday-
@@ -35,21 +42,23 @@ def day_night_breakdown(db: Session, listener_id: int, start: datetime, end: dat
 
     def split_sum(amount_col, time_col, filters):
         base = [*filters, time_col >= start, time_col < end]
+        ist_hour = extract('hour', time_col + IST_OFFSET)
         day_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
-            *base, extract('hour', time_col) >= DAY_START_HOUR, extract('hour', time_col) < DAY_END_HOUR,
+            *base, ist_hour >= DAY_START_HOUR, ist_hour < DAY_END_HOUR,
         ).scalar()
         night_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
-            *base, (extract('hour', time_col) < DAY_START_HOUR) | (extract('hour', time_col) >= DAY_END_HOUR),
+            *base, (ist_hour < DAY_START_HOUR) | (ist_hour >= DAY_END_HOUR),
         ).scalar()
         return int(day_sum), int(night_sum)
 
     def split_count(id_col, time_col, filters):
         base = [*filters, time_col >= start, time_col < end]
+        ist_hour = extract('hour', time_col + IST_OFFSET)
         day_count = db.query(sa_func.count(id_col)).filter(
-            *base, extract('hour', time_col) >= DAY_START_HOUR, extract('hour', time_col) < DAY_END_HOUR,
+            *base, ist_hour >= DAY_START_HOUR, ist_hour < DAY_END_HOUR,
         ).scalar()
         night_count = db.query(sa_func.count(id_col)).filter(
-            *base, (extract('hour', time_col) < DAY_START_HOUR) | (extract('hour', time_col) >= DAY_END_HOUR),
+            *base, (ist_hour < DAY_START_HOUR) | (ist_hour >= DAY_END_HOUR),
         ).scalar()
         return int(day_count), int(night_count)
 

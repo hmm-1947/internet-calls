@@ -73,31 +73,40 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
 def get_wallet(db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     from app.models.models import ListenerCoinTransaction, GiftTransaction
     from sqlalchemy import extract, case
+    from datetime import timedelta
+
+    # created_at is stored in UTC; the day/night split is meant in IST, so
+    # shift the column by the IST offset before pulling out the hour (same
+    # fix as app/utils/wallet_stats.py).
+    IST_OFFSET = timedelta(hours=5, minutes=30)
 
     def is_day(col):
-        return extract('hour', col) >= 5 and extract('hour', col) < 21
+        ist_hour = extract('hour', col + IST_OFFSET)
+        return ist_hour >= 5 and ist_hour < 21
 
     def split_sum(model, amount_col, time_col, filters):
+        ist_hour = extract('hour', time_col + IST_OFFSET)
         day_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
             *filters,
-            extract('hour', time_col) >= 5,
-            extract('hour', time_col) < 21,
+            ist_hour >= 5,
+            ist_hour < 21,
         ).scalar()
         night_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
             *filters,
-            (extract('hour', time_col) < 5) | (extract('hour', time_col) >= 21),
+            (ist_hour < 5) | (ist_hour >= 21),
         ).scalar()
         return int(day_sum), int(night_sum)
 
     def split_count(model, time_col, filters):
+        ist_hour = extract('hour', time_col + IST_OFFSET)
         day_count = db.query(sa_func.count(model.id)).filter(
             *filters,
-            extract('hour', time_col) >= 5,
-            extract('hour', time_col) < 21,
+            ist_hour >= 5,
+            ist_hour < 21,
         ).scalar()
         night_count = db.query(sa_func.count(model.id)).filter(
             *filters,
-            (extract('hour', time_col) < 5) | (extract('hour', time_col) >= 21),
+            (ist_hour < 5) | (ist_hour >= 21),
         ).scalar()
         return int(day_count), int(night_count)
 
