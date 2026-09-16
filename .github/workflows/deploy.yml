@@ -26,6 +26,11 @@ jobs:
         run: |
           echo "API_BASE_URL=${{ secrets.API_BASE_URL }}" > .env
 
+      - name: Create google-services.json
+        working-directory: livekitapp
+        run: |
+          echo '${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+
       - name: Get Flutter dependencies
         working-directory: livekitapp
         run: flutter pub get
@@ -38,6 +43,18 @@ jobs:
         working-directory: livekitapp
         run: flutter build apk --release --flavor user -t lib/main_user.dart
 
+      - name: Upload user APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-apk
+          path: livekitapp/build/app/outputs/flutter-apk/app-user-release.apk
+
       - name: Build listener APK
         working-directory: livekitapp
         run: flutter build apk --release --flavor listener -t lib/main_listener.dart
+
+      - name: Upload listener APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: listener-apk
+          path: livekitapp/build/app/outputs/flutter-apk/app-listener-release.apk
