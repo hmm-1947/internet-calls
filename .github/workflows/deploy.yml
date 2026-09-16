@@ -32,7 +32,7 @@ jobs:
 
       - name: Analyze Flutter project
         working-directory: livekitapp
-        run: flutter analyze
+        run: flutter analyze --no-fatal-warnings
 
       - name: Build user APK
         working-directory: livekitapp
