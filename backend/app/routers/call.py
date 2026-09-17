@@ -17,7 +17,7 @@ from app.schemas.schemas import CallInitiate
 from app.utils.livekit_token import generate_token
 from app.utils.fcm import send_call_notification, send_call_cancelled, send_call_rejected, send_call_accepted, send_call_ended, send_call_coin_exceeded, send_call_missed, send_async, is_invalid_token_error
 from app.models.models import CallRecording
-from app.utils.livekit_egress import start_recording, stop_recording
+from app.utils.livekit_egress import start_recording, stop_recording, enqueue_egress_start
 from app.utils.livekit_room import delete_room_background
 
 
@@ -271,19 +271,29 @@ async def start_call_recording(call_id: int, db: Session = Depends(get_db), curr
     )
     if not is_participant:
         raise HTTPException(status_code=403, detail="Not a participant of this call")
-    existing = db.query(CallRecording).filter(CallRecording.call_id == call_id, CallRecording.status == "recording").first()
+    existing = db.query(CallRecording).filter(
+        CallRecording.call_id == call_id,
+        CallRecording.status.in_(("recording", "pending")),
+    ).first()
     if existing:
-        return {"egress_id": existing.egress_id}
+        return {"egress_id": existing.egress_id, "status": existing.status}
     output_path = f"/out/{call.room_name}.ogg"
+    # The actual LiveKit start_room_composite_egress call is queued rather than
+    # made directly here, so this endpoint (and therefore call setup) never
+    # waits on it. A background worker spaces out consecutive starts to avoid
+    # LiveKit RPC timeouts under burst conditions; see app/utils/livekit_egress.py.
+    recording = CallRecording(call_id=call_id, egress_id=None, room_name=call.room_name, file_path=output_path, status="pending")
+    db.add(recording)
+    db.commit()
     try:
-        egress_id = await start_recording(call.room_name, output_path)
-        recording = CallRecording(call_id=call_id, egress_id=egress_id, room_name=call.room_name, file_path=output_path)
-        db.add(recording)
-        db.commit()
-        return {"egress_id": egress_id}
+        await enqueue_egress_start(call_id, call.room_name, output_path)
     except Exception as e:
-        print(f"[EGRESS ERROR] Failed to start recording for call {call_id}: {e}")
+        print(f"[EGRESS ERROR] Failed to enqueue recording start for call {call_id}: {e}")
+        recording.status = "failed"
+        db.commit()
         return {"status": "failed"}
+    return {"status": "pending"}
+
 
 @router.post("/{call_id}/reject")
 async def reject_call(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
@@ -431,15 +441,29 @@ async def finalize_abandoned_call(
     )
 
     if stop_egress:
-        recording = db.query(CallRecording).filter(CallRecording.call_id == call.id, CallRecording.status == "recording").first()
+        recording = db.query(CallRecording).filter(
+            CallRecording.call_id == call.id,
+            CallRecording.status.in_(("recording", "pending")),
+        ).first()
         if recording:
-            try:
-                await stop_recording(recording.egress_id)
-            except Exception as e:
-                print(f"[EGRESS ERROR] Failed to stop recording for call {call.id}: {e}")
-            recording.status = "ended"
-            recording.ended_at = datetime.now(timezone.utc)
-            db.commit()
+            if recording.status == "pending":
+                # Egress-start request is still queued/in-flight (spaced-out
+                # background worker hasn't gotten to it yet, or is retrying).
+                # There's no egress_id to stop yet; mark it cancelled so the
+                # worker's own DB update (which only touches rows still in
+                # "pending") no-ops harmlessly if it lands after this.
+                recording.status = "cancelled"
+                recording.ended_at = datetime.now(timezone.utc)
+                db.commit()
+            else:
+                try:
+                    await stop_recording(recording.egress_id)
+                except Exception as e:
+                    print(f"[EGRESS ERROR] Failed to stop recording for call {call.id}: {e}")
+                recording.status = "ended"
+                recording.ended_at = datetime.now(timezone.utc)
+                db.commit()
+
 
     if notify_user:
         user = db.query(User).filter(User.id == call.caller_user_id).first()
