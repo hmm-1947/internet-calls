@@ -297,27 +297,28 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
               },
             ),
 
-            const Divider(height: 1, color: Colors.white12),
-            _SettingsTile(
-              icon: Icons.lock_reset,
-              title: 'Change Password',
-              onTap: () {
-                Navigator.of(context).push(
-                  slideRoute(
-                    ChangePasswordScreen(
-                      onVerifyCurrentPassword: (current) async {
-                        final token = await _localStorage.getToken();
-                        await _repository.verifyCurrentPassword(token!, current);
-                      },
-                      onSubmit: (current, next) async {
-                        final token = await _localStorage.getToken();
-                        await _repository.changePassword(token!, current, next);
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
+            // Change Password option hidden for now (kept for easy re-enable in future).
+            // const Divider(height: 1, color: Colors.white12),
+            // _SettingsTile(
+            //   icon: Icons.lock_reset,
+            //   title: 'Change Password',
+            //   onTap: () {
+            //     Navigator.of(context).push(
+            //       slideRoute(
+            //         ChangePasswordScreen(
+            //           onVerifyCurrentPassword: (current) async {
+            //             final token = await _localStorage.getToken();
+            //             await _repository.verifyCurrentPassword(token!, current);
+            //           },
+            //           onSubmit: (current, next) async {
+            //             final token = await _localStorage.getToken();
+            //             await _repository.changePassword(token!, current, next);
+            //           },
+            //         ),
+            //       ),
+            //     );
+            //   },
+            // ),
             const Divider(height: 1, color: Colors.white12),
             _SettingsTile(
               icon: Icons.reviews,
