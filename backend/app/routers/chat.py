@@ -10,7 +10,7 @@ import uuid
 from starlette.websockets import WebSocketState
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
 from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call, ListenerBadgeTag
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
@@ -160,7 +160,6 @@ async def _finalize_active_calls_for_listener(listener_id: int, db: Session):
         await finalize_abandoned_call(db, call)
 
 async def _finalize_active_calls_for_user_after_grace(user_id: int):
-    from app.core.database import SessionLocal
     await asyncio.sleep(CALL_DISCONNECT_GRACE_SECONDS)
     if manager.is_user_online(user_id):
         return
@@ -171,7 +170,6 @@ async def _finalize_active_calls_for_user_after_grace(user_id: int):
         db.close()
 
 async def _finalize_active_calls_for_listener_after_grace(listener_id: int):
-    from app.core.database import SessionLocal
     await asyncio.sleep(CALL_DISCONNECT_GRACE_SECONDS)
     if manager.is_listener_online(listener_id):
         return
@@ -478,6 +476,7 @@ async def listener_send_voice(
 
 @router.get("/user/{listener_id}/messages", response_model=list[ChatMessageOut])
 async def user_get_messages(listener_id: int, before_id: int | None = None, limit: int = 25, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    limit = max(1, min(limit, 100))
     query = db.query(ChatMessage).filter(
         ChatMessage.user_id == current_user.id,
         ChatMessage.listener_id == listener_id,
@@ -509,6 +508,7 @@ async def user_get_messages(listener_id: int, before_id: int | None = None, limi
 
 @router.get("/listener/{user_id}/messages", response_model=list[ChatMessageOut])
 async def listener_get_messages(user_id: int, before_id: int | None = None, limit: int = 25, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    limit = max(1, min(limit, 100))
     query = db.query(ChatMessage).filter(
         ChatMessage.user_id == user_id,
         ChatMessage.listener_id == current_listener.id,
@@ -567,10 +567,7 @@ async def user_mark_delivered(payload: DeliveredAck, db: Session = Depends(get_d
         else:
             listener = db.query(Listener).filter(Listener.id == listener_id).first()
             if listener and listener.fcm_token:
-                try:
-                    send_delivery_status(listener.fcm_token, ids, "delivered", current_user.id, listener_id)
-                except Exception as e:
-                    print(f"[FCM ERROR] Failed to notify listener {listener_id} of delivery status: {e}")
+                send_async(send_delivery_status, listener.fcm_token, ids, "delivered", current_user.id, listener_id)
     return {"updated": len(msgs)}
 
 @router.post("/listener/delivered")
@@ -599,10 +596,7 @@ async def listener_mark_delivered(payload: DeliveredAck, db: Session = Depends(g
         else:
             user = db.query(User).filter(User.id == user_id).first()
             if user and user.fcm_token:
-                try:
-                    send_delivery_status(user.fcm_token, ids, "delivered", user_id, current_listener.id)
-                except Exception as e:
-                    print(f"[FCM ERROR] Failed to notify user {user_id} of delivery status: {e}")
+                send_async(send_delivery_status, user.fcm_token, ids, "delivered", user_id, current_listener.id)
     return {"updated": len(msgs)}
 
 
@@ -745,13 +739,14 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
 
     listeners = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids), Listener.is_active == True).all()}
 
-    all_msgs = db.query(ChatMessage).filter(
+    last_ids = [r[0] for r in db.query(func.max(ChatMessage.id)).filter(
         ChatMessage.user_id == current_user.id,
         ChatMessage.listener_id.in_(listener_ids),
-    ).order_by(ChatMessage.created_at.asc()).all()
-    last_msg_by_listener = {}
-    for m in all_msgs:
-        last_msg_by_listener[m.listener_id] = m
+    ).group_by(ChatMessage.listener_id).all()]
+    last_msg_by_listener = {
+        m.listener_id: m
+        for m in db.query(ChatMessage).filter(ChatMessage.id.in_(last_ids)).all()
+    } if last_ids else {}
 
     unread_rows = db.query(
         ChatMessage.listener_id, func.count(ChatMessage.id)
@@ -810,13 +805,14 @@ def listener_get_threads(db: Session = Depends(get_db), current_listener: Listen
 
     users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids), User.is_active == True).all()}
 
-    all_msgs = db.query(ChatMessage).filter(
+    last_ids = [r[0] for r in db.query(func.max(ChatMessage.id)).filter(
         ChatMessage.listener_id == current_listener.id,
         ChatMessage.user_id.in_(user_ids),
-    ).order_by(ChatMessage.created_at.asc()).all()
-    last_msg_by_user = {}
-    for m in all_msgs:
-        last_msg_by_user[m.user_id] = m
+    ).group_by(ChatMessage.user_id).all()]
+    last_msg_by_user = {
+        m.user_id: m
+        for m in db.query(ChatMessage).filter(ChatMessage.id.in_(last_ids)).all()
+    } if last_ids else {}
 
     unread_rows = db.query(
         ChatMessage.user_id, func.count(ChatMessage.id)
@@ -860,35 +856,54 @@ def listener_get_threads(db: Session = Depends(get_db), current_listener: Listen
     result.sort(key=lambda t: t.is_pinned, reverse=True)
     return result
     
+def _authenticate_user_ws(token: str) -> tuple[int | None, int, str | None]:
+    db = SessionLocal()
+    try:
+        session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.user_id.isnot(None)).first()
+        if not session:
+            return None, 4001, None
+        if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+            db.delete(session)
+            db.commit()
+            return None, 4001, None
+        user = db.query(User).filter(User.id == session.user_id).first()
+        if not user or not user.is_active:
+            db.delete(session)
+            db.commit()
+            return None, 4003, "deactivated"
+        return user.id, 0, None
+    finally:
+        db.close()
+
+
+def _set_user_online_flag(user_id: int, is_online: bool) -> None:
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.id == user_id, User.is_online != is_online).update(
+            {User.is_online: is_online}, synchronize_session=False
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
 @router.websocket("/ws/user")
-async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
-    session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.user_id.isnot(None)).first()
-    if not session:
-        await websocket.close(code=4001)
-        return
-    if session.expires_at and session.expires_at < datetime.now(timezone.utc):
-        db.delete(session)
-        db.commit()
-        await websocket.close(code=4001)
-        return
-    user_id = session.user_id
-    user_check = db.query(User).filter(User.id == user_id).first()
-    if not user_check or not user_check.is_active:
-        db.delete(session)
-        db.commit()
-        await websocket.close(code=4003, reason="deactivated")
+async def user_chat_ws(websocket: WebSocket, token: str = Query(...)):
+    user_id, close_code, close_reason = await run_in_threadpool(_authenticate_user_ws, token)
+    if user_id is None:
+        if close_reason:
+            await websocket.close(code=close_code, reason=close_reason)
+        else:
+            await websocket.close(code=close_code)
         return
     await manager.connect_user(user_id, websocket)
     logger.info(f"WebSocket user={user_id} connected -> online")
     await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": True})
-    user = db.query(User).filter(User.id == user_id).first()
-    if user and not user.is_online:
-        user.is_online = True
-        db.commit()
+    await run_in_threadpool(_set_user_online_flag, user_id, True)
     await manager.broadcast_to_all_listeners({"type": "user_online", "user_id": user_id})
     typing_targets: set[int] = set()
 
-    reason = await _run_ws_loop(websocket, lambda raw: _handle_user_ws_event(raw, user_id, db, typing_targets))
+    reason = await _run_ws_loop(websocket, lambda raw: _handle_user_ws_event(raw, user_id, typing_targets))
 
     for target_listener_id in typing_targets:
         await manager.send_to_listener(target_listener_id, {"type": "typing", "user_id": user_id, "is_typing": False})
@@ -901,13 +916,10 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...), db: Sessio
 
     logger.info(f"WebSocket user={user_id} disconnected: {reason} -> offline")
     await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": False})
-    user = db.query(User).filter(User.id == user_id).first()
-    if user:
-        user.is_online = False
-        db.commit()
+    await run_in_threadpool(_set_user_online_flag, user_id, False)
     await manager.broadcast_to_all_listeners({"type": "user_offline", "user_id": user_id})
 
-async def _handle_user_ws_event(raw: dict, user_id: int, db: Session, typing_targets: set | None = None):
+async def _handle_user_ws_event(raw: dict, user_id: int, typing_targets: set | None = None):
     etype = raw.get("type")
     if etype == "typing":
         listener_id = raw.get("listener_id")
@@ -923,55 +935,89 @@ async def _handle_user_ws_event(raw: dict, user_id: int, db: Session, typing_tar
     elif etype == "ping":
         pass
 
-@router.websocket("/ws/listener")
-async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
-    session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.listener_id.isnot(None)).first()
-    if not session:
-        await websocket.close(code=4001)
-        return
-    if session.expires_at and session.expires_at < datetime.now(timezone.utc):
-        db.delete(session)
+def _authenticate_listener_ws(token: str) -> tuple[int | None, int]:
+    db = SessionLocal()
+    try:
+        session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.listener_id.isnot(None)).first()
+        if not session:
+            return None, 4001
+        if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+            db.delete(session)
+            db.commit()
+            return None, 4001
+        listener = db.query(Listener).filter(Listener.id == session.listener_id).first()
+        if not listener or not listener.is_active:
+            return None, 4003
+        return listener.id, 0
+    finally:
+        db.close()
+
+
+def _load_listener_ws_state(listener_id: int) -> tuple[bool, list[int], list[dict]]:
+    db = SessionLocal()
+    try:
+        listener = db.query(Listener).filter(Listener.id == listener_id).first()
+        availability_on = bool(listener and listener.is_online)
+        user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
+        pending = db.query(GiftTransaction).filter(
+            GiftTransaction.listener_id == listener_id,
+            GiftTransaction.notified == False,
+        ).order_by(GiftTransaction.created_at.asc()).all()
+        gift_events: list[dict] = []
+        if pending:
+            gift_names = {g.id: g.name for g in db.query(Gift.id, Gift.name).filter(Gift.id.in_({gt.gift_id for gt in pending})).all()}
+            sender_names = {u.id: u.name for u in db.query(User.id, User.name).filter(User.id.in_({gt.user_id for gt in pending})).all()}
+            for gt in pending:
+                gift_events.append({
+                    "type": "gift_received",
+                    "gift_name": gift_names.get(gt.gift_id, ""),
+                    "coins": gt.coins,
+                    "credited_coins": gt.coins // 2,
+                    "from_user_id": gt.user_id,
+                    "from_user_name": sender_names.get(gt.user_id, ""),
+                })
+                gt.notified = True
+            db.commit()
+        return availability_on, user_ids, gift_events
+    finally:
+        db.close()
+
+
+def _stamp_listener_last_seen(listener_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        listener = db.query(Listener).filter(Listener.id == listener_id).first()
+        if not listener:
+            return False
+        listener.last_seen = datetime.now(timezone.utc)
         db.commit()
-        await websocket.close(code=4001)
-        return
-    listener_id = session.listener_id
-    listener_check = db.query(Listener).filter(Listener.id == listener_id).first()
-    if not listener_check or not listener_check.is_active:
-        await websocket.close(code=4003)
+        return bool(listener.is_online)
+    finally:
+        db.close()
+
+
+@router.websocket("/ws/listener")
+async def listener_chat_ws(websocket: WebSocket, token: str = Query(...)):
+    listener_id, close_code = await run_in_threadpool(_authenticate_listener_ws, token)
+    if listener_id is None:
+        await websocket.close(code=close_code)
         return
     await manager.connect_listener(listener_id, websocket)
-    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    availability_on, user_ids, gift_events = await run_in_threadpool(_load_listener_ws_state, listener_id)
     logger.info(
         f"WebSocket listener={listener_id} connected -> presence online "
-        f"(availability switch is_online={bool(listener and listener.is_online)})"
+        f"(availability switch is_online={availability_on})"
     )
-    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": bool(listener and listener.is_online)})
-    user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
-    if listener and listener.is_online:
-        for uid in manager.get_online_user_ids(user_ids):
-            await manager.send_to_user(uid, {"type": "listener_online", "listener_id": listener_id})
-    for uid in manager.get_online_user_ids(user_ids):
-        await manager.send_to_user(uid, {"type": "listener_presence", "listener_id": listener_id, "presence_online": bool(listener and listener.is_online)})
-
-
-    pending_gifts = db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id, GiftTransaction.notified == False).order_by(GiftTransaction.created_at.asc()).all()
-    for gt in pending_gifts:
-        gift_row = db.query(Gift).filter(Gift.id == gt.gift_id).first()
-        sender = db.query(User).filter(User.id == gt.user_id).first()
-        await manager.send_to_listener(listener_id, {
-            "type": "gift_received",
-            "gift_name": gift_row.name if gift_row else "",
-            "coins": gt.coins,
-            "credited_coins": gt.coins // 2,
-            "from_user_id": gt.user_id,
-            "from_user_name": sender.name if sender else "",
-        })
-        gt.notified = True
-    if pending_gifts:
-        db.commit()
+    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": availability_on})
+    online_user_ids = manager.get_online_user_ids(user_ids)
+    if availability_on:
+        await manager.send_to_users(online_user_ids, {"type": "listener_online", "listener_id": listener_id})
+    await manager.send_to_users(online_user_ids, {"type": "listener_presence", "listener_id": listener_id, "presence_online": availability_on})
+    for event in gift_events:
+        await manager.send_to_listener(listener_id, event)
     typing_targets: set[int] = set()
 
-    reason = await _run_ws_loop(websocket, lambda raw: _handle_listener_ws_event(raw, listener_id, db, typing_targets))
+    reason = await _run_ws_loop(websocket, lambda raw: _handle_listener_ws_event(raw, listener_id, typing_targets))
 
     for target_user_id in typing_targets:
         await manager.send_to_user(target_user_id, {"type": "typing", "listener_id": listener_id, "is_typing": False})
@@ -984,29 +1030,14 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...), db: Se
 
     logger.info(f"WebSocket listener={listener_id} disconnected: {reason} -> presence offline")
     await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": False})
-    listener = db.query(Listener).filter(Listener.id == listener_id).first()
-    if listener:
-        # Only the socket went away. `is_online` is the listener's own
-        # availability switch and is deliberately left untouched here: a
-        # dropped socket (app backgrounded during a call, network blip)
-        # must not silently flip their switch off.
-        listener.last_seen = datetime.now(timezone.utc)
-        db.commit()
-    # Users only care about the listener's manual availability switch, not
-    # the transient socket connection, so only tell them the listener went
-    # offline if the switch itself is actually off. Otherwise a background/
-    # kill/reconnect blip while the switch is still on must not disable
-    # their call buttons.
-    if not (listener and listener.is_online):
-        for uid in manager.get_online_user_ids(user_ids):
-            await manager.send_to_user(uid, {"type": "listener_offline", "listener_id": listener_id})
-    for uid in manager.get_online_user_ids(user_ids):
-        await manager.send_to_user(uid, {"type": "listener_presence", "listener_id": listener_id, "presence_online": False})
+    availability_on = await run_in_threadpool(_stamp_listener_last_seen, listener_id)
+    online_user_ids = manager.get_online_user_ids(user_ids)
+    if not availability_on:
+        await manager.send_to_users(online_user_ids, {"type": "listener_offline", "listener_id": listener_id})
+    await manager.send_to_users(online_user_ids, {"type": "listener_presence", "listener_id": listener_id, "presence_online": False})
 
 
-
-
-async def _handle_listener_ws_event(raw: dict, listener_id: int, db: Session, typing_targets: set | None = None):
+async def _handle_listener_ws_event(raw: dict, listener_id: int, typing_targets: set | None = None):
     etype = raw.get("type")
     if etype == "typing":
         user_id = raw.get("user_id")

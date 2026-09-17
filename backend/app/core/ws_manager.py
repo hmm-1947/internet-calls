@@ -1,10 +1,21 @@
 import asyncio
 import logging
-import time
-from typing import Dict
+from typing import Dict, Iterable
 from fastapi import WebSocket
 
 logger = logging.getLogger("ws_manager")
+
+SEND_TIMEOUT_SECONDS = 5
+
+
+async def _send_with_timeout(ws: WebSocket, data: dict) -> bool:
+    try:
+        await asyncio.wait_for(ws.send_json(data), timeout=SEND_TIMEOUT_SECONDS)
+        return True
+    except Exception as e:
+        logger.debug(f"websocket send failed: {e!r}")
+        return False
+
 
 class ConnectionManager:
     def __init__(self):
@@ -23,11 +34,12 @@ class ConnectionManager:
             self.admin_connections.remove(websocket)
 
     async def broadcast_to_admins(self, data: dict):
-        for ws in list(self.admin_connections):
-            try:
-                await ws.send_json(data)
-            except Exception as e:
-                logger.debug(f"broadcast_to_admins: dropping dead connection: {e}")
+        targets = list(self.admin_connections)
+        if not targets:
+            return
+        results = await asyncio.gather(*(_send_with_timeout(ws, data) for ws in targets))
+        for ws, ok in zip(targets, results):
+            if not ok:
                 self.disconnect_admin(ws)
 
 
@@ -72,39 +84,37 @@ class ConnectionManager:
 
     async def send_to_user(self, user_id: int, data: dict):
         ws = self.user_connections.get(user_id)
-        if ws:
-            try:
-                await ws.send_json(data)
-            except Exception as e:
-                logger.warning(f"send_to_user({user_id}) failed: {e}")
-                await self.disconnect_user(user_id, ws)
+        if ws and not await _send_with_timeout(ws, data):
+            logger.warning(f"send_to_user({user_id}) failed, dropping connection")
+            await self.disconnect_user(user_id, ws)
 
     async def send_to_listener(self, listener_id: int, data: dict):
         ws = self.listener_connections.get(listener_id)
-        if ws:
-            try:
-                await ws.send_json(data)
-            except Exception as e:
-                logger.warning(f"send_to_listener({listener_id}) failed: {e}")
-                await self.disconnect_listener(listener_id, ws)
+        if ws and not await _send_with_timeout(ws, data):
+            logger.warning(f"send_to_listener({listener_id}) failed, dropping connection")
+            await self.disconnect_listener(listener_id, ws)
 
+    async def send_to_users(self, user_ids: Iterable[int], data: dict):
+        targets = [(uid, self.user_connections[uid]) for uid in user_ids if uid in self.user_connections]
+        if not targets:
+            return
+        results = await asyncio.gather(*(_send_with_timeout(ws, data) for _, ws in targets))
+        for (uid, ws), ok in zip(targets, results):
+            if not ok:
+                await self.disconnect_user(uid, ws)
 
     def get_online_user_ids(self, user_ids: list) -> list:
         return [uid for uid in user_ids if uid in self.user_connections]
 
     async def broadcast_to_all_users(self, data: dict):
-        for ws in list(self.user_connections.values()):
-            try:
-                await ws.send_json(data)
-            except Exception as e:
-                logger.debug(f"broadcast_to_all_users: dropping dead connection: {e}")
+        targets = list(self.user_connections.values())
+        if targets:
+            await asyncio.gather(*(_send_with_timeout(ws, data) for ws in targets))
 
     async def broadcast_to_all_listeners(self, data: dict):
-        for ws in list(self.listener_connections.values()):
-            try:
-                await ws.send_json(data)
-            except Exception as e:
-                logger.debug(f"broadcast_to_all_listeners: dropping dead connection: {e}")
+        targets = list(self.listener_connections.values())
+        if targets:
+            await asyncio.gather(*(_send_with_timeout(ws, data) for ws in targets))
 
 
 manager = ConnectionManager()

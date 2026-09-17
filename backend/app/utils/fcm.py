@@ -9,10 +9,15 @@ if not firebase_admin._apps:
     cred = credentials.Certificate(settings.firebase_credentials_path)
     firebase_admin.initialize_app(cred)
 
-_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="fcm")
+_executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix="fcm")
 
 
-def send_async(fn, *args, **kwargs):
+def is_invalid_token_error(error: Exception) -> bool:
+    text = str(error).lower()
+    return "not found" in text or "registration-token-not-registered" in text or "invalid-registration-token" in text
+
+
+def send_async(fn, *args, on_error=None, **kwargs):
     """Dispatch a blocking FCM send onto a worker thread.
 
     `messaging.send()` is a synchronous HTTPS round trip. Called inline from an
@@ -25,6 +30,11 @@ def send_async(fn, *args, **kwargs):
             fn(*args, **kwargs)
         except Exception as e:
             print(f"[FCM ERROR] background send {getattr(fn, '__name__', fn)} failed: {e}")
+            if on_error is not None:
+                try:
+                    on_error(e)
+                except Exception as hook_error:
+                    print(f"[FCM ERROR] on_error hook failed: {hook_error}")
 
     _executor.submit(_run)
 

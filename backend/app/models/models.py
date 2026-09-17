@@ -88,9 +88,9 @@ class Session(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String, unique=True, index=True, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=True)
-    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
@@ -132,7 +132,7 @@ class Call(Base):
     __tablename__ = "calls"
 
     id = Column(Integer, primary_key=True, index=True)
-    room_name = Column(String, nullable=False)
+    room_name = Column(String, nullable=False, index=True)
     caller_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     callee_listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False)
     status = Column(String, default="ringing", index=True)
@@ -158,7 +158,7 @@ class CallRecording(Base):
     __tablename__ = "call_recordings"
 
     id = Column(Integer, primary_key=True, index=True)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
     egress_id = Column(String, nullable=True)
     room_name = Column(String, nullable=False)
     file_path = Column(String, nullable=True)
@@ -196,6 +196,10 @@ class ChatMessage(Base):
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    __table_args__ = (
+        Index('ix_chat_messages_pair_id', 'user_id', 'listener_id', 'id'),
+    )
+
 class ChatSettings(Base):
     __tablename__ = "chat_settings"
 
@@ -206,6 +210,10 @@ class ChatSettings(Base):
     is_pinned = Column(Boolean, default=False)
     is_archived = Column(Boolean, default=False)
     is_muted = Column(Boolean, default=False)
+
+    __table_args__ = (
+        Index('ix_chat_settings_owner_other', 'owner_type', 'owner_id', 'other_id'),
+    )
 
 class CoinSettings(Base):
     __tablename__ = "coin_settings"
@@ -289,20 +297,20 @@ class CoinTransaction(Base):
     __tablename__ = "coin_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     amount = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ListenerCoinTransaction(Base):
     __tablename__ = "listener_coin_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
-    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False, index=True)
     amount = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Gift(Base):
@@ -330,8 +338,8 @@ class GiftTransaction(Base):
     __tablename__ = "gift_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=False, index=True)
     gift_id = Column(Integer, ForeignKey("gifts.id"), nullable=False)
     coins = Column(Integer, nullable=False)
     call_id = Column(Integer, ForeignKey("calls.id"), nullable=True)
