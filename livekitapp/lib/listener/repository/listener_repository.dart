@@ -599,4 +599,16 @@ class ListenerRepository {
       throw Exception(data['detail'] ?? 'Failed to save note');
     }
   }
+
+  /// Digits-only WhatsApp number of the admin who handles help/support
+  /// requests, taken from the phone saved on the admin profile. Null when no
+  /// admin has saved one yet, in which case the app cannot open a chat.
+  Future<String?> getSupportWhatsappNumber() async {
+    final response = await _apiClient.get(ApiConstants.appEnrollContact);
+    if (response.statusCode != 200) return null;
+    final data = jsonDecode(response.body);
+    final number = data['whatsapp_number'] as String?;
+    if (number == null || number.trim().isEmpty) return null;
+    return number.trim();
+  }
 }

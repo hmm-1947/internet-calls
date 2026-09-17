@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/chat_socket_service.dart';
@@ -74,6 +75,41 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+class _MenuTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  /// Swaps the chevron for a spinner and blocks taps while an action runs.
+  final bool busy;
+
+  const _MenuTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.busy = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: busy ? null : onTap,
+      leading: Icon(icon, color: Colors.white70),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      trailing: busy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white70,
+              ),
+            )
+          : const Icon(Icons.chevron_right, color: Colors.white38),
+    );
+  }
+}
+
 class _SettingsCard extends StatelessWidget {
   final List<Widget> children;
   const _SettingsCard(this.children);
@@ -112,6 +148,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   Map<String, dynamic>? _badgeTag;
   bool _statusOnline = true;
   bool _videoCallEnabled = true;
+  bool _openingSupportChat = false;
 
   @override
   void initState() {
@@ -190,6 +227,65 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
           bottomOffset: 78,
         );
       }
+    }
+  }
+
+  void _showSupportNotice(String title, String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: Text(title, style: const TextStyle(color: Colors.white)),
+        content: Text(message, style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Opens a WhatsApp chat with the admin for help/support. The destination
+  /// is the phone saved on the admin profile, same as user-side enrollment.
+  Future<void> _openHelpAndSupport() async {
+    if (_openingSupportChat) return;
+    setState(() => _openingSupportChat = true);
+    String? number;
+    try {
+      number = await _repository.getSupportWhatsappNumber();
+      if (number == null) {
+        _showSupportNotice(
+          'Not available yet',
+          'Support contact is not set up yet. Please try again later.',
+        );
+        return;
+      }
+
+      final who = [
+        if (_name.trim().isNotEmpty) _name.trim(),
+        if (_phone.trim().isNotEmpty) _phone.trim(),
+      ].join(', ');
+      final message =
+          'Hi, I need help and support with the app.'
+          '${who.isEmpty ? '' : ' My account details: $who.'}';
+
+      final uri = Uri.https('wa.me', '/$number', {'text': message});
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) throw Exception('no app available to handle $uri');
+    } catch (e) {
+      debugPrint('Help and support: could not open WhatsApp: $e');
+      _showSupportNotice(
+        'Could not open WhatsApp',
+        number == null
+            ? 'Something went wrong. Please check your connection and try again.'
+            : 'Make sure WhatsApp is installed, then try again. '
+                  'You can also message us on +$number.',
+      );
+    } finally {
+      if (mounted) setState(() => _openingSupportChat = false);
     }
   }
 
@@ -357,6 +453,13 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
           ]),
           _SectionLabel('SUPPORT'),
           _SettingsCard([
+            _MenuTile(
+              icon: Icons.support_agent_outlined,
+              title: 'Help and Support',
+              onTap: _openHelpAndSupport,
+              busy: _openingSupportChat,
+            ),
+            const Divider(height: 1, color: Colors.white12),
             _SettingsTile(
               icon: Icons.description_outlined,
               title: 'Terms of Service',
