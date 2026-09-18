@@ -2,3 +2,7 @@ backend.zip
 __pycache__/
 livekit/
 livekitapp\upload-keystore.jks
+
+
+*.bak
+.github/workflows/.cody_history/

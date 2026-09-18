@@ -48,3 +48,5 @@ app.*.map.json
 upload-keystore.jks
 
 *.bak
+
+.github/workflows/.cody_history/
