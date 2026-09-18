@@ -495,6 +495,18 @@ class ListenerCreate(BaseModel):
     password: str
     confirm_reserved_username: bool = False
 
+
+class AdminListenerPasswordUpdate(BaseModel):
+    """Body for an admin resetting a listener's password. No current-password
+    check here - the admin's own session (verify_admin) is the authority."""
+
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 class AuthResponse(BaseModel):
     token: str
     id: int

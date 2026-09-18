@@ -18,10 +18,11 @@ from app.models.models import (
     ListenerNote, UserBillingPurchase, ListenerBadgeTag,
 )
 from datetime import timedelta
-from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, ListenerBadgeTagCreate, ListenerTagAssign
+from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, ListenerBadgeTagCreate, ListenerTagAssign, AdminListenerPasswordUpdate
 from app.utils.security import hash_password
 from app.utils.uploads import read_and_validate_image, write_file
 from app.utils.media_urls import sign_media_url
+from app.utils.audit import record_audit_event
 
 # Admin recording playback links only need to stay valid for the length of a
 # viewing session on the panel, not forever.
@@ -247,6 +248,25 @@ async def set_listener_active(listener_id: int, payload: AdminActiveUpdate, db: 
     if not listener.is_active:
         await manager.send_to_listener(listener_id, {"type": "force_logout"})
     return {"id": listener.id, "is_active": listener.is_active}
+
+
+@router.post("/listeners/{listener_id}/password")
+async def set_listener_password(listener_id: int, payload: AdminListenerPasswordUpdate, db: Session = Depends(get_db), admin: AdminUser = Depends(verify_admin)):
+    """Let an admin reset a listener's password directly, no current-password
+    check needed since the admin's own session already proves the right to
+    act. Existing sessions for that listener are invalidated and any
+    logged-in device is kicked out, mirroring how an admin's own
+    change-password flow revokes sessions."""
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    listener.password_hash = hash_password(payload.new_password)
+    db.query(SessionModel).filter(SessionModel.listener_id == listener_id).delete()
+    record_audit_event(db, "listener", listener.id, listener.name, "password_reset_by_admin")
+    db.commit()
+    await manager.send_to_listener(listener_id, {"type": "force_logout"})
+    return {"id": listener.id, "status": "password_changed"}
+
 
 @router.get("/listener-tags")
 def list_listener_tags(db: Session = Depends(get_db), _=Depends(verify_admin)):
