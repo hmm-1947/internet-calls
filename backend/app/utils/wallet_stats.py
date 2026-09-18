@@ -40,13 +40,19 @@ def day_night_breakdown(db: Session, listener_id: int, start: datetime, end: dat
     night buckets."""
     from app.models.models import Call, ChatMessage, GiftTransaction
 
-    def split_sum(amount_col, time_col, filters):
+    def split_sum(amount_col, time_col, filters, whole_minutes: bool = False):
         base = [*filters, time_col >= start, time_col < end]
         ist_hour = extract('hour', time_col + IST_OFFSET)
-        day_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
+        # For call durations, wallet minutes should only count a call once it
+        # has run a full 60 seconds - a 59-second call contributes 0, not a
+        # rounded-up 1. Each row is floored to its own whole-minute boundary
+        # *before* summing, so two 59-second calls don't add up to a
+        # "minute" together either.
+        col = (amount_col - amount_col % 60) if whole_minutes else amount_col
+        day_sum = db.query(sa_func.coalesce(sa_func.sum(col), 0)).filter(
             *base, ist_hour >= DAY_START_HOUR, ist_hour < DAY_END_HOUR,
         ).scalar()
-        night_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
+        night_sum = db.query(sa_func.coalesce(sa_func.sum(col), 0)).filter(
             *base, (ist_hour < DAY_START_HOUR) | (ist_hour >= DAY_END_HOUR),
         ).scalar()
         return int(day_sum), int(night_sum)
@@ -65,10 +71,12 @@ def day_night_breakdown(db: Session, listener_id: int, start: datetime, end: dat
     audio_day, audio_night = split_sum(
         Call.duration_seconds, Call.created_at,
         [Call.callee_listener_id == listener_id, Call.call_type == "audio"],
+        whole_minutes=True,
     )
     video_day, video_night = split_sum(
         Call.duration_seconds, Call.created_at,
         [Call.callee_listener_id == listener_id, Call.call_type == "video"],
+        whole_minutes=True,
     )
     text_day, text_night = split_count(
         ChatMessage.id, ChatMessage.created_at,

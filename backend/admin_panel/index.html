@@ -2163,6 +2163,13 @@
       border: 1px solid var(--line);
     }
 
+    #listenerPwRules:empty {
+      display: none;
+      margin: 0;
+      padding: 0;
+      border: none;
+    }
+
     .pw-field {
       position: relative;
     }
@@ -2562,6 +2569,29 @@
     <div class="confirm-btns">
       <button class="btn btn-ghost" onclick="closeChangePasswordModal()">Cancel</button>
       <button class="btn btn-primary" id="changePasswordBtn" onclick="submitChangeAdminPassword()">Update password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin resets a listener's password -->
+<div class="confirm-overlay change-password-overlay" id="listenerPasswordOverlay" style="display:none;">
+  <div class="confirm-box profile-box">
+    <div class="confirm-icon warning"><svg viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Zm10-10V7a4 4 0 0 0-8 0v2"/></svg></div>
+    <div class="confirm-title">Reset Listener Password</div>
+    <div class="profile-username" id="listenerPasswordSubtitle"></div>
+    <div class="pw-field">
+      <input id="listenerNewPassword" placeholder="New password" type="password" oninput="renderPasswordRules('listenerPwRules', this.value)">
+      <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+    <div id="listenerPwRules" class="pw-rules"></div>
+    <div class="pw-field">
+      <input id="listenerConfirmPassword" placeholder="Confirm new password" type="password">
+      <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+    <div id="listenerPasswordMsg" style="font-weight:600;font-size:13px;text-align:center;min-height:18px;margin-bottom:8px;"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeListenerPasswordModal()">Cancel</button>
+      <button class="btn btn-leaf" id="listenerPasswordBtn" onclick="submitListenerPasswordReset()">Reset password</button>
     </div>
   </div>
 </div>
@@ -4558,6 +4588,80 @@
     document.getElementById('changePasswordOverlay').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) closeChangePasswordModal();
     });
+
+    // ─── Admin resets a listener's password ───────────────────────────────
+    let _listenerPasswordTarget = { id: null, name: '' };
+
+    function openListenerPasswordModal(id, name) {
+      _listenerPasswordTarget = { id, name };
+      document.getElementById('listenerPasswordSubtitle').textContent = name;
+      resetListenerPasswordSection();
+      const overlay = document.getElementById('listenerPasswordOverlay');
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('show'));
+    }
+
+    function closeListenerPasswordModal() {
+      const overlay = document.getElementById('listenerPasswordOverlay');
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 180);
+      resetListenerPasswordSection();
+    }
+
+    document.getElementById('listenerPasswordOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeListenerPasswordModal();
+    });
+
+    function resetListenerPasswordSection() {
+      document.getElementById('listenerNewPassword').value = '';
+      document.getElementById('listenerConfirmPassword').value = '';
+      document.getElementById('listenerPwRules').innerHTML = '';
+      setListenerPasswordMsg('', null);
+    }
+
+    function setListenerPasswordMsg(text, ok) {
+      const el = document.getElementById('listenerPasswordMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    async function submitListenerPasswordReset() {
+      const newPassword = document.getElementById('listenerNewPassword').value;
+      const confirmPassword = document.getElementById('listenerConfirmPassword').value;
+      if (!_listenerPasswordTarget.id) return;
+
+      renderPasswordRules('listenerPwRules', newPassword);
+      if (!isPasswordValidAdmin(newPassword)) { setListenerPasswordMsg('Please satisfy all password rules.', false); return; }
+      if (newPassword !== confirmPassword) { setListenerPasswordMsg('Passwords do not match.', false); return; }
+
+      const ok = await confirmDialog({
+        title: 'Reset password',
+        body: `Set a new password for "${_listenerPasswordTarget.name}"? They will be logged out on all devices and must sign in again with the new password.`,
+        okLabel: 'Yes, reset it',
+        okClass: 'btn-leaf',
+        icon: 'edit',
+        iconClass: 'warning'
+      });
+      if (!ok) return;
+
+      setListenerPasswordMsg('Updating…', null);
+      document.getElementById('listenerPasswordBtn').disabled = true;
+      try {
+        const res = await fetch(API_URL + `/admin/listeners/${_listenerPasswordTarget.id}/password`, {
+          method: 'POST', headers: authHeaders(true),
+          body: JSON.stringify({ new_password: newPassword })
+        });
+        const data = await readResponseBody(res);
+        if (!res.ok) throw new Error(detailMessage(data && data.detail) || 'Failed to reset password');
+        setListenerPasswordMsg('✓ Password updated', true);
+        setMsg(`✓ Password reset for ${_listenerPasswordTarget.name}`, true);
+        setTimeout(() => closeListenerPasswordModal(), 900);
+      } catch (e) {
+        setListenerPasswordMsg('✗ ' + e.message, false);
+      } finally {
+        document.getElementById('listenerPasswordBtn').disabled = false;
+      }
+    }
 
     function resetChangePasswordSection() {
       document.getElementById('profileCurrentPassword').value = '';
@@ -6812,6 +6916,7 @@
           </div>` : `
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn btn-danger" onclick="openListenerPasswordModal(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Reset Password</button>
             <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
           </div>`}
         </div>
