@@ -7,6 +7,7 @@ from app.routers import user_auth, listener_auth, admin, admin_coins, admin_auth
 from fastapi.staticfiles import StaticFiles
 from app.core.database import SessionLocal
 from app.models.models import User, Listener
+from app.utils.livekit_egress import start_egress_worker, stop_egress_worker
 
 # Base.metadata.create_all(bind=engine)
 # test
@@ -99,3 +100,16 @@ def reset_online_status():
         db.commit()
     finally:
         db.close()
+
+
+@app.on_event("startup")
+async def start_egress_start_worker():
+    """Starts the single background worker that drains queued egress-start
+    requests one at a time with spacing between LiveKit calls. See
+    app/utils/livekit_egress.py for why this exists."""
+    start_egress_worker()
+
+
+@app.on_event("shutdown")
+async def stop_egress_start_worker():
+    stop_egress_worker()

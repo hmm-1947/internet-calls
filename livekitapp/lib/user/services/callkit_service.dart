@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,8 +12,9 @@ class UserCallkitService {
     final padded = callId.padLeft(12, '0');
     return '00000000-0000-0000-0000-$padded';
   }
-Future<void> startOutgoingCall(String callId, String calleeName, {String? calleePhotoUrl}) async {
+  Future<void> startOutgoingCall(String callId, String calleeName, {String? calleePhotoUrl}) async {
     await Permission.microphone.request();
+    if (Platform.isAndroid) return;
     final params = CallKitParams(
       id: _callIdToUuid(callId),
       nameCaller: calleeName,

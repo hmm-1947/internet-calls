@@ -268,6 +268,10 @@ class _CallScreenState extends State<CallScreen> {
       await _ringingPlayer?.dispose();
     } catch (_) {}
     _ringingPlayer = null;
+    try {
+      final session = await AudioSession.instance;
+      await session.setActive(false);
+    } catch (_) {}
   }
 
   Future<void> _requestMicAndStartCall() async {
@@ -327,11 +331,11 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _toggleSpeaker() async {
     final newSpeakerOn = !_speakerOn;
-    if (_room != null) {
-      try {
-        await _room!.setSpeakerOn(newSpeakerOn);
-      } catch (_) {}
-    }
+    try {
+      await AudioManager.instance.setSpeakerOutputPreferred(newSpeakerOn, force: true);
+      VolumeController.instance.showSystemUI = false;
+      VolumeController.instance.setVolume(newSpeakerOn ? 1.0 : 0.3);
+    } catch (_) {}
     try {
       await _ringingPlayer?.setVolume(newSpeakerOn ? 1.0 : 0.12);
     } catch (_) {}
@@ -614,7 +618,7 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _applyAudioRoute(Room room) async {
     try {
-      await room.setSpeakerOn(_speakerOn);
+      await AudioManager.instance.setSpeakerOutputPreferred(_speakerOn, force: true);
       VolumeController.instance.showSystemUI = false;
       VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
     } catch (e) {

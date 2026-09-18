@@ -1,14 +1,35 @@
+import time
 from sqlalchemy.orm import Session
 from app.models.models import CoinSettings, User, CoinTransaction, Call, Listener, ListenerCoinTransaction
 
+# CoinSettings is a single row read on every billing tick, chat message and
+# gift send, but only ever written from the admin panel. With thousands of
+# concurrent calls each ticking every 60s that's thousands of avoidable
+# SELECTs/minute, so cache it in-process for a few seconds. Worst case an
+# admin's rate change takes up to this long to take effect everywhere.
+_SETTINGS_CACHE_SECONDS = 5
+_settings_cache: tuple[float, int, int, int, int] | None = None
+
+
 def get_coin_settings(db: Session) -> CoinSettings:
+    global _settings_cache
+    now = time.monotonic()
+    if _settings_cache is not None and now - _settings_cache[0] < _SETTINGS_CACHE_SECONDS:
+        _, audio, video, chat, voice = _settings_cache
+        return CoinSettings(audio_coins_per_minute=audio, video_coins_per_minute=video, chat_message_coins=chat, voice_message_coins=voice)
     settings = db.query(CoinSettings).first()
     if not settings:
         settings = CoinSettings(audio_coins_per_minute=10, video_coins_per_minute=10, chat_message_coins=1, voice_message_coins=1)
         db.add(settings)
         db.commit()
         db.refresh(settings)
+    _settings_cache = (now, settings.audio_coins_per_minute, settings.video_coins_per_minute, settings.chat_message_coins, settings.voice_message_coins)
     return settings
+
+
+def invalidate_coin_settings_cache() -> None:
+    global _settings_cache
+    _settings_cache = None
 
 def coins_per_minute(db: Session, call_type: str) -> int:
     settings = get_coin_settings(db)
@@ -50,7 +71,7 @@ def remaining_call_seconds(db: Session, user: User, call: Call, elapsed_seconds:
 async def _credit_listener(db: Session, listener_id: int, amount: int, reason: str, call_id: int | None = None):
     if amount <= 0:
         return
-    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    listener = db.query(Listener).filter(Listener.id == listener_id).with_for_update().first()
     if not listener:
         return
     listener.coins += amount
@@ -62,14 +83,17 @@ async def _credit_listener(db: Session, listener_id: int, amount: int, reason: s
 async def bill_call_minute(db: Session, call: Call) -> int | None:
     """Bill exactly one minute for the given call's user, at current settings.
     Returns the amount deducted, or None if the user doesn't have enough coins."""
-    user = db.query(User).filter(User.id == call.caller_user_id).first()
-    if not user:
-        return None
     per_minute = coins_per_minute(db, call.call_type)
     if per_minute <= 0:
+        user = db.query(User).filter(User.id == call.caller_user_id).first()
+        if not user:
+            return None
         call.billed_minutes += 1
         db.commit()
         return 0
+    user = db.query(User).filter(User.id == call.caller_user_id).with_for_update().first()
+    if not user:
+        return None
     if user.coins < per_minute:
         return None
     user.coins -= per_minute
@@ -87,7 +111,7 @@ async def reconcile_call_billing(db: Session, call: Call, duration_seconds: int)
     final minute that started but wasn't billed yet by the loop, e.g. if the
     call ends in the same tick the loop is about to run. Returns the total
     coins deducted for the whole call (call.coins_deducted)."""
-    user = db.query(User).filter(User.id == call.caller_user_id).first()
+    user = db.query(User).filter(User.id == call.caller_user_id).with_for_update().first()
     if not user:
         return call.coins_deducted or 0
     per_minute = coins_per_minute(db, call.call_type)

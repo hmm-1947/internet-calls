@@ -187,6 +187,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   bool _savingVideoCallSetting = false;
   bool _loggingOut = false;
   bool _openingEnrollChat = false;
+  bool _openingSupportChat = false;
   bool _requestingDeletion = false;
 
   @override
@@ -479,6 +480,47 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
+  /// Opens a WhatsApp chat with the admin for general help/support. Uses the
+  /// same admin-profile phone number as listener enrollment.
+  Future<void> _openHelpAndSupport() async {
+    if (_openingSupportChat) return;
+    setState(() => _openingSupportChat = true);
+    String? number;
+    try {
+      number = await _repository.getEnrollWhatsappNumber();
+      if (number == null) {
+        _showEnrollNotice(
+          'Not available yet',
+          'Support contact is not set up yet. Please try again later.',
+        );
+        return;
+      }
+
+      final who = [
+        if (_name.trim().isNotEmpty) _name.trim(),
+        if (_phone.trim().isNotEmpty) _phone.trim(),
+      ].join(', ');
+      final message =
+          'Hi, I need help and support with the app.'
+          '${who.isEmpty ? '' : ' My account details: $who.'}';
+
+      final uri = Uri.https('wa.me', '/$number', {'text': message});
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) throw Exception('no app available to handle $uri');
+    } catch (e) {
+      debugPrint('Help and support: could not open WhatsApp: $e');
+      _showEnrollNotice(
+        'Could not open WhatsApp',
+        number == null
+            ? 'Something went wrong. Please check your connection and try again.'
+            : 'Make sure WhatsApp is installed, then try again. '
+                  'You can also message us on +$number.',
+      );
+    } finally {
+      if (mounted) setState(() => _openingSupportChat = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -592,6 +634,13 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                   ]),
                   _SectionLabel('SUPPORT'),
                   _SettingsCard([
+                    _MenuTile(
+                      icon: Icons.support_agent_outlined,
+                      title: 'Help and Support',
+                      onTap: _openHelpAndSupport,
+                      busy: _openingSupportChat,
+                    ),
+                    const Divider(height: 1, color: Colors.white12),
                     _SettingsTile(
                       icon: Icons.description_outlined,
                       title: 'Terms of Service',

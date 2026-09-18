@@ -9,7 +9,7 @@ from app.core.ws_manager import manager
 from app.models.models import Listener, ListenerCoinTransaction, WithdrawalRequest, AdminUser
 from app.routers.notifications import create_admin_notification
 from app.schemas.schemas import WithdrawalRequestCreate, WithdrawalRequestOut, WithdrawalDecision
-from app.utils.fcm import send_withdrawal_decision
+from app.utils.fcm import send_withdrawal_decision, send_async
 
 listener_router = APIRouter(prefix="/listener/withdrawals", tags=["listener-withdrawals"])
 admin_router = APIRouter(prefix="/admin/withdrawals", tags=["admin-withdrawals"])
@@ -224,10 +224,7 @@ async def approve_withdrawal_request(
         "wallet_coins": listener.coins,
     })
     if listener.fcm_token:
-        try:
-            send_withdrawal_decision(listener.fcm_token, request.id, "approved", request.coins)
-        except Exception:
-            pass
+        send_async(send_withdrawal_decision, listener.fcm_token, request.id, "approved", request.coins)
 
     out = WithdrawalRequestOut.model_validate(request)
     out.listener_name = listener.name
@@ -265,10 +262,7 @@ async def reject_withdrawal_request(
             "coins": request.coins,
         })
         if listener.fcm_token:
-            try:
-                send_withdrawal_decision(listener.fcm_token, request.id, "rejected", request.coins)
-            except Exception:
-                pass
+            send_async(send_withdrawal_decision, listener.fcm_token, request.id, "rejected", request.coins)
 
     out = WithdrawalRequestOut.model_validate(request)
     out.listener_name = listener.name if listener else None

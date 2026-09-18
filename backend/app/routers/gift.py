@@ -208,11 +208,9 @@ async def send_gift(payload: GiftSend, db: Session = Depends(get_db), current_us
     gift = db.query(Gift).filter(Gift.id == payload.gift_id).first()
     if not gift:
         raise HTTPException(status_code=404, detail="Gift not found")
-    listener = db.query(Listener).filter(Listener.id == payload.listener_id).first()
-    if not listener or not listener.is_active:
+    listener = db.query(Listener).filter(Listener.id == payload.listener_id, Listener.is_active == True).with_for_update().first()
+    if not listener:
         raise HTTPException(status_code=404, detail="Listener not found")
-    if current_user.coins < gift.coins:
-        raise HTTPException(status_code=402, detail="Not enough coins to send this gift")
 
     call_id = payload.call_id
     if call_id is not None:
@@ -220,7 +218,12 @@ async def send_gift(payload: GiftSend, db: Session = Depends(get_db), current_us
         if not call or call.caller_user_id != current_user.id or call.callee_listener_id != listener.id:
             call_id = None
 
-    current_user.coins -= gift.coins
+    locked_user = db.query(User).filter(User.id == current_user.id).with_for_update().first()
+    if not locked_user or locked_user.coins < gift.coins:
+        raise HTTPException(status_code=402, detail="Not enough coins to send this gift")
+
+    locked_user.coins -= gift.coins
+    current_user.coins = locked_user.coins
     db.add(CoinTransaction(user_id=current_user.id, amount=-gift.coins, reason="gift_sent", call_id=call_id))
     gift_txn = GiftTransaction(
         user_id=current_user.id,

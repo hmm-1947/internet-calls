@@ -474,7 +474,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
 
   Future<void> _applyAudioRoute(Room room) async {
     try {
-      await room.setSpeakerOn(_speakerOn);
+      await AudioManager.instance.setSpeakerOutputPreferred(_speakerOn, force: true);
       VolumeController.instance.showSystemUI = false;
       VolumeController.instance.setVolume(_speakerOn ? 1.0 : 0.3);
     } catch (e) {
@@ -595,7 +595,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
   Future<void> _toggleSpeaker() async {
     if (_room == null) return;
     final newSpeakerOn = !_speakerOn;
-    await _room!.setSpeakerOn(newSpeakerOn);
+    await AudioManager.instance.setSpeakerOutputPreferred(newSpeakerOn, force: true);
     VolumeController.instance.showSystemUI = false;
     VolumeController.instance.setVolume(newSpeakerOn ? 1.0 : 0.3);
     if (mounted) setState(() => _speakerOn = newSpeakerOn);

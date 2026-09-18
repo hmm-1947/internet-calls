@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.models import User, CoinSettings, Listener
 from app.routers.admin import verify_admin
-from app.utils.coins import get_coin_settings
+from app.utils.coins import get_coin_settings, invalidate_coin_settings_cache
 from app.core.ws_manager import manager
 from pydantic import BaseModel
 
@@ -69,10 +69,17 @@ def get_settings(db: Session = Depends(get_db), _=Depends(verify_admin)):
 
 @router.post("/settings")
 def update_settings(payload: CoinSettingsUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
-    s = get_coin_settings(db)
+    # Fetch the tracked row directly rather than through get_coin_settings(),
+    # which may hand back a detached cached copy that db.commit() wouldn't
+    # persist.
+    s = db.query(CoinSettings).first()
+    if not s:
+        s = CoinSettings()
+        db.add(s)
     s.audio_coins_per_minute = payload.audio_coins_per_minute
     s.video_coins_per_minute = payload.video_coins_per_minute
     s.chat_message_coins = payload.chat_message_coins
     s.voice_message_coins = payload.voice_message_coins
     db.commit()
+    invalidate_coin_settings_cache()
     return {"audio_coins_per_minute": s.audio_coins_per_minute, "video_coins_per_minute": s.video_coins_per_minute, "chat_message_coins": s.chat_message_coins, "voice_message_coins": s.voice_message_coins}
