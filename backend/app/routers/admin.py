@@ -619,14 +619,18 @@ def admin_listener_wallet(
     # screen uses).
     IST_OFFSET = timedelta(hours=5, minutes=30)
 
-    def split_sum(amount_col, time_col, filters):
+    def split_sum(amount_col, time_col, filters, whole_minutes: bool = False):
         ist_hour = extract('hour', time_col + IST_OFFSET)
-        day_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
+        # Wallet minutes only count a call once it has run a full 60 seconds;
+        # each row is floored to its own whole-minute boundary before
+        # summing (see app/utils/wallet_stats.py for the same trick).
+        col = (amount_col - amount_col % 60) if whole_minutes else amount_col
+        day_sum = db.query(sa_func.coalesce(sa_func.sum(col), 0)).filter(
             *filters,
             ist_hour >= 5,
             ist_hour < 21,
         ).scalar()
-        night_sum = db.query(sa_func.coalesce(sa_func.sum(amount_col), 0)).filter(
+        night_sum = db.query(sa_func.coalesce(sa_func.sum(col), 0)).filter(
             *filters,
             (ist_hour < 5) | (ist_hour >= 21),
         ).scalar()
@@ -661,10 +665,12 @@ def admin_listener_wallet(
     audio_seconds_day, audio_seconds_night = split_sum(
         Call.duration_seconds, Call.created_at,
         in_date_range(Call.created_at, [Call.callee_listener_id == listener.id, Call.call_type == "audio"]),
+        whole_minutes=True,
     )
     video_seconds_day, video_seconds_night = split_sum(
         Call.duration_seconds, Call.created_at,
         in_date_range(Call.created_at, [Call.callee_listener_id == listener.id, Call.call_type == "video"]),
+        whole_minutes=True,
     )
     text_msgs_day, text_msgs_night = split_count(
         ChatMessage, ChatMessage.created_at,
