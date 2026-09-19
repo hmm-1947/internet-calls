@@ -15,7 +15,7 @@ from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
     CoinTransaction, CallRating, Session as SessionModel, AdminUser, AuditLog,
     GiftTransaction, ListenerCoinTransaction, ChatSettings, ReservedUsername,
-    ListenerNote, UserBillingPurchase, ListenerBadgeTag,
+    ListenerNote, UserBillingPurchase, ListenerBadgeTag, ListenerWeeklyChallengeProgress,
 )
 from datetime import timedelta
 from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, ListenerBadgeTagCreate, ListenerTagAssign, AdminListenerPasswordUpdate
@@ -406,6 +406,7 @@ def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(v
         db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ListenerNote).filter(ListenerNote.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(ListenerWeeklyChallengeProgress).filter(ListenerWeeklyChallengeProgress.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ChatSettings).filter(
             ((ChatSettings.owner_type == "listener") & (ChatSettings.owner_id == listener_id)) |
             ((ChatSettings.owner_type == "user") & (ChatSettings.other_id == listener_id))
