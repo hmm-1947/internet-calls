@@ -56,6 +56,7 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         "is_online": bool(current_listener.is_online),
         "is_connected": manager.is_listener_online(current_listener.id),
         "video_call_enabled": bool(current_listener.video_call_enabled),
+        "video_call_disabled_by_admin": bool(current_listener.video_call_disabled_by_admin),
         "about": current_listener.about,
         "tags": _parse_list(current_listener.tags),
         "languages": _parse_list(current_listener.languages),

@@ -258,6 +258,10 @@ async def set_listener_video_call_disabled(listener_id: int, payload: AdminVideo
     listener.video_call_disabled_by_admin = payload.disabled
     db.commit()
     effective = bool(listener.video_call_enabled) and not bool(listener.video_call_disabled_by_admin)
+    await manager.send_to_listener(listener.id, {
+        "type": "video_call_admin_setting_changed",
+        "video_call_disabled_by_admin": bool(listener.video_call_disabled_by_admin),
+    })
     await manager.broadcast_to_all_users({
         "type": "listener_video_call_changed",
         "listener_id": listener.id,
