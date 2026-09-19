@@ -6916,6 +6916,7 @@
           </div>` : `
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleListenerVideoCall(${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
             <button class="btn btn-danger" onclick="openListenerPasswordModal(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Reset Password</button>
             <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
           </div>`}
@@ -7377,6 +7378,28 @@ ${logSection === 'chats' ? '' : `
         loadPeople();
         renderPersonContent();
       } catch (e) { setUserMsg('✗ ' + e.message, false); }
+    }
+
+    async function toggleListenerVideoCall(id, currentlyDisabled) {
+      const newDisabled = !currentlyDisabled;
+      const ok = await confirmDialog(
+        newDisabled
+          ? { title: 'Disable Video Call', body: 'Disable video calling for this listener? No user will be able to video call them, regardless of the listener\'s own settings.', okLabel: 'Disable', okClass: 'btn-danger', icon: 'video-off', iconClass: 'danger' }
+          : { title: 'Enable Video Call', body: 'Re-enable video calling for this listener? Their own app settings will decide whether video calls are available.', okLabel: 'Enable', okClass: 'btn-leaf', icon: 'video', iconClass: 'info' }
+      );
+      if (!ok) return;
+      try {
+        const res = await fetch(API_URL + `/admin/listeners/${id}/video-call`, {
+          method: 'PATCH', headers: authHeaders(true),
+          body: JSON.stringify({ disabled: newDisabled })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg(`✓ Video call ${newDisabled ? 'disabled' : 'enabled'} for listener`, true);
+        if (selectedPerson) selectedPerson.raw.video_call_disabled_by_admin = newDisabled;
+        loadPeople();
+        renderPersonContent();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
     }
 
     async function saveProfileEdits(type, id) {

@@ -483,6 +483,16 @@ class UserHomeScreenState extends State<UserHomeScreen>
         _listeners[idx]['avg_rating'] = data['avg_rating'];
         _listeners[idx]['rating_count'] = data['rating_count'];
       });
+    } else if (type == 'listener_video_call_changed') {
+      final listenerId = data['listener_id'];
+      if (listenerId == null) return;
+      final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+      if (idx == -1) return;
+      final enabled = data['video_call_enabled'] != false;
+      if (_listeners[idx]['video_call_enabled'] == enabled) return;
+      setState(() {
+        _listeners[idx]['video_call_enabled'] = enabled;
+      });
     } else if (type == 'coins_updated') {
       final coins = data['coins'];
       if (coins is! int || coins == _profileCoins) return;

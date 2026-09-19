@@ -139,6 +139,8 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
         raise HTTPException(status_code=403, detail="Admin has disabled video calls for your account")
     if call_type == "video" and not current_user.video_call_enabled:
         raise HTTPException(status_code=403, detail="Video calls are disabled in your settings")
+    if call_type == "video" and listener.video_call_disabled_by_admin:
+        raise HTTPException(status_code=403, detail="Video calls are disabled for this listener")
     if call_type == "video" and not listener.video_call_enabled:
         raise HTTPException(status_code=403, detail="This listener has video calls disabled")
     per_minute = coins_per_minute(db, call_type)
