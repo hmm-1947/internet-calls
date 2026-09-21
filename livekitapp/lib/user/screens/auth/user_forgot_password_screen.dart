@@ -6,6 +6,7 @@ import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 enum _ForgotPasswordStep { identifier, otp, reset }
 
@@ -74,7 +75,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
         _step = _ForgotPasswordStep.otp;
       });
     } catch (e) {
-      final message = e.toString().replaceFirst('Exception: ', '');
+      final message = friendlyError(e);
       _showError(
         message.toLowerCase().contains('registered')
             ? 'enter a registered phone number'
@@ -101,7 +102,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
       if (!mounted) return;
       setState(() => _step = _ForgotPasswordStep.reset);
     } catch (e) {
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _showError(friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -141,7 +142,7 @@ class _UserForgotPasswordScreenState extends State<UserForgotPasswordScreen> {
       // Surfaces backend messages as-is, e.g. when the new password
       // matches the current one: "New password must be different
       // from your current password".
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _showError(friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -13,6 +13,7 @@ import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 /// Sign-up step 3 of 3: the profile, exchanged for the actual account.
 ///
@@ -129,7 +130,7 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
       setState(() {
         _checkingUsername = false;
         _usernameAvailable = null;
-        _usernameMessage = e.toString().replaceFirst('Exception: ', '');
+        _usernameMessage = friendlyError(e);
       });
     }
   }
@@ -217,7 +218,7 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      final message = e.toString().replaceFirst('Exception: ', '');
+      final message = friendlyError(e);
       // The username can be claimed by someone else between our check and the
       // final request, so keep the field in sync with what the server says.
       if (message.toLowerCase().contains('username')) {

@@ -7,6 +7,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/billing_repository.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -137,7 +138,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         return;
       }
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = friendlyError(e);
         _loading = false;
       });
       return;
@@ -233,7 +234,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       _razorpay.open(options);
     } catch (e) {
       if (!mounted) return;
-      PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
+      PillMessage.showError(context, friendlyError(e));
       setState(() => _purchasing = false);
     }
   }
@@ -261,7 +262,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       PillMessage.showError(
         context,
         'Payment received but verification failed: '
-        '${e.toString().replaceFirst('Exception: ', '')}',
+        '${friendlyError(e)}',
       );
     } finally {
       _pendingOrderId = null;

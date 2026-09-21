@@ -3,6 +3,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class ListenerWalletScreen extends StatefulWidget {
   const ListenerWalletScreen({super.key});
@@ -109,7 +110,7 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
       if (mounted) {
         PillMessage.showError(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          friendlyError(e),
         );
       }
     } finally {

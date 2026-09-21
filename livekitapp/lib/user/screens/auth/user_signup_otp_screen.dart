@@ -5,6 +5,7 @@ import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_profile_setup_screen.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 /// Sign-up step 2 of 3: verify the phone number from step 1.
 ///
@@ -54,7 +55,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
       _showMessage('A new code has been sent to ${widget.identifier}');
     } catch (e) {
       if (!mounted) return;
-      final message = e.toString().replaceFirst('Exception: ', '');
+      final message = friendlyError(e);
       setState(() {
         _sending = false;
         _sendError = message;
@@ -77,7 +78,7 @@ class _UserSignupOtpScreenState extends State<UserSignupOtpScreen> {
       _goToProfileSetup(signupToken);
     } catch (e) {
       if (!mounted) return;
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      _showMessage(friendlyError(e));
     } finally {
       if (mounted) setState(() => _verifying = false);
     }

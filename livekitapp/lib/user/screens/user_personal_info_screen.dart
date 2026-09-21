@@ -10,6 +10,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_contact_change_screen.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 const _kBrandRed = Color(0xFFE11D48);
 const _kFieldBg = Color(0xFF141B26);
@@ -502,7 +503,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
       setState(() {
         _checkingUsername = false;
         _usernameAvailable = null;
-        _usernameMessage = e.toString().replaceFirst('Exception: ', '');
+        _usernameMessage = friendlyError(e);
       });
     }
   }
@@ -525,7 +526,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
         setState(() => _photoUrl = result['photo_url']);
       }
     } catch (e) {
-      if (mounted) _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) _showMessage(friendlyError(e));
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
@@ -619,7 +620,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
       _showMessage('Changes saved');
     } catch (e) {
       if (!mounted) return;
-      final message = e.toString().replaceFirst('Exception: ', '');
+      final message = friendlyError(e);
       // The handle can be claimed by someone else between our check and the
       // save, so keep the field in sync with what the server says.
       if (message.toLowerCase().contains('username')) {

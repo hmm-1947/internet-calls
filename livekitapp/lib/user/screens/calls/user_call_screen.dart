@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/call_foreground_service.dart';
@@ -611,7 +612,13 @@ class _CallScreenState extends State<CallScreen> {
       if (!mounted || _isEnding) return;
       // The listener is already sitting in the room, so leaving the caller on a
       // "Calling..." screen would strand them both. End it properly instead.
-      _showMessage('Connection error: $e');
+      debugPrint('Call connection error: $e');
+      _showMessage(
+        friendlyError(
+          e,
+          fallback: 'Could not connect the call. Please try again.',
+        ),
+      );
       unawaited(_hangUp());
     }
   }
@@ -1057,7 +1064,7 @@ class _CallScreenState extends State<CallScreen> {
         _phase = _CallPhase.noAnswer;
       });
       _publishStatus();
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      _showMessage(friendlyError(e));
       // Give the full window back rather than stranding the user here after a
       // redial that never got off the ground.
       _noAnswerTimer = Timer(_noAnswerAutoCloseDelay, _dismissCallScreen);

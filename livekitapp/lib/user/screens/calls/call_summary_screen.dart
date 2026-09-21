@@ -4,6 +4,7 @@ import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 String _fmtDuration(int seconds) {
   final m = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -111,7 +112,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
+        PillMessage.showError(context, friendlyError(e));
       }
       if (mounted) setState(() => _submitting = false);
     }
@@ -145,7 +146,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
+        PillMessage.showError(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _callingAgain = false);

@@ -5,6 +5,7 @@ import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0F1A);
@@ -128,7 +129,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
         // error over data we already have on disk.
         _error = _name.isNotEmpty
             ? null
-            : e.toString().replaceFirst('Exception: ', '');
+            : friendlyError(e);
         _loading = false;
       });
     }

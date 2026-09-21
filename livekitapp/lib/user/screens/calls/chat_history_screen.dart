@@ -24,6 +24,7 @@ import 'package:livekitapp/user/screens/listener_profile_view_screen.dart';
 import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/user/widgets/gift_sheet.dart';
 import 'package:uuid/uuid.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class ChatHistoryScreen extends StatefulWidget {
   final int listenerId;
@@ -834,7 +835,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       if (mounted) _showInsufficientCoins();
     } catch (e) {
       if (mounted) {
-        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
+        PillMessage.showError(context, friendlyError(e));
       }
     } finally {
       _callingListener = false;

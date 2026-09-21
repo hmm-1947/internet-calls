@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/weekly_challenge_repository.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -94,7 +95,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       if (!mounted) return;
       setState(() {
         if (_progress == null) {
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _error = friendlyError(e);
         }
         _loading = false;
       });
@@ -119,7 +120,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       if (!mounted) return;
       setState(() {
         if (_history == null) {
-          _historyError = e.toString().replaceFirst('Exception: ', '');
+          _historyError = friendlyError(e);
         }
         _historyLoading = false;
       });

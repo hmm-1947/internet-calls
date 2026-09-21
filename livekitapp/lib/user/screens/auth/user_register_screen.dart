@@ -7,6 +7,7 @@ import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/auth/user_signup_otp_screen.dart';
 import 'package:livekitapp/user/services/phone_auth_service.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 /// Sign-up step 1 of 3: the phone number to verify, and the password.
 ///
@@ -115,7 +116,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      _showMessage(friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

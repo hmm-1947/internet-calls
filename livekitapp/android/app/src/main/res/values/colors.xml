@@ -5,6 +5,6 @@
     <color name="incoming_call_avatar">#1F2430</color>
     <color name="incoming_call_accept">#2FBF71</color>
     <color name="incoming_call_decline">#E53950</color>
-	<color name="ic_launcher_background">#FFFFFF</color>
+	<color name="ic_launcher_background">#000000</color>
 	<color name="splash_background">#0B0F1A</color>
 </resources>

@@ -8,6 +8,7 @@ import 'package:livekitapp/core/network/user_data_cache.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_main_screen.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 /// Second step of logging in to a phone account: the password was accepted,
 /// now the SMS OTP sent by the backend has to be entered.
@@ -55,7 +56,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
       _countdownKey.currentState?.restart();
     } catch (e) {
       if (!mounted) return;
-      final message = e.toString().replaceFirst('Exception: ', '');
+      final message = friendlyError(e);
       setState(() {
         _sending = false;
         _sendError = message;
@@ -91,7 +92,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
+      PillMessage.showError(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
