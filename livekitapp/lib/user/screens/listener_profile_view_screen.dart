@@ -9,6 +9,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -224,7 +225,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
         // painted from the cache: offline, the cached copy is the answer.
         _error = _hasCachedProfile
             ? null
-            : e.toString().replaceFirst('Exception: ', '');
+            : friendlyError(e);
         _loading = false;
       });
     }
@@ -267,7 +268,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
       );
     } catch (e) {
       if (mounted) {
-        PillMessage.showError(context, e.toString().replaceFirst('Exception: ', ''));
+        PillMessage.showError(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _callingListener = false);

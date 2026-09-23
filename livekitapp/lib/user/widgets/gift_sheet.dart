@@ -8,6 +8,7 @@ import 'package:livekitapp/user/repository/user_repository.dart' show Insufficie
 import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/common/widgets/gift_success_popup.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 IconData giftIconFor(String? icon) {
   switch (icon) {
@@ -225,7 +226,7 @@ class _GiftSheetState extends State<GiftSheet> {
       if (mounted) {
         PillMessage.showError(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          friendlyError(e),
         );
       }
     } finally {

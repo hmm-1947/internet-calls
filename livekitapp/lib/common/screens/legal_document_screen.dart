@@ -3,6 +3,7 @@ import 'package:livekitapp/common/services/legal_repository.dart';
 import 'package:livekitapp/common/widgets/simple_html_view.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 /// Shared full-screen viewer for the admin-authored Terms of Service or
 /// Privacy Policy. Used from both the user and listener settings screens.
@@ -77,7 +78,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
         return;
       }
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = friendlyError(e);
         _loading = false;
       });
     }

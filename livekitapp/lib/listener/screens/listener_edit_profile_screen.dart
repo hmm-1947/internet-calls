@@ -8,6 +8,7 @@ import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0B0B);
@@ -210,7 +211,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
       if (mounted) {
         PillMessage.showError(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          friendlyError(e),
         );
       }
     } finally {
@@ -253,7 +254,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
       if (mounted) {
         PillMessage.showError(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          friendlyError(e),
         );
       }
     }

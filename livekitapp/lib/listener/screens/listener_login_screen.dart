@@ -6,6 +6,7 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
 import 'package:livekitapp/core/network/chat_storage.dart';
 import 'package:livekitapp/listener/screens/listener_main_screen.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class ListenerLoginScreen extends StatefulWidget {
   const ListenerLoginScreen({super.key});
@@ -51,7 +52,7 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
       if (!mounted) return;
       PillMessage.showError(
         context,
-        e.toString().replaceFirst('Exception: ', ''),
+        friendlyError(e),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

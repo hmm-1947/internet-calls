@@ -15,7 +15,7 @@ from app.models.models import (
     Listener, User, Call, CallRecording, ChatMessage,
     CoinTransaction, CallRating, Session as SessionModel, AdminUser, AuditLog,
     GiftTransaction, ListenerCoinTransaction, ChatSettings, ReservedUsername,
-    ListenerNote, UserBillingPurchase, ListenerBadgeTag,
+    ListenerNote, UserBillingPurchase, ListenerBadgeTag, ListenerWeeklyChallengeProgress,
 )
 from datetime import timedelta
 from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, ListenerBadgeTagCreate, ListenerTagAssign, AdminListenerPasswordUpdate
@@ -199,7 +199,7 @@ def list_listeners(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None
     if tag_ids:
         for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(tag_ids)).all():
             tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id)} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id), "video_call_disabled_by_admin": bool(l.video_call_disabled_by_admin)} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -248,6 +248,26 @@ async def set_listener_active(listener_id: int, payload: AdminActiveUpdate, db: 
     if not listener.is_active:
         await manager.send_to_listener(listener_id, {"type": "force_logout"})
     return {"id": listener.id, "is_active": listener.is_active}
+
+
+@router.patch("/listeners/{listener_id}/video-call")
+async def set_listener_video_call_disabled(listener_id: int, payload: AdminVideoCallUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    listener.video_call_disabled_by_admin = payload.disabled
+    db.commit()
+    effective = bool(listener.video_call_enabled) and not bool(listener.video_call_disabled_by_admin)
+    await manager.send_to_listener(listener.id, {
+        "type": "video_call_admin_setting_changed",
+        "video_call_disabled_by_admin": bool(listener.video_call_disabled_by_admin),
+    })
+    await manager.broadcast_to_all_users({
+        "type": "listener_video_call_changed",
+        "listener_id": listener.id,
+        "video_call_enabled": effective,
+    })
+    return {"id": listener.id, "video_call_disabled_by_admin": listener.video_call_disabled_by_admin}
 
 
 @router.post("/listeners/{listener_id}/password")
@@ -390,6 +410,7 @@ def delete_listener(listener_id: int, db: Session = Depends(get_db), _=Depends(v
         db.query(GiftTransaction).filter(GiftTransaction.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ListenerCoinTransaction).filter(ListenerCoinTransaction.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ListenerNote).filter(ListenerNote.listener_id == listener_id).delete(synchronize_session=False)
+        db.query(ListenerWeeklyChallengeProgress).filter(ListenerWeeklyChallengeProgress.listener_id == listener_id).delete(synchronize_session=False)
         db.query(ChatSettings).filter(
             ((ChatSettings.owner_type == "listener") & (ChatSettings.owner_id == listener_id)) |
             ((ChatSettings.owner_type == "user") & (ChatSettings.other_id == listener_id))

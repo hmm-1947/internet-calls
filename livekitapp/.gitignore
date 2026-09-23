@@ -46,7 +46,8 @@ app.*.map.json
 /android/app/google-services.json
 .env
 upload-keystore.jks
-
+android\app\upload-keystore.jks
 *.bak
 
 .github/workflows/.cody_history/
+android\key.properties

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -148,13 +150,29 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   Map<String, dynamic>? _badgeTag;
   bool _statusOnline = true;
   bool _videoCallEnabled = true;
+  bool _videoCallDisabledByAdmin = false;
   bool _openingSupportChat = false;
+  StreamSubscription<Map<String, dynamic>>? _socketSub;
 
   @override
   void initState() {
     super.initState();
     _seedFromCache();
+    _socketSub = ChatSocketService().stream.listen((data) {
+      if (!mounted) return;
+      if (data['type'] == 'video_call_admin_setting_changed') {
+        setState(() {
+          _videoCallDisabledByAdmin = data['video_call_disabled_by_admin'] == true;
+        });
+      }
+    });
     refresh();
+  }
+
+  @override
+  void dispose() {
+    _socketSub?.cancel();
+    super.dispose();
   }
 
   void _seedFromCache() {
@@ -166,6 +184,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     _badgeTag = cached['badge_tag'] as Map<String, dynamic>?;
     if (cached['is_online'] is bool) _statusOnline = cached['is_online'];
     if (cached['video_call_enabled'] is bool) _videoCallEnabled = cached['video_call_enabled'];
+    if (cached['video_call_disabled_by_admin'] is bool) _videoCallDisabledByAdmin = cached['video_call_disabled_by_admin'];
   }
 
   Future<void> refresh() async {
@@ -183,6 +202,9 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
         }
         if (data['video_call_enabled'] is bool) {
           _videoCallEnabled = data['video_call_enabled'] as bool;
+        }
+        if (data['video_call_disabled_by_admin'] is bool) {
+          _videoCallDisabledByAdmin = data['video_call_disabled_by_admin'] as bool;
         }
       });
     } catch (_) {}
@@ -450,6 +472,14 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                 onChanged: _toggleVideoCall,
               ),
             ),
+            if (_videoCallDisabledByAdmin)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(72, 0, 16, 14),
+                child: Text(
+                  'Admin has disabled your video calls. Changing this setting will not take effect.',
+                  style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                ),
+              ),
           ]),
           _SectionLabel('SUPPORT'),
           _SettingsCard([

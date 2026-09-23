@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 /// Shared "Change Password" screen used from both the user and listener
 /// settings screens. The caller supplies [onSubmit], which should call the
@@ -78,7 +79,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     try {
       await widget.onVerifyCurrentPassword(currentPassword);
     } catch (e) {
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _showError(friendlyError(e));
       if (mounted) setState(() => _loading = false);
       return;
     }
@@ -103,7 +104,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       // Surfaces backend messages as-is, e.g. "Current password is
       // incorrect" or "New password must be different from your current
       // password".
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _showError(friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

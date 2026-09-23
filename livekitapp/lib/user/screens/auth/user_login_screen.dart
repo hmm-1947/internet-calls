@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 import 'package:livekitapp/common/widgets/onboarding_screen.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
@@ -67,7 +68,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      _showMessage(friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -134,10 +135,12 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       if (e.code == GoogleSignInExceptionCode.canceled && e.description == null) {
         return;
       }
-      _showMessage('Google sign-in failed: ${e.description ?? e.code}');
+      debugPrint('Google sign-in failed: ${e.code} ${e.description}');
+      _showMessage(friendlyError(e));
     } catch (e) {
       if (!mounted) return;
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      debugPrint('Google sign-in error: $e');
+      _showMessage(friendlyError(e));
     } finally {
       if (mounted) setState(() => _googleLoading = false);
     }

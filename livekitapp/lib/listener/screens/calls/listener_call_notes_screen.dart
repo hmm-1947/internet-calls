@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
@@ -155,7 +156,10 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
       }
     } catch (e) {
       if (mounted) {
-        PillMessage.showError(context, 'Failed to save note: $e');
+        PillMessage.showError(
+          context,
+          friendlyError(e, fallback: 'Could not save the note. Please try again.'),
+        );
       }
     }
     if (mounted) setState(() => _saving = false);

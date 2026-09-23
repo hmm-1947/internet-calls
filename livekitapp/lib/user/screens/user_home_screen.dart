@@ -23,6 +23,7 @@ import 'package:livekitapp/user/screens/user_settings_screen.dart';
 import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
+import 'package:livekitapp/common/utils/friendly_error.dart';
 
 class _AppColors {
   static const bg = Color(0xFF0B0F1A);
@@ -483,6 +484,16 @@ class UserHomeScreenState extends State<UserHomeScreen>
         _listeners[idx]['avg_rating'] = data['avg_rating'];
         _listeners[idx]['rating_count'] = data['rating_count'];
       });
+    } else if (type == 'listener_video_call_changed') {
+      final listenerId = data['listener_id'];
+      if (listenerId == null) return;
+      final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+      if (idx == -1) return;
+      final enabled = data['video_call_enabled'] != false;
+      if (_listeners[idx]['video_call_enabled'] == enabled) return;
+      setState(() {
+        _listeners[idx]['video_call_enabled'] = enabled;
+      });
     } else if (type == 'coins_updated') {
       final coins = data['coins'];
       if (coins is! int || coins == _profileCoins) return;
@@ -577,7 +588,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
       if (requestId != _loadRequestId || !mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = friendlyError(e);
       });
     }
   }
@@ -621,7 +632,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
       if (mounted) {
         PillMessage.showError(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          friendlyError(e),
           bottomOffset: 78,
         );
       }
