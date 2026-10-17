@@ -94,7 +94,6 @@ async function request<T>(method: string, path: string, body?: unknown, opts: Re
 
 const get = <T>(p: string, o?: ReqOpts) => request<T>("GET", p, undefined, o);
 const post = <T>(p: string, b: unknown = {}, o?: ReqOpts) => request<T>("POST", p, b, o);
-const del = <T>(p: string, o?: ReqOpts) => request<T>("DELETE", p, undefined, o);
 
 export const friendly = (e: unknown, fallback = "Something went wrong. Please try again."): string =>
   e instanceof Error && e.message ? e.message : fallback;
@@ -186,8 +185,6 @@ export const api = {
   },
   markRead: (listenerId: number) => post(`/chat/user/${listenerId}/mark_read`),
   markDelivered: (ids: number[]) => post("/chat/user/delivered", { message_ids: ids }),
-  editMessage: (message_id: number, message: string) => post<ChatMsg>("/chat/message/edit", { message_id, message }),
-  deleteMessage: (id: number) => del(`/chat/message/${id}`),
   chatSettings: (other_id: number, s: { is_pinned?: boolean; is_archived?: boolean; is_muted?: boolean }) =>
     post("/chat/settings", { other_id, ...s }),
 

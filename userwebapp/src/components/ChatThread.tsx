@@ -8,12 +8,12 @@ import { cx, isLive, dayLabel, formatDuration, humanDuration, parseDate, timeLab
 import type { ChatMsg, Listener } from "../lib/types";
 import { useApp } from "../state/app";
 import { useCall } from "../state/call";
-import { Avatar, BadgePill, Confirm, PageLoader, Spinner } from "./ui";
+import { Avatar, BadgePill, PageLoader, Spinner } from "./ui";
 import { GiftIcon, GiftSheet } from "./GiftSheet";
 import { VoicePlayer } from "./VoicePlayer";
 import { useCallRules } from "./ListenerCard";
 import {
-  IconBack, IconCheck, IconCheckAll, IconClose, IconEdit, IconGift, IconMic, IconMore, IconPhone, IconSend, IconTrash, IconVideo,
+  IconBack, IconCheck, IconCheckAll, IconGift, IconMic, IconPhone, IconSend, IconTrash, IconVideo,
 } from "./icons";
 
 const PAGE = 25;
@@ -55,10 +55,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
   const [fetched, setFetched] = useState<Listener | null>(null);
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
-  const [editing, setEditing] = useState<ChatMsg | null>(null);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [delMsg, setDelMsg] = useState<ChatMsg | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const [rec, setRec] = useState<{ seconds: number } | null>(null);
   const [sendingVoice, setSendingVoice] = useState(false);
@@ -104,7 +100,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
     setMsgs([]);
     setLoading(true);
     setText("");
-    setEditing(null);
     stick.current = true;
     setActiveChat(listenerId);
     void load().then(() => { void refreshThreads(); });
@@ -209,7 +204,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
 
   const onType = (v: string) => {
     setText(v.slice(0, MAX_CHAT_LENGTH));
-    if (editing) return;
     if (!typingSent.current && v.trim()) { typingSent.current = true; socket.sendTyping(listenerId, true); }
     window.clearTimeout(typingTimer.current);
     typingTimer.current = window.setTimeout(stopTyping, 2500);
@@ -250,31 +244,13 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
     }
   };
 
-  const saveEdit = async () => {
-    if (!editing?.id) return;
-    const body = text.trim();
-    if (!body) return;
-    if (body === editing.message) { setEditing(null); setText(""); return; }
-    try {
-      const saved = await api.editMessage(editing.id, body);
-      setMsgs((cur) => upsert(cur, saved));
-      setEditing(null);
-      setText("");
-      void refreshThreads();
-    } catch (e) {
-      toast(friendly(e), "error");
-    }
-  };
-
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (editing) void saveEdit();
-    else void sendText();
+    void sendText();
   };
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
-    if (e.key === "Escape" && editing) { setEditing(null); setText(""); }
   };
 
   const startRecording = async () => {
@@ -328,22 +304,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
     }
   };
 
-  const doDelete = async () => {
-    if (!delMsg?.id) return;
-    setDeleting(true);
-    try {
-      await api.deleteMessage(delMsg.id);
-      const id = delMsg.id;
-      setMsgs((cur) => cur.map((m) => (m.id === id ? { ...m, is_deleted: true, message: "", audio_url: null } : m)));
-      setDelMsg(null);
-      void refreshThreads();
-    } catch (e) {
-      toast(friendly(e), "error");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const rows = useMemo(() => {
     const out: { key: string; day?: string; msg?: ChatMsg }[] = [];
     let last = "";
@@ -357,7 +317,7 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
   }, [msgs]);
 
   return (
-    <div className="flex h-full flex-col bg-bg" onClick={() => setMenuFor(null)}>
+    <div className="flex h-full flex-col bg-bg">
       <div className="flex items-center gap-3 border-b border-line bg-bg/90 px-3 py-2.5 backdrop-blur safe-t">
         <button onClick={onBack} className="rounded-full p-2 hover:bg-white/10 md:hidden" aria-label="Back"><IconBack size={22} /></button>
         <button onClick={() => nav(`/listener/${listenerId}`)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
@@ -398,8 +358,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
                 );
               }
               const own = m.sender_type === "user";
-              const canEdit = own && !m.is_deleted && !m.pending && !m.failed && m.id && (!m.message_type || m.message_type === "text");
-              const canDelete = own && !m.is_deleted && !m.pending && !m.failed && m.id && m.message_type !== "gift";
               return (
                 <div key={r.key} className={cx("group flex items-end gap-1.5", own ? "flex-row-reverse" : "")}>
                   <div
@@ -431,23 +389,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
                       {own && <Ticks m={m} />}
                     </div>
                   </div>
-                  {(canEdit || canDelete) && (
-                    <div className="relative">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === r.key ? null : r.key); }}
-                        className="rounded-full p-1.5 text-white/30 hover:bg-white/10 hover:text-white md:opacity-0 md:group-hover:opacity-100"
-                        aria-label="Message options"
-                      >
-                        <IconMore size={16} />
-                      </button>
-                      {menuFor === r.key && (
-                        <div onClick={(e) => e.stopPropagation()} className={cx("pop-in absolute bottom-8 z-20 w-36 overflow-hidden rounded-xl border border-line bg-card2 shadow-2xl", own ? "right-0" : "left-0")}>
-                          {canEdit && <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-white/10" onClick={() => { setEditing(m); setText(m.message); setMenuFor(null); taRef.current?.focus(); }}><IconEdit size={15} />Edit</button>}
-                          {canDelete && <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-white/10" onClick={() => { setDelMsg(m); setMenuFor(null); }}><IconTrash size={15} />Delete</button>}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -462,12 +403,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
 
       <div className="border-t border-line bg-[#0e0e0e] px-3 py-3 safe-b md:px-6">
         <div className="mx-auto max-w-3xl">
-          {editing && (
-            <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-xs text-white/70">
-              <IconEdit size={14} /><span className="flex-1 truncate">Editing: {editing.message}</span>
-              <button onClick={() => { setEditing(null); setText(""); }} aria-label="Cancel edit"><IconClose size={14} /></button>
-            </div>
-          )}
           {rec ? (
             <div className="flex items-center gap-3">
               <button onClick={cancelRecording} className="rounded-full p-3 text-red-400 hover:bg-white/10" aria-label="Discard"><IconTrash size={20} /></button>
@@ -498,13 +433,13 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
                   </div>
                 )}
               </div>
-              {!text.trim() && !editing ? (
+              {!text.trim() ? (
                 <button type="button" onClick={() => void startRecording()} disabled={sendingVoice} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Record voice note">
                   {sendingVoice ? <Spinner size={18} /> : <IconMic size={20} />}
                 </button>
               ) : (
-                <button className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-soft hover:bg-brand" aria-label={editing ? "Save edit" : "Send"}>
-                  {editing ? <IconCheck size={20} /> : <IconSend size={20} />}
+                <button className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-soft hover:bg-brand" aria-label="Send">
+                  <IconSend size={20} />
                 </button>
               )}
             </form>
@@ -513,7 +448,6 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
       </div>
 
       <GiftSheet open={giftOpen} onClose={() => setGiftOpen(false)} listenerId={listenerId} />
-      <Confirm open={!!delMsg} title="Delete message?" message="This message will be deleted for everyone." confirmLabel="Delete" danger busy={deleting} onConfirm={() => void doDelete()} onCancel={() => setDelMsg(null)} />
     </div>
   );
 }
