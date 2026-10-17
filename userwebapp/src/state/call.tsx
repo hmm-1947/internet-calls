@@ -20,7 +20,6 @@ export interface CallState {
   video: boolean;
   phase: CallPhase;
   micOn: boolean;
-  speakerOn: boolean;
   camOn: boolean;
   reconnecting: boolean;
   remoteJoined: boolean;
@@ -38,7 +37,6 @@ interface CallApi {
   startCall: (l: Listener | (CallParty & Partial<Listener>), video: boolean) => Promise<void>;
   hangUp: () => Promise<void>;
   toggleMic: () => Promise<void>;
-  toggleSpeaker: () => Promise<void>;
   toggleCam: () => Promise<void>;
   redial: () => Promise<void>;
   dismiss: () => void;
@@ -67,15 +65,13 @@ interface Internal {
   video: boolean;
   party: CallParty | null;
   micOn: boolean;
-  speakerOn: boolean;
 }
 
 const QUIET_VOLUME = 0.25;
-const speakerVolume = (on: boolean) => (on ? 1 : QUIET_VOLUME);
 
 const fresh = (): Internal => ({
   callId: null, phase: "idle", acceptHandled: false, ending: false, room: null, localTracks: [], tone: null,
-  audioEls: [], timers: {}, durationStart: null, video: false, party: null, micOn: true, speakerOn: false,
+  audioEls: [], timers: {}, durationStart: null, video: false, party: null, micOn: true,
 });
 
 export function CallProvider({ children }: { children: ReactNode }) {
@@ -218,7 +214,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const attachAudio = (track: RemoteTrack) => {
       const el = track.attach() as HTMLMediaElement;
       el.style.display = "none";
-      el.volume = speakerVolume(s.speakerOn);
+      el.volume = QUIET_VOLUME;
       document.body.appendChild(el);
       s.audioEls.push(el);
     };
@@ -354,7 +350,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     I.current = { ...fresh(), phase: "starting", video, party };
     setMinimized(false);
     setCall({
-      callId: null, party, video, phase: "starting", micOn: true, speakerOn: false, camOn: video, reconnecting: false, remoteJoined: false,
+      callId: null, party, video, phase: "starting", micOn: true, camOn: video, reconnecting: false, remoteJoined: false,
       remoteVideo: null, remoteVideoMuted: false, localVideo: null, quality: "", seconds: 0, remoteLevel: 0, message: null,
     });
     const s = I.current;
@@ -441,15 +437,6 @@ export function CallProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggleSpeaker = useCallback(async () => {
-    const s = I.current;
-    const next = !s.speakerOn;
-    s.speakerOn = next;
-    s.audioEls.forEach((e) => { e.volume = speakerVolume(next); });
-    patch({ speakerOn: next });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const toggleCam = useCallback(async () => {
     const s = I.current;
     const room = s.room;
@@ -489,6 +476,6 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const dismiss = useCallback(() => { window.clearTimeout(I.current.timers.noAnswer); closeOverlay(); }, []);
 
-  const value: CallApi = { call, startCall, hangUp, toggleMic, toggleSpeaker, toggleCam, redial, dismiss, minimized, setMinimized };
+  const value: CallApi = { call, startCall, hangUp, toggleMic, toggleCam, redial, dismiss, minimized, setMinimized };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
