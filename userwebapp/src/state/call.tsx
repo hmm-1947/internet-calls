@@ -70,9 +70,12 @@ interface Internal {
   speakerOn: boolean;
 }
 
+const QUIET_VOLUME = 0.25;
+const speakerVolume = (on: boolean) => (on ? 1 : QUIET_VOLUME);
+
 const fresh = (): Internal => ({
   callId: null, phase: "idle", acceptHandled: false, ending: false, room: null, localTracks: [], tone: null,
-  audioEls: [], timers: {}, durationStart: null, video: false, party: null, micOn: true, speakerOn: true,
+  audioEls: [], timers: {}, durationStart: null, video: false, party: null, micOn: true, speakerOn: false,
 });
 
 export function CallProvider({ children }: { children: ReactNode }) {
@@ -215,6 +218,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const attachAudio = (track: RemoteTrack) => {
       const el = track.attach() as HTMLMediaElement;
       el.style.display = "none";
+      el.volume = speakerVolume(s.speakerOn);
       document.body.appendChild(el);
       s.audioEls.push(el);
     };
@@ -350,7 +354,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     I.current = { ...fresh(), phase: "starting", video, party };
     setMinimized(false);
     setCall({
-      callId: null, party, video, phase: "starting", micOn: true, speakerOn: true, camOn: video, reconnecting: false, remoteJoined: false,
+      callId: null, party, video, phase: "starting", micOn: true, speakerOn: false, camOn: video, reconnecting: false, remoteJoined: false,
       remoteVideo: null, remoteVideoMuted: false, localVideo: null, quality: "", seconds: 0, remoteLevel: 0, message: null,
     });
     const s = I.current;
@@ -439,22 +443,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const toggleSpeaker = useCallback(async () => {
     const s = I.current;
-    const room = s.room;
     const next = !s.speakerOn;
-    const unsupported = () => toast("This browser cannot switch the audio output. Use your phone volume or Bluetooth controls.", "info");
-    if (!room || typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices || !("setSinkId" in HTMLMediaElement.prototype)) { unsupported(); return; }
-    try {
-      const outs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
-      const earpiece = outs.find((d) => /earpiece|receiver|handset/i.test(d.label));
-      const speaker = outs.find((d) => /speaker/i.test(d.label)) ?? outs.find((d) => d.deviceId === "default") ?? outs[0];
-      const target = next ? speaker : earpiece;
-      if (!target) { unsupported(); return; }
-      await room.switchActiveDevice("audiooutput", target.deviceId);
-      s.speakerOn = next;
-      patch({ speakerOn: next });
-    } catch {
-      unsupported();
-    }
+    s.speakerOn = next;
+    s.audioEls.forEach((e) => { e.volume = speakerVolume(next); });
+    patch({ speakerOn: next });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
