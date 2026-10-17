@@ -20,6 +20,23 @@ export function Shell() {
   const loc = useLocation();
   const inThread = /^\/chats\/\d+/.test(loc.pathname);
 
+  const tab = (it: (typeof items)[number]) => (
+    <NavLink
+      key={it.to}
+      to={it.to}
+      end={it.end}
+      className={({ isActive }) =>
+        cx("relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold", isActive ? "text-brand-soft" : "text-white/50")
+      }
+    >
+      <it.icon size={22} />
+      {it.label}
+      {it.to === "/chats" && unreadTotal > 0 && (
+        <span className="absolute right-[28%] top-1.5 rounded-full bg-brand-soft px-1.5 text-[10px] font-bold text-white">{unreadTotal > 99 ? "99+" : unreadTotal}</span>
+      )}
+    </NavLink>
+  );
+
   return (
     <div className="flex h-full bg-bg">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-[#0e0e0e] p-4 md:flex">
@@ -81,23 +98,18 @@ export function Shell() {
           <Outlet />
         </main>
         {!inThread && (
-          <nav className="grid grid-cols-4 border-t border-line bg-[#0e0e0e] safe-b md:hidden">
-            {items.map((it) => (
-              <NavLink
-                key={it.to}
-                to={it.to}
-                end={it.end}
-                className={({ isActive }) =>
-                  cx("relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold", isActive ? "text-brand-soft" : "text-white/50")
-                }
-              >
-                <it.icon size={22} />
-                {it.label}
-                {it.to === "/chats" && unreadTotal > 0 && (
-                  <span className="absolute right-[28%] top-1.5 rounded-full bg-brand-soft px-1.5 text-[10px] font-bold text-white">{unreadTotal > 99 ? "99+" : unreadTotal}</span>
-                )}
-              </NavLink>
-            ))}
+          <nav className="relative z-20 grid grid-cols-5 border-t border-line bg-[#0e0e0e] safe-b md:hidden">
+            {items.slice(0, 2).map(tab)}
+            <div />
+            {items.slice(2).map(tab)}
+            <button
+              onClick={() => nav("/upgrade")}
+              aria-label="Buy coins"
+              className="absolute left-1/2 top-0 h-[72px] w-[72px] -translate-x-1/2 -translate-y-[55%] overflow-hidden rounded-full active:scale-95"
+              style={{ boxShadow: "0 0 16px 2px rgba(229,57,80,0.5)" }}
+            >
+              <img src={`${import.meta.env.BASE_URL}rupee-256.png`} alt="" className="h-full w-full object-cover" />
+            </button>
           </nav>
         )}
       </div>
