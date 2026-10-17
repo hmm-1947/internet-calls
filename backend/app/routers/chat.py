@@ -568,6 +568,8 @@ async def listener_get_messages(user_id: int, before_id: int | None = None, limi
         ChatMessage.sender_type == "user",
         ChatMessage.is_read == False,
     ).all()
+    if not current_listener.is_online:
+        unread = []
     now = datetime.now(timezone.utc)
     for m in unread:
         m.is_read = True
@@ -698,6 +700,8 @@ async def listener_mark_read(user_id: int, db: Session = Depends(get_db), curren
         ChatMessage.sender_type == "user",
         ChatMessage.is_read == False,
     ).all()
+    if not current_listener.is_online:
+        unread = []
     now = datetime.now(timezone.utc)
     for m in unread:
         m.is_read = True

@@ -10,7 +10,7 @@ import { cx, isLive } from "../lib/util";
 export function useCallRules(l: Pick<Listener, "is_online" | "is_in_call" | "video_call_enabled"> & { presence_online?: boolean }) {
   const { me } = useApp();
   const { call } = useCall();
-  const voice = !l.is_in_call && !call;
+  const voice = l.is_online && !l.is_in_call && !call;
   const videoAllowed = !!me && me.video_call_enabled && !me.video_call_disabled_by_admin && l.video_call_enabled;
   return { voice, video: voice && videoAllowed, videoAllowed };
 }
