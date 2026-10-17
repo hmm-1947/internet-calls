@@ -61,3 +61,5 @@ export const IconEye = mk(<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12
 export const IconEyeOff = mk(<path d="M17.9 17.9A10.9 10.9 0 0 1 12 20C5 20 1 12 1 12a18.5 18.5 0 0 1 5.1-5.9M9.9 4.2A10.7 10.7 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M1 1l22 22" />);
 export const IconMore = mk(<><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></>, true);
 export const IconWhatsapp = mk(<path d="M3 21l1.7-5A9 9 0 1 1 8 19.3z" />);
+export const IconSpeaker = mk(<><path d="M11 5L6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></>);
+export const IconSpeakerOff = mk(<><path d="M11 5L6 9H3v6h3l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></>);

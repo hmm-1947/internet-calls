@@ -84,7 +84,7 @@ export default function Home() {
       ) : shown.length === 0 ? (
         <Empty title={q || onlineOnly ? "No listeners match" : "No listeners yet"} text={q || onlineOnly ? "Try a different search or filter." : "Please check back in a little while."} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {shown.map((l) => <ListenerCard key={l.id} l={l} />)}
         </div>
       )}

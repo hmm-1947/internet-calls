@@ -4,7 +4,7 @@ import { useCall } from "../state/call";
 import { formatDuration, cx } from "../lib/util";
 import { Avatar, BadgePill, Spinner } from "./ui";
 import { GiftSheet } from "./GiftSheet";
-import { IconGift, IconMic, IconMicOff, IconMinimize, IconPhoneEnd, IconVideo, IconVideoOff } from "./icons";
+import { IconGift, IconMic, IconMicOff, IconMinimize, IconPhoneEnd, IconSpeaker, IconSpeakerOff, IconVideo, IconVideoOff } from "./icons";
 
 function VideoView({ track, mirror, className }: { track: Track | null; mirror?: boolean; className?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -37,7 +37,7 @@ function RoundBtn({ onClick, active = true, danger, label, children, disabled }:
 }
 
 export function CallOverlay() {
-  const { call, hangUp, toggleMic, toggleCam, redial, dismiss, minimized, setMinimized } = useCall();
+  const { call, hangUp, toggleMic, toggleSpeaker, toggleCam, redial, dismiss, minimized, setMinimized } = useCall();
   const [giftOpen, setGiftOpen] = useState(false);
   if (!call) return null;
 
@@ -116,7 +116,7 @@ export function CallOverlay() {
         </div>
       )}
 
-      <div className="relative z-10 flex items-end justify-center gap-5 px-4 pb-8 pt-4">
+      <div className="relative z-10 flex items-end justify-center gap-3 px-2 pb-8 pt-4 sm:gap-5 sm:px-4">
         {call.phase === "noAnswer" ? (
           <>
             <RoundBtn onClick={dismiss} label="Close" active><IconPhoneEnd size={22} /></RoundBtn>
@@ -132,6 +132,9 @@ export function CallOverlay() {
                 {call.camOn ? <IconVideo size={22} /> : <IconVideoOff size={22} />}
               </RoundBtn>
             )}
+            <RoundBtn onClick={() => void toggleSpeaker()} label="Speaker" active={call.speakerOn}>
+              {call.speakerOn ? <IconSpeaker size={22} /> : <IconSpeakerOff size={22} />}
+            </RoundBtn>
             <RoundBtn onClick={() => setGiftOpen(true)} label="Gift" disabled={!connected}><IconGift size={22} /></RoundBtn>
             <RoundBtn onClick={() => void hangUp()} label="End" danger><IconPhoneEnd size={22} /></RoundBtn>
           </>

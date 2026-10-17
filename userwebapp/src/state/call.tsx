@@ -20,6 +20,7 @@ export interface CallState {
   video: boolean;
   phase: CallPhase;
   micOn: boolean;
+  speakerOn: boolean;
   camOn: boolean;
   reconnecting: boolean;
   remoteJoined: boolean;
@@ -37,6 +38,7 @@ interface CallApi {
   startCall: (l: Listener | (CallParty & Partial<Listener>), video: boolean) => Promise<void>;
   hangUp: () => Promise<void>;
   toggleMic: () => Promise<void>;
+  toggleSpeaker: () => Promise<void>;
   toggleCam: () => Promise<void>;
   redial: () => Promise<void>;
   dismiss: () => void;
@@ -65,11 +67,12 @@ interface Internal {
   video: boolean;
   party: CallParty | null;
   micOn: boolean;
+  speakerOn: boolean;
 }
 
 const fresh = (): Internal => ({
   callId: null, phase: "idle", acceptHandled: false, ending: false, room: null, localTracks: [], tone: null,
-  audioEls: [], timers: {}, durationStart: null, video: false, party: null, micOn: true,
+  audioEls: [], timers: {}, durationStart: null, video: false, party: null, micOn: true, speakerOn: true,
 });
 
 export function CallProvider({ children }: { children: ReactNode }) {
@@ -347,7 +350,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     I.current = { ...fresh(), phase: "starting", video, party };
     setMinimized(false);
     setCall({
-      callId: null, party, video, phase: "starting", micOn: true, camOn: video, reconnecting: false, remoteJoined: false,
+      callId: null, party, video, phase: "starting", micOn: true, speakerOn: true, camOn: video, reconnecting: false, remoteJoined: false,
       remoteVideo: null, remoteVideoMuted: false, localVideo: null, quality: "", seconds: 0, remoteLevel: 0, message: null,
     });
     const s = I.current;
@@ -434,6 +437,27 @@ export function CallProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const toggleSpeaker = useCallback(async () => {
+    const s = I.current;
+    const room = s.room;
+    const next = !s.speakerOn;
+    const unsupported = () => toast("This browser cannot switch the audio output. Use your phone volume or Bluetooth controls.", "info");
+    if (!room || typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices || !("setSinkId" in HTMLMediaElement.prototype)) { unsupported(); return; }
+    try {
+      const outs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
+      const earpiece = outs.find((d) => /earpiece|receiver|handset/i.test(d.label));
+      const speaker = outs.find((d) => /speaker/i.test(d.label)) ?? outs.find((d) => d.deviceId === "default") ?? outs[0];
+      const target = next ? speaker : earpiece;
+      if (!target) { unsupported(); return; }
+      await room.switchActiveDevice("audiooutput", target.deviceId);
+      s.speakerOn = next;
+      patch({ speakerOn: next });
+    } catch {
+      unsupported();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleCam = useCallback(async () => {
     const s = I.current;
     const room = s.room;
@@ -473,6 +497,6 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const dismiss = useCallback(() => { window.clearTimeout(I.current.timers.noAnswer); closeOverlay(); }, []);
 
-  const value: CallApi = { call, startCall, hangUp, toggleMic, toggleCam, redial, dismiss, minimized, setMinimized };
+  const value: CallApi = { call, startCall, hangUp, toggleMic, toggleSpeaker, toggleCam, redial, dismiss, minimized, setMinimized };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -2,9 +2,8 @@ import { useNavigate } from "react-router-dom";
 import type { Listener } from "../lib/types";
 import { useApp } from "../state/app";
 import { useCall } from "../state/call";
-import { mediaUrl } from "../lib/config";
-import { BadgePill, PresenceDot, Stars } from "./ui";
-import { IconChat, IconPhone, IconUser, IconVideo } from "./icons";
+import { Avatar, BadgePill, PresenceDot } from "./ui";
+import { IconPhone, IconVideo } from "./icons";
 import { cx, isLive } from "../lib/util";
 
 export function useCallRules(l: Pick<Listener, "is_online" | "is_in_call" | "video_call_enabled"> & { presence_online?: boolean }) {
@@ -19,61 +18,57 @@ export function ListenerCard({ l }: { l: Listener }) {
   const nav = useNavigate();
   const { startCall } = useCall();
   const rules = useCallRules(l);
-  const status = l.is_in_call ? "On a call" : isLive(l) ? "Online" : "Offline";
+  const live = isLive(l);
+  const status = l.is_in_call ? "On a call" : live ? "Online now" : "Offline";
+  const meta = [l.age ? `Age: ${l.age}` : null, l.occupation].filter(Boolean).join(" · ");
+  const circle = "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition";
 
   return (
     <div
       onClick={() => nav(`/listener/${l.id}`)}
-      className="card group flex cursor-pointer flex-col overflow-hidden transition hover:border-brand-soft/40 hover:bg-[#1e1e1e]"
+      className="card flex cursor-pointer items-center gap-4 p-3.5 transition hover:border-brand-soft/40 hover:bg-[#1e1e1e]"
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-card2">
-        {l.photo_url ? (
-          <img src={mediaUrl(l.photo_url)} alt={l.name} loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-white/20"><IconUser size={56} /></div>
-        )}
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 to-transparent" />
-        <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold backdrop-blur">
-          <PresenceDot online={isLive(l)} busy={l.is_in_call} className="!h-2 !w-2 !border-0" />
-          {status}
-        </div>
-        <div className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between">
-          <div className="min-w-0">
-            <div className="truncate text-base font-bold drop-shadow">{l.name}{l.age ? `, ${l.age}` : ""}</div>
-            {l.occupation && <div className="truncate text-xs text-white/70">{l.occupation}</div>}
-          </div>
-          <Stars value={l.avg_rating} count={l.rating_count} />
-        </div>
+      <div className="relative shrink-0 pt-3">
+        <Avatar src={l.photo_url} name={l.name} size={88} />
+        {l.badge_tag && <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2"><BadgePill tag={l.badge_tag} /></div>}
+        <PresenceDot online={live} busy={l.is_in_call} className="absolute bottom-1 right-1 !h-3.5 !w-3.5" />
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-3.5">
-        <div className="flex min-h-[22px] flex-wrap items-center gap-1.5">
-          <BadgePill tag={l.badge_tag} />
-          {l.tags.slice(0, 3).map((t) => (
-            <span key={t} className="rounded-full bg-white/8 px-2 py-0.5 text-[11px] text-white/70" style={{ background: "rgba(255,255,255,0.07)" }}>{t}</span>
-          ))}
-        </div>
-        <div className="mt-auto flex gap-2" onClick={(e) => e.stopPropagation()}>
-          <button
-            disabled={!rules.voice}
-            onClick={() => void startCall(l, false)}
-            className={cx("btn flex-1 !py-2", rules.voice ? "bg-online/90 text-white hover:bg-online" : "bg-white/5 text-white/40")}
-          >
-            <IconPhone size={16} /> Call
-          </button>
-          {l.video_call_enabled && (
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-lg font-bold leading-tight">{l.name}</div>
+            {meta && <div className="mt-0.5 truncate text-sm text-white/70">{meta}</div>}
+            <div className={cx("mt-1 text-sm font-semibold", l.is_in_call ? "text-gold" : live ? "text-online" : "text-white/80")}>{status}</div>
+          </div>
+          <div className="flex shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
+            {l.video_call_enabled && (
+              <button
+                disabled={!rules.video}
+                onClick={() => void startCall(l, true)}
+                className={cx(circle, rules.video ? "bg-brand-soft text-white hover:bg-brand" : "bg-white/5 text-white/30")}
+                aria-label="Video call"
+                title={!rules.videoAllowed ? "Video calls are turned off" : undefined}
+              >
+                <IconVideo size={18} />
+              </button>
+            )}
             <button
-              disabled={!rules.video}
-              onClick={() => void startCall(l, true)}
-              className={cx("btn flex-1 !py-2", rules.video ? "btn-primary" : "bg-white/5 text-white/40")}
-              title={!rules.videoAllowed ? "Video calls are turned off" : undefined}
+              disabled={!rules.voice}
+              onClick={() => void startCall(l, false)}
+              className={cx(circle, rules.voice ? "bg-brand-soft text-white hover:bg-brand" : "bg-white/5 text-white/30")}
+              aria-label="Voice call"
             >
-              <IconVideo size={16} /> Video
+              <IconPhone size={18} />
             </button>
-          )}
-          <button onClick={() => nav(`/chats/${l.id}`)} className="btn btn-ghost !px-3 !py-2" aria-label="Chat">
-            <IconChat size={16} />
-          </button>
+          </div>
         </div>
+        {l.tags.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {l.tags.slice(0, 3).map((t) => (
+              <span key={t} className="rounded-full px-3 py-1 text-xs text-white/80" style={{ background: "rgba(225,29,72,0.18)" }}>{t}</span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
