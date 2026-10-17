@@ -84,6 +84,12 @@ app.include_router(media.router)
 def health():
     return {"status": "ok"}
 
+_WEBAPP_DIST = os.environ.get("USER_WEBAPP_DIST") or os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "userwebapp", "dist")
+)
+if os.path.isdir(_WEBAPP_DIST):
+    app.mount("/app", StaticFiles(directory=_WEBAPP_DIST, html=True), name="userwebapp")
+
 app.mount("/", StaticFiles(directory="landing", html=True), name="landing")
 
     

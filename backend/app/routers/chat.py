@@ -6,15 +6,18 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import os
+import shutil
+import subprocess
+import tempfile
 import uuid
 from starlette.websockets import WebSocketState
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user, get_current_listener, get_current_participant
-from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call, ListenerBadgeTag
+from app.models.models import ChatMessage, User, Listener, Session as SessionModel, ChatSettings, GiftTransaction, Gift, Call, ListenerBadgeTag, WebPushToken
 from app.schemas.schemas import ChatMessageSend, ListenerChatMessageSend, ChatMessageOut, ChatThreadOut, TypingEvent, MessageEdit, ChatSettingsUpdate
-from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary, send_async
+from app.utils.fcm import send_chat_message, send_delivery_status, send_chat_summary, send_async, send_web_chat_push
 from app.utils.coins import chat_message_coin_cost, deduct_chat_coins, voice_message_coin_cost, deduct_voice_message_coins
 from app.utils.media_urls import sign_media_url
 from app.core.ws_manager import manager
@@ -73,6 +76,29 @@ def _write_voice_file_sync(filepath: str, data: bytes) -> None:
         f.write(data)
 
 
+def _webm_to_m4a_sync(data: bytes) -> bytes | None:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return None
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "in.webm")
+            dst = os.path.join(tmp, "out.m4a")
+            with open(src, "wb") as f:
+                f.write(data)
+            proc = subprocess.run(
+                [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", src,
+                 "-vn", "-c:a", "aac", "-b:a", "64k", dst],
+                capture_output=True, timeout=30,
+            )
+            if proc.returncode != 0 or not os.path.exists(dst):
+                return None
+            with open(dst, "rb") as f:
+                return f.read()
+    except Exception:
+        return None
+
+
 async def _save_voice_upload(file: UploadFile) -> str:
     """Validates, reads (with a size cap), and writes a voice-note upload off
     the event loop. Returns the filename (not the full path) to store."""
@@ -82,6 +108,11 @@ async def _save_voice_upload(file: UploadFile) -> str:
         raise HTTPException(status_code=400, detail="Empty voice note")
     if len(data) > MAX_VOICE_NOTE_BYTES:
         raise HTTPException(status_code=413, detail="Voice note exceeds maximum allowed size")
+    if ext == ".webm":
+        converted = await run_in_threadpool(_webm_to_m4a_sync, data)
+        if converted:
+            data = converted
+            ext = ".m4a"
     filename = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(VOICE_NOTES_DIR, filename)
     await run_in_threadpool(_write_voice_file_sync, filepath, data)
@@ -212,6 +243,18 @@ def _is_muted(db, owner_type, owner_id, other_id) -> bool:
     are suppressed for them."""
     settings = _get_settings(db, owner_type, owner_id, other_id)
     return bool(settings and settings.is_muted)
+
+
+def _web_push(db, user_id, sender_name, body, listener_id, message_id, photo_url):
+    try:
+        if manager.is_user_online(user_id) or _is_muted(db, "user", user_id, listener_id):
+            return
+        tokens = [t.token for t in db.query(WebPushToken).filter(WebPushToken.user_id == user_id).all()]
+        if tokens:
+            send_async(send_web_chat_push, tokens, sender_name, body, listener_id, message_id, photo_url)
+    except Exception as e:
+        print(f"[WEBPUSH ERROR] user {user_id}: {e}")
+
 
 def _msg_dict(msg):
     return {
@@ -394,6 +437,7 @@ async def listener_send_message(payload: ListenerChatMessageSend, db: Session = 
                 send_async(send_chat_summary, user.fcm_token, current_listener.name, payload_msgs, user.id, current_listener.id, "listener", current_listener.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of chat message: {e}")
+    _web_push(db, user.id, current_listener.name, payload.message, current_listener.id, msg.id, current_listener.photo_url)
     return msg
 
 @router.post("/user/send-voice", response_model=ChatMessageOut)
@@ -472,6 +516,7 @@ async def listener_send_voice(
             send_async(send_chat_message, user.fcm_token, current_listener.name, "🎤 Voice message", user.id, current_listener.id, "listener", msg.id, msg.client_id, current_listener.photo_url)
         except Exception as e:
             print(f"[FCM ERROR] Failed to notify user {user.id} of voice message: {e}")
+    _web_push(db, user.id, current_listener.name, "🎤 Voice message", current_listener.id, msg.id, current_listener.photo_url)
     return msg
 
 @router.get("/user/{listener_id}/messages", response_model=list[ChatMessageOut])
@@ -896,7 +941,7 @@ async def user_chat_ws(websocket: WebSocket, token: str = Query(...)):
         else:
             await websocket.close(code=close_code)
         return
-    await manager.connect_user(user_id, websocket)
+    await manager.connect_user(user_id, websocket, token)
     logger.info(f"WebSocket user={user_id} connected -> online")
     await manager.broadcast_to_admins({"type": "user_status", "id": user_id, "is_online": True})
     await run_in_threadpool(_set_user_online_flag, user_id, True)

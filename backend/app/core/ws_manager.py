@@ -20,6 +20,7 @@ async def _send_with_timeout(ws: WebSocket, data: dict) -> bool:
 class ConnectionManager:
     def __init__(self):
         self.user_connections: Dict[int, WebSocket] = {}
+        self.user_tokens: Dict[int, str] = {}
         self.listener_connections: Dict[int, WebSocket] = {}
         self.admin_connections: list = []
         self._lock = asyncio.Lock()
@@ -43,11 +44,13 @@ class ConnectionManager:
                 self.disconnect_admin(ws)
 
 
-    async def connect_user(self, user_id: int, websocket: WebSocket):
+    async def connect_user(self, user_id: int, websocket: WebSocket, token: str = None):
         await websocket.accept()
         async with self._lock:
             old = self.user_connections.get(user_id)
             self.user_connections[user_id] = websocket
+            if token:
+                self.user_tokens[user_id] = token
         if old is not None and old is not websocket:
             try:
                 await old.close()
@@ -69,6 +72,7 @@ class ConnectionManager:
         async with self._lock:
             if websocket is None or self.user_connections.get(user_id) is websocket:
                 self.user_connections.pop(user_id, None)
+                self.user_tokens.pop(user_id, None)
 
     async def disconnect_listener(self, listener_id: int, websocket: WebSocket = None):
         async with self._lock:

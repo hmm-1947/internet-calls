@@ -327,3 +327,38 @@ def send_delivery_status(fcm_token: str, message_ids: list[int], status: str, us
         ttl=86400,
     )
 
+
+
+def send_web_chat_push(tokens, title, body, listener_id, message_id, photo_url=None):
+    from app.core.database import SessionLocal
+    from app.models.models import WebPushToken
+
+    stale = []
+    for token in tokens:
+        message = messaging.Message(
+            data={
+                "type": "chat_message",
+                "title": title,
+                "body": body,
+                "listener_id": str(listener_id),
+                "message_id": str(message_id),
+                "icon": photo_url or "",
+            },
+            token=token,
+            webpush=messaging.WebpushConfig(headers={"Urgency": "high", "TTL": "86400"}),
+        )
+        try:
+            messaging.send(message)
+            print(f"[FCM] Sent web chat push -> {token[:20]}...")
+        except Exception as e:
+            if isinstance(e, messaging.UnregisteredError) or is_invalid_token_error(e):
+                stale.append(token)
+            else:
+                print(f"[FCM ERROR] web push failed: {e}")
+    if stale:
+        db = SessionLocal()
+        try:
+            db.query(WebPushToken).filter(WebPushToken.token.in_(stale)).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()

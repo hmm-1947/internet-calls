@@ -92,9 +92,17 @@ class Session(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     listener_id = Column(Integer, ForeignKey("listeners.id"), nullable=True, index=True)
     admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    platform = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
+class WebPushToken(Base):
+    __tablename__ = "web_push_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(String, unique=True, index=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 class AdminUser(Base):
     __tablename__ = "admin_users"
 

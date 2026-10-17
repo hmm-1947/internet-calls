@@ -3,7 +3,8 @@ import os
 import secrets
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
+from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Header
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.models.models import ChatMessage
@@ -39,8 +40,8 @@ from app.schemas.schemas import (
     validate_password_strength,
 )
 
-from app.core.database import get_db
-from app.models.models import AdminNotification, PendingSignup, User, Session as SessionModel, ReservedUsername
+from app.core.database import get_db, SessionLocal
+from app.models.models import AdminNotification, PendingSignup, User, Session as SessionModel, ReservedUsername, WebPushToken
 from app.routers.notifications import create_admin_notification
 from app.utils.sms_otp import generate_otp_code as generate_sms_otp_code, send_otp_sms
 from app.utils.phone import normalize_indian_phone
@@ -55,6 +56,34 @@ import app.utils.fcm  # noqa: F401  ensures the default Firebase app is initiali
 
 
 router = APIRouter(prefix="/user", tags=["user-auth"])
+
+
+def _start_user_session(db: Session, user: User, token: str, x_client: Optional[str]) -> bool:
+    is_web = (x_client or "").strip().lower() == "web"
+    stale = db.query(SessionModel).filter(SessionModel.user_id == user.id)
+    if not is_web:
+        stale = stale.filter(SessionModel.platform == "web")
+    kicked = stale.delete(synchronize_session=False) > 0
+    db.query(WebPushToken).filter(WebPushToken.user_id == user.id).delete(synchronize_session=False)
+    db.add(SessionModel(
+        token=token,
+        user_id=user.id,
+        platform="web" if is_web else None,
+        expires_at=session_expiry(),
+    ))
+    return kicked
+
+async def _push_force_logout(user_id: int) -> None:
+    token = manager.user_tokens.get(user_id)
+    if token:
+        db = SessionLocal()
+        try:
+            alive = db.query(SessionModel.id).filter(SessionModel.token == token).first() is not None
+        finally:
+            db.close()
+        if alive:
+            return
+    await manager.send_to_user(user_id, {"type": "force_logout"})
 
 @router.get("/session/check")
 def session_check(current_user: User = Depends(get_current_user)):
@@ -437,7 +466,7 @@ def register_verify_phone(payload: UserRegisterVerifyPhone, db: Session = Depend
     response_model=AuthResponse,
     dependencies=[Depends(rate_limit("register_complete", limit=10, window_seconds=300))],
 )
-def register_complete(payload: UserRegisterComplete, db: Session = Depends(get_db)):
+def register_complete(payload: UserRegisterComplete, background_tasks: BackgroundTasks, x_client: Optional[str] = Header(None), db: Session = Depends(get_db)):
     """Step 3: create the account from a verified sign-up and log the user in.
 
     The profile photo is optional and is uploaded separately through
@@ -492,9 +521,11 @@ def register_complete(payload: UserRegisterComplete, db: Session = Depends(get_d
 
 
     token = generate_session_token()
-    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
+    kicked = _start_user_session(db, user, token, x_client)
     record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
+    if kicked:
+        background_tasks.add_task(_push_force_logout, user.id)
     db.refresh(user)
     return AuthResponse(token=token, id=user.id, name=user.name)
 
@@ -504,7 +535,7 @@ def register_complete(payload: UserRegisterComplete, db: Session = Depends(get_d
     response_model=AuthResponse,
     dependencies=[Depends(rate_limit("login_initiate", limit=10, window_seconds=60))],
 )
-def login_initiate(payload: UserLoginInitiate, db: Session = Depends(get_db)):
+def login_initiate(payload: UserLoginInitiate, background_tasks: BackgroundTasks, x_client: Optional[str] = Header(None), db: Session = Depends(get_db)):
     """Login: check the identifier/password and start a session immediately.
 
     Password login is phone-only. Google accounts come in through
@@ -528,15 +559,17 @@ def login_initiate(payload: UserLoginInitiate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = generate_session_token()
-    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
+    kicked = _start_user_session(db, user, token, x_client)
     record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
+    if kicked:
+        background_tasks.add_task(_push_force_logout, user.id)
     db.refresh(user)
     return AuthResponse(token=token, id=user.id, name=user.name)
 
 
 @router.post("/login/verify", response_model=AuthResponse)
-def login_verify(payload: UserLoginVerify, db: Session = Depends(get_db)):
+def login_verify(payload: UserLoginVerify, background_tasks: BackgroundTasks, x_client: Optional[str] = Header(None), db: Session = Depends(get_db)):
     user = _find_user_by_phone(db, payload.phone)
     if not user or not user.password_hash:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -560,9 +593,11 @@ def login_verify(payload: UserLoginVerify, db: Session = Depends(get_db)):
     user.reset_otp_attempts = 0
 
     token = generate_session_token()
-    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
+    kicked = _start_user_session(db, user, token, x_client)
     record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
+    if kicked:
+        background_tasks.add_task(_push_force_logout, user.id)
     return AuthResponse(token=token, id=user.id, name=user.name)
 
 
@@ -571,7 +606,7 @@ def login_verify(payload: UserLoginVerify, db: Session = Depends(get_db)):
     response_model=GoogleAuthResponse,
     dependencies=[Depends(rate_limit("auth_google", limit=20, window_seconds=300))],
 )
-def auth_google(payload: GoogleSignIn, db: Session = Depends(get_db)):
+def auth_google(payload: GoogleSignIn, background_tasks: BackgroundTasks, x_client: Optional[str] = Header(None), db: Session = Depends(get_db)):
     """Signs in with a Google ID token, creating the account on first use.
 
     A returning `google_uid` logs straight in. A first-time signer whose
@@ -618,9 +653,11 @@ def auth_google(payload: GoogleSignIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="This account has been deactivated")
 
     token = generate_session_token()
-    db.add(SessionModel(token=token, user_id=user.id, expires_at=session_expiry()))
+    kicked = _start_user_session(db, user, token, x_client)
     record_audit_event(db, "user", user.id, user.name, "login")
     db.commit()
+    if kicked:
+        background_tasks.add_task(_push_force_logout, user.id)
     db.refresh(user)
     return GoogleAuthResponse(
         token=token,
@@ -1217,3 +1254,28 @@ async def update_status(payload: ListenerStatusUpdate, db: Session = Depends(get
     event_type = "user_online" if payload.is_online else "user_offline"
     await manager.broadcast_to_all_listeners({"type": event_type, "user_id": current_user.id})
     return {"status": "updated"}
+
+
+class WebPushTokenPayload(BaseModel):
+    token: str
+
+
+@router.post("/web-push-token")
+def register_web_push_token(payload: WebPushTokenPayload, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    token = (payload.token or "").strip()
+    if not token or len(token) > 4096:
+        raise HTTPException(status_code=400, detail="token is required")
+    existing = db.query(WebPushToken).filter(WebPushToken.token == token).first()
+    if existing:
+        existing.user_id = current_user.id
+    else:
+        db.add(WebPushToken(user_id=current_user.id, token=token))
+    db.commit()
+    return {"status": "ok"}
+
+
+@router.delete("/web-push-token")
+def delete_web_push_token(payload: WebPushTokenPayload, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db.query(WebPushToken).filter(WebPushToken.token == payload.token, WebPushToken.user_id == current_user.id).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "ok"}
