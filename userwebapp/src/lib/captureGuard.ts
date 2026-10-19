@@ -1,5 +1,4 @@
 let holds = 0;
-let timer: number | undefined;
 
 function apply() {
   const on = holds > 0;
@@ -88,7 +87,4 @@ export function startCaptureGuard() {
       return stream;
     };
   }
-
-  const mq = window.matchMedia?.("(display-mode: picture-in-picture)");
-  void mq;
 }
