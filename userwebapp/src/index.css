@@ -59,3 +59,8 @@ body {
 .legal a { color: #E53950; text-decoration: underline; }
 .legal strong { color: #fff; }
 .legal img { max-width: 100%; height: auto; }
+
+html[data-shield="1"] body { background: #000 !important; }
+html[data-shield="1"] #root { visibility: hidden !important; }
+html[data-shield="1"] video, html[data-shield="1"] canvas, html[data-shield="1"] img { visibility: hidden !important; }
+@media print { #root { display: none !important; } body { background: #000 !important; } }
