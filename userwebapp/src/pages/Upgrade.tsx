@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, friendly } from "../lib/api";
 import { mediaUrl } from "../lib/config";
@@ -7,14 +7,25 @@ import { listTimeLabel, cx } from "../lib/util";
 import type { Plan, Purchase } from "../lib/types";
 import { useApp } from "../state/app";
 import { Empty, Modal, PageHeader, PageLoader, Spinner } from "../components/ui";
-import { IconCoin } from "../components/icons";
+import { IconCoin, IconStar } from "../components/icons";
 
-function PlanIcon({ icon }: { icon: string }) {
+const RUPEE = "\u20B9";
+
+function PlanIcon({ plan }: { plan: Plan }) {
   const [failed, setFailed] = useState(false);
-  if (icon && (icon.startsWith("/") || icon.startsWith("http")) && !failed) {
-    return <img src={mediaUrl(icon)} alt="" className="h-12 w-12 rounded-xl object-cover" onError={() => setFailed(true)} />;
-  }
-  return <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/15 text-gold"><IconCoin size={28} /></div>;
+  const icon = plan.icon || "";
+  const hasImg = (icon.startsWith("/") || icon.startsWith("http")) && !failed;
+  return (
+    <div className={cx("flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full", plan.is_featured ? "bg-brand/15 text-brand" : "bg-[#13212F] text-gold")}>
+      {hasImg ? (
+        <img src={mediaUrl(icon)} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : icon === "star" ? (
+        <IconStar size={22} />
+      ) : (
+        <IconCoin size={22} />
+      )}
+    </div>
+  );
 }
 
 export default function Upgrade() {
@@ -23,14 +34,21 @@ export default function Upgrade() {
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
-  const [paying, setPaying] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [paying, setPaying] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<Purchase[] | null>(null);
   const [success, setSuccess] = useState<{ coins: number } | null>(null);
 
   const load = () => {
     setError(null);
-    api.plans().then(setPlans).catch((e) => setError(friendly(e)));
+    api
+      .plans()
+      .then((list) => {
+        setPlans(list);
+        setSelected((cur) => (cur !== null && list.some((p) => p.id === cur) ? cur : (list.find((p) => p.is_featured) ?? list[0])?.id ?? null));
+      })
+      .catch((e) => setError(friendly(e)));
   };
 
   useEffect(() => {
@@ -39,9 +57,10 @@ export default function Upgrade() {
     void refreshMe();
   }, []);
 
-  const buy = async (p: Plan) => {
-    if (paying !== null) return;
-    setPaying(p.id);
+  const buy = async () => {
+    const p = plans?.find((x) => x.id === selected);
+    if (!p || paying) return;
+    setPaying(true);
     try {
       const r = await payForPlan(p);
       if (r.status === "success") {
@@ -53,7 +72,7 @@ export default function Upgrade() {
     } catch (e) {
       toast(friendly(e), "error");
     } finally {
-      setPaying(null);
+      setPaying(false);
     }
   };
 
@@ -63,50 +82,83 @@ export default function Upgrade() {
     api.myPurchases().then(setHistory).catch((e) => { toast(friendly(e), "error"); setHistory([]); });
   };
 
+  const hasPlans = !!plans && plans.length > 0;
+
   return (
-    <div>
+    <div className="flex min-h-full flex-col">
       <PageHeader
         title="Buy coins"
         onBack={() => nav(-1)}
         right={<button onClick={openHistory} className="rounded-full px-3 py-1.5 text-sm font-semibold text-brand-soft hover:bg-white/10">History</button>}
       />
-      <div className="mx-auto w-full max-w-5xl px-4 pb-10 pt-5 md:px-8 md:pt-8">
-        <div className="mb-6 flex items-center justify-between rounded-2xl border border-gold/25 bg-gold/10 px-5 py-4">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-gold/80">Your balance</div>
-            <div className="mt-0.5 inline-flex items-center gap-2 text-3xl font-extrabold text-gold"><IconCoin size={28} />{me?.coins ?? "â€”"}</div>
-          </div>
-          <p className="hidden max-w-xs text-right text-sm text-white/60 sm:block">Coins are used for calls, chats and gifts.</p>
+      <div className="mx-auto w-full max-w-xl flex-1 px-5 pt-2">
+        <div className="relative flex min-h-[140px] items-center justify-center py-3">
+          <div className="pointer-events-none absolute h-24 w-24 rounded-full bg-brand/50 blur-3xl" />
+          {banner ? (
+            <img src={mediaUrl(banner)} alt="" className="relative max-h-[220px] max-w-[260px] rounded-2xl object-contain" />
+          ) : (
+            <IconStar size={72} className="relative text-gold" />
+          )}
         </div>
 
-        {banner && <img src={mediaUrl(banner)} alt="" className="mb-6 w-full rounded-2xl object-cover" />}
-
-        {error && !plans ? (
-          <Empty title="Could not load plans" text={error} action={<button className="btn btn-primary" onClick={load}>Try again</button>} />
-        ) : !plans ? (
-          <PageLoader />
-        ) : plans.length === 0 ? (
-          <Empty title="No plans available" text="Please check back soon." />
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {plans.map((p) => (
-              <div key={p.id} className={cx("card relative flex flex-col gap-4 p-5", p.is_featured && "!border-gold/60 shadow-[0_0_0_1px_rgba(255,201,74,0.25)]")}>
-                {p.is_featured && <span className="absolute right-4 top-4 rounded-full bg-gold px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-black">Best value</span>}
-                <PlanIcon icon={p.icon} />
-                <div>
-                  <div className="text-sm text-muted">{p.name}</div>
-                  <div className="mt-1 inline-flex items-center gap-2 text-2xl font-extrabold text-gold"><IconCoin size={22} />{p.coins}</div>
-                </div>
-                <button className="btn btn-primary mt-auto w-full" disabled={paying !== null} onClick={() => void buy(p)}>
-                  {paying === p.id ? <Spinner size={14} /> : null}
-                  Pay â‚¹{p.price}
-                </button>
-              </div>
-            ))}
+        <div className="mt-5 text-center">
+          <div className="text-xs font-semibold uppercase tracking-widest text-[#9C8484]">My balance</div>
+          <div className="mt-1.5 inline-flex items-center justify-center gap-2 text-2xl font-bold text-white">
+            <IconCoin size={22} className="text-gold" />
+            {me ? me.coins : "\u2014"} Coins
           </div>
-        )}
-        <p className="mt-6 text-center text-xs text-muted">Payments are processed securely by Razorpay.</p>
+        </div>
+
+        <div className="mt-5">
+          {error && !plans ? (
+            <Empty title="Could not load plans" text={error} action={<button className="btn btn-primary" onClick={load}>Try again</button>} />
+          ) : !plans ? (
+            <PageLoader />
+          ) : plans.length === 0 ? (
+            <Empty title="No plans currently available" text="Please check back later." />
+          ) : (
+            plans.map((p) => {
+              const sel = selected === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelected(p.id)}
+                  className={cx(
+                    "relative mb-3.5 flex w-full items-center gap-3.5 rounded-[14px] bg-[#1A1A1A]/80 p-4 text-left transition",
+                    sel ? "border-[1.6px] border-brand" : "border border-white/5"
+                  )}
+                >
+                  <PlanIcon plan={p} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-base font-semibold text-white">{p.name}</div>
+                    <div className="mt-0.5 text-xs text-[#9C8484]">{p.coins} Coins</div>
+                  </div>
+                  <div className={cx("text-[17px] font-bold", p.is_featured ? "text-brand" : "text-white")}>{RUPEE}{p.price}</div>
+                  {p.is_featured && (
+                    <span className="absolute -top-2 right-3 rounded-md bg-brand px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Best seller</span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+        <p className="mb-4 mt-2 text-center text-xs text-muted">Payments are processed securely by Razorpay.</p>
       </div>
+
+      {hasPlans && (
+        <div className="safe-b sticky bottom-0 z-10 bg-bg/95 px-5 pb-5 pt-3 backdrop-blur">
+          <div className="mx-auto w-full max-w-xl">
+            <button
+              className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-brand text-sm font-bold uppercase tracking-wider text-white transition hover:brightness-110 disabled:opacity-40"
+              disabled={selected === null || paying}
+              onClick={() => void buy()}
+            >
+              {paying ? <Spinner size={18} /> : "Purchase now"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Purchase history" sheet>
         {history === null ? (
@@ -119,7 +171,7 @@ export default function Upgrade() {
               <div key={h.id} className="flex items-center justify-between py-3">
                 <div>
                   <div className="text-sm font-semibold">{h.plan_name}</div>
-                  <div className="text-xs text-muted">{listTimeLabel(h.created_at)} Â· â‚¹{h.price_paid}</div>
+                  <div className="text-xs text-muted">{listTimeLabel(h.created_at)} {"\u00B7"} {RUPEE}{h.price_paid}</div>
                 </div>
                 <div className="text-right">
                   <div className="inline-flex items-center gap-1 text-sm font-bold text-gold"><IconCoin size={14} />{h.coins_purchased}</div>
