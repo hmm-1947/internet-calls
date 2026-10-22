@@ -414,8 +414,8 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
               <button onClick={() => void finishRecording(true)} className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-soft hover:bg-brand" aria-label="Send voice note"><IconSend size={20} /></button>
             </div>
           ) : (
-            <form onSubmit={submit} className="flex items-end gap-2">
-              <div className="flex-1">
+            <form onSubmit={submit}>
+              <div className="flex items-end gap-2">
                 <textarea
                   ref={taRef}
                   value={text}
@@ -424,23 +424,23 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
                   rows={1}
                   maxLength={MAX_CHAT_LENGTH}
                   placeholder="Type a message"
-                  className="input max-h-32 resize-none !rounded-2xl !py-3"
+                  className="input max-h-32 min-w-0 flex-1 resize-none !rounded-2xl !py-3"
                 />
-                {(text.length > MAX_CHAT_LENGTH * 0.7 || cost > 0) && (
-                  <div className="mt-1 flex justify-between px-1 text-[11px] text-muted">
-                    <span>{cost > 0 ? `${cost} coin${cost === 1 ? "" : "s"} per message` : ""}</span>
-                    <span>{text.length}/{MAX_CHAT_LENGTH}</span>
-                  </div>
+                {!text.trim() ? (
+                  <button type="button" onClick={() => void startRecording()} disabled={sendingVoice} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Record voice note">
+                    {sendingVoice ? <Spinner size={18} /> : <IconMic size={20} />}
+                  </button>
+                ) : (
+                  <button className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-soft hover:bg-brand" aria-label="Send">
+                    <IconSend size={20} />
+                  </button>
                 )}
               </div>
-              {!text.trim() ? (
-                <button type="button" onClick={() => void startRecording()} disabled={sendingVoice} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Record voice note">
-                  {sendingVoice ? <Spinner size={18} /> : <IconMic size={20} />}
-                </button>
-              ) : (
-                <button className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-soft hover:bg-brand" aria-label="Send">
-                  <IconSend size={20} />
-                </button>
+              {(text.length > MAX_CHAT_LENGTH * 0.7 || cost > 0) && (
+                <div className="mt-1 flex justify-between px-1 text-[11px] text-muted">
+                  <span>{cost > 0 ? `${cost} coin${cost === 1 ? "" : "s"} per message` : ""}</span>
+                  <span>{text.length}/{MAX_CHAT_LENGTH}</span>
+                </div>
               )}
             </form>
           )}

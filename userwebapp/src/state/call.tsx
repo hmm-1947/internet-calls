@@ -8,6 +8,8 @@ import { api, ApiError, friendly, InsufficientCoinsError } from "../lib/api";
 import { resolveLivekitUrl, RING_TIMEOUT_SECONDS } from "../lib/config";
 import { socket, type WsEvent } from "../lib/ws";
 import { useApp } from "./app";
+import { Confirm } from "../components/ui";
+
 import type { BadgeTag, Listener } from "../lib/types";
 
 export type CallPhase = "starting" | "ringing" | "connecting" | "connected" | "noAnswer";
@@ -79,6 +81,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const nav = useNavigate();
   const [call, setCall] = useState<CallState | null>(null);
   const [minimized, setMinimized] = useState(false);
+  const [reloadAsk, setReloadAsk] = useState(false);
+
   const I = useRef<Internal>(fresh());
 
   const patch = useCallback((p: Partial<CallState>) => setCall((c) => (c ? { ...c, ...p } : c)), []);
@@ -453,6 +457,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+  const onKey = (e: KeyboardEvent) => {
+    const k = e.key.toLowerCase();
+    const isReload = k === "f5" || ((e.ctrlKey || e.metaKey) && k === "r");
+    if (isReload && I.current.phase !== "idle") { e.preventDefault(); setReloadAsk(true); }
+  };
+  window.addEventListener("keydown", onKey, true);
     const onUnload = () => {
       const s = I.current;
       if (s.phase === "idle" || !s.callId) return;
@@ -467,6 +477,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener("pagehide", onUnload);
       window.removeEventListener("beforeunload", warn);
+      window.removeEventListener("keydown", onKey, true);
       const s = I.current;
       if (s.phase !== "idle" && s.callId) { void (s.phase === "connected" ? api.endCall(s.callId) : api.cancelCall(s.callId)).catch(() => undefined); }
       releaseAll();
@@ -477,5 +488,21 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const dismiss = useCallback(() => { window.clearTimeout(I.current.timers.noAnswer); closeOverlay(); }, []);
 
   const value: CallApi = { call, startCall, hangUp, toggleMic, toggleCam, redial, dismiss, minimized, setMinimized };
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      <div className="[&>div]:!z-[70]">
+        <Confirm
+          open={reloadAsk}
+          title="Reload page?"
+          message="You are on a call. Reloading will disconnect it."
+          confirmLabel="Reload anyway"
+          danger
+          onConfirm={() => { setReloadAsk(false); window.location.reload(); }}
+          onCancel={() => setReloadAsk(false)}
+        />
+      </div>
+    </Ctx.Provider>
+  );
+
 }
