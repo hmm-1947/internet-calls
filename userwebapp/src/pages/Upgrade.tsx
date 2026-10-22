@@ -147,7 +147,7 @@ export default function Upgrade() {
       </div>
 
       {hasPlans && (
-        <div className="safe-b sticky bottom-0 z-10 bg-bg/95 px-5 pb-5 pt-3 backdrop-blur">
+        <div className="safe-b sticky bottom-0 z-10 bg-bg/95 px-5 pb-12 pt-3 backdrop-blur md:pb-5">
           <div className="mx-auto w-full max-w-xl">
             <button
               className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-brand text-sm font-bold uppercase tracking-wider text-white transition hover:brightness-110 disabled:opacity-40"
