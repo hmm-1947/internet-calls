@@ -1656,6 +1656,30 @@
       margin-bottom: 16px;
     }
 
+    .detail-header {
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .person-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
+    .person-actions .btn {
+      white-space: nowrap;
+      height: 38px;
+      padding-top: 0;
+      padding-bottom: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     .detail-header h3 {
       margin: 0;
       font-size: 18px;
@@ -6909,13 +6933,14 @@
             </div>
           </div>
           ${p.type === 'user' ? `
-          <div style="display:flex;gap:6px;align-items:center">
+          <div class="person-actions">
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('user', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
             <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleVideoCall('user', ${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
             <button class="btn btn-danger" onclick="deletePerson('user', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete User</button>
           </div>` : `
-          <div style="display:flex;gap:6px;align-items:center">
+          <div class="person-actions">
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn ${p.raw.status_on ? 'btn-danger' : 'btn-leaf'}" onclick="toggleListenerStatus(${p.id}, ${!!p.raw.status_on})">${p.raw.status_on ? 'Set Offline' : 'Set Online'}</button>
             <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleListenerVideoCall(${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
             <button class="btn btn-danger" onclick="openListenerPasswordModal(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Reset Password</button>
             <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
@@ -7404,6 +7429,32 @@ ${logSection === 'chats' ? '' : `
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
 
+    async function toggleListenerStatus(id, currentlyOn) {
+      const goOnline = !currentlyOn;
+      const ok = await confirmDialog(
+        goOnline
+          ? { title: 'Set Listener Online', body: 'Set this listener to online? They will show as online whenever they are logged in, and can change their own status again.', okLabel: 'Set Online', okClass: 'btn-leaf', icon: 'check', iconClass: 'info' }
+          : { title: 'Set Listener Offline', body: 'Set this listener to offline? They will show as offline and receive no calls, and cannot switch themselves back online until you turn this on.', okLabel: 'Set Offline', okClass: 'btn-danger', icon: 'x', iconClass: 'danger' }
+      );
+      if (!ok) return;
+      try {
+        const res = await fetch(API_URL + `/admin/listeners/${id}/status`, {
+          method: 'PATCH', headers: authHeaders(true),
+          body: JSON.stringify({ is_online: goOnline })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        setMsg(`✓ Listener set ${goOnline ? 'online' : 'offline'}`, true);
+        if (selectedPerson) {
+          selectedPerson.raw.status_on = data.status_on;
+          selectedPerson.raw.admin_forced_offline = data.admin_forced_offline;
+          selectedPerson.raw.is_online = data.is_online;
+        }
+        loadPeople();
+        renderPersonContent();
+      } catch (e) { setMsg('✗ ' + e.message, false); }
+    }
+
     async function saveProfileEdits(type, id) {
       try {
         let endpoint, body;
@@ -7702,7 +7753,7 @@ ${logSection === 'chats' ? '' : `
             if (u) { u.is_online = data.is_online; renderPersonList('user'); refreshPresenceStatsFromCache(); }
           } else if (data.type === 'listener_status') {
             const l = listenersCache.find(x => x.id === data.id);
-            if (l) { l.is_online = data.is_online; renderPersonList('listener'); refreshPresenceStatsFromCache(); }
+            if (l) { l.is_online = data.is_online; if (data.admin_forced_offline !== undefined) { l.admin_forced_offline = data.admin_forced_offline; l.status_on = data.status_on; } renderPersonList('listener'); refreshPresenceStatsFromCache(); if (selectedPerson && selectedPerson.type === 'listener' && selectedPerson.id === l.id) renderPersonContent(); }
           } else if (data.type === 'admin_notification' && data.notification) {
             const isOpen = document.getElementById('page-notifications').style.display !== 'none';
             if (!notificationsCache.some(n => n.id === data.notification.id)) {

@@ -134,7 +134,7 @@ def initiate_call(payload: CallInitiate, db: Session = Depends(get_db), current_
     listener = db.query(Listener).filter(Listener.id == payload.listener_id).first()
     if not listener or not listener.is_active:
         raise HTTPException(status_code=404, detail="Listener not found")
-    if not listener.is_online:
+    if not listener.effective_online:
         raise HTTPException(status_code=409, detail="Listener is unavailable right now")
     call_type = payload.call_type if payload.call_type in ("audio", "video") else "audio"
     if call_type == "video" and current_user.video_call_disabled_by_admin:
@@ -207,6 +207,9 @@ async def accept_call(call_id: int, db: Session = Depends(get_db), current_liste
         return {"room_name": call.room_name, "token": listener_token, "livekit_url": settings.livekit_url, "call_type": call.call_type}
     if call.status != "ringing":
         raise HTTPException(status_code=400, detail="Call has already been cancelled, ended, or accepted")
+    if not current_listener.effective_online:
+        await reject_ringing_calls_for_listener(db, current_listener.id)
+        raise HTTPException(status_code=409, detail="You are offline, so you cannot accept calls")
     if datetime.now(timezone.utc) - call.created_at.replace(tzinfo=timezone.utc) > RINGING_TIMEOUT:
         call.status = "missed"
         db.commit()
@@ -325,6 +328,34 @@ async def reject_call(call_id: int, db: Session = Depends(get_db), current_liste
         _push_in_background(send_call_rejected, user, call_id)
     return {"status": "rejected"}
 
+async def reject_ringing_calls_for_listener(db: Session, listener_id: int) -> int:
+    from app.routers.chat import record_call_message
+    ringing = db.query(Call).filter(Call.callee_listener_id == listener_id, Call.status == "ringing").all()
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    handled = 0
+    for call in ringing:
+        claimed = db.query(Call).filter(Call.id == call.id, Call.status == "ringing").update(
+            {"status": "missed"}, synchronize_session=False
+        )
+        db.commit()
+        if not claimed:
+            continue
+        handled += 1
+        delete_room_background(call.room_name)
+        await record_call_message(
+            db,
+            user_id=call.caller_user_id,
+            listener_id=call.callee_listener_id,
+            call_id=call.id,
+            call_type=call.call_type,
+            call_status="missed",
+        )
+        user = db.query(User).filter(User.id == call.caller_user_id).first()
+        if user:
+            _push_in_background(send_call_rejected, user, call.id)
+        if listener:
+            _push_in_background(send_call_cancelled, listener, call.id)
+    return handled
 @router.post("/{call_id}/cancel")
 async def cancel_call(call_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     call = db.query(Call).filter(Call.id == call_id, Call.caller_user_id == current_user.id).first()
@@ -506,7 +537,7 @@ def call_status(call_id: int, db: Session = Depends(get_db), current_user: User 
 
 
 @router.get("/{call_id}/listener-status")
-def listener_call_status(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+async def listener_call_status(call_id: int, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     """Lets the listener app confirm a call is still actually ringing before
     showing the incoming-call UI — a `call` push can arrive after the ringing
     window has already expired server-side (e.g. delivered late on reconnect
@@ -515,6 +546,9 @@ def listener_call_status(call_id: int, db: Session = Depends(get_db), current_li
     call = db.query(Call).filter(Call.id == call_id, Call.callee_listener_id == current_listener.id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if call.status == "ringing" and not current_listener.effective_online:
+        await reject_ringing_calls_for_listener(db, current_listener.id)
+        db.refresh(call)
     return {"status": call.status}
 
 

@@ -96,10 +96,8 @@ app.mount("/", StaticFiles(directory="landing", html=True), name="landing")
 @app.on_event("startup")
 def reset_online_status():
     """`User.is_online` mirrors a live websocket, so it is stale after a restart
-    and gets cleared. `Listener.is_online` is the listener's own availability
-    switch and must survive restarts, otherwise every listener is silently
-    forced offline and has to re-toggle it by hand. Whether a listener is
-    actually reachable is always `is_online AND manager.is_listener_online(id)`."""
+    and gets cleared. Listener presence is not socket-based: it is stored
+    (`is_logged_in`, `is_online`, `admin_forced_offline`) and survives restarts."""
     db = SessionLocal()
     try:
         db.query(User).update({User.is_online: False})

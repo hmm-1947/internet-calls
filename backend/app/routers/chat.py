@@ -836,8 +836,8 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
             is_pinned=settings.is_pinned if settings else False,
             is_archived=settings.is_archived if settings else False,
             is_muted=settings.is_muted if settings else False,
-            is_online=bool(listener.is_online),
-            presence_online=manager.is_listener_online(lid) and bool(listener.is_online),
+            is_online=listener.effective_online,
+            presence_online=listener.effective_online,
             last_seen=listener.last_seen,
             photo_url=listener.photo_url,
             badge_tag=badge_tags_by_id.get(listener.badge_tag_id),
@@ -1002,11 +1002,12 @@ def _authenticate_listener_ws(token: str) -> tuple[int | None, int]:
         db.close()
 
 
-def _load_listener_ws_state(listener_id: int) -> tuple[bool, list[int], list[dict]]:
+def _load_listener_ws_state(listener_id: int) -> tuple[bool, bool, list[int], list[dict]]:
     db = SessionLocal()
     try:
         listener = db.query(Listener).filter(Listener.id == listener_id).first()
         availability_on = bool(listener and listener.is_online)
+        admin_forced = bool(listener and listener.admin_forced_offline)
         user_ids = [r[0] for r in db.query(ChatMessage.user_id).filter(ChatMessage.listener_id == listener_id).distinct().all()]
         pending = db.query(GiftTransaction).filter(
             GiftTransaction.listener_id == listener_id,
@@ -1027,7 +1028,7 @@ def _load_listener_ws_state(listener_id: int) -> tuple[bool, list[int], list[dic
                 })
                 gt.notified = True
             db.commit()
-        return availability_on, user_ids, gift_events
+        return availability_on, admin_forced, user_ids, gift_events
     finally:
         db.close()
 
@@ -1052,16 +1053,9 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...)):
         await websocket.close(code=close_code)
         return
     await manager.connect_listener(listener_id, websocket)
-    availability_on, user_ids, gift_events = await run_in_threadpool(_load_listener_ws_state, listener_id)
-    logger.info(
-        f"WebSocket listener={listener_id} connected -> presence online "
-        f"(availability switch is_online={availability_on})"
-    )
-    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": availability_on})
-    online_user_ids = manager.get_online_user_ids(user_ids)
-    if availability_on:
-        await manager.send_to_users(online_user_ids, {"type": "listener_online", "listener_id": listener_id})
-    await manager.send_to_users(online_user_ids, {"type": "listener_presence", "listener_id": listener_id, "presence_online": availability_on})
+    availability_on, admin_forced, user_ids, gift_events = await run_in_threadpool(_load_listener_ws_state, listener_id)
+    logger.info(f"WebSocket listener={listener_id} connected (availability switch is_online={availability_on})")
+    await manager.send_to_listener(listener_id, {"type": "listener_status_changed", "is_online": availability_on, "admin_forced_offline": admin_forced})
     for event in gift_events:
         await manager.send_to_listener(listener_id, event)
     typing_targets: set[int] = set()
@@ -1077,13 +1071,8 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...)):
         logger.info(f"WebSocket listener={listener_id} disconnected: {reason} (another connection is still open, stays online)")
         return
 
-    logger.info(f"WebSocket listener={listener_id} disconnected: {reason} -> presence offline")
-    await manager.broadcast_to_admins({"type": "listener_status", "id": listener_id, "is_online": False})
-    availability_on = await run_in_threadpool(_stamp_listener_last_seen, listener_id)
-    online_user_ids = manager.get_online_user_ids(user_ids)
-    if not availability_on:
-        await manager.send_to_users(online_user_ids, {"type": "listener_offline", "listener_id": listener_id})
-    await manager.send_to_users(online_user_ids, {"type": "listener_presence", "listener_id": listener_id, "presence_online": False})
+    logger.info(f"WebSocket listener={listener_id} disconnected: {reason} (presence unchanged, it is not socket-based)")
+    await run_in_threadpool(_stamp_listener_last_seen, listener_id)
 
 
 async def _handle_listener_ws_event(raw: dict, listener_id: int, typing_targets: set | None = None):

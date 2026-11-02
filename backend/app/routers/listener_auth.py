@@ -55,6 +55,7 @@ def get_me(db: Session = Depends(get_db), current_listener: Listener = Depends(g
         # settings toggle keeps its position across restarts and reconnects.
         "is_online": bool(current_listener.is_online),
         "is_connected": manager.is_listener_online(current_listener.id),
+        "admin_forced_offline": bool(current_listener.admin_forced_offline),
         "video_call_enabled": bool(current_listener.video_call_enabled),
         "video_call_disabled_by_admin": bool(current_listener.video_call_disabled_by_admin),
         "about": current_listener.about,
@@ -214,7 +215,7 @@ async def update_photo(file: UploadFile = File(...), db: Session = Depends(get_d
     return {"status": "updated", "photo_url": current_listener.photo_url}
 
 @router.post("/login", response_model=AuthResponse)
-def login(payload: ListenerLogin, db: Session = Depends(get_db)):
+async def login(payload: ListenerLogin, db: Session = Depends(get_db)):
     listener = db.query(Listener).filter(Listener.phone == payload.phone).first()
     if not listener or not verify_password(payload.password, listener.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -222,23 +223,25 @@ def login(payload: ListenerLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = generate_session_token()
     db.add(SessionModel(token=token, listener_id=listener.id, expires_at=session_expiry()))
-    listener.is_online = True
+    listener.is_logged_in = True
     record_audit_event(db, "listener", listener.id, listener.name, "login")
     db.commit()
+    from app.utils.listener_presence import broadcast_listener_presence
+    await broadcast_listener_presence(listener)
     return AuthResponse(token=token, id=listener.id, name=listener.name)
 
 @router.post("/status")
 async def update_status(payload: ListenerStatusUpdate, db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
+    from app.utils.listener_presence import broadcast_listener_presence, reject_calls_if_offline
+    if current_listener.admin_forced_offline:
+        raise HTTPException(status_code=403, detail="The admin has set you to offline. You cannot change your status.")
     current_listener.is_online = payload.is_online
     if not payload.is_online:
         current_listener.last_seen = datetime.now(timezone.utc)
     db.commit()
-    event_type = "listener_online" if payload.is_online else "listener_offline"
-    payload_out = {"type": event_type, "listener_id": current_listener.id}
-    if not payload.is_online:
-        payload_out["last_seen"] = current_listener.last_seen.isoformat()
-    await manager.broadcast_to_all_users(payload_out)
-    return {"status": "updated", "is_online": current_listener.is_online}
+    await reject_calls_if_offline(db, current_listener)
+    await broadcast_listener_presence(current_listener)
+    return {"status": "updated", "is_online": current_listener.is_online, "admin_forced_offline": False}
 
 
 @router.post("/video-call-setting")
@@ -261,19 +264,18 @@ async def update_video_call_setting(payload: ListenerVideoCallSettingUpdate, db:
 async def logout(authorization: str = Header(...), db: Session = Depends(get_db), current_listener: Listener = Depends(get_current_listener)):
     token = authorization.replace("Bearer ", "")
     db.query(SessionModel).filter(SessionModel.token == token).delete()
-    current_listener.is_online = False
+    db.flush()
+    current_listener.is_logged_in = False
     current_listener.last_seen = datetime.now(timezone.utc)
     # Otherwise a call placed after logout still reaches this device: the
     # push only checks for a stored token, not whether anyone is logged in.
     current_listener.fcm_token = None
     record_audit_event(db, "listener", current_listener.id, current_listener.name, "logout")
     db.commit()
+    from app.utils.listener_presence import broadcast_listener_presence, reject_calls_if_offline
     await manager.disconnect_listener(current_listener.id)
-    await manager.broadcast_to_all_users({
-        "type": "listener_offline",
-        "listener_id": current_listener.id,
-        "last_seen": current_listener.last_seen.isoformat(),
-    })
+    await reject_calls_if_offline(db, current_listener)
+    await broadcast_listener_presence(current_listener)
     return {"status": "logged_out"}
 
 @router.post("/verify-password")

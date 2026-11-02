@@ -530,6 +530,9 @@ class CallInitiate(BaseModel):
 class ListenerStatusUpdate(BaseModel):
     is_online: bool
 
+class AdminListenerStatusUpdate(BaseModel):
+    is_online: bool
+
 class ListenerProfileUpdate(BaseModel):
     about: Optional[str] = None
     tags: Optional[list[str]] = None

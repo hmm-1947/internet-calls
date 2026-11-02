@@ -28,10 +28,24 @@ from app.schemas.schemas import (
 router = APIRouter(tags=["billing"])
 
 
-def _razorpay_client() -> razorpay.Client:
+def _is_web_request(request: Request) -> bool:
+    return (request.headers.get("X-Client") or "").strip().lower() == "web"
+
+
+def _razorpay_credentials(request: Request) -> tuple[str, str]:
+    if _is_web_request(request):
+        key_id, key_secret = settings.web_razorpay_key_id, settings.web_razorpay_key_secret
+        if not key_id or not key_secret:
+            raise HTTPException(status_code=500, detail="Razorpay is not configured for the web app")
+        return key_id, key_secret
     if not settings.razorpay_key_id or not settings.razorpay_key_secret:
         raise HTTPException(status_code=500, detail="Razorpay is not configured on the server")
-    return razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
+    return settings.razorpay_key_id, settings.razorpay_key_secret
+
+
+def _razorpay_client(request: Request) -> razorpay.Client:
+    key_id, key_secret = _razorpay_credentials(request)
+    return razorpay.Client(auth=(key_id, key_secret))
 
 
 def _log_plan_action(db: Session, admin: AdminUser, action: str, plan_id: Optional[int], plan_name: str, details: str) -> None:
@@ -215,7 +229,7 @@ def user_list_plans(db: Session = Depends(get_db), current_user: User = Depends(
 
 
 @router.post("/billing/purchase/{plan_id}", response_model=RazorpayOrderOut)
-def purchase_plan(plan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def purchase_plan(plan_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a Razorpay order for the selected plan. Coins are only credited
     once /billing/verify-payment confirms the payment succeeded."""
     plan = db.query(BillingPlan).filter(BillingPlan.id == plan_id, BillingPlan.is_active == True).first()  # noqa: E712
@@ -253,7 +267,7 @@ def purchase_plan(plan_id: int, db: Session = Depends(get_db), current_user: Use
         order_id=order["id"],
         amount=amount_paise,
         currency="INR",
-        key_id=settings.razorpay_key_id,
+        key_id=key_id,
         plan_name=plan.name,
         coins=plan.coins,
         name=current_user.name,
@@ -297,7 +311,7 @@ async def verify_payment(
         }
 
     expected_signature = hmac.new(
-        settings.razorpay_key_secret.encode(),
+        _razorpay_credentials(request)[1].encode(),
         f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}".encode(),
         hashlib.sha256,
     ).hexdigest()
@@ -452,16 +466,18 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
     signature = request.headers.get("X-Razorpay-Signature", "")
 
-    if not settings.razorpay_webhook_secret:
+    secrets = [s for s in (settings.razorpay_webhook_secret, settings.web_razorpay_webhook_secret) if s]
+    if not secrets:
         raise HTTPException(status_code=500, detail="Razorpay webhook secret is not configured on the server")
 
-    expected_signature = hmac.new(
-        settings.razorpay_webhook_secret.encode(),
-        raw_body,
-        hashlib.sha256,
-    ).hexdigest()
-
-    if not hmac.compare_digest(expected_signature, signature):
+    valid = any(
+        hmac.compare_digest(
+            hmac.new(s.encode(), raw_body, hashlib.sha256).hexdigest(),
+            signature,
+        )
+        for s in secrets
+    )
+    if not valid:
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     payload = await request.json()

@@ -881,8 +881,8 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             tags = []
         last_call_at = last_call_by_listener.get(l.id)
         result.append({
-            "id": l.id, "name": l.name, "is_online": bool(l.is_online),
-            "presence_online": manager.is_listener_online(l.id) and bool(l.is_online),
+            "id": l.id, "name": l.name, "is_online": l.effective_online,
+            "presence_online": l.effective_online,
             "is_in_call": l.id in busy_listener_ids,
             "video_call_enabled": bool(l.video_call_enabled) and not bool(l.video_call_disabled_by_admin),
             "tags": tags,
@@ -937,8 +937,8 @@ def get_listener_profile(listener_id: int, db: Session = Depends(get_db), curren
     return {
         "id": l.id,
         "name": l.name,
-        "is_online": bool(l.is_online),
-        "presence_online": manager.is_listener_online(l.id) and bool(l.is_online),
+        "is_online": l.effective_online,
+        "presence_online": l.effective_online,
         "is_in_call": is_in_call,
         "video_call_enabled": bool(l.video_call_enabled) and not bool(l.video_call_disabled_by_admin),
         "about": l.about,

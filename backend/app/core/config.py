@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""
 
+    web_razorpay_key_id: str = ""
+    web_razorpay_key_secret: str = ""
+    web_razorpay_webhook_secret: str = ""
+
     recaptcha_site_key: str = ""
     recaptcha_secret_key: str = ""
 

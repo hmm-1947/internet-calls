@@ -58,7 +58,9 @@ class Listener(Base):
     phone = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     fcm_token = Column(String, nullable=True)
-    is_online = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_online = Column(Boolean, default=True, nullable=False, server_default="1")
+    is_logged_in = Column(Boolean, default=False, nullable=False, server_default="0")
+    admin_forced_offline = Column(Boolean, default=False, nullable=False, server_default="0")
     is_active = Column(Boolean, default=True)
     last_seen = Column(DateTime(timezone=True), nullable=True)
     about = Column(String, nullable=True)
@@ -72,6 +74,10 @@ class Listener(Base):
     video_call_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
     video_call_disabled_by_admin = Column(Boolean, default=False, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    @property
+    def effective_online(self) -> bool:
+        return bool(self.is_logged_in) and bool(self.is_online) and not bool(self.admin_forced_offline)
 
 
 class ListenerBadgeTag(Base):

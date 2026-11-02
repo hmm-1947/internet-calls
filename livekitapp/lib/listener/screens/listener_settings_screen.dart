@@ -149,6 +149,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   String? _photoUrl;
   Map<String, dynamic>? _badgeTag;
   bool _statusOnline = true;
+  bool _adminForcedOffline = false;
   bool _videoCallEnabled = true;
   bool _videoCallDisabledByAdmin = false;
   bool _openingSupportChat = false;
@@ -163,6 +164,11 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
       if (data['type'] == 'video_call_admin_setting_changed') {
         setState(() {
           _videoCallDisabledByAdmin = data['video_call_disabled_by_admin'] == true;
+        });
+      } else if (data['type'] == 'listener_status_changed') {
+        setState(() {
+          _statusOnline = data['is_online'] == true;
+          _adminForcedOffline = data['admin_forced_offline'] == true;
         });
       }
     });
@@ -183,6 +189,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     _photoUrl = cached['photo_url'];
     _badgeTag = cached['badge_tag'] as Map<String, dynamic>?;
     if (cached['is_online'] is bool) _statusOnline = cached['is_online'];
+    _adminForcedOffline = cached['admin_forced_offline'] == true;
     if (cached['video_call_enabled'] is bool) _videoCallEnabled = cached['video_call_enabled'];
     if (cached['video_call_disabled_by_admin'] is bool) _videoCallDisabledByAdmin = cached['video_call_disabled_by_admin'];
   }
@@ -200,6 +207,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
         if (data['is_online'] is bool) {
           _statusOnline = data['is_online'] as bool;
         }
+        _adminForcedOffline = data['admin_forced_offline'] == true;
         if (data['video_call_enabled'] is bool) {
           _videoCallEnabled = data['video_call_enabled'] as bool;
         }
@@ -211,6 +219,14 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   }
 
   Future<void> _toggleStatus(bool value) async {
+    if (_adminForcedOffline) {
+      PillMessage.showError(
+        context,
+        'The admin has set you to offline. You cannot change your status.',
+        bottomOffset: 78,
+      );
+      return;
+    }
     final previous = _statusOnline;
     setState(() => _statusOnline = value);
     try {
@@ -223,10 +239,15 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _statusOnline = previous);
+        final message = e.toString().replaceFirst('Exception: ', '');
+        final forced = message.toLowerCase().contains('admin has set you');
+        setState(() {
+          _statusOnline = forced ? false : previous;
+          if (forced) _adminForcedOffline = true;
+        });
         PillMessage.showError(
           context,
-          'Failed to update status: $e',
+          forced ? message : 'Failed to update status: $message',
           bottomOffset: 78,
         );
       }
@@ -315,11 +336,6 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     try {
       final token = await _localStorage.getToken();
       if (token != null) {
-        try {
-          await _repository.updateStatus(token, false);
-        } catch (e) {
-          debugPrint('Logout: updateStatus failed, continuing to logout: $e');
-        }
         await _repository.logout(token);
       } else {
         debugPrint(
@@ -453,12 +469,16 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
           _SettingsCard([
             _SettingsTile(
               icon: Icons.podcasts,
-              title: 'Invisible',
-              subtitle: 'hide yourself and block incoming calls',
+              title: 'Online status',
+              subtitle: _adminForcedOffline
+                  ? 'set to offline by admin'
+                  : (_statusOnline
+                      ? 'you are online and can receive calls'
+                      : 'you are offline and will not receive calls'),
               trailing: Switch(
-                value: !_statusOnline,
+                value: _statusOnline && !_adminForcedOffline,
                 activeColor: Colors.green,
-                onChanged: (value) => _toggleStatus(!value),
+                onChanged: (value) => _toggleStatus(value),
               ),
             ),
             const Divider(height: 1, color: Colors.white12),

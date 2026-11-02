@@ -18,7 +18,7 @@ from app.models.models import (
     ListenerNote, UserBillingPurchase, ListenerBadgeTag, ListenerWeeklyChallengeProgress,
 )
 from datetime import timedelta
-from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, ListenerBadgeTagCreate, ListenerTagAssign, AdminListenerPasswordUpdate
+from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, AdminListenerStatusUpdate, ListenerBadgeTagCreate, ListenerTagAssign, AdminListenerPasswordUpdate
 from app.utils.security import hash_password
 from app.utils.uploads import read_and_validate_image, write_file
 from app.utils.media_urls import sign_media_url
@@ -199,7 +199,7 @@ def list_listeners(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None
     if tag_ids:
         for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(tag_ids)).all():
             tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": manager.is_listener_online(l.id), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id), "video_call_disabled_by_admin": bool(l.video_call_disabled_by_admin)} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": l.effective_online, "is_logged_in": bool(l.is_logged_in), "status_on": bool(l.is_online) and not bool(l.admin_forced_offline), "admin_forced_offline": bool(l.admin_forced_offline), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id), "video_call_disabled_by_admin": bool(l.video_call_disabled_by_admin)} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -268,6 +268,33 @@ async def set_listener_video_call_disabled(listener_id: int, payload: AdminVideo
         "video_call_enabled": effective,
     })
     return {"id": listener.id, "video_call_disabled_by_admin": listener.video_call_disabled_by_admin}
+
+
+@router.patch("/listeners/{listener_id}/status")
+async def set_listener_status(listener_id: int, payload: AdminListenerStatusUpdate, db: Session = Depends(get_db), _=Depends(verify_admin)):
+    from app.utils.listener_presence import broadcast_listener_presence, reject_calls_if_offline
+    listener = db.query(Listener).filter(Listener.id == listener_id).first()
+    if not listener:
+        raise HTTPException(status_code=404, detail="Listener not found")
+    listener.is_online = payload.is_online
+    listener.admin_forced_offline = not payload.is_online
+    if not payload.is_online:
+        listener.last_seen = datetime.now(timezone.utc)
+    db.commit()
+    await manager.send_to_listener(listener.id, {
+        "type": "listener_status_changed",
+        "is_online": bool(listener.is_online),
+        "admin_forced_offline": bool(listener.admin_forced_offline),
+    })
+    await reject_calls_if_offline(db, listener)
+    await broadcast_listener_presence(listener)
+    return {
+        "id": listener.id,
+        "is_online": listener.effective_online,
+        "status_on": bool(listener.is_online) and not bool(listener.admin_forced_offline),
+        "is_logged_in": bool(listener.is_logged_in),
+        "admin_forced_offline": bool(listener.admin_forced_offline),
+    }
 
 
 @router.post("/listeners/{listener_id}/password")
@@ -775,7 +802,7 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
     # what the people lists show and can never go stale after a restart.
     online_users = sum(1 for (uid,) in db.query(User.id).all() if manager.is_user_online(uid))
     offline_users = total_users - online_users
-    online_listeners = sum(1 for (lid,) in db.query(Listener.id).all() if manager.is_listener_online(lid))
+    online_listeners = sum(1 for l in db.query(Listener).all() if l.effective_online)
     offline_listeners = total_listeners - online_listeners
 
     avg_duration = db.query(func.coalesce(func.avg(Call.duration_seconds), 0)).filter(Call.status == "ended").scalar() or 0
