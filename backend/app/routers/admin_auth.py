@@ -313,14 +313,16 @@ def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depen
     admin.reset_otp_code = None
     admin.reset_otp_expires_at = None
     admin.reset_otp_attempts = 0
+    admin.failed_login_attempts = 0
+    admin.locked_until = None
     db.query(SessionModel).filter(SessionModel.admin_id == admin.id).delete()
     db.commit()
 
     return {"status": "password_reset"}
 
 
-MAX_LOGIN_ATTEMPTS = 5
-LOGIN_LOCKOUT_MINUTES = 15
+MAX_LOGIN_ATTEMPTS = 6
+LOGIN_LOCKED_MESSAGE = "Account locked after 6 failed login attempts. Use 'Forgot password' to reset your password and unlock it."
 
 
 def _verify_recaptcha(token: str) -> bool:
@@ -352,15 +354,22 @@ def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
     ).first()
 
     if admin and admin.locked_until and admin.locked_until > datetime.now(timezone.utc):
-        raise HTTPException(status_code=429, detail="Account temporarily locked due to too many failed attempts. Try again later.")
+        raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
 
     if not admin or not verify_password(payload.password, admin.password_hash):
         if admin:
             admin.failed_login_attempts += 1
-            if admin.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
-                admin.locked_until = datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
-                admin.failed_login_attempts = 0
+            remaining = MAX_LOGIN_ATTEMPTS - admin.failed_login_attempts
+            if remaining <= 0:
+                admin.failed_login_attempts = MAX_LOGIN_ATTEMPTS
+                admin.locked_until = datetime.now(timezone.utc) + timedelta(days=365 * 100)
+                db.commit()
+                raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
             db.commit()
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid credentials. {remaining} attempt{'s' if remaining != 1 else ''} remaining before your account is locked.",
+            )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not admin.is_active:
