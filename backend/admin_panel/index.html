@@ -2839,6 +2839,12 @@
         <div class="stat-value" id="statTotalEarnings">–</div>
         <div class="stat-sub">
           <span class="down" id="statTotalRefunded">₹0 refunded</span>
+          <span id="statEarningsRange">All time</span>
+        </div>
+        <div class="stat-sub" style="gap:6px;flex-wrap:wrap;margin-top:10px;">
+          <input type="date" id="earningsFrom" onchange="loadEarnings()" title="From" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;">
+          <input type="date" id="earningsTo" onchange="loadEarnings()" title="To" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;">
+          <a href="#" onclick="clearEarningsFilter();return false;" style="font-size:12px;">Clear</a>
         </div>
       </div>
       <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 9h12"/><path d="M9 4c5 0 6 5 0 5l6 8"/></svg></div>
@@ -4160,12 +4166,35 @@
 
         document.getElementById('statAvgDuration').innerHTML = formatDuration(data.avg_call_duration_seconds) + ' <small>avg</small>';
 
-        const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-        document.getElementById('statTotalEarnings').textContent = inr(data.total_earnings);
-        document.getElementById('statTotalRefunded').textContent = inr(data.total_refunded) + ' refunded';
+        loadEarnings();
 
         renderCallsChart(data.calls_series);
       } catch (e) { }
+    }
+
+    async function loadEarnings() {
+      const from = document.getElementById('earningsFrom').value;
+      const to = document.getElementById('earningsTo').value;
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      try {
+        const res = await fetch(API_URL + '/admin/stats/earnings?' + params.toString(), { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+        document.getElementById('statTotalEarnings').textContent = inr(data.total_earnings);
+        document.getElementById('statTotalRefunded').textContent = inr(data.total_refunded) + ' refunded';
+        document.getElementById('statEarningsRange').textContent = (from || to) ? ((from || 'start') + ' → ' + (to || 'today')) : 'All time';
+      } catch (e) {
+        document.getElementById('statEarningsRange').textContent = e.message || 'Failed';
+      }
+    }
+
+    function clearEarningsFilter() {
+      document.getElementById('earningsFrom').value = '';
+      document.getElementById('earningsTo').value = '';
+      loadEarnings();
     }
 
     async function loadChatsChart() {

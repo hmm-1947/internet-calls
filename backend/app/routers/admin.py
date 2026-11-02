@@ -915,6 +915,50 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
     }
 
 
+@router.get("/stats/earnings")
+def stats_earnings(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+    db: Session = Depends(get_db),
+    _=Depends(verify_admin),
+):
+    from zoneinfo import ZoneInfo
+
+    ist = ZoneInfo("Asia/Kolkata")
+
+    def parse_day(value: Optional[str], end_of_day: bool):
+        if not value:
+            return None
+        try:
+            day = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=ist)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Dates must be YYYY-MM-DD")
+        return day + timedelta(days=1) if end_of_day else day
+
+    start = parse_day(from_date, False)
+    end = parse_day(to_date, True)
+    if start and end and start >= end:
+        raise HTTPException(status_code=400, detail="From date must be on or before To date")
+
+    query = db.query(
+        func.coalesce(func.sum(UserBillingPurchase.price_paid), 0),
+        func.coalesce(func.sum(UserBillingPurchase.refunded_amount_paise), 0),
+        func.count(UserBillingPurchase.id),
+    ).filter(UserBillingPurchase.status.in_(["completed", "partially_refunded", "refunded"]))
+    if start:
+        query = query.filter(UserBillingPurchase.created_at >= start)
+    if end:
+        query = query.filter(UserBillingPurchase.created_at < end)
+
+    gross_rupees, refunded_paise, purchases = query.one()
+    refunded_rupees = (refunded_paise or 0) / 100
+    return {
+        "total_earnings": round(max((gross_rupees or 0) - refunded_rupees, 0), 2),
+        "total_refunded": round(refunded_rupees, 2),
+        "purchases": purchases or 0,
+    }
+
+
 @router.get("/stats/users")
 def list_user_stats(db: Session = Depends(get_db), _=Depends(verify_admin)):
     call_stats = dict(
