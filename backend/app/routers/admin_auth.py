@@ -323,6 +323,7 @@ def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depen
 
 MAX_LOGIN_ATTEMPTS = 6
 LOGIN_ATTEMPT_WINDOW_HOURS = 24
+_unknown_login_attempts: dict = {}
 LOGIN_LOCKED_MESSAGE = "Account locked after 6 failed login attempts. Use 'Forgot password' to reset your password and unlock it."
 
 
@@ -359,23 +360,39 @@ def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
     if admin and admin.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
         raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
 
+    unknown_key = identifier.lower()
+    if not admin:
+        entry = _unknown_login_attempts.get(unknown_key)
+        if entry and entry[1] > now and entry[0] >= MAX_LOGIN_ATTEMPTS:
+            raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
+
     if not admin or not verify_password(payload.password, admin.password_hash):
         if admin:
             if not admin.locked_until or admin.locked_until <= now:
                 admin.failed_login_attempts = 0
                 admin.locked_until = now + timedelta(hours=LOGIN_ATTEMPT_WINDOW_HOURS)
             admin.failed_login_attempts += 1
-            remaining = MAX_LOGIN_ATTEMPTS - admin.failed_login_attempts
-            if remaining <= 0:
+            count = admin.failed_login_attempts
+            if count >= MAX_LOGIN_ATTEMPTS:
                 admin.failed_login_attempts = MAX_LOGIN_ATTEMPTS
-                db.commit()
-                raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
             db.commit()
-            raise HTTPException(
-                status_code=401,
-                detail=f"Invalid credentials. {remaining} attempt{'s' if remaining != 1 else ''} remaining before your account is locked.",
-            )
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        else:
+            if len(_unknown_login_attempts) > 5000:
+                for k in [k for k, v in _unknown_login_attempts.items() if v[1] <= now]:
+                    _unknown_login_attempts.pop(k, None)
+            entry = _unknown_login_attempts.get(unknown_key)
+            if not entry or entry[1] <= now:
+                entry = [0, now + timedelta(hours=LOGIN_ATTEMPT_WINDOW_HOURS)]
+            entry[0] += 1
+            _unknown_login_attempts[unknown_key] = entry
+            count = entry[0]
+        remaining = MAX_LOGIN_ATTEMPTS - count
+        if remaining <= 0:
+            raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid credentials. {remaining} attempt{'s' if remaining != 1 else ''} remaining before your account is locked.",
+        )
 
     if not admin.is_active:
         raise HTTPException(status_code=403, detail="Account disabled")
