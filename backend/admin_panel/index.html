@@ -2833,21 +2833,28 @@
       </div>
       <div class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="position:relative;">
       <div>
         <div class="stat-label">Total<br><b>Earnings</b></div>
         <div class="stat-value" id="statTotalEarnings">–</div>
         <div class="stat-sub">
           <span class="down" id="statTotalRefunded">₹0 refunded</span>
-          <span id="statEarningsRange">All time</span>
         </div>
-        <div class="stat-sub" style="gap:6px;flex-wrap:wrap;margin-top:10px;">
-          <input type="date" id="earningsFrom" onchange="loadEarnings()" title="From" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;">
-          <input type="date" id="earningsTo" onchange="loadEarnings()" title="To" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;">
-          <a href="#" onclick="clearEarningsFilter();return false;" style="font-size:12px;">Clear</a>
+        <div class="stat-sub">
+          <span id="statEarningsRange">Today</span>
         </div>
       </div>
-      <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 9h12"/><path d="M9 4c5 0 6 5 0 5l6 8"/></svg></div>
+      <div class="stat-icon" id="earningsCalBtn" role="button" tabindex="0" title="Select date range" style="cursor:pointer;" onclick="toggleEarningsMenu(event)"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></div>
+      <div id="earningsMenu" onclick="event.stopPropagation()" style="display:none;position:absolute;top:64px;right:12px;z-index:30;background:var(--white);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(20,20,30,.16);padding:14px;min-width:210px;">
+        <label style="display:block;font-size:12px;color:var(--slate);margin-bottom:4px;">From</label>
+        <input type="date" id="earningsFrom" onchange="loadEarnings()" style="width:100%;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;">
+        <label style="display:block;font-size:12px;color:var(--slate);margin-bottom:4px;">To</label>
+        <input type="date" id="earningsTo" onchange="loadEarnings()" style="width:100%;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;">
+          <a href="#" onclick="setEarningsToday();return false;">Today</a>
+          <a href="#" onclick="clearEarningsFilter();return false;">All time</a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -4172,7 +4179,37 @@
       } catch (e) { }
     }
 
+    let earningsInit = false;
+
+    function todayIST() {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    }
+
+    function setEarningsToday() {
+      const t = todayIST();
+      document.getElementById('earningsFrom').value = t;
+      document.getElementById('earningsTo').value = t;
+      loadEarnings();
+    }
+
+    function toggleEarningsMenu(e) {
+      e.stopPropagation();
+      const m = document.getElementById('earningsMenu');
+      m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    }
+
+    document.addEventListener('click', () => {
+      const m = document.getElementById('earningsMenu');
+      if (m) m.style.display = 'none';
+    });
+
     async function loadEarnings() {
+      if (!earningsInit) {
+        earningsInit = true;
+        const t = todayIST();
+        document.getElementById('earningsFrom').value = t;
+        document.getElementById('earningsTo').value = t;
+      }
       const from = document.getElementById('earningsFrom').value;
       const to = document.getElementById('earningsTo').value;
       const params = new URLSearchParams();
@@ -4185,7 +4222,7 @@
         const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
         document.getElementById('statTotalEarnings').textContent = inr(data.total_earnings);
         document.getElementById('statTotalRefunded').textContent = inr(data.total_refunded) + ' refunded';
-        document.getElementById('statEarningsRange').textContent = (from || to) ? ((from || 'start') + ' → ' + (to || 'today')) : 'All time';
+        document.getElementById('statEarningsRange').textContent = (!from && !to) ? 'All time' : (from === todayIST() && to === from) ? 'Today' : (from === to ? from : ((from || 'start') + ' → ' + (to || 'today')));
       } catch (e) {
         document.getElementById('statEarningsRange').textContent = e.message || 'Failed';
       }
