@@ -321,6 +321,35 @@ def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depen
     return {"status": "password_reset"}
 
 
+@router.post("/unlock/verify-otp", response_model=AdminAuthResponse)
+def unlock_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
+    admin = _find_admin_by_email(db, payload.email)
+    if not admin:
+        raise HTTPException(status_code=404, detail="Email not registered")
+    if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+    if admin.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
+    if not admin.reset_otp_code or admin.reset_otp_code != payload.otp_code:
+        admin.reset_otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if not admin.is_active:
+        raise HTTPException(status_code=403, detail="Account disabled")
+
+    admin.failed_login_attempts = 0
+    admin.locked_until = None
+    admin.reset_otp_code = None
+    admin.reset_otp_expires_at = None
+    admin.reset_otp_attempts = 0
+
+    token = generate_session_token()
+    db.add(SessionModel(token=token, admin_id=admin.id, expires_at=session_expiry()))
+    db.commit()
+
+    return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)
+
+
 MAX_LOGIN_ATTEMPTS = 6
 LOGIN_ATTEMPT_WINDOW_HOURS = 24
 _unknown_login_attempts: dict = {}

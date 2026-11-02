@@ -2685,7 +2685,8 @@
       </div>
       <div id="loginRecaptcha" style="margin:10px 0;"></div>
       <button class="btn btn-primary" onclick="doAdminLogin()">Login</button>
-      <div style="margin-top:8px;text-align:right;">
+      <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+        <a href="#" style="font-size:13px;font-weight:600;" onclick="showUnlockScreen();return false;">Unlock account</a>
         <a href="#" style="font-size:13px;font-weight:600;" onclick="showForgotScreen();return false;">Forgot password?</a>
       </div>
       <div id="loginMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
@@ -2723,6 +2724,24 @@
     </div>
   </div>
 
+  <div id="unlockScreen" style="max-width:380px;margin:80px auto;display:none;">
+    <div class="card">
+      <h2>Unlock Account</h2>
+      <div id="unlockStepEmail">
+        <input id="unlockEmail" placeholder="Email address">
+        <button class="btn btn-primary" onclick="requestUnlockOtp()">Send verification code</button>
+      </div>
+      <div id="unlockStepOtp" style="display:none;">
+        <input id="unlockOtp" placeholder="Enter OTP">
+        <div id="unlockOtpTimer" class="otp-timer"></div>
+        <button class="btn btn-primary" id="unlockVerifyBtn" onclick="verifyUnlockOtp()">Verify &amp; unlock</button>
+      </div>
+      <div id="unlockMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
+      <div style="margin-top:8px;">
+        <a href="#" style="font-size:13px;font-weight:600;" onclick="showLoginScreen();return false;">Back to login</a>
+      </div>
+    </div>
+  </div>
   <div id="setupScreen" style="max-width:420px;margin:80px auto;display:none;">
     <div class="card">
       <h2>Set Up Admin Account</h2>
@@ -3421,6 +3440,7 @@
     function showLoginScreen() {
       document.getElementById('loginScreen').style.display = '';
       document.getElementById('forgotScreen').style.display = 'none';
+      document.getElementById('unlockScreen').style.display = 'none';
       document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = 'none';
     }
@@ -3593,6 +3613,70 @@
       } catch (e) { setForgotMsg('✗ ' + e.message, false); }
     }
 
+    function setUnlockMsg(text, ok) {
+      const el = document.getElementById('unlockMsg');
+      el.textContent = text;
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
+    }
+
+    function showUnlockScreen() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('forgotScreen').style.display = 'none';
+      document.getElementById('unlockScreen').style.display = '';
+      document.getElementById('setupScreen').style.display = 'none';
+      document.getElementById('panelRoot').style.display = 'none';
+      document.getElementById('unlockStepEmail').style.display = '';
+      document.getElementById('unlockStepOtp').style.display = 'none';
+      document.getElementById('unlockEmail').value = localStorage.getItem('adminEmail') || '';
+      document.getElementById('unlockOtp').value = '';
+      clearOtpTimer('unlockOtpTimer');
+      document.getElementById('unlockOtpTimer').textContent = '';
+      setUnlockMsg('', null);
+    }
+
+    async function requestUnlockOtp() {
+      const email = document.getElementById('unlockEmail').value.trim();
+      if (!email) { setUnlockMsg('Enter your email.', false); return; }
+      setUnlockMsg('Sending code…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/auth/forgot-password/request-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to send code');
+        setUnlockMsg('✓ Code sent to ' + email, true);
+        document.getElementById('unlockOtp').value = '';
+        document.getElementById('unlockStepEmail').style.display = 'none';
+        document.getElementById('unlockStepOtp').style.display = '';
+        startOtpTimer('unlockOtpTimer', 'unlockVerifyBtn', 60, 'requestUnlockOtp');
+      } catch (e) { setUnlockMsg('✗ ' + e.message, false); }
+    }
+
+    async function verifyUnlockOtp() {
+      const email = document.getElementById('unlockEmail').value.trim();
+      const otp_code = document.getElementById('unlockOtp').value.trim();
+      if (!otp_code) { setUnlockMsg('Enter the OTP.', false); return; }
+      if (document.getElementById('unlockVerifyBtn').disabled) {
+        setUnlockMsg('OTP expired, please resend.', false);
+        return;
+      }
+      setUnlockMsg('Verifying…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/auth/unlock/verify-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp_code })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Invalid code');
+        clearOtpTimer('unlockOtpTimer');
+        setAdminToken(data.token);
+        localStorage.setItem('adminUsername', data.username || 'Admin');
+        if (data.email) localStorage.setItem('adminEmail', data.email);
+        document.getElementById('unlockScreen').style.display = 'none';
+        showPanel();
+      } catch (e) { setUnlockMsg('✗ ' + e.message, false); }
+    }
     function showSetupScreen() {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('setupScreen').style.display = '';
