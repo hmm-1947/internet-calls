@@ -236,7 +236,8 @@ def purchase_plan(plan_id: int, request: Request, db: Session = Depends(get_db),
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
 
-    client = _razorpay_client()
+    key_id, _ = _razorpay_credentials(request)
+    client = _razorpay_client(request)
     amount_paise = plan.price * 100
     try:
         order = client.order.create(
@@ -279,6 +280,7 @@ def purchase_plan(plan_id: int, request: Request, db: Session = Depends(get_db),
 @router.post("/billing/verify-payment")
 async def verify_payment(
     payload: RazorpayVerifyPayment,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
