@@ -322,6 +322,7 @@ def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depen
 
 
 MAX_LOGIN_ATTEMPTS = 6
+LOGIN_ATTEMPT_WINDOW_HOURS = 24
 LOGIN_LOCKED_MESSAGE = "Account locked after 6 failed login attempts. Use 'Forgot password' to reset your password and unlock it."
 
 
@@ -353,16 +354,20 @@ def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
         (AdminUser.username == identifier) | (func.lower(AdminUser.email) == identifier.lower())
     ).first()
 
-    if admin and admin.locked_until and admin.locked_until > datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+
+    if admin and admin.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
         raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
 
     if not admin or not verify_password(payload.password, admin.password_hash):
         if admin:
+            if not admin.locked_until or admin.locked_until <= now:
+                admin.failed_login_attempts = 0
+                admin.locked_until = now + timedelta(hours=LOGIN_ATTEMPT_WINDOW_HOURS)
             admin.failed_login_attempts += 1
             remaining = MAX_LOGIN_ATTEMPTS - admin.failed_login_attempts
             if remaining <= 0:
                 admin.failed_login_attempts = MAX_LOGIN_ATTEMPTS
-                admin.locked_until = datetime.now(timezone.utc) + timedelta(days=365 * 100)
                 db.commit()
                 raise HTTPException(status_code=423, detail=LOGIN_LOCKED_MESSAGE)
             db.commit()
