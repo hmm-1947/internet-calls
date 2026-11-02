@@ -2833,6 +2833,16 @@
       </div>
       <div class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
     </div>
+    <div class="stat-card">
+      <div>
+        <div class="stat-label">Total<br><b>Earnings</b></div>
+        <div class="stat-value" id="statTotalEarnings">–</div>
+        <div class="stat-sub">
+          <span class="down" id="statTotalRefunded">₹0 refunded</span>
+        </div>
+      </div>
+      <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 9h12"/><path d="M9 4c5 0 6 5 0 5l6 8"/></svg></div>
+    </div>
   </div>
 
   <div class="card">
@@ -4149,6 +4159,10 @@
         setPresenceStats('Listeners', data.online_listeners, data.offline_listeners);
 
         document.getElementById('statAvgDuration').innerHTML = formatDuration(data.avg_call_duration_seconds) + ' <small>avg</small>';
+
+        const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+        document.getElementById('statTotalEarnings').textContent = inr(data.total_earnings);
+        document.getElementById('statTotalRefunded').textContent = inr(data.total_refunded) + ' refunded';
 
         renderCallsChart(data.calls_series);
       } catch (e) { }

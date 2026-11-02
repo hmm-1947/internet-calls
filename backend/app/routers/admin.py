@@ -807,6 +807,14 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
 
     avg_duration = db.query(func.coalesce(func.avg(Call.duration_seconds), 0)).filter(Call.status == "ended").scalar() or 0
 
+    paid_statuses = ["completed", "partially_refunded", "refunded"]
+    gross_rupees, refunded_paise = db.query(
+        func.coalesce(func.sum(UserBillingPurchase.price_paid), 0),
+        func.coalesce(func.sum(UserBillingPurchase.refunded_amount_paise), 0),
+    ).filter(UserBillingPurchase.status.in_(paid_statuses)).one()
+    refunded_rupees = (refunded_paise or 0) / 100
+    total_earnings = max((gross_rupees or 0) - refunded_rupees, 0)
+
     now = datetime.now(timezone.utc)
     ranges = {
         "day": (now - timedelta(days=1), "hour"),
@@ -900,6 +908,8 @@ def stats_overview(range: str = Query("month"), db: Session = Depends(get_db), _
         "online_listeners": online_listeners,
         "offline_listeners": offline_listeners,
         "avg_call_duration_seconds": round(avg_duration),
+        "total_earnings": round(total_earnings, 2),
+        "total_refunded": round(refunded_rupees, 2),
         "calls_series": series,
         "chats_series": chats_series,
     }
