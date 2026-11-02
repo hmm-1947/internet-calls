@@ -1,4 +1,5 @@
 import logging
+import re
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +39,22 @@ def _configure_app_logging() -> None:
 
 
 _configure_app_logging()
+
+
+_TOKEN_QS = re.compile(r"((?:token|sig|authorization)=)[^&\s\"']+", re.IGNORECASE)
+
+
+class _RedactTokens(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = _TOKEN_QS.sub(r"\1***", record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(_TOKEN_QS.sub(r"\1***", a) if isinstance(a, str) else a for a in record.args)
+        return True
+
+
+for _name in ("uvicorn", "uvicorn.error", "uvicorn.access", "websockets", "websockets.server"):
+    logging.getLogger(_name).addFilter(_RedactTokens())
 
 app = FastAPI(title="Calling App Backend")
 
