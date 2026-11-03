@@ -56,7 +56,7 @@ class _RedactTokens(logging.Filter):
 for _name in ("uvicorn", "uvicorn.error", "uvicorn.access", "websockets", "websockets.server"):
     logging.getLogger(_name).addFilter(_RedactTokens())
 
-app = FastAPI(title="Calling App Backend")
+app = FastAPI(title="Calling App Backend", docs_url=None, redoc_url=None, openapi_url=None)
 
 # /recordings and /voice_notes used to be public StaticFiles mounts here -
 # anyone who obtained/guessed a filename could download that call's audio or

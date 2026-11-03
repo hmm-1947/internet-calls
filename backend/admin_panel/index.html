@@ -5439,14 +5439,14 @@
             ${billingPlansCache.map(p => `
               <tr>
                 <td>${BILLING_ICON_LABELS[p.icon] || p.icon}</td>
-                <td>${p.name}</td>
+                <td>${escapeHtml(p.name)}</td>
                 <td>₹${p.price}</td>
                 <td>${p.coins} coins</td>
                 <td>${p.is_featured ? '<span class="badge badge-yes">Yes</span>' : '—'}</td>
                 <td><span class="badge ${p.is_active ? 'badge-yes' : 'badge-no'}">${p.is_active ? 'Visible' : 'Hidden'}</span></td>
                 <td style="white-space:nowrap;">
                   <button class="btn btn-ghost" onclick="editBillingPlan(${p.id})">Edit</button>
-                  <button class="btn btn-danger" onclick="deleteBillingPlan(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete</button>
+                  <button class="btn btn-danger" onclick="deleteBillingPlan(${p.id}, ${jsArg(p.name)})">Delete</button>
                 </td>
               </tr>
             `).join('')}
@@ -5610,11 +5610,11 @@
             ${giftsCache.map(g => `
               <tr>
                 <td>${giftIconUrl(g.icon) ? `<img src="${giftIconUrl(g.icon)}" style="width:36px;height:36px;object-fit:cover;border-radius:8px;">` : '🎁'}</td>
-                <td>${g.name}</td>
+                <td>${escapeHtml(g.name)}</td>
                 <td>${g.coins} coins</td>
                 <td style="white-space:nowrap;">
                   <button class="btn btn-ghost" onclick="editGift(${g.id})">Edit</button>
-                  <button class="btn btn-danger" onclick="deleteGift(${g.id}, '${g.name.replace(/'/g, "\\'")}')">Delete</button>
+                  <button class="btn btn-danger" onclick="deleteGift(${g.id}, ${jsArg(g.name)})">Delete</button>
                 </td>
               </tr>
             `).join('')}
@@ -5775,9 +5775,9 @@
           <tbody>
             ${pageItems.map(r => `
               <tr>
-                <td>${r.user_name} (#${r.user_id})</td>
-                <td>${r.listener_name} (#${r.listener_id})</td>
-                <td>${r.gift_name}</td>
+                <td>${escapeHtml(r.user_name)} (#${r.user_id})</td>
+                <td>${escapeHtml(r.listener_name)} (#${r.listener_id})</td>
+                <td>${escapeHtml(r.gift_name)}</td>
                 <td>${r.coins} coins</td>
                 <td>${r.created_at ? formatAuditDate(r.created_at) : '-'}</td>
               </tr>
@@ -6359,7 +6359,7 @@
             ${rows.map(r => `
               <tr>
                 <td>${wcRankBadge(r.rank)}</td>
-                <td>${r.listener_name}</td>
+                <td>${escapeHtml(r.listener_name)}</td>
                 <td>${formatDuration(r.talk_seconds)}</td>
               </tr>
             `).join('')}
@@ -6394,7 +6394,7 @@
           <tbody>
             ${rows.map(r => `
               <tr>
-                <td>${r.listener_name}</td>
+                <td>${escapeHtml(r.listener_name)}</td>
                 <td>${formatDuration(r.talk_seconds)}</td>
                 ${r.goals.map(g => `<td>${wcDoneCell(g.completed)}</td>`).join('')}
               </tr>
@@ -6443,7 +6443,7 @@
         const start = formatDmy(new Date(w.week_start));
         const end = formatDmy(new Date(w.week_end));
         const topListener = w.top_listener_name
-          ? ` &middot; <span class="wc-icon wc-trophy">${CONFIRM_ICONS.trophy}</span> ${w.top_listener_name}`
+          ? ` &middot; <span class="wc-icon wc-trophy">${CONFIRM_ICONS.trophy}</span> ${escapeHtml(w.top_listener_name)}`
           : '';
         return `
           <div style="margin-bottom:18px;">
@@ -6454,7 +6454,7 @@
                 ${w.listeners.map((r, i) => `
                   <tr>
                     <td>${wcRankBadge(i + 1)}</td>
-                    <td>${r.listener_name}</td>
+                    <td>${escapeHtml(r.listener_name)}</td>
                     <td>${formatDuration(r.talk_seconds)}</td>
                     ${r.goals.map(g => `<td>${wcDoneCell(g.completed)}</td>`).join('')}
                   </tr>
@@ -6530,7 +6530,7 @@
           <tbody>
             ${items.map(l => `
               <tr>
-                <td>${l.name}</td>
+                <td>${escapeHtml(l.name)}</td>
                 <td><span class="badge ${LOGIN_AUDIT_ACTION_BADGE[l.action] || ''}">${LOGIN_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
                 <td style="white-space:nowrap;">${formatAuditDate(l.created_at)}</td>
               </tr>
@@ -6546,7 +6546,11 @@
     }
 
     // ─── Notifications ────────────────────────────────────────────────────────
-    /** Notification text is user supplied (names, reasons), so never trust it. */
+        function jsArg(value) {
+      return escapeHtml(JSON.stringify(String(value == null ? '' : value)));
+    }
+
+/** Notification text is user supplied (names, reasons), so never trust it. */
     function escapeHtml(value) {
       return String(value == null ? '' : value)
         .replace(/&/g, '&amp;')
@@ -6944,7 +6948,7 @@
               <tr>
                 <td style="white-space:nowrap;">${formatAuditDate(l.created_at)}</td>
                 <td><span class="badge ${BILLING_AUDIT_ACTION_BADGE[l.action] || ''}">${BILLING_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
-                <td>${l.plan_name}</td>
+                <td>${escapeHtml(l.plan_name)}</td>
                 <td style="color:var(--slate);font-size:13px;">${l.details || '—'}</td>
                 <td>${l.admin_username || '—'}</td>
               </tr>
@@ -7000,7 +7004,7 @@
               <tr>
                 <td style="white-space:nowrap;">${formatAuditDate(l.created_at)}</td>
                 <td><span class="badge ${GIFT_AUDIT_ACTION_BADGE[l.action] || ''}">${GIFT_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
-                <td>${l.gift_name}</td>
+                <td>${escapeHtml(l.gift_name)}</td>
                 <td style="color:var(--slate);font-size:13px;">${l.details || '—'}</td>
                 <td>${l.admin_username || '—'}</td>
               </tr>
@@ -7186,10 +7190,10 @@
               <tr>
                 <td>
                   ${p.user_name || '—'}
-                  ${p.user_phone ? `<div style="font-size:11px;color:var(--slate);">${p.user_phone}</div>` : ''}
+                  ${p.user_phone ? `<div style="font-size:11px;color:var(--slate);">${escapeHtml(p.user_phone)}</div>` : ''}
                 </td>
                 <td>
-                  ${p.plan_name}
+                  ${escapeHtml(p.plan_name)}
                   <div style="font-size:11px;color:var(--slate);">${p.coins_purchased} coins</div>
                 </td>
                 <td>₹${p.price_paid}</td>
@@ -7244,7 +7248,7 @@
             <tbody>
               ${data.map(c => `
                 <tr>
-                  <td>${c.room_name}</td>
+                  <td>${escapeHtml(c.room_name)}</td>
                   <td>${c.user_name || ''}</td>
                   <td>${c.listener_name || ''}</td>
                   <td>${c.call_type}</td>
@@ -7505,14 +7509,14 @@
           <div class="person-actions">
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('user', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
             <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleVideoCall('user', ${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
-            <button class="btn btn-danger" onclick="deletePerson('user', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete User</button>
+            <button class="btn btn-danger" onclick="deletePerson('user', ${p.id}, ${jsArg(p.name)})">Delete User</button>
           </div>` : `
           <div class="person-actions">
             <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
             <button class="btn ${p.raw.status_on ? 'btn-danger' : 'btn-leaf'}" onclick="toggleListenerStatus(${p.id}, ${!!p.raw.status_on})">${p.raw.status_on ? 'Set Offline' : 'Set Online'}</button>
             <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleListenerVideoCall(${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
-            <button class="btn btn-danger" onclick="openListenerPasswordModal(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Reset Password</button>
-            <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete Listener</button>
+            <button class="btn btn-danger" onclick="openListenerPasswordModal(${p.id}, ${jsArg(p.name)})">Reset Password</button>
+            <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, ${jsArg(p.name)})">Delete Listener</button>
           </div>`}
         </div>
         <div class="profile-edit-box" style="margin:12px 0;padding:12px;border:1px solid #333;border-radius:8px">
@@ -7746,8 +7750,8 @@ ${logSection === 'chats' ? '' : `
             const sub = selectedPerson.type === 'user'
               ? escapeHtml(p.phone || '')
               : [p.username ? '@' + p.username : '', p.phone, p.email].filter(Boolean).map(escapeHtml).join(' · ');
-            const safeName = String(p.name).replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-            return `<div class="other-person-option${otherPersonFilter === p.name ? ' selected' : ''}" onmousedown="pickOtherPerson('${safeName}')">`
+            const safeName = jsArg(p.name);
+            return `<div class="other-person-option${otherPersonFilter === p.name ? ' selected' : ''}" onmousedown="pickOtherPerson(${safeName})">`
               + `<span class="other-person-option-name">${escapeHtml(p.name)}</span>`
               + (sub ? `<span class="other-person-option-sub">${sub}</span>` : '')
               + `</div>`;
@@ -8195,7 +8199,7 @@ ${logSection === 'chats' ? '' : `
         return;
       }
       wrap.innerHTML = filtered.map(p => `
-        <div class="coin-search-row" onclick="openCoinAdjust('${type}', ${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', ${p.coins})">
+        <div class="coin-search-row" onclick="openCoinAdjust('${type}', ${p.id}, ${jsArg(p.name)}, ${p.coins})">
           <div class="coin-search-info">
             <span class="person-name">${escapeHtml(p.name)}</span>
             <span class="person-sub">${type === 'user' ? personHandle(p) : ''}${personContact(p, type)} · ${p.coins} coins</span>
@@ -8213,7 +8217,7 @@ ${logSection === 'chats' ? '' : `
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
         const link = window.location.origin + window.location.pathname + '?invite=' + data.invite_token;
-        wrap.innerHTML = `<input readonly value="${escapeHtml(link)}" onclick="this.select()"> <div class="person-sub">Expires: ${escapeHtml(formatAuditDate(data.expires_at))}</div>`;
+        wrap.innerHTML = `<input readonly value="${escapeHtml(link)}" onclick="this.select()"> <div class="person-sub">Expires: ${escapeHtml(formatAuditDate(data.expires_at))} · valid for 5 minutes, shown only once</div>`;
       } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
     }
 

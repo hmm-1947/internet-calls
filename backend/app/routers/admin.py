@@ -19,7 +19,7 @@ from app.models.models import (
 )
 from datetime import timedelta
 from app.schemas.schemas import ListenerCreate, AdminListenerProfileUpdate, AdminUserProfileUpdate, AdminActiveUpdate, AdminVideoCallUpdate, AdminListenerStatusUpdate, ListenerBadgeTagCreate, ListenerTagAssign, AdminListenerPasswordUpdate
-from app.utils.security import hash_password
+from app.utils.security import hash_password, hash_session_token
 from app.utils.uploads import read_and_validate_image, write_file
 from app.utils.media_urls import sign_media_url
 from app.utils.audit import record_audit_event
@@ -37,7 +37,7 @@ def verify_admin(authorization: str = Header(...), db: Session = Depends(get_db)
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     token = authorization.removeprefix("Bearer ")
-    session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id.isnot(None)).first()
+    session = db.query(SessionModel).filter(SessionModel.token == hash_session_token(token), SessionModel.admin_id.isnot(None)).first()
     if not session:
         raise HTTPException(status_code=401, detail="Invalid session")
     if session.expires_at and session.expires_at < datetime.now(timezone.utc):
@@ -57,7 +57,7 @@ ADMIN_WS_REVALIDATE_SECONDS = 60
 async def admin_ws(websocket: WebSocket, token: str = Query(...)):
     db = next(get_db())
     try:
-        session = db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id.isnot(None)).first()
+        session = db.query(SessionModel).filter(SessionModel.token == hash_session_token(token), SessionModel.admin_id.isnot(None)).first()
         admin = db.query(AdminUser).filter(AdminUser.id == session.admin_id).first() if session else None
         if not admin or not admin.is_active:
             await websocket.close(code=4003)
@@ -71,7 +71,7 @@ async def admin_ws(websocket: WebSocket, token: str = Query(...)):
             await asyncio.sleep(ADMIN_WS_REVALIDATE_SECONDS)
             check_db = next(get_db())
             try:
-                check_session = check_db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id.isnot(None)).first()
+                check_session = check_db.query(SessionModel).filter(SessionModel.token == hash_session_token(token), SessionModel.admin_id.isnot(None)).first()
                 if not check_session or (check_session.expires_at and check_session.expires_at < datetime.now(timezone.utc)):
                     await websocket.close(code=4003)
                     return

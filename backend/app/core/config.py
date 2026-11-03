@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     public_base_url: str = "https://lailanow.com"
 
+    trusted_proxy_hops: int = 1
+
 
     class Config:
         env_file = ".env"

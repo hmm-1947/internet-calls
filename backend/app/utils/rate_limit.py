@@ -18,6 +18,8 @@ from typing import Optional
 
 from fastapi import HTTPException, Request
 
+from app.core.config import settings
+
 # Keys untouched for this long are dropped so the table cannot grow forever.
 _EVICT_AFTER_SECONDS = 3600
 _EVICT_EVERY_CALLS = 500
@@ -65,13 +67,16 @@ _window = _SlidingWindow()
 def client_ip(request: Request) -> str:
     """Best-effort caller identity.
 
-    X-Forwarded-For is only meaningful when a reverse proxy sets it; a direct
-    caller can spoof it, which is why the limits below stay generous enough for
-    real users and are a speed bump rather than an access control.
+    A caller can prepend fake entries to X-Forwarded-For, but the trusted
+    reverse proxy appends the real peer address last, so the entry counted from
+    the right (trusted_proxy_hops) is the one that cannot be forged.
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            hops = max(1, settings.trusted_proxy_hops)
+            return parts[-hops] if len(parts) >= hops else parts[0]
     return request.client.host if request.client else "unknown"
 
 

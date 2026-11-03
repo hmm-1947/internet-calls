@@ -24,10 +24,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 SESSION_LIFETIME_DAYS = 30
+ADMIN_SESSION_LIFETIME_HOURS = 12
+
+
+def hash_session_token(token: str) -> str:
+    return hashlib.sha256((token or "").encode()).hexdigest()
 
 
 def generate_session_token() -> str:
     return secrets.token_hex(32)
+
+
+def admin_session_expiry():
+    from datetime import datetime, timedelta, timezone
+    return datetime.now(timezone.utc) + timedelta(hours=ADMIN_SESSION_LIFETIME_HOURS)
 
 
 def session_expiry():
