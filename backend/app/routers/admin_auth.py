@@ -75,9 +75,13 @@ def request_invite_otp(payload: AdminInviteRequestOtp, db: Session = Depends(get
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    enforce_rate_limit(
+        "admin_invite_otp", payload.invite_token, limit=5, window_seconds=600,
+        detail="Too many codes requested. Please wait a few minutes and try again.",
+    )
     otp_code = generate_otp_code()
     invite.email = payload.email
-    invite.otp_code = otp_code
+    invite.otp_code = _hash_login_otp(otp_code)
     invite.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     invite.otp_attempts = 0
     invite.email_verified = False
@@ -103,7 +107,7 @@ def verify_invite_otp(payload: AdminInviteVerifyOtp, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="OTP expired")
     if invite.otp_attempts >= MAX_OTP_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
-    if not invite.otp_code or invite.otp_code != payload.otp_code:
+    if not invite.otp_code or not hmac.compare_digest(_hash_login_otp((payload.otp_code or "").strip()), invite.otp_code):
         invite.otp_attempts += 1
         db.commit()
         raise HTTPException(status_code=400, detail="Invalid OTP")
@@ -264,13 +268,21 @@ def _find_admin_by_email(db: Session, email: str) -> Optional[AdminUser]:
 
 
 @router.post("/forgot-password/request-otp")
-def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, db: Session = Depends(get_db)):
+def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, request: Request, db: Session = Depends(get_db)):
+    enforce_rate_limit(
+        "admin_reset_otp_ip", client_ip(request), limit=10, window_seconds=600,
+        detail="Too many codes requested. Please wait a few minutes and try again.",
+    )
+    enforce_rate_limit(
+        "admin_reset_otp", (payload.email or "").strip().lower(), limit=5, window_seconds=600,
+        detail="Too many codes requested. Please wait a few minutes and try again.",
+    )
     admin = _find_admin_by_email(db, payload.email)
     if not admin:
-        raise HTTPException(status_code=404, detail="Email not registered")
+        return {"status": "otp_sent"}
 
     otp_code = generate_otp_code()
-    admin.reset_otp_code = otp_code
+    admin.reset_otp_code = _hash_login_otp(otp_code)
     admin.reset_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     admin.reset_otp_attempts = 0
     db.commit()
@@ -284,12 +296,12 @@ def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, db: Sess
 def forgot_password_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
     admin = _find_admin_by_email(db, payload.email)
     if not admin:
-        raise HTTPException(status_code=404, detail="Email not registered")
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
     if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
     if admin.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
-    if not admin.reset_otp_code or admin.reset_otp_code != payload.otp_code:
+    if not admin.reset_otp_code or not hmac.compare_digest(_hash_login_otp((payload.otp_code or "").strip()), admin.reset_otp_code):
         admin.reset_otp_attempts += 1
         db.commit()
         raise HTTPException(status_code=400, detail="Invalid OTP")
@@ -301,12 +313,12 @@ def forgot_password_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Sessio
 def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depends(get_db)):
     admin = _find_admin_by_email(db, payload.email)
     if not admin:
-        raise HTTPException(status_code=404, detail="Email not registered")
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
     if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
     if admin.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
-    if not admin.reset_otp_code or admin.reset_otp_code != payload.otp_code:
+    if not admin.reset_otp_code or not hmac.compare_digest(_hash_login_otp((payload.otp_code or "").strip()), admin.reset_otp_code):
         admin.reset_otp_attempts += 1
         db.commit()
         raise HTTPException(status_code=400, detail="Invalid OTP")
@@ -330,12 +342,12 @@ def forgot_password_reset(payload: AdminForgotPasswordReset, db: Session = Depen
 def unlock_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Session = Depends(get_db)):
     admin = _find_admin_by_email(db, payload.email)
     if not admin:
-        raise HTTPException(status_code=404, detail="Email not registered")
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
     if not admin.reset_otp_expires_at or admin.reset_otp_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
     if admin.reset_otp_attempts >= MAX_OTP_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Too many attempts. Please request a new OTP.")
-    if not admin.reset_otp_code or admin.reset_otp_code != payload.otp_code:
+    if not admin.reset_otp_code or not hmac.compare_digest(_hash_login_otp((payload.otp_code or "").strip()), admin.reset_otp_code):
         admin.reset_otp_attempts += 1
         db.commit()
         raise HTTPException(status_code=400, detail="Invalid OTP")

@@ -1,4 +1,4 @@
-import random
+import secrets
 import smtplib
 import logging
 import os
@@ -24,7 +24,7 @@ RETRY_BACKOFF_SECONDS = 1.5
 
 
 def generate_otp_code() -> str:
-    return str(random.randint(100000, 999999))
+    return str(100000 + secrets.randbelow(900000))
 
 
 PURPOSES = {
