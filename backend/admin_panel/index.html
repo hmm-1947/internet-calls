@@ -1318,8 +1318,22 @@
       padding: 14px;
       box-shadow: 0 2px 10px rgba(20, 20, 30, .05);
       max-height: 760px;
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       border: 1px solid var(--line);
+    }
+
+    .sidebar > .search-box {
+      flex-shrink: 0;
+    }
+
+    .sidebar > #userList,
+    .sidebar > #listenerList {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 2px;
     }
 
     .sidebar-tabs {
@@ -2788,30 +2802,6 @@
       </div>
     </div>
   </div>
-  <div id="setupScreen" style="max-width:420px;margin:80px auto;display:none;">
-    <div class="card">
-      <h2>Set Up Admin Account</h2>
-      <div id="setupStepEmail">
-        <input id="setupEmail" placeholder="Email address">
-        <button class="btn btn-primary" onclick="requestSetupOtp()">Send verification code</button>
-      </div>
-      <div id="setupStepOtp" style="display:none;">
-        <input id="setupOtp" placeholder="Enter OTP">
-        <div id="setupOtpTimer" class="otp-timer"></div>
-        <button class="btn btn-primary" id="setupVerifyBtn" onclick="verifySetupOtp()">Verify code</button>
-      </div>
-      <div id="setupStepCreds" style="display:none;">
-        <input id="setupUsername" placeholder="Choose a username">
-        <div class="pw-field">
-          <input id="setupPassword" placeholder="Choose a password" type="password">
-          <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
-        </div>
-        <div id="setupPwRules" class="pw-rules"></div>
-        <button class="btn btn-primary" id="setupCompleteBtn" onclick="completeSetup()">Create account</button>
-      </div>
-      <div id="setupMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
-    </div>
-  </div>
 
   <div id="panelRoot" style="display:none;">
   <div class="app-shell">
@@ -2950,17 +2940,6 @@
       </select>
     </div>
     <canvas id="chatsChart" height="90"></canvas>
-  </div>
-
-  <div class="card">
-    <h2>Invite New Admin</h2>
-    <button class="btn btn-primary" style="width:auto" onclick="generateAdminInvite()">Generate Invite Link</button>
-    <div id="inviteLinkWrap" style="margin-top:10px;"></div>
-    <h3 style="margin:18px 0 8px;font-size:14px;display:flex;align-items:center;justify-content:space-between;">
-      <span>Admins <span id="inviteAdminCount" class="person-sub"></span></span>
-      <button class="btn btn-ghost" onclick="loadInviteAdmins()">↻ Refresh</button>
-    </h3>
-    <div id="inviteAdminsWrap" style="overflow-x:auto;"></div>
   </div>
 
   <div class="card">
@@ -3500,14 +3479,12 @@
       document.getElementById('loginScreen').style.display = '';
       document.getElementById('forgotScreen').style.display = 'none';
       document.getElementById('unlockScreen').style.display = 'none';
-      document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = 'none';
     }
 
     function showForgotScreen() {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('forgotScreen').style.display = '';
-      document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = 'none';
       document.getElementById('forgotStepEmail').style.display = '';
       document.getElementById('forgotStepOtp').style.display = 'none';
@@ -3682,7 +3659,6 @@
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('forgotScreen').style.display = 'none';
       document.getElementById('unlockScreen').style.display = '';
-      document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = 'none';
       document.getElementById('unlockStepEmail').style.display = '';
       document.getElementById('unlockStepOtp').style.display = 'none';
@@ -3736,19 +3712,8 @@
         showPanel();
       } catch (e) { setUnlockMsg('✗ ' + e.message, false); }
     }
-    function showSetupScreen() {
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('setupScreen').style.display = '';
-      document.getElementById('panelRoot').style.display = 'none';
-      document.getElementById('setupPassword').value = '';
-      document.getElementById('setupPwRules').innerHTML = '';
-      clearOtpTimer('setupOtpTimer');
-      document.getElementById('setupOtpTimer').textContent = '';
-    }
-
     function showPanel() {
       document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('setupScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = '';
       applyStoredNavCollapse();
       const validPages = ['dashboard', 'notifications', 'users', 'listeners', 'coinsettings', 'billing', 'gifts', 'specialoffers', 'weeklychallenges', 'termsprivacy', 'appversion', 'tags'];
@@ -3769,7 +3734,6 @@
       loadWeeklyChallengeLeaderboard();
       loadWeeklyChallengeHistory();
       loadActiveCalls();
-      loadInviteAdmins();
       loadStats();
       loadAdminAuditLog();
       loadOverview();
@@ -4558,12 +4522,6 @@
       el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
     }
 
-    function setSetupMsg(text, ok) {
-      const el = document.getElementById('setupMsg');
-      el.textContent = text;
-      el.className = ok === true ? 'ok' : ok === false ? 'err' : '';
-    }
-
     // ─── reCAPTCHA ("I'm not a robot") on admin login ─────────────────────────
     let _loginRecaptchaWidgetId = null;
 
@@ -5160,83 +5118,7 @@
       return '';
     }
 
-    let setupInviteToken = null;
-
-    async function requestSetupOtp() {
-      const email = document.getElementById('setupEmail').value.trim();
-      if (!email) { setSetupMsg('Enter your email.', false); return; }
-      setSetupMsg('Sending code…', null);
-      try {
-        const res = await fetch(API_URL + '/admin/auth/invite/request-otp', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invite_token: setupInviteToken, email })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to send code');
-        setSetupMsg('✓ Code sent to ' + email, true);
-        document.getElementById('setupOtp').value = '';
-        document.getElementById('setupStepEmail').style.display = 'none';
-        document.getElementById('setupStepOtp').style.display = '';
-        startOtpTimer('setupOtpTimer', 'setupVerifyBtn', 60, 'requestSetupOtp');
-      } catch (e) { setSetupMsg('✗ ' + e.message, false); }
-    }
-
-    async function verifySetupOtp() {
-      const email = document.getElementById('setupEmail').value.trim();
-      const otp_code = document.getElementById('setupOtp').value.trim();
-      if (!otp_code) { setSetupMsg('Enter the OTP.', false); return; }
-      if (document.getElementById('setupVerifyBtn').disabled) {
-        setSetupMsg('OTP expired, please resend.', false);
-        return;
-      }
-      setSetupMsg('Verifying…', null);
-      try {
-        const res = await fetch(API_URL + '/admin/auth/invite/verify-otp', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invite_token: setupInviteToken, email, otp_code })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Invalid code');
-        setSetupMsg('✓ Email verified', true);
-        clearOtpTimer('setupOtpTimer');
-        document.getElementById('setupStepOtp').style.display = 'none';
-        document.getElementById('setupStepCreds').style.display = '';
-        document.getElementById('setupPwRules').innerHTML = '';
-      } catch (e) { setSetupMsg('✗ ' + e.message, false); }
-    }
-
-    async function completeSetup() {
-      const username = document.getElementById('setupUsername').value.trim();
-      const password = document.getElementById('setupPassword').value;
-      // Render rules on submit so the user can see which rules are violated.
-      renderPasswordRules('setupPwRules', password);
-      if (!username || !password) { setSetupMsg('Please fill in all fields.', false); return; }
-      if (!isPasswordValidAdmin(password)) { setSetupMsg('Please satisfy all password rules.', false); return; }
-      setSetupMsg('Creating account…', null);
-      try {
-        const loc = await getLoginLocation();
-        const location_label = await reverseGeocodeLabel(loc.latitude, loc.longitude);
-        const res = await fetch(API_URL + '/admin/auth/invite/complete', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invite_token: setupInviteToken, username, password, ...loc, location_label })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to create account');
-        setAdminToken(data.token);
-        localStorage.setItem('adminUsername', username || 'Admin');
-        window.history.replaceState({}, document.title, window.location.pathname);
-        showPanel();
-      } catch (e) { setSetupMsg('✗ ' + e.message, false); }
-    }
-
     function initAuth() {
-      const params = new URLSearchParams(window.location.search);
-      const inviteToken = params.get('invite');
-      if (inviteToken) {
-        setupInviteToken = inviteToken;
-        showSetupScreen();
-        return;
-      }
       if (getAdminToken()) {
         showPanel();
       } else {
@@ -8205,45 +8087,6 @@ ${logSection === 'chats' ? '' : `
             <span class="person-sub">${type === 'user' ? personHandle(p) : ''}${personContact(p, type)} · ${p.coins} coins</span>
           </div>
         </div>`).join('');
-    }
-
-    async function generateAdminInvite() {
-      const wrap = document.getElementById('inviteLinkWrap');
-      wrap.textContent = 'Generating…';
-      try {
-        const res = await fetch(API_URL + '/admin/auth/invite', {
-          method: 'POST', headers: authHeaders(true), body: JSON.stringify({})
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
-        const link = window.location.origin + window.location.pathname + '?invite=' + data.invite_token;
-        wrap.innerHTML = `<input readonly value="${escapeHtml(link)}" onclick="this.select()"> <div class="person-sub">Expires: ${escapeHtml(formatAuditDate(data.expires_at))} · valid for 5 minutes, shown only once</div>`;
-      } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
-    }
-
-    async function loadInviteAdmins() {
-      const wrap = document.getElementById('inviteAdminsWrap');
-      const count = document.getElementById('inviteAdminCount');
-      if (!wrap) return;
-      wrap.textContent = 'Loading…';
-      try {
-        const res = await fetch(API_URL + '/admin/auth/admins', { headers: authHeaders() });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
-        if (count) count.textContent = '(' + data.length + ')';
-        if (!data.length) { wrap.innerHTML = '<div class="person-sub">No admins yet.</div>'; return; }
-        const cell = 'padding:6px 10px;text-align:left;white-space:nowrap;';
-        const rows = data.map(a => `<tr>
-          <td style="${cell}">${escapeHtml(a.username)}</td>
-          <td style="${cell}">${escapeHtml(a.email || '—')}</td>
-          <td style="${cell}">${a.is_active ? 'Active' : 'Disabled'}</td>
-          <td style="${cell}">${a.last_login_at ? escapeHtml(formatAuditDate(a.last_login_at)) : 'Never'}</td>
-        </tr>`).join('');
-        wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead><tr>
-            <th style="${cell}">Username</th><th style="${cell}">Email</th><th style="${cell}">Status</th><th style="${cell}">Last login</th>
-          </tr></thead><tbody>${rows}</tbody></table>`;
-      } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
     }
 
     function applyTheme(theme) {

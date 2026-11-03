@@ -736,32 +736,6 @@ class AccountDeletionRequestCreate(BaseModel):
     reason: Optional[str] = None
 
 
-class AdminInviteCreate(BaseModel):
-    expires_in_hours: Optional[int] = 72
-
-class AdminInviteRequestOtp(BaseModel):
-    invite_token: str
-    email: str
-
-class AdminInviteVerifyOtp(BaseModel):
-    invite_token: str
-    email: str
-    otp_code: str
-
-class AdminInviteComplete(BaseModel):
-    invite_token: str
-    username: str
-    password: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    accuracy_m: Optional[float] = None
-    location_label: Optional[str] = None
-
-    @field_validator("password")
-    @classmethod
-    def password_strength(cls, v: str) -> str:
-        return validate_password_strength(v)
-
 class AdminLogin(BaseModel):
     identifier: str
     password: str

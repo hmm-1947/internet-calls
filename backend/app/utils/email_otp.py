@@ -40,12 +40,6 @@ PURPOSES = {
         "intro": "Enter this code to reset your password. Please don't share it with anyone.",
         "ignore": "If you didn't request a password reset, you can safely ignore this email. Your password won't change.",
     },
-    "invite": {
-        "label": "verification code",
-        "heading": "Verify your email",
-        "intro": "Enter this code to verify your email and finish your admin sign-up.",
-        "ignore": "If you didn't expect this invitation, you can safely ignore this email.",
-    },
 }
 
 
