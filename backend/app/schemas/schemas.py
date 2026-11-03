@@ -762,6 +762,24 @@ class AdminLogin(BaseModel):
     identifier: str
     password: str
     captcha_token: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_m: Optional[float] = None
+    location_label: Optional[str] = None
+
+class AdminLoginVerifyOtp(BaseModel):
+    identifier: str
+    otp_code: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_m: Optional[float] = None
+    location_label: Optional[str] = None
+
+class AdminLogout(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_m: Optional[float] = None
+    location_label: Optional[str] = None
 
 class AdminForgotPasswordRequestOtp(BaseModel):
     email: str

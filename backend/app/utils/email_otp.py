@@ -7,11 +7,15 @@ from concurrent.futures import ThreadPoolExecutor
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
+from email.utils import formataddr
 from app.core.config import settings
 
 logger = logging.getLogger("email_otp")
 
-LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "logo.png")
+BRAND_NAME = "LailaNow"
+DEFAULT_OTP_VALID_MINUTES = 5
+
+LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "admin_logo.png")
 
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="otp-email")
 
@@ -23,50 +27,90 @@ def generate_otp_code() -> str:
     return str(random.randint(100000, 999999))
 
 
-def _build_message(to_email: str, otp_code: str) -> MIMEMultipart:
-    subject = "Your verification code"
+PURPOSES = {
+    "login": {
+        "label": "authentication code",
+        "heading": "Your authentication code",
+        "intro": "Enter this code to finish signing in. Please don't share it with anyone.",
+        "ignore": "If you didn't try to sign in, please reset your password as soon as possible.",
+    },
+    "reset": {
+        "label": "password reset code",
+        "heading": "Reset your password",
+        "intro": "Enter this code to reset your password. Please don't share it with anyone.",
+        "ignore": "If you didn't request a password reset, you can safely ignore this email. Your password won't change.",
+    },
+    "invite": {
+        "label": "verification code",
+        "heading": "Verify your email",
+        "intro": "Enter this code to verify your email and finish your admin sign-up.",
+        "ignore": "If you didn't expect this invitation, you can safely ignore this email.",
+    },
+}
+
+
+def _build_message(to_email: str, otp_code: str, valid_minutes: int, purpose: str = "login") -> MIMEMultipart:
+    info = PURPOSES.get(purpose, PURPOSES["login"])
+    subject = f"Your {BRAND_NAME} {info['label']}: {otp_code}"
+    logo_exists = os.path.exists(LOGO_PATH)
+    minutes_label = f"{valid_minutes} minute{'s' if valid_minutes != 1 else ''}"
+    digits = "".join(
+        f'<td style="padding:0 4px;"><div style="width:44px;height:56px;line-height:56px;text-align:center;'
+        f'background-color:#fff5f5;border:1px solid #f6c9cd;border-radius:10px;color:#c1121f;'
+        f'font-size:28px;font-weight:700;font-family:\'Segoe UI\',Arial,sans-serif;">{d}</div></td>'
+        for d in otp_code
+    )
+
+    logo_html = (
+        f'<img src="cid:logo_cid" height="56" style="display:block;height:56px;width:auto;border:0;" alt="{BRAND_NAME}"/>'
+        if logo_exists
+        else f'<p style="margin:0;color:#e63946;font-size:20px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">{BRAND_NAME}</p>'
+    )
 
     html_body = f"""
     <html>
-    <body style="margin:0;padding:0;background-color:#0B0F1A;font-family:Arial,sans-serif;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0B0F1A;padding:40px 0;">
+    <body style="margin:0;padding:0;background-color:#f5f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+        <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Valid for {minutes_label}. Don\x27t share this code with anyone.</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f6f9;padding:40px 12px;">
             <tr>
                 <td align="center">
-                    <table width="420" cellpadding="0" cellspacing="0" style="background-color:#15070A;border:2px solid #E53950;border-radius:16px;overflow:hidden;box-shadow:0 0 25px rgba(229,57,80,0.35);">
+                    <table width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border:1px solid #ecedf1;border-radius:16px;overflow:hidden;">
                         <tr>
-                            <td align="center" style="background-color:#000000;padding:24px;border-bottom:2px solid #E53950;">
-                                <img src="cid:logo_cid" width="90" height="90" style="border-radius:50%;border:3px solid #E53950;" alt="Logo"/>
+                            <td style="background-color:#e63946;height:6px;font-size:0;line-height:0;">&nbsp;</td>
+                        </tr>
+                        <tr>
+                            <td align="center" style="padding:32px 32px 4px 32px;">
+                                {logo_html}
                             </td>
                         </tr>
                         <tr>
-                            <td align="center" style="padding:32px 28px 8px 28px;">
-                                <p style="color:#FFFFFF;font-size:16px;margin:0 0 6px 0;">Verify your email</p>
-                                <p style="color:#8A8F98;font-size:13px;margin:0;">Use the code below to complete your verification</p>
+                            <td align="center" style="padding:20px 32px 0 32px;">
+                                <h1 style="margin:0 0 8px 0;color:#1f2430;font-size:22px;font-weight:700;">{info["heading"]}</h1>
+                                <p style="margin:0;color:#7c8493;font-size:14px;line-height:1.6;">{info["intro"]}</p>
                             </td>
                         </tr>
                         <tr>
-                            <td align="center" style="padding:24px 28px;">
-                                <table cellpadding="0" cellspacing="0">
-                                    <tr>
-                                        <td style="background-color:#000000;border:2px solid #E53950;border-radius:10px;padding:16px 32px;">
-                                            <span style="color:#E53950;font-size:32px;font-weight:bold;letter-spacing:8px;">{otp_code}</span>
-                                        </td>
-                                    </tr>
-                                </table>
+                            <td align="center" style="padding:28px 32px 8px 32px;">
+                                <table cellpadding="0" cellspacing="0"><tr>{digits}</tr></table>
                             </td>
                         </tr>
                         <tr>
-                            <td align="center" style="padding:0 28px 28px 28px;">
-                                <p style="color:#8A8F98;font-size:12px;margin:0;">This code expires in 10 minutes.</p>
-                                <p style="color:#8A8F98;font-size:12px;margin:8px 0 0 0;">If you didn't request this, you can ignore this email.</p>
+                            <td align="center" style="padding:16px 32px 8px 32px;">
+                                <p style="margin:0;color:#1f2430;font-size:13px;">This code is valid for <strong>{minutes_label}</strong>.</p>
                             </td>
                         </tr>
                         <tr>
-                            <td align="center" style="background-color:#000000;padding:14px;border-top:2px solid #E53950;">
-                                <p style="color:#E53950;font-size:12px;margin:0;letter-spacing:1px;">LAILA NOW</p>
+                            <td style="padding:24px 32px 0 32px;">
+                                <div style="border-top:1px solid #ecedf1;"></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td align="center" style="padding:18px 32px 30px 32px;">
+                                <p style="margin:0;color:#7c8493;font-size:12px;line-height:1.6;">{info["ignore"]}</p>
                             </td>
                         </tr>
                     </table>
+                    <p style="margin:18px 0 0 0;color:#9aa2b1;font-size:11px;">&copy; {BRAND_NAME}</p>
                 </td>
             </tr>
         </table>
@@ -75,24 +119,23 @@ def _build_message(to_email: str, otp_code: str) -> MIMEMultipart:
     """
 
     msg = MIMEMultipart("related")
+    alt = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = settings.smtp_from_email
+    msg["From"] = formataddr((BRAND_NAME, settings.smtp_from_email))
     msg["To"] = to_email
-
-    alt_part = MIMEMultipart("alternative")
-    alt_part.attach(MIMEText(f"Your OTP code is {otp_code}. It expires in 10 minutes.", "plain"))
-    alt_part.attach(MIMEText(html_body, "html"))
-    msg.attach(alt_part)
-
-    if os.path.exists(LOGO_PATH):
+    alt.attach(MIMEText(
+        f"Your {BRAND_NAME} {info['label']}: {otp_code}\n\nValid for {minutes_label}. "
+        f"If you didn't request this, you can ignore this email.",
+        "plain",
+    ))
+    alt.attach(MIMEText(html_body, "html"))
+    msg.attach(alt)
+    if logo_exists:
         with open(LOGO_PATH, "rb") as f:
             logo_img = MIMEImage(f.read())
-            logo_img.add_header("Content-ID", "<logo_cid>")
-            logo_img.add_header("Content-Disposition", "inline", filename="logo.png")
-            msg.attach(logo_img)
-    else:
-        logger.warning(f"Logo file not found at {LOGO_PATH}")
-
+        logo_img.add_header("Content-ID", "<logo_cid>")
+        logo_img.add_header("Content-Disposition", "inline")
+        msg.attach(logo_img)
     return msg
 
 
@@ -118,7 +161,6 @@ def _send_with_retry(to_email: str, otp_code: str, msg: MIMEMultipart):
     logger.error(f"Giving up sending OTP email to {to_email} after {MAX_SEND_RETRIES} attempts: {last_error}")
 
 
-def send_otp_email(to_email: str, otp_code: str):
-    msg = _build_message(to_email, otp_code)
+def send_otp_email(to_email: str, otp_code: str, valid_minutes: int = DEFAULT_OTP_VALID_MINUTES, purpose: str = "login"):
+    msg = _build_message(to_email, otp_code, valid_minutes, purpose)
     _executor.submit(_send_with_retry, to_email, otp_code, msg)
-

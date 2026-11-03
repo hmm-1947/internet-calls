@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, Text, Float
 
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -125,6 +125,9 @@ class AdminUser(Base):
     reset_otp_code = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
     reset_otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
+    login_otp_code = Column(String, nullable=True)
+    login_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    login_otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -569,3 +572,18 @@ class ReservedUsername(Base):
     released_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, nullable=False, index=True)
+    admin_username = Column(String, nullable=False)
+    action = Column(String, nullable=False, index=True)
+    ip_address = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    accuracy_m = Column(Float, nullable=True)
+    location_label = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

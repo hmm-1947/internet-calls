@@ -1073,3 +1073,36 @@ def list_listener_audit_log(
     """Login/logout history for listeners, most recent first. Failed login
     attempts are never recorded, so only successful events appear here."""
     return _paginated_audit_log(db, "listener", page, page_size)
+
+
+@router.get("/audit-log/admins")
+def list_admin_audit_log(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _=Depends(verify_admin),
+):
+    """Admin panel login/logout history, most recent first. Failed login
+    attempts are never recorded, so only successful events appear here."""
+    from app.models.models import AdminAuditLog
+
+    rows = (
+        db.query(AdminAuditLog)
+        .order_by(AdminAuditLog.created_at.desc(), AdminAuditLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "admin_id": r.admin_id,
+            "name": r.admin_username,
+            "action": r.action,
+            "ip_address": r.ip_address,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "accuracy_m": r.accuracy_m,
+            "location_label": r.location_label,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]

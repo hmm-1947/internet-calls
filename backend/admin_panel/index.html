@@ -1807,6 +1807,42 @@
       color: rgba(255,255,255,0.6);
     }
 
+    /* Date inputs show DD-MON-YYYY: the native locale text is hidden and the
+       formatted value (kept in data-dmy by the script) is painted instead. */
+    input[type="date"][data-dmy] {
+      position: relative;
+    }
+
+    input[type="date"][data-dmy]::-webkit-datetime-edit {
+      display: none;
+    }
+
+    input[type="date"][data-dmy]::before {
+      content: attr(data-dmy);
+      display: block;
+      color: inherit;
+      padding-right: 26px;
+      cursor: pointer;
+    }
+
+    input[type="date"][data-dmy][data-empty]::before {
+      opacity: .55;
+    }
+
+    input[type="date"][data-dmy]::-webkit-calendar-picker-indicator {
+      position: absolute;
+      right: 8px;
+      top: 0;
+      bottom: 0;
+      margin: auto 0;
+      cursor: pointer;
+    }
+
+    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+    body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+    }
+
     .wallet-date-range input[type="date"] {
       padding: 6px 30px 6px 10px;
       border-radius: 8px;
@@ -2678,16 +2714,26 @@
   <div id="loginScreen" style="max-width:380px;margin:80px auto;display:none;">
     <div class="card">
       <h2>Admin Login</h2>
-      <input id="loginIdentifier" placeholder="Username or Email">
-      <div class="pw-field">
-        <input id="loginPassword" placeholder="Password" type="password">
-        <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <div id="loginStepCreds">
+        <input id="loginIdentifier" placeholder="Username or Email">
+        <div class="pw-field">
+          <input id="loginPassword" placeholder="Password" type="password">
+          <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
+        <div id="loginRecaptcha" style="margin:10px 0;"></div>
+        <button class="btn btn-primary" onclick="doAdminLogin()">Login</button>
+        <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+          <a href="#" style="font-size:13px;font-weight:600;" onclick="showUnlockScreen();return false;">Unlock account</a>
+          <a href="#" style="font-size:13px;font-weight:600;" onclick="showForgotScreen();return false;">Forgot password?</a>
+        </div>
       </div>
-      <div id="loginRecaptcha" style="margin:10px 0;"></div>
-      <button class="btn btn-primary" onclick="doAdminLogin()">Login</button>
-      <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
-        <a href="#" style="font-size:13px;font-weight:600;" onclick="showUnlockScreen();return false;">Unlock account</a>
-        <a href="#" style="font-size:13px;font-weight:600;" onclick="showForgotScreen();return false;">Forgot password?</a>
+      <div id="loginStepOtp" style="display:none;">
+        <div id="loginOtpHint" style="font-size:13px;color:var(--slate);margin-bottom:10px;"></div>
+        <input id="loginOtp" placeholder="Enter 6-digit code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')verifyLoginOtp()">
+        <button class="btn btn-primary" onclick="verifyLoginOtp()">Verify &amp; login</button>
+        <div style="margin-top:8px;">
+          <a href="#" style="font-size:13px;font-weight:600;" onclick="backToLoginCreds();return false;">Back to login</a>
+        </div>
       </div>
       <div id="loginMsg" style="margin-top:10px;font-weight:600;font-size:13px;"></div>
     </div>
@@ -2930,6 +2976,13 @@
     <div id="statsTableWrap"></div>
   </div>
 
+  <div class="card">
+    <h2>Admin Login &amp; Logout Audit Log
+      <button class="btn btn-ghost" onclick="loadAdminAuditLog()">↻ Refresh</button>
+    </h2>
+    <div id="adminAuditLogList"></div>
+  </div>
+
   </div>
 
   <div id="page-notifications" style="display:none;">
@@ -2941,7 +2994,7 @@
       <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
         Requests and events raised from the apps.
       </p>
-      <input class="search-box" id="notificationSearch" placeholder="Search withdrawal requests by listener name" oninput="renderNotifications()">
+      <input class="search-box" id="notificationSearch" placeholder="Search withdrawal requests by listener name" oninput="onNotificationSearch()">
       <div id="notificationsList"></div>
     </div>
   </div>
@@ -3438,6 +3491,7 @@
     }
 
     function showLoginScreen() {
+      if (typeof resetLoginStep === 'function') resetLoginStep();
       document.getElementById('loginScreen').style.display = '';
       document.getElementById('forgotScreen').style.display = 'none';
       document.getElementById('unlockScreen').style.display = 'none';
@@ -3562,7 +3616,7 @@
         document.getElementById('forgotOtp').value = '';
         document.getElementById('forgotStepEmail').style.display = 'none';
         document.getElementById('forgotStepOtp').style.display = '';
-        startOtpTimer('forgotOtpTimer', 'forgotVerifyBtn', 60, 'requestForgotOtp');
+        startOtpTimer('forgotOtpTimer', 'forgotVerifyBtn', 300, 'requestForgotOtp');
       } catch (e) { setForgotMsg('✗ ' + e.message, false); }
     }
 
@@ -3649,7 +3703,7 @@
         document.getElementById('unlockOtp').value = '';
         document.getElementById('unlockStepEmail').style.display = 'none';
         document.getElementById('unlockStepOtp').style.display = '';
-        startOtpTimer('unlockOtpTimer', 'unlockVerifyBtn', 60, 'requestUnlockOtp');
+        startOtpTimer('unlockOtpTimer', 'unlockVerifyBtn', 300, 'requestUnlockOtp');
       } catch (e) { setUnlockMsg('✗ ' + e.message, false); }
     }
 
@@ -3711,6 +3765,7 @@
       loadWeeklyChallengeHistory();
       loadActiveCalls();
       loadStats();
+      loadAdminAuditLog();
       loadOverview();
       loadChatsChart();
       loadNotificationsUnreadCount();
@@ -4466,7 +4521,7 @@
     }
 
     function renderCallsChart(series) {
-      const labels = series.map(s => s.label);
+      const labels = series.map(s => prettyChartLabel(s.label));
       const audioCounts = series.map(s => s.audio_count ?? s.count ?? 0);
       const videoCounts = series.map(s => s.video_count ?? 0);
       if (callsChartInstance) callsChartInstance.destroy();
@@ -4479,7 +4534,7 @@
     }
 
     function renderChatsChart(series) {
-      const labels = series.map(s => s.label);
+      const labels = series.map(s => prettyChartLabel(s.label));
       const textCounts = series.map(s => s.text_count ?? s.count ?? 0);
       const voiceCounts = series.map(s => s.voice_count ?? 0);
       if (chatsChartInstance) chatsChartInstance.destroy();
@@ -4524,31 +4579,181 @@
       }
     }
 
+    function getLoginLocation() {
+      const blockedMsg = 'Location is blocked for this site, so the browser will not ask again. Click the lock icon in the address bar, set Location to Allow, then press Sign in again.';
+      const requestPosition = () => new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('This browser does not support location access, which is required to log in.'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy_m: pos.coords.accuracy
+          }),
+          err => {
+            const msg = err.code === 1
+              ? blockedMsg
+              : 'Could not determine your location. Please check your device location settings and try again.';
+            reject(new Error(msg));
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      });
+
+      if (!navigator.permissions || !navigator.permissions.query) return requestPosition();
+      return navigator.permissions.query({ name: 'geolocation' }).then(status => {
+        if (status.state === 'denied') {
+          status.onchange = () => {
+            if (status.state !== 'denied') {
+              setLoginMsg('Location enabled. Press Sign in to continue.', true);
+              status.onchange = null;
+            }
+          };
+          throw new Error(blockedMsg);
+        }
+        return requestPosition();
+      }, () => requestPosition());
+    }
+
+    async function reverseGeocodeLabel(lat, lng) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      try {
+        const res = await fetch(
+          'https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&lat=' + lat + '&lon=' + lng,
+          { signal: ctrl.signal, headers: { 'Accept': 'application/json' } }
+        );
+        if (!res.ok) return '';
+        const data = await res.json();
+        return (data && data.display_name) || '';
+      } catch (e) {
+        return '';
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    let _pendingLogin = null;
+
+    function showLoginOtpStep(emailHint) {
+      document.getElementById('loginStepCreds').style.display = 'none';
+      document.getElementById('loginStepOtp').style.display = '';
+      document.getElementById('loginOtp').value = '';
+      document.getElementById('loginOtpHint').textContent = 'We sent a 6-digit code to ' + (emailHint || 'your email') + '. It is valid for 5 minutes.';
+      document.getElementById('loginOtp').focus();
+    }
+
+    function resetLoginStep() {
+      _pendingLogin = null;
+      const creds = document.getElementById('loginStepCreds');
+      const otp = document.getElementById('loginStepOtp');
+      if (creds) creds.style.display = '';
+      if (otp) otp.style.display = 'none';
+      const otpInput = document.getElementById('loginOtp');
+      if (otpInput) otpInput.value = '';
+    }
+
+    function backToLoginCreds() {
+      resetLoginStep();
+      document.getElementById('loginPassword').value = '';
+      setLoginMsg('', null);
+      resetLoginCaptcha();
+    }
+
     async function doAdminLogin() {
       const identifier = document.getElementById('loginIdentifier').value.trim();
       const password = document.getElementById('loginPassword').value;
       if (!identifier || !password) { setLoginMsg('Please fill in all fields.', false); return; }
       const captcha_token = getLoginCaptchaToken();
       if (CONFIG.RECAPTCHA_SITE_KEY && !captcha_token) { setLoginMsg('Please verify you are not a robot.', false); return; }
-      setLoginMsg('Signing in…', null);
+      setLoginMsg('Requesting location access…', null);
       try {
+        const loc = await getLoginLocation();
+        setLoginMsg('Checking credentials…', null);
+        const location_label = await reverseGeocodeLabel(loc.latitude, loc.longitude);
         const res = await fetch(API_URL + '/admin/auth/login', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier, password, captcha_token })
+          body: JSON.stringify({ identifier, password, captcha_token, ...loc, location_label })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Login failed');
-        setAdminToken(data.token);
-        localStorage.setItem('adminUsername', data.username || 'Admin');
-        if (data.email) localStorage.setItem('adminEmail', data.email);
-        showPanel();
+        if (!data.otp_required) throw new Error('Unexpected login response');
+        _pendingLogin = { identifier, loc, location_label };
+        document.getElementById('loginPassword').value = '';
+        setLoginMsg('', null);
+        showLoginOtpStep(data.email_hint);
       } catch (e) {
         setLoginMsg('✗ ' + e.message, false);
         resetLoginCaptcha();
       }
     }
 
-    function doAdminLogout() {
+    async function verifyLoginOtp() {
+      if (!_pendingLogin) { backToLoginCreds(); return; }
+      const otp_code = document.getElementById('loginOtp').value.trim();
+      if (!otp_code) { setLoginMsg('Enter the code sent to your email.', false); return; }
+      setLoginMsg('Verifying…', null);
+      try {
+        const res = await fetch(API_URL + '/admin/auth/login/verify-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            identifier: _pendingLogin.identifier,
+            otp_code,
+            ..._pendingLogin.loc,
+            location_label: _pendingLogin.location_label
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Invalid code');
+        setAdminToken(data.token);
+        localStorage.setItem('adminUsername', data.username || 'Admin');
+        if (data.email) localStorage.setItem('adminEmail', data.email);
+        resetLoginStep();
+        setLoginMsg('', null);
+        showPanel();
+      } catch (e) {
+        setLoginMsg('✗ ' + e.message, false);
+      }
+    }
+
+    async function getLogoutLocation() {
+      if (!navigator.geolocation) return {};
+      try {
+        const pos = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 4000, maximumAge: 120000 });
+        });
+        const loc = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_m: pos.coords.accuracy
+        };
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 2500);
+        let label = '';
+        try {
+          const res = await fetch(
+            'https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&lat=' + loc.latitude + '&lon=' + loc.longitude,
+            { signal: ctrl.signal, headers: { 'Accept': 'application/json' } }
+          );
+          if (res.ok) { const d = await res.json(); label = (d && d.display_name) || ''; }
+        } catch (e) {} finally { clearTimeout(timer); }
+        return { ...loc, location_label: label };
+      } catch (e) {
+        return {};
+      }
+    }
+
+    async function doAdminLogout() {
+      try {
+        const loc = await getLogoutLocation();
+        await fetch(API_URL + '/admin/auth/logout', {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(loc)
+        });
+      } catch (e) {}
       clearAdminToken();
       localStorage.removeItem('adminUsername');
       if (adminWs) adminWs.close();
@@ -5566,7 +5771,7 @@
                 <td>${r.listener_name} (#${r.listener_id})</td>
                 <td>${r.gift_name}</td>
                 <td>${r.coins} coins</td>
-                <td>${r.created_at ? new Date(r.created_at).toLocaleString() : '-'}</td>
+                <td>${r.created_at ? formatAuditDate(r.created_at) : '-'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -6036,7 +6241,7 @@
       const el = document.getElementById('wcStatusBanner');
       if (!el) return;
       if (active) {
-        const exp = expiresAt ? new Date(expiresAt).toLocaleString() : '';
+        const exp = expiresAt ? formatAuditDate(expiresAt) : '';
         el.style.color = '#1a9e5c';
         el.textContent = `● Challenge is live${exp ? ' — expires ' + exp : ''}`;
       } else {
@@ -6191,6 +6396,10 @@
       `;
     }
 
+    const WC_HISTORY_PAGE_SIZE = 5;
+    let wcHistoryCache = [];
+    let wcHistoryPage = 1;
+
     async function loadWeeklyChallengeHistory() {
       const wrap = document.getElementById('wcHistoryList');
       if (wrap) wrap.innerHTML = skelTable(6, 5);
@@ -6198,21 +6407,33 @@
         const res = await fetch(API_URL + '/weekly-challenge/admin/history', { headers: authHeaders() });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to load history');
-        renderWeeklyChallengeHistory(data);
+        wcHistoryCache = data;
+        wcHistoryPage = 1;
+        renderWeeklyChallengeHistory();
       } catch (e) {
         if (wrap) wrap.innerHTML = '<div class="empty-state">Failed to load previous weeks.</div>';
       }
     }
 
-    function renderWeeklyChallengeHistory(weeks) {
+    function goWcHistoryPage(page) {
+      wcHistoryPage = page;
+      renderWeeklyChallengeHistory();
+    }
+
+    function renderWeeklyChallengeHistory() {
       const wrap = document.getElementById('wcHistoryList');
-      if (!weeks.length) {
+      const allWeeks = wcHistoryCache;
+      if (!allWeeks.length) {
         wrap.innerHTML = '<div class="empty-state">No completed weeks yet. Past challenges will show up here once their week ends.</div>';
         return;
       }
+      const totalPages = Math.max(1, Math.ceil(allWeeks.length / WC_HISTORY_PAGE_SIZE));
+      wcHistoryPage = Math.min(Math.max(1, wcHistoryPage), totalPages);
+      const pageStart = (wcHistoryPage - 1) * WC_HISTORY_PAGE_SIZE;
+      const weeks = allWeeks.slice(pageStart, pageStart + WC_HISTORY_PAGE_SIZE);
       wrap.innerHTML = weeks.map(w => {
-        const start = new Date(w.week_start).toLocaleDateString();
-        const end = new Date(w.week_end).toLocaleDateString();
+        const start = formatDmy(new Date(w.week_start));
+        const end = formatDmy(new Date(w.week_end));
         const topListener = w.top_listener_name
           ? ` &middot; <span class="wc-icon wc-trophy">${CONFIRM_ICONS.trophy}</span> ${w.top_listener_name}`
           : '';
@@ -6234,7 +6455,7 @@
             </table>
           </div>
         `;
-      }).join('');
+      }).join('') + statsPager(wcHistoryPage, totalPages, 'goWcHistoryPage');
     }
 
 
@@ -6303,7 +6524,7 @@
               <tr>
                 <td>${l.name}</td>
                 <td><span class="badge ${LOGIN_AUDIT_ACTION_BADGE[l.action] || ''}">${LOGIN_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
-                <td style="white-space:nowrap;">${formatPurchaseDate(l.created_at)}</td>
+                <td style="white-space:nowrap;">${formatAuditDate(l.created_at)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -6330,6 +6551,17 @@
     // Open (not yet done) notifications, newest first. Kept in memory so a
     // websocket push can prepend without refetching the whole feed.
     let notificationsCache = [];
+    let notificationsPage = 1;
+
+    function goNotificationsPage(page) {
+      notificationsPage = page;
+      renderNotifications();
+    }
+
+    function onNotificationSearch() {
+      notificationsPage = 1;
+      renderNotifications();
+    }
     let notificationsUnread = 0;
 
     function setNotificationsBadge(count) {
@@ -6387,7 +6619,7 @@
       const diffDays = Math.round((startOf(today) - startOf(d)) / 86400000);
       if (diffDays === 0) return 'Today';
       if (diffDays === 1) return 'Yesterday';
-      return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+      return formatDmy(d);
     }
 
     function notificationTimeLabel(iso) {
@@ -6418,8 +6650,12 @@
         return;
       }
 
-      // Newest first, then split into day buckets so each day gets one header.
-      const items = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      // Newest first, then 10 per page, split into day buckets so each day gets one header.
+      const sorted = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const totalPages = Math.max(1, Math.ceil(sorted.length / AUDIT_LOG_PAGE_SIZE));
+      notificationsPage = Math.min(Math.max(1, notificationsPage), totalPages);
+      const pageStart = (notificationsPage - 1) * AUDIT_LOG_PAGE_SIZE;
+      const items = sorted.slice(pageStart, pageStart + AUDIT_LOG_PAGE_SIZE);
       const groups = [];
       items.forEach(n => {
         const label = notificationDateLabel(n.created_at);
@@ -6442,7 +6678,7 @@
             <div class="notif-time">${notificationTimeLabel(n.created_at)}</div>
           </div>
         `).join('')}
-      `).join('');
+      `).join('') + statsPager(notificationsPage, totalPages, 'goNotificationsPage');
     }
 
     const WITHDRAWAL_LOG_PAGE_SIZE = 10;
@@ -6698,7 +6934,7 @@
           <tbody>
             ${pageRows.map(l => `
               <tr>
-                <td style="white-space:nowrap;">${formatPurchaseDate(l.created_at)}</td>
+                <td style="white-space:nowrap;">${formatAuditDate(l.created_at)}</td>
                 <td><span class="badge ${BILLING_AUDIT_ACTION_BADGE[l.action] || ''}">${BILLING_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
                 <td>${l.plan_name}</td>
                 <td style="color:var(--slate);font-size:13px;">${l.details || '—'}</td>
@@ -6754,7 +6990,7 @@
           <tbody>
             ${pageRows.map(l => `
               <tr>
-                <td style="white-space:nowrap;">${formatPurchaseDate(l.created_at)}</td>
+                <td style="white-space:nowrap;">${formatAuditDate(l.created_at)}</td>
                 <td><span class="badge ${GIFT_AUDIT_ACTION_BADGE[l.action] || ''}">${GIFT_AUDIT_ACTION_LABELS[l.action] || l.action}</span></td>
                 <td>${l.gift_name}</td>
                 <td style="color:var(--slate);font-size:13px;">${l.details || '—'}</td>
@@ -6787,7 +7023,89 @@
       if (!iso) return '—';
       const d = new Date(iso);
       if (isNaN(d.getTime())) return '—';
-      return d.toLocaleString();
+      return formatAuditDate(iso);
+    }
+
+    const AUDIT_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+    /** Date only, DD-MON-YYYY, e.g. "03-NOV-2026". Takes a Date. */
+    function formatDmy(d) {
+      if (!(d instanceof Date) || isNaN(d.getTime())) return '—';
+      return String(d.getDate()).padStart(2, '0') + '-' + AUDIT_MONTHS[d.getMonth()] + '-' + d.getFullYear();
+    }
+
+    /** Converts a "YYYY-MM-DD" value (as used by date inputs and the API) to DD-MON-YYYY. */
+    function formatDmyString(value) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');
+      return m ? m[3] + '-' + AUDIT_MONTHS[Number(m[2]) - 1] + '-' + m[1] : '';
+    }
+
+    /** Chart x-axis labels from the API (2026-11-03, 2026-11-03 14:00, 2026-W44, 2026-11) in the DD-MON-YYYY style. */
+    function prettyChartLabel(label) {
+      const s = String(label || '');
+      let m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})$/.exec(s);
+      if (m) return formatDmyString(m[1]) + ' ' + m[2];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatDmyString(s);
+      m = /^(\d{4})-W(\d{2})$/.exec(s);
+      if (m) {
+        const jan4 = new Date(Date.UTC(Number(m[1]), 0, 4));
+        const dow = jan4.getUTCDay() || 7;
+        const monday = new Date(jan4.getTime() + ((Number(m[2]) - 1) * 7 - (dow - 1)) * 86400000);
+        return String(monday.getUTCDate()).padStart(2, '0') + '-' + AUDIT_MONTHS[monday.getUTCMonth()] + '-' + monday.getUTCFullYear();
+      }
+      m = /^(\d{4})-(\d{2})$/.exec(s);
+      if (m) return AUDIT_MONTHS[Number(m[2]) - 1] + '-' + m[1];
+      return s;
+    }
+
+    /**
+     * Native date inputs follow the browser's locale and cannot be formatted
+     * from CSS alone, so each one carries its value as DD-MON-YYYY in a
+     * data attribute that the stylesheet paints over the hidden native text
+     * (see input[type="date"][data-dmy] above). Clicking anywhere on the
+     * field opens the calendar. The value setter is wrapped so values set
+     * from code (e.g. the "today" defaults) update the display as well.
+     */
+    (function setupDmyDateInputs() {
+      const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      function sync(inp) {
+        const text = formatDmyString(desc.get.call(inp));
+        inp.setAttribute('data-dmy', text || 'DD-MON-YYYY');
+        inp.toggleAttribute('data-empty', !text);
+      }
+      function enhance(inp) {
+        if (inp._dmyReady) return;
+        inp._dmyReady = true;
+        Object.defineProperty(inp, 'value', {
+          configurable: true,
+          get() { return desc.get.call(this); },
+          set(v) { desc.set.call(this, v); sync(this); }
+        });
+        inp.addEventListener('input', () => sync(inp));
+        inp.addEventListener('change', () => sync(inp));
+        inp.addEventListener('click', () => { try { inp.showPicker(); } catch (e) {} });
+        sync(inp);
+      }
+      function scan(root) {
+        if (root.matches && root.matches('input[type="date"]')) enhance(root);
+        if (root.querySelectorAll) root.querySelectorAll('input[type="date"]').forEach(enhance);
+      }
+      scan(document);
+      document.addEventListener('DOMContentLoaded', () => scan(document));
+      new MutationObserver(muts => {
+        muts.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) scan(n); }));
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    })();
+
+    /** Audit log timestamps: "03-NOV-2026, 09:13:45 AM" in the admin's local time. */
+    function formatAuditDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      const pad = n => String(n).padStart(2, '0');
+      const h = d.getHours();
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      return pad(d.getDate()) + '-' + AUDIT_MONTHS[d.getMonth()] + '-' + d.getFullYear() + ', ' + pad(h12) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' ' + (h < 12 ? 'AM' : 'PM');
     }
 
     /**
@@ -6801,7 +7119,7 @@
       if (!iso) return '—';
       const d = new Date(iso);
       if (isNaN(d.getTime())) return '—';
-      const date = d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+      const date = formatDmy(d);
       const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       return `${date}, ${time}`;
     }
@@ -6888,6 +7206,7 @@
 
 
     let statsTab = 'user';
+    let statsPage = 1;
     let statsCache = { user: [], listener: [] };
 
     function formatDuration(totalSeconds) {
@@ -6934,7 +7253,63 @@
       statsTab = tab;
       document.getElementById('tabStatsUsers').classList.toggle('active', tab === 'user');
       document.getElementById('tabStatsListeners').classList.toggle('active', tab === 'listener');
+      statsPage = 1;
       renderStatsTable();
+    }
+
+    let adminAuditCache = [];
+    let adminAuditPage = 1;
+
+    async function loadAdminAuditLog() {
+      const wrap = document.getElementById('adminAuditLogList');
+      if (!wrap) return;
+      wrap.innerHTML = skelTable(5, 5);
+      try {
+        const res = await fetch(API_URL + '/admin/audit-log/admins?limit=200', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load audit log');
+        adminAuditCache = data;
+        renderAdminAuditLog(1);
+      } catch (e) {
+        wrap.innerHTML = '<div class="empty-state">Failed to load admin login activity.</div>';
+      }
+    }
+
+    function renderAdminAuditLog(page) {
+      const wrap = document.getElementById('adminAuditLogList');
+      const items = adminAuditCache;
+      if (!items.length) {
+        wrap.innerHTML = '<div class="empty-state">No admin login activity yet.</div>';
+        return;
+      }
+      const totalPages = Math.max(1, Math.ceil(items.length / AUDIT_LOG_PAGE_SIZE));
+      adminAuditPage = Math.min(Math.max(1, page || 1), totalPages);
+      const start = (adminAuditPage - 1) * AUDIT_LOG_PAGE_SIZE;
+      wrap.innerHTML = `
+        <table>
+          <thead><tr><th>Admin</th><th>Action</th><th>Location</th><th>IP Address</th><th>Timestamp</th></tr></thead>
+          <tbody>
+            ${items.slice(start, start + AUDIT_LOG_PAGE_SIZE).map(l => {
+              let loc = '<span style="color:var(--slate);">—</span>';
+              if (l.latitude != null && l.longitude != null) {
+                const coords = Number(l.latitude).toFixed(5) + ', ' + Number(l.longitude).toFixed(5);
+                const label = l.location_label ? escapeHtml(l.location_label) + '<br>' : '';
+                const acc = l.accuracy_m != null ? ' (±' + Math.round(l.accuracy_m) + ' m)' : '';
+                loc = label + '<a href="https://www.google.com/maps?q=' + l.latitude + ',' + l.longitude + '" target="_blank" rel="noopener" style="font-size:12px;">' + coords + '</a><span style="font-size:12px;color:var(--slate);">' + acc + '</span>';
+              }
+              return `
+              <tr>
+                <td>${escapeHtml(l.name)}</td>
+                <td><span class="badge ${LOGIN_AUDIT_ACTION_BADGE[l.action] || ''}">${LOGIN_AUDIT_ACTION_LABELS[l.action] || escapeHtml(l.action)}</span></td>
+                <td>${loc}</td>
+                <td style="white-space:nowrap;">${escapeHtml(l.ip_address || '—')}</td>
+                <td style="white-space:nowrap;">${formatAuditDate(l.created_at)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        ${statsPager(adminAuditPage, totalPages, 'renderAdminAuditLog')}
+      `;
     }
 
     async function loadStats() {
@@ -6953,19 +7328,33 @@
       } catch (e) { wrap.innerHTML = '<div class="empty-state">' + e.message + '</div>'; }
     }
 
-    function renderStatsTable() {
+    function statsPager(page, totalPages, fnName) {
+      if (totalPages <= 1) return '';
+      return `
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;">
+          <button class="btn btn-ghost" onclick="${fnName}(${page - 1})" ${page <= 1 ? 'disabled' : ''}>← Prev</button>
+          <span style="font-size:13px;color:var(--slate);">Page ${page} of ${totalPages}</span>
+          <button class="btn btn-ghost" onclick="${fnName}(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Next →</button>
+        </div>`;
+    }
+
+    function renderStatsTable(page) {
+      if (page) statsPage = page;
       const wrap = document.getElementById('statsTableWrap');
       const data = statsCache[statsTab] || [];
       if (data.length === 0) {
         wrap.innerHTML = '<div class="empty-state">No data yet.</div>';
         return;
       }
+      const totalPages = Math.max(1, Math.ceil(data.length / AUDIT_LOG_PAGE_SIZE));
+      statsPage = Math.min(Math.max(1, statsPage), totalPages);
+      const start = (statsPage - 1) * AUDIT_LOG_PAGE_SIZE;
       const nameCol = statsTab === 'user' ? 'User' : 'Listener';
       wrap.innerHTML = `
         <table>
           <thead><tr><th>${nameCol}</th><th>Phone</th><th>Total Calls</th><th>Total Call Time</th><th>Chat Messages Sent</th></tr></thead>
           <tbody>
-            ${data.map(p => `
+            ${data.slice(start, start + AUDIT_LOG_PAGE_SIZE).map(p => `
               <tr>
                 <td>${p.name || ''}</td>
                 <td>${p.phone || ''}</td>
@@ -6975,6 +7364,7 @@
               </tr>`).join('')}
           </tbody>
         </table>
+        ${statsPager(statsPage, totalPages, 'renderStatsTable')}
       `;
     }
 
@@ -7439,7 +7829,7 @@ ${logSection === 'chats' ? '' : `
           if (diff === 0) return 'Today';
           if (diff === 1) return 'Yesterday';
           if (diff > 1 && diff < 7) return dayNames[d.getDay()];
-          return d.toLocaleDateString();
+          return formatDmy(d);
         };
         wrap.innerHTML = `
           <div class="chat-scroll">
@@ -7815,7 +8205,7 @@ ${logSection === 'chats' ? '' : `
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
         const link = window.location.origin + window.location.pathname + '?invite=' + data.invite_token;
-        wrap.innerHTML = `<input readonly value="${link}" onclick="this.select()"> <div class="person-sub">Expires: ${new Date(data.expires_at).toLocaleString()}</div>`;
+        wrap.innerHTML = `<input readonly value="${link}" onclick="this.select()"> <div class="person-sub">Expires: ${formatAuditDate(data.expires_at)}</div>`;
       } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + e.message + '</span>'; }
     }
 
@@ -7947,6 +8337,71 @@ ${logSection === 'chats' ? '' : `
       adminWs.onerror = () => { adminWs.close(); };
 
     }
+
+    (function keepPagedListHeights() {
+      const LISTS = [
+        { id: 'statsTableWrap' },
+        { id: 'adminAuditLogList' },
+        { id: 'notificationsList' },
+        { id: 'userAuditLogList' },
+        { id: 'listenerAuditLogList' },
+        { id: 'withdrawalLogList', pagerId: 'withdrawalLogPagination' },
+        { id: 'billingAuditLogList' },
+        { id: 'billingPurchasesList' },
+        { id: 'giftAuditLogList' },
+        { id: 'giftTxnList', pagerId: 'giftTxnPaginationWrap' },
+        { id: 'wcHistoryList' }
+      ];
+
+      function totalPagesOf(el) {
+        const m = /Page\s+\d+\s+of\s+(\d+)/.exec(el ? el.textContent : '');
+        return m ? parseInt(m[1], 10) : 0;
+      }
+
+      function sync(cfg) {
+        const wrap = document.getElementById(cfg.id);
+        if (!wrap) return;
+        const pager = cfg.pagerId ? document.getElementById(cfg.pagerId) : wrap;
+        const pages = totalPagesOf(pager);
+        wrap.style.minHeight = '';
+        wrap.style.display = '';
+        wrap.style.flexDirection = '';
+        if (pages <= 1 || wrap.querySelector('.skel, .skeleton')) {
+          cfg.max = 0;
+          return;
+        }
+        const h = wrap.offsetHeight;
+        if (!h) return;
+        cfg.max = Math.max(cfg.max || 0, h);
+        wrap.style.minHeight = cfg.max + 'px';
+        if (!cfg.pagerId && wrap.lastElementChild) {
+          wrap.style.display = 'flex';
+          wrap.style.flexDirection = 'column';
+          wrap.lastElementChild.style.marginTop = 'auto';
+          wrap.lastElementChild.style.paddingTop = '12px';
+        }
+      }
+
+      LISTS.forEach(cfg => {
+        const wrap = document.getElementById(cfg.id);
+        if (!wrap) return;
+        const targets = [wrap];
+        if (cfg.pagerId) {
+          const p = document.getElementById(cfg.pagerId);
+          if (p) targets.push(p);
+        }
+        const obs = new MutationObserver(() => sync(cfg));
+        targets.forEach(t => obs.observe(t, { childList: true }));
+      });
+
+      window.addEventListener('resize', () => {
+        LISTS.forEach(cfg => {
+          cfg.max = 0;
+          const wrap = document.getElementById(cfg.id);
+          if (wrap) wrap.style.minHeight = '';
+        });
+      });
+    })();
   </script>
   <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaApiReady&render=explicit" async defer></script>
 </body>

@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import os
 import secrets
 import uuid
@@ -5,13 +7,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, File
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.models import AdminUser, AdminInvite, Session as SessionModel
+from app.models.models import AdminUser, AdminInvite, AdminAuditLog, Session as SessionModel
 from app.routers.admin import verify_admin
 from app.schemas.schemas import (
     AdminInviteCreate,
@@ -19,6 +21,8 @@ from app.schemas.schemas import (
     AdminInviteVerifyOtp,
     AdminInviteComplete,
     AdminLogin,
+    AdminLoginVerifyOtp,
+    AdminLogout,
     AdminForgotPasswordRequestOtp,
     AdminForgotPasswordVerifyOtp,
     AdminForgotPasswordReset,
@@ -31,6 +35,7 @@ from app.schemas.schemas import (
 )
 
 from app.utils.email_otp import generate_otp_code, send_otp_email
+from app.utils.rate_limit import client_ip, enforce_rate_limit
 from app.utils.security import hash_password, verify_password, generate_session_token, session_expiry
 from app.utils.uploads import read_and_validate_image, write_file
 
@@ -78,7 +83,7 @@ def request_invite_otp(payload: AdminInviteRequestOtp, db: Session = Depends(get
     invite.email_verified = False
     db.commit()
 
-    send_otp_email(payload.email, otp_code)
+    send_otp_email(payload.email, otp_code, purpose="invite")
     return {"status": "otp_sent"}
 
 
@@ -271,7 +276,7 @@ def forgot_password_request_otp(payload: AdminForgotPasswordRequestOtp, db: Sess
     db.commit()
 
     # Always send to the email stored on the admin profile, never to the raw input.
-    send_otp_email(admin.email, otp_code)
+    send_otp_email(admin.email, otp_code, purpose="reset")
     return {"status": "otp_sent"}
 
 
@@ -350,6 +355,18 @@ def unlock_verify_otp(payload: AdminForgotPasswordVerifyOtp, db: Session = Depen
     return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)
 
 
+LOGIN_OTP_TTL_MINUTES = 5
+
+
+def _hash_login_otp(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+def _mask_email(email: str) -> str:
+    name, _, domain = email.partition("@")
+    return (name[:1] + "***" if name else "***") + "@" + domain
+
+
 MAX_LOGIN_ATTEMPTS = 6
 LOGIN_ATTEMPT_WINDOW_HOURS = 24
 _unknown_login_attempts: dict = {}
@@ -374,8 +391,12 @@ def _verify_recaptcha(token: str) -> bool:
         return False
 
 
-@router.post("/login", response_model=AdminAuthResponse)
-def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
+@router.post("/login")
+def admin_login(payload: AdminLogin, request: Request, db: Session = Depends(get_db)):
+    lat, lng = payload.latitude, payload.longitude
+    if lat is None or lng is None or not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        raise HTTPException(status_code=400, detail="Location access is required to log in. Please allow location permission and try again.")
+
     if not _verify_recaptcha(payload.captcha_token):
         raise HTTPException(status_code=400, detail="Captcha verification failed. Please try again.")
 
@@ -429,12 +450,102 @@ def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
     admin.failed_login_attempts = 0
     admin.locked_until = None
 
+    if not admin.email:
+        raise HTTPException(
+            status_code=400,
+            detail="This account has no email address, so a login code cannot be sent. Ask another admin for help.",
+        )
+
+    enforce_rate_limit(
+        "admin_login_otp", str(admin.id), limit=5, window_seconds=600,
+        detail="Too many login codes requested. Please wait a few minutes and try again.",
+    )
+    otp_code = generate_otp_code()
+    admin.login_otp_code = _hash_login_otp(otp_code)
+    admin.login_otp_expires_at = now + timedelta(minutes=LOGIN_OTP_TTL_MINUTES)
+    admin.login_otp_attempts = 0
+    db.commit()
+
+    send_otp_email(admin.email, otp_code, LOGIN_OTP_TTL_MINUTES)
+    return {"otp_required": True, "email_hint": _mask_email(admin.email)}
+
+
+@router.post("/login/verify-otp", response_model=AdminAuthResponse)
+def admin_login_verify_otp(payload: AdminLoginVerifyOtp, request: Request, db: Session = Depends(get_db)):
+    lat, lng = payload.latitude, payload.longitude
+    if lat is None or lng is None or not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        raise HTTPException(status_code=400, detail="Location access is required to log in. Please allow location permission and try again.")
+
+    identifier = (payload.identifier or "").strip()
+    admin = db.query(AdminUser).filter(
+        (AdminUser.username == identifier) | (func.lower(AdminUser.email) == identifier.lower())
+    ).first()
+    if not admin:
+        raise HTTPException(status_code=400, detail="Invalid or expired code. Please log in again.")
+
+    now = datetime.now(timezone.utc)
+    if not admin.login_otp_code or not admin.login_otp_expires_at or admin.login_otp_expires_at < now:
+        raise HTTPException(status_code=400, detail="Code expired. Please log in again to get a new one.")
+    if admin.login_otp_attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please log in again to get a new code.")
+    if not hmac.compare_digest(_hash_login_otp((payload.otp_code or "").strip()), admin.login_otp_code):
+        admin.login_otp_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid code")
+    if not admin.is_active:
+        raise HTTPException(status_code=403, detail="Account disabled")
+
+    admin.login_otp_code = None
+    admin.login_otp_expires_at = None
+    admin.login_otp_attempts = 0
+
     token = generate_session_token()
     db.add(SessionModel(token=token, admin_id=admin.id, expires_at=session_expiry()))
-
+    db.add(
+        AdminAuditLog(
+            admin_id=admin.id,
+            admin_username=admin.username,
+            action="login",
+            ip_address=client_ip(request),
+            latitude=lat,
+            longitude=lng,
+            accuracy_m=payload.accuracy_m,
+            location_label=(payload.location_label or "").strip()[:255] or None,
+        )
+    )
     db.commit()
 
     return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)
+
+
+@router.post("/logout")
+def admin_logout(
+    request: Request,
+    payload: Optional[AdminLogout] = None,
+    authorization: str = Header(...),
+    admin: AdminUser = Depends(verify_admin),
+    db: Session = Depends(get_db),
+):
+    token = authorization.removeprefix("Bearer ")
+    lat = payload.latitude if payload else None
+    lng = payload.longitude if payload else None
+    if lat is None or lng is None or not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        lat = lng = None
+    db.query(SessionModel).filter(SessionModel.token == token, SessionModel.admin_id == admin.id).delete()
+    db.add(
+        AdminAuditLog(
+            admin_id=admin.id,
+            admin_username=admin.username,
+            action="logout",
+            ip_address=client_ip(request),
+            latitude=lat,
+            longitude=lng,
+            accuracy_m=payload.accuracy_m if payload else None,
+            location_label=((payload.location_label if payload else "") or "").strip()[:255] or None,
+        )
+    )
+    db.commit()
+    return {"detail": "Logged out"}
 
 
 
