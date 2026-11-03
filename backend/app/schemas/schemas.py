@@ -752,6 +752,10 @@ class AdminInviteComplete(BaseModel):
     invite_token: str
     username: str
     password: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_m: Optional[float] = None
+    location_label: Optional[str] = None
 
     @field_validator("password")
     @classmethod

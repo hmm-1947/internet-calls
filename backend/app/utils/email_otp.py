@@ -6,7 +6,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.image import MIMEImage
 from email.utils import formataddr
 from app.core.config import settings
 
@@ -16,6 +15,7 @@ BRAND_NAME = "LailaNow"
 DEFAULT_OTP_VALID_MINUTES = 5
 
 LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "admin_logo.png")
+LOGO_URL = settings.public_base_url.rstrip("/") + "/assets/admin_logo.png"
 
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="otp-email")
 
@@ -62,7 +62,7 @@ def _build_message(to_email: str, otp_code: str, valid_minutes: int, purpose: st
     )
 
     logo_html = (
-        f'<img src="cid:logo_cid" height="56" style="display:block;height:56px;width:auto;border:0;" alt="{BRAND_NAME}"/>'
+        f'<img src="{LOGO_URL}" height="56" style="display:block;height:56px;width:auto;border:0;" alt="{BRAND_NAME}"/>'
         if logo_exists
         else f'<p style="margin:0;color:#e63946;font-size:20px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">{BRAND_NAME}</p>'
     )
@@ -118,24 +118,16 @@ def _build_message(to_email: str, otp_code: str, valid_minutes: int, purpose: st
     </html>
     """
 
-    msg = MIMEMultipart("related")
-    alt = MIMEMultipart("alternative")
+    msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = formataddr((BRAND_NAME, settings.smtp_from_email))
     msg["To"] = to_email
-    alt.attach(MIMEText(
+    msg.attach(MIMEText(
         f"Your {BRAND_NAME} {info['label']}: {otp_code}\n\nValid for {minutes_label}. "
         f"If you didn't request this, you can ignore this email.",
         "plain",
     ))
-    alt.attach(MIMEText(html_body, "html"))
-    msg.attach(alt)
-    if logo_exists:
-        with open(LOGO_PATH, "rb") as f:
-            logo_img = MIMEImage(f.read())
-        logo_img.add_header("Content-ID", "<logo_cid>")
-        logo_img.add_header("Content-Disposition", "inline")
-        msg.attach(logo_img)
+    msg.attach(MIMEText(html_body, "html"))
     return msg
 
 

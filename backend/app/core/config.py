@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # don't need an .env change to pick this fix up.
     media_url_secret: str = ""
 
+    public_base_url: str = "https://lailanow.com"
+
 
     class Config:
         env_file = ".env"

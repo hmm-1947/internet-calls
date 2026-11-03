@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -32,6 +33,7 @@ from app.schemas.schemas import (
     AdminChangePassword,
     CurrentPasswordCheck,
     validate_password_strength,
+    EMAIL_PATTERN,
 )
 
 from app.utils.email_otp import generate_otp_code, send_otp_email
@@ -43,7 +45,9 @@ router = APIRouter(prefix="/admin/auth", tags=["admin-auth"])
 
 
 @router.post("/invite")
-def create_invite(payload: AdminInviteCreate, db: Session = Depends(get_db), _=Depends(verify_admin)):
+def create_invite(payload: AdminInviteCreate, db: Session = Depends(get_db), admin: AdminUser = Depends(verify_admin)):
+    if getattr(admin, "is_support", False):
+        raise HTTPException(status_code=403, detail="Not allowed")
     existing = (
         db.query(AdminInvite)
         .filter(AdminInvite.is_used.is_(False))
@@ -54,11 +58,33 @@ def create_invite(payload: AdminInviteCreate, db: Session = Depends(get_db), _=D
     if existing:
         return {"invite_token": existing.token, "expires_at": existing.expires_at}
     token = secrets.token_urlsafe(24)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=payload.expires_in_hours or 72)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=min(max(payload.expires_in_hours or 72, 1), 168))
     invite = AdminInvite(token=token, expires_at=expires_at)
     db.add(invite)
     db.commit()
     return {"invite_token": token, "expires_at": expires_at}
+
+
+@router.get("/admins")
+def list_admins(db: Session = Depends(get_db), _=Depends(verify_admin)):
+    last_login = dict(
+        db.query(AdminAuditLog.admin_id, func.max(AdminAuditLog.created_at))
+        .filter(AdminAuditLog.action == "login")
+        .group_by(AdminAuditLog.admin_id)
+        .all()
+    )
+    admins = db.query(AdminUser).order_by(AdminUser.created_at.asc(), AdminUser.id.asc()).all()
+    return [
+        {
+            "id": a.id,
+            "username": a.username,
+            "email": a.email,
+            "is_active": bool(a.is_active),
+            "created_at": a.created_at,
+            "last_login_at": last_login.get(a.id),
+        }
+        for a in admins
+    ]
 
 
 @router.post("/invite/request-otp")
@@ -71,7 +97,13 @@ def request_invite_otp(payload: AdminInviteRequestOtp, db: Session = Depends(get
     if invite.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invite link expired")
 
-    existing = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    if invite.email_verified:
+        raise HTTPException(status_code=400, detail="This invite is already being completed")
+
+    email = (payload.email or "").strip().lower()
+    if not EMAIL_PATTERN.match(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    existing = db.query(AdminUser).filter(func.lower(AdminUser.email) == email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -80,14 +112,14 @@ def request_invite_otp(payload: AdminInviteRequestOtp, db: Session = Depends(get
         detail="Too many codes requested. Please wait a few minutes and try again.",
     )
     otp_code = generate_otp_code()
-    invite.email = payload.email
+    invite.email = email
     invite.otp_code = _hash_login_otp(otp_code)
     invite.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     invite.otp_attempts = 0
     invite.email_verified = False
     db.commit()
 
-    send_otp_email(payload.email, otp_code, purpose="invite")
+    send_otp_email(email, otp_code, purpose="invite")
     return {"status": "otp_sent"}
 
 
@@ -95,13 +127,15 @@ MAX_OTP_ATTEMPTS = 5
 
 
 @router.post("/invite/verify-otp")
-def verify_invite_otp(payload: AdminInviteVerifyOtp, db: Session = Depends(get_db)):
+def verify_invite_otp(payload: AdminInviteVerifyOtp, request: Request, db: Session = Depends(get_db)):
+    enforce_rate_limit("admin_invite_verify", client_ip(request), limit=20, window_seconds=600)
+    enforce_rate_limit("admin_invite_verify_token", payload.invite_token, limit=10, window_seconds=600)
     invite = db.query(AdminInvite).filter(AdminInvite.token == payload.invite_token).first()
     if not invite:
         raise HTTPException(status_code=404, detail="Invalid invite link")
     if invite.is_used:
         raise HTTPException(status_code=400, detail="Invite already used")
-    if invite.email != payload.email:
+    if invite.email != (payload.email or "").strip().lower():
         raise HTTPException(status_code=400, detail="Email does not match this invite")
     if not invite.otp_expires_at or invite.otp_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
@@ -119,8 +153,13 @@ def verify_invite_otp(payload: AdminInviteVerifyOtp, db: Session = Depends(get_d
 
 
 @router.post("/invite/complete", response_model=AdminAuthResponse)
-def complete_invite(payload: AdminInviteComplete, db: Session = Depends(get_db)):
-    invite = db.query(AdminInvite).filter(AdminInvite.token == payload.invite_token).first()
+def complete_invite(payload: AdminInviteComplete, request: Request, db: Session = Depends(get_db)):
+    enforce_rate_limit("admin_invite_complete", client_ip(request), limit=10, window_seconds=600)
+    enforce_rate_limit("admin_invite_complete_token", payload.invite_token, limit=10, window_seconds=600)
+    lat, lng = payload.latitude, payload.longitude
+    if lat is None or lng is None or not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        raise HTTPException(status_code=400, detail="Location access is required to create your account. Please allow location permission and try again.")
+    invite = db.query(AdminInvite).filter(AdminInvite.token == payload.invite_token).with_for_update().first()
     if not invite:
         raise HTTPException(status_code=404, detail="Invalid invite link")
     if invite.is_used:
@@ -130,12 +169,15 @@ def complete_invite(payload: AdminInviteComplete, db: Session = Depends(get_db))
     if invite.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invite link expired")
 
-    existing_username = db.query(AdminUser).filter(AdminUser.username == payload.username).first()
+    username = (payload.username or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username):
+        raise HTTPException(status_code=400, detail="Username must be 3-32 characters: letters, numbers, dot, dash or underscore")
+    existing_username = db.query(AdminUser).filter(func.lower(AdminUser.username) == username.lower()).first()
     if existing_username:
         raise HTTPException(status_code=400, detail="Username already taken")
 
     admin = AdminUser(
-        username=payload.username,
+        username=username,
         email=invite.email,
         password_hash=hash_password(payload.password),
     )
@@ -146,7 +188,18 @@ def complete_invite(payload: AdminInviteComplete, db: Session = Depends(get_db))
 
     token = generate_session_token()
     db.add(SessionModel(token=token, admin_id=admin.id, expires_at=session_expiry()))
-
+    db.add(
+        AdminAuditLog(
+            admin_id=admin.id,
+            admin_username=admin.username,
+            action="login",
+            ip_address=client_ip(request),
+            latitude=lat,
+            longitude=lng,
+            accuracy_m=payload.accuracy_m,
+            location_label=(payload.location_label or "").strip()[:255] or None,
+        )
+    )
     db.commit()
 
     return AdminAuthResponse(token=token, id=admin.id, username=admin.username, email=admin.email)

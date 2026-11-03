@@ -2956,6 +2956,11 @@
     <h2>Invite New Admin</h2>
     <button class="btn btn-primary" style="width:auto" onclick="generateAdminInvite()">Generate Invite Link</button>
     <div id="inviteLinkWrap" style="margin-top:10px;"></div>
+    <h3 style="margin:18px 0 8px;font-size:14px;display:flex;align-items:center;justify-content:space-between;">
+      <span>Admins <span id="inviteAdminCount" class="person-sub"></span></span>
+      <button class="btn btn-ghost" onclick="loadInviteAdmins()">↻ Refresh</button>
+    </h3>
+    <div id="inviteAdminsWrap" style="overflow-x:auto;"></div>
   </div>
 
   <div class="card">
@@ -3764,6 +3769,7 @@
       loadWeeklyChallengeLeaderboard();
       loadWeeklyChallengeHistory();
       loadActiveCalls();
+      loadInviteAdmins();
       loadStats();
       loadAdminAuditLog();
       loadOverview();
@@ -5208,9 +5214,11 @@
       if (!isPasswordValidAdmin(password)) { setSetupMsg('Please satisfy all password rules.', false); return; }
       setSetupMsg('Creating account…', null);
       try {
+        const loc = await getLoginLocation();
+        const location_label = await reverseGeocodeLabel(loc.latitude, loc.longitude);
         const res = await fetch(API_URL + '/admin/auth/invite/complete', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invite_token: setupInviteToken, username, password })
+          body: JSON.stringify({ invite_token: setupInviteToken, username, password, ...loc, location_label })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to create account');
@@ -8205,8 +8213,33 @@ ${logSection === 'chats' ? '' : `
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
         const link = window.location.origin + window.location.pathname + '?invite=' + data.invite_token;
-        wrap.innerHTML = `<input readonly value="${link}" onclick="this.select()"> <div class="person-sub">Expires: ${formatAuditDate(data.expires_at)}</div>`;
-      } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + e.message + '</span>'; }
+        wrap.innerHTML = `<input readonly value="${escapeHtml(link)}" onclick="this.select()"> <div class="person-sub">Expires: ${escapeHtml(formatAuditDate(data.expires_at))}</div>`;
+      } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+    }
+
+    async function loadInviteAdmins() {
+      const wrap = document.getElementById('inviteAdminsWrap');
+      const count = document.getElementById('inviteAdminCount');
+      if (!wrap) return;
+      wrap.textContent = 'Loading…';
+      try {
+        const res = await fetch(API_URL + '/admin/auth/admins', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        if (count) count.textContent = '(' + data.length + ')';
+        if (!data.length) { wrap.innerHTML = '<div class="person-sub">No admins yet.</div>'; return; }
+        const cell = 'padding:6px 10px;text-align:left;white-space:nowrap;';
+        const rows = data.map(a => `<tr>
+          <td style="${cell}">${escapeHtml(a.username)}</td>
+          <td style="${cell}">${escapeHtml(a.email || '—')}</td>
+          <td style="${cell}">${a.is_active ? 'Active' : 'Disabled'}</td>
+          <td style="${cell}">${a.last_login_at ? escapeHtml(formatAuditDate(a.last_login_at)) : 'Never'}</td>
+        </tr>`).join('');
+        wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr>
+            <th style="${cell}">Username</th><th style="${cell}">Email</th><th style="${cell}">Status</th><th style="${cell}">Last login</th>
+          </tr></thead><tbody>${rows}</tbody></table>`;
+      } catch (e) { wrap.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
     }
 
     function applyTheme(theme) {
