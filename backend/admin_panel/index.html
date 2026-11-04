@@ -3623,6 +3623,7 @@
         document.getElementById('forgotStepOtp').style.display = 'none';
         document.getElementById('forgotStepReset').style.display = '';
         document.getElementById('forgotPwRules').innerHTML = '';
+        document.getElementById('forgotResetBtn').disabled = false;
       } catch (e) { setForgotMsg('✗ ' + e.message, false); }
     }
 
@@ -8212,7 +8213,7 @@ ${logSection === 'chats' ? '' : `
       };
       adminWs.onclose = () => {
         clearTimeout(adminWsReconnectTimer);
-        adminWsReconnectTimer = setTimeout(connectAdminWs, 3000);
+        if (getAdminToken()) adminWsReconnectTimer = setTimeout(connectAdminWs, 3000);
       };
       adminWs.onerror = () => { adminWs.close(); };
 
