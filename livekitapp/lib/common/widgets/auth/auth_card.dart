@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// A themed rounded card used across the auth flows (login / register /
@@ -23,12 +24,12 @@ class AuthCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF141414),
+        color: context.c.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.red.withOpacity(0.25)),
+        border: Border.all(color: AppColors.brand.withOpacity(0.25)),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.10),
+            color: AppColors.brand.withOpacity(0.10),
             blurRadius: 28,
             spreadRadius: 1,
           ),
@@ -43,17 +44,17 @@ class AuthCard extends StatelessWidget {
             height: 64,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.12),
+              color: AppColors.brand.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.red, size: 30),
+            child: Icon(icon, color: AppColors.brand, size: 30),
           ),
           const SizedBox(height: 18),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.c.text,
               fontSize: 21,
               fontWeight: FontWeight.bold,
             ),
@@ -63,7 +64,7 @@ class AuthCard extends StatelessWidget {
             Text(
               subtitle!,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white60, fontSize: 13.5),
+              style: TextStyle(color: context.c.muted, fontSize: 13.5),
             ),
           ],
           const SizedBox(height: 26),
@@ -114,24 +115,24 @@ class _AuthTextFieldState extends State<AuthTextField> {
       textAlign: widget.textAlign,
       maxLength: widget.maxLength,
       style: TextStyle(
-        color: Colors.white,
+        color: context.c.text,
         letterSpacing: widget.letterSpacing,
         fontSize: widget.fontSize,
         fontWeight: widget.letterSpacing != null ? FontWeight.w600 : null,
       ),
       decoration: InputDecoration(
         labelText: widget.label,
-        labelStyle: const TextStyle(color: Colors.white60),
+        labelStyle: TextStyle(color: context.c.muted),
         counterText: '',
         filled: true,
-        fillColor: Colors.white.withOpacity(0.04),
+        fillColor: context.c.card,
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: context.c.faint, width: 1),
+          borderRadius: BorderRadius.circular(12),
         ),
         focusedBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Colors.red, width: 1.6),
-          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.brand, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -141,7 +142,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
             ? IconButton(
                 icon: Icon(
                   _obscured ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.white60,
+                  color: context.c.muted,
                 ),
                 onPressed: () => setState(() => _obscured = !_obscured),
               )

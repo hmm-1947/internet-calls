@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
@@ -17,36 +18,35 @@ class _StatCard extends StatelessWidget {
   final Color iconColor;
   final String label;
   final String value;
-  final Color valueColor;
+  final Color? valueColor;
 
   const _StatCard({
     required this.icon,
     required this.iconColor,
     required this.label,
     required this.value,
-    this.valueColor = Colors.white,
+    this.valueColor,
   });
 
-  static const _dimText = Colors.white54;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: context.c.card,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
           Icon(icon, color: iconColor),
           const SizedBox(height: 6),
-          Text(label, style: const TextStyle(color: _dimText, fontSize: 11)),
+          Text(label, style: TextStyle(color: context.c.muted, fontSize: 11)),
           const SizedBox(height: 4),
           Text(
             value,
             style: TextStyle(
-              color: valueColor,
+              color: valueColor ?? context.c.text,
               fontSize: 16,
               fontWeight: FontWeight.bold,
             ),
@@ -161,14 +161,12 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFF0B0B0B);
-    const pink = Color(0xFFE53950);
-    const dimText = Colors.white54;
+    const pink = AppColors.brand;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        backgroundColor: bg,
+        backgroundColor: context.c.bg,
         elevation: 0,
         title: const Text(
           'Call Summary',
@@ -179,10 +177,10 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _summary == null
-          ? const Center(
+          ? Center(
               child: Text(
                 'Failed to load summary',
-                style: TextStyle(color: dimText),
+                style: TextStyle(color: context.c.muted),
               ),
             )
           : SingleChildScrollView(
@@ -215,16 +213,16 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                   Text(
                     'Call with ${_summary!['listener_name']} Ended',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.c.text,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'You shared a beautiful moment together',
-                    style: TextStyle(color: dimText, fontSize: 13),
+                    style: TextStyle(color: context.c.muted, fontSize: 13),
                   ),
                   const SizedBox(height: 28),
                   Row(
@@ -232,7 +230,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                       Expanded(
                         child: _StatCard(
                           icon: Icons.access_time,
-                          iconColor: Colors.white70,
+                          iconColor: context.c.textSecondary,
                           label: 'DURATION',
                           value: _fmtDuration(
                             _summary!['duration_seconds'] ?? 0,
@@ -261,21 +259,21 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(28),
                         ),
-                        side: const BorderSide(color: dimText),
+                        side: BorderSide(color: context.c.muted),
                       ),
                       icon: _callingAgain
-                          ? const SizedBox(
+                          ? SizedBox(
                               height: 16,
                               width: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: context.c.text,
                               ),
                             )
-                          : const Icon(Icons.call, color: Colors.white),
-                      label: const Text(
+                          : Icon(Icons.call, color: context.c.text),
+                      label: Text(
                         'Call Again',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.c.text),
                       ),
                     ),
                   ),
@@ -284,15 +282,15 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A1A),
+                      color: context.c.card,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Column(
                       children: [
-                        const Text(
+                        Text(
                           'How was your call?',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: context.c.text,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
@@ -306,7 +304,7 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                               onPressed: () => setState(() => _rating = i + 1),
                               icon: Icon(
                                 filled ? Icons.star : Icons.star_border,
-                                color: filled ? Colors.amber : Colors.white38,
+                                color: filled ? Colors.amber : context.c.faint,
                                 size: 30,
                               ),
                             );
@@ -316,12 +314,12 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                         TextField(
                           controller: _reviewController,
                           maxLines: 3,
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: context.c.text),
                           decoration: InputDecoration(
                             hintText: 'Write a review (optional)',
-                            hintStyle: const TextStyle(color: Colors.white38),
+                            hintStyle: TextStyle(color: context.c.faint),
                             filled: true,
-                            fillColor: const Color(0xFF0B0B0B),
+                            fillColor: context.c.bg,
                             contentPadding: const EdgeInsets.all(12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -345,18 +343,18 @@ class _CallSummaryScreenState extends State<CallSummaryScreen> {
                         ),
                       ),
                       child: _submitting
-                          ? const SizedBox(
+                          ? SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: context.c.text,
                               ),
                             )
-                          : const Text(
+                          : Text(
                               'Submit Rating',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: context.c.text,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),

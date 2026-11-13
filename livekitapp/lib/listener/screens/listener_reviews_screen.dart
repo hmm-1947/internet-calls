@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -66,19 +67,17 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFF0B0B0B);
-    const dimText = Colors.white54;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        backgroundColor: bg,
-        foregroundColor: Colors.white,
+        backgroundColor: context.c.bg,
+        foregroundColor: context.c.text,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Reviews & Ratings',
           style: TextStyle(
-            color: Colors.white,
+            color: context.c.text,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -86,20 +85,20 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53950)),
+              child: CircularProgressIndicator(color: AppColors.brand),
             )
           : RefreshIndicator(
-              color: const Color(0xFFE53950),
+              color: AppColors.brand,
               onRefresh: _refresh,
               child: _reviews.isEmpty
                   ? ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      children: const [
+                      children: [
                         SizedBox(height: 120),
                         Center(
                           child: Text(
                             'No reviews yet',
-                            style: TextStyle(color: dimText),
+                            style: TextStyle(color: context.c.muted),
                           ),
                         ),
                       ],
@@ -119,7 +118,7 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
                           margin: const EdgeInsets.only(bottom: 14),
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1A1A1A),
+                            color: context.c.card,
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Column(
@@ -137,8 +136,8 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
                                   Expanded(
                                     child: Text(
                                       r['user_name'] ?? 'Unknown',
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: context.c.text,
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -147,8 +146,8 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
                                   if (createdAt != null)
                                     Text(
                                       _timeAgo(createdAt),
-                                      style: const TextStyle(
-                                        color: dimText,
+                                      style: TextStyle(
+                                        color: context.c.muted,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -158,8 +157,8 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
                               if (review != null && review.isNotEmpty) ...[
                                 Text(
                                   review,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
+                                  style: TextStyle(
+                                    color: context.c.textSecondary,
                                     fontSize: 13,
                                     height: 1.4,
                                   ),

@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:livekitapp/listener/screens/calls/listener_call_history_screen.dart';
@@ -151,12 +152,12 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
         _onTabSelected(0);
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: context.c.bg,
         extendBody: true,
         body: Column(
           children: [
             Container(
-              color: Colors.black,
+              color: context.c.bg,
               child: SafeArea(
                 bottom: false,
                 child: ListenerHomeHeader(
@@ -220,7 +221,7 @@ class _ListenerMainScreenState extends State<ListenerMainScreen> {
                           width: 8,
                           height: 8,
                           decoration: const BoxDecoration(
-                            color: Colors.red,
+                            color: AppColors.brand,
                             shape: BoxShape.circle,
                           ),
                         ),

@@ -103,6 +103,7 @@ class ApiConstants {
   static const String userContactRequestOtp = '/user/contact/request-otp';
   static const String userContactVerify = '/user/contact/verify';
   static const String userVideoCallSetting = '/user/video-call-setting';
+  static const String userGenderPreference = '/user/gender-preference';
   static const String userPhoto = '/user/photo';
 
   static const String giftCatalog = '/gift/catalog';

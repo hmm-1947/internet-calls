@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 
@@ -84,17 +85,17 @@ class OtpCountdownState extends State<OtpCountdown> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
+          color: context.c.overlay,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.timer_outlined, color: Colors.white60, size: 16),
+            Icon(Icons.timer_outlined, color: context.c.muted, size: 16),
             const SizedBox(width: 6),
             Text(
               'OTP expires in $_formatted',
-              style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+              style: TextStyle(color: context.c.textSecondary, fontSize: 12.5),
             ),
           ],
         ),
@@ -106,7 +107,7 @@ class OtpCountdownState extends State<OtpCountdown> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.12),
+            color: AppColors.brand.withOpacity(0.12),
             borderRadius: BorderRadius.circular(20),
           ),
           child: const Row(
@@ -117,7 +118,7 @@ class OtpCountdownState extends State<OtpCountdown> {
               Text(
                 'OTP expired',
                 style: TextStyle(
-                  color: Colors.redAccent,
+                  color: AppColors.brand,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -134,14 +135,14 @@ class OtpCountdownState extends State<OtpCountdown> {
                   height: 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Colors.red,
+                    color: AppColors.brand,
                   ),
                 )
-              : const Icon(Icons.refresh, color: Colors.red, size: 18),
+              : const Icon(Icons.refresh, color: AppColors.brand, size: 18),
           label: Text(
             _resending ? 'Sending…' : 'Resend OTP',
             style: const TextStyle(
-              color: Colors.red,
+              color: AppColors.brand,
               fontWeight: FontWeight.w700,
             ),
           ),

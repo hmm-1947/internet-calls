@@ -1,6 +1,6 @@
 {
-    "name": "livekitapp",
-    "short_name": "livekitapp",
+    "name": "MindiCo",
+    "short_name": "MindiCo",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

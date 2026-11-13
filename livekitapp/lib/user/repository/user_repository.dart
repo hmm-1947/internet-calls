@@ -815,6 +815,19 @@ Future<Map<String, dynamic>> updatePhoto(String token, String filePath) async {
     return Map<String, dynamic>.from(data);
   }
 
+  Future<void> setGenderPreference(String token, String preference) async {
+    final response = await _apiClient.post(ApiConstants.userGenderPreference, {
+      'preference': preference,
+    }, token: token);
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['detail'] ?? 'Failed to save preference');
+    }
+    UserDataCache().invalidateMe();
+    UserDataCache().invalidateListeners();
+    UserDataCache().invalidateThreads();
+  }
+
   Future<void> updateVideoCallSetting(String token, bool enabled) async {
     final response = await _apiClient.post(ApiConstants.userVideoCallSetting, {
       'enabled': enabled,

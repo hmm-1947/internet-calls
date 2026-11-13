@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/legal_repository.dart';
 import 'package:livekitapp/common/widgets/simple_html_view.dart';
@@ -86,23 +87,23 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const pink = Color(0xFFE53950);
+    const pink = AppColors.brand;
     final title = widget.documentType == 'privacy'
         ? 'Privacy Policy'
         : 'Terms of Service';
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
         title: Text(
           title,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: context.c.text,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: context.c.bg,
+        foregroundColor: context.c.text,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -120,7 +121,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                   child: Text(
                     _error!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70),
+                    style: TextStyle(color: context.c.textSecondary),
                   ),
                 ),
               )

@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
@@ -156,7 +157,7 @@ class ActiveCallBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final manager = ActiveCallManager.instance;
     return Material(
-      color: const Color(0xFF17202E),
+      color: context.c.card,
       child: InkWell(
         onTap: manager.expand,
         child: SafeArea(
@@ -168,7 +169,7 @@ class ActiveCallBar extends StatelessWidget {
                 const SizedBox(width: 4),
                 IconButton(
                   onPressed: manager.expand,
-                  icon: const Icon(Icons.fullscreen, color: Colors.white),
+                  icon: Icon(Icons.fullscreen, color: context.c.text),
                 ),
                 Expanded(
                   child: ValueListenableBuilder<String>(
@@ -188,8 +189,8 @@ class ActiveCallBar extends StatelessWidget {
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white70,
+                                style: TextStyle(
+                                  color: context.c.textSecondary,
                                   fontSize: 11,
                                 ),
                               ),
@@ -199,8 +200,8 @@ class ActiveCallBar extends StatelessWidget {
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.c.text,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                   fontFeatures: [FontFeature.tabularFigures()],
@@ -222,10 +223,10 @@ class ActiveCallBar extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: const BoxDecoration(
-                        color: Color(0xFFE53950),
+                        color: Colors.red,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.call_end,
                         color: Colors.white,
                         size: 20,

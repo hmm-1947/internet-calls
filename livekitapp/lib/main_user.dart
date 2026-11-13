@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:livekitapp/core/theme/app_theme.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -211,7 +213,7 @@ void main() async {
   // permission prompts, cache restores) can take several seconds; without
   // this, nothing is on screen at all until it finishes.
   runApp(
-    const MaterialApp(debugShowCheckedModeBanner: false, home: SplashScreen()),
+    MaterialApp(debugShowCheckedModeBanner: false, theme: AppTheme.light, themeMode: ThemeMode.light, home: const SplashScreen()),
   );
 
   await dotenv.load(fileName: ".env");
@@ -329,30 +331,22 @@ class _UserAppState extends State<UserApp> {
   /// Status bar / navigation bar styling used across the whole app.
   /// Light icons so the clock, wifi and battery stay readable on the dark
   /// background painted behind the status bar.
-  static const _overlayStyle = SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.black,
-    systemNavigationBarIconBrightness: Brightness.light,
-  );
-
   @override
   Widget build(BuildContext context) {
     // AnnotatedRegion keeps this style applied for every route. Without it, any
     // screen with an AppBar overrides the status bar icon colour and can leave
     // dark icons on the dark status bar (invisible).
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _overlayStyle,
-      child: AppLifecycleReporter(
-        child: MaterialApp(
+    return AppLifecycleReporter(
+      child: MaterialApp(
           navigatorKey: userNavigatorKey,
           // Lets chat screens report whether they are the visible route, which
           // is what keeps the minimized voice-note bar hidden while a chat is open.
           navigatorObservers: [voiceChatRouteObserver],
-          title: 'Calling App',
+          title: 'MindiCo',
           debugShowCheckedModeBanner: false,
-          builder: (context, child) => ActiveCallHost(
+          builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+            value: AppTheme.overlay(Theme.of(context).brightness),
+            child: ActiveCallHost(
             callScreenBuilder: (callContext, info) => CallScreen(
               key: ValueKey<int>(info.callId),
               callId: info.callId,
@@ -363,15 +357,10 @@ class _UserAppState extends State<UserApp> {
               listenerId: info.listenerId,
             ),
             child: child ?? const SizedBox.shrink(),
+            ),
           ),
-          theme: ThemeData(
-            colorSchemeSeed: Colors.blue,
-            useMaterial3: true,
-
-            brightness: Brightness.dark,
-            scaffoldBackgroundColor: const Color(0xFF0B0B0B),
-            appBarTheme: const AppBarTheme(systemOverlayStyle: _overlayStyle),
-          ),
+          theme: AppTheme.light,
+          themeMode: ThemeMode.light,
           home: FutureBuilder<String?>(
             future: _initialToken,
             builder: (context, snapshot) {
@@ -384,7 +373,6 @@ class _UserAppState extends State<UserApp> {
               return const UserLoginScreen();
             },
           ),
-        ),
       ),
     );
   }

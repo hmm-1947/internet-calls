@@ -6,3 +6,5 @@ livekitapp\upload-keystore.jks
 
 *.bak
 .github/workflows/.cody_history/
+*.jks
+key.properties

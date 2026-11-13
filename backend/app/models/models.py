@@ -48,6 +48,7 @@ class User(Base):
     pending_contact_otp_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     video_call_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
     video_call_disabled_by_admin = Column(Boolean, default=False, nullable=False, server_default="0")
+    gender_preference = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Listener(Base):
@@ -71,6 +72,7 @@ class Listener(Base):
     coins = Column(Integer, default=0, nullable=False)
     photo_url = Column(String, nullable=True)
     badge_tag_id = Column(Integer, ForeignKey("listener_badge_tags.id"), nullable=True)
+    gender = Column(String, nullable=True)
     video_call_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
     video_call_disabled_by_admin = Column(Boolean, default=False, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

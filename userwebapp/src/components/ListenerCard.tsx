@@ -26,7 +26,7 @@ export function ListenerCard({ l }: { l: Listener }) {
   return (
     <div
       onClick={() => nav(`/listener/${l.id}`)}
-      className="card flex cursor-pointer items-center gap-4 p-3.5 transition hover:border-brand-soft/40 hover:bg-[#1e1e1e]"
+      className="card flex cursor-pointer items-center gap-4 p-3.5 transition hover:border-brand-soft/40 hover:bg-card2"
     >
       <div className="relative shrink-0 pt-3">
         <Avatar src={l.photo_url} name={l.name} size={88} />
@@ -37,15 +37,15 @@ export function ListenerCard({ l }: { l: Listener }) {
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <div className="truncate text-lg font-bold leading-tight">{l.name}</div>
-            {meta && <div className="mt-0.5 truncate text-sm text-white/70">{meta}</div>}
-            <div className={cx("mt-1 text-sm font-semibold", l.is_in_call ? "text-gold" : live ? "text-online" : "text-white/80")}>{status}</div>
+            {meta && <div className="mt-0.5 truncate text-sm text-ink/70">{meta}</div>}
+            <div className={cx("mt-1 text-sm font-semibold", l.is_in_call ? "text-gold" : live ? "text-online" : "text-ink/80")}>{status}</div>
           </div>
           <div className="flex shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
             {l.video_call_enabled && (
               <button
                 disabled={!rules.video}
                 onClick={() => void startCall(l, true)}
-                className={cx(circle, rules.video ? "bg-brand-soft text-white hover:bg-brand" : "bg-white/5 text-white/30")}
+                className={cx(circle, rules.video ? "bg-brand-soft text-white hover:bg-brand" : "bg-black/5 text-ink/30")}
                 aria-label="Video call"
                 title={!rules.videoAllowed ? "Video calls are turned off" : undefined}
               >
@@ -55,7 +55,7 @@ export function ListenerCard({ l }: { l: Listener }) {
             <button
               disabled={!rules.voice}
               onClick={() => void startCall(l, false)}
-              className={cx(circle, rules.voice ? "bg-brand-soft text-white hover:bg-brand" : "bg-white/5 text-white/30")}
+              className={cx(circle, rules.voice ? "bg-brand-soft text-white hover:bg-brand" : "bg-black/5 text-ink/30")}
               aria-label="Voice call"
             >
               <IconPhone size={18} />
@@ -65,7 +65,7 @@ export function ListenerCard({ l }: { l: Listener }) {
         {l.tags.length > 0 && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {l.tags.slice(0, 3).map((t) => (
-              <span key={t} className="rounded-full px-3 py-1 text-xs text-white/80" style={{ background: "rgba(225,29,72,0.18)" }}>{t}</span>
+              <span key={t} className="rounded-full px-3 py-1 text-xs text-ink/80" style={{ background: "rgba(18,160,68,0.18)" }}>{t}</span>
             ))}
           </div>
         )}

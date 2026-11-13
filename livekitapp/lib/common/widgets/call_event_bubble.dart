@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 String _callDurationLabel(int seconds) {
@@ -20,8 +21,7 @@ class CallEventBubble extends StatelessWidget {
   final bool isMe;
   final VoidCallback? onCallBack;
 
-  static const _bubbleIn = Color(0xFF1F2430);
-  static const _bubbleOut = Color(0xFF7A1620);
+  static const _bubbleOut = AppColors.brand;
 
   const CallEventBubble({
     super.key,
@@ -39,8 +39,7 @@ class CallEventBubble extends StatelessWidget {
     final isMissed = status == 'missed' || status == 'declined';
 
     final icon = isVideo ? Icons.videocam : Icons.call;
-    final iconColor = Colors.white70;
-    final textColor = isMissed ? const Color(0xFFE53950) : Colors.white70;
+    final textColor = isMissed ? AppColors.brand : context.c.textSecondary;
     final time = _callClockLabel(message['created_at']);
 
     String label;
@@ -71,7 +70,7 @@ class CallEventBubble extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isMe ? _bubbleOut : _bubbleIn,
+          color: isMe ? _bubbleOut : context.c.card,
           borderRadius: BorderRadius.circular(14),
         ),
         child: InkWell(
@@ -80,21 +79,21 @@ class CallEventBubble extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: iconColor),
+              Icon(icon, size: 16, color: context.c.textSecondary),
               const SizedBox(width: 6),
               Text(label, style: TextStyle(color: textColor, fontSize: 13)),
               if (status == 'completed' && duration > 0) ...[
                 const SizedBox(width: 6),
                 Text(
                   '• ${_callDurationLabel(duration)}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: context.c.muted, fontSize: 12),
                 ),
               ],
               if (time.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Text(
                   time,
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  style: TextStyle(color: context.c.muted, fontSize: 11),
                 ),
               ],
             ],

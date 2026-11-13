@@ -359,7 +359,7 @@ async def user_send_message(payload: ChatMessageSend, db: Session = Depends(get_
     if len(payload.message) > 100:
         raise HTTPException(status_code=400, detail="Message too long, only 100 characters allowed")
     listener = db.query(Listener).filter(Listener.id == payload.listener_id, Listener.is_active == True).first()
-    if not listener:
+    if not listener or (current_user.gender_preference in ("male", "female") and listener.gender != current_user.gender_preference):
         raise HTTPException(status_code=404, detail="Listener not found")
     _require_chat_coins(db, current_user)
     if payload.client_id:
@@ -786,7 +786,10 @@ def user_get_threads(db: Session = Depends(get_db), current_user: User = Depends
     if not listener_ids:
         return []
 
-    listeners = {l.id: l for l in db.query(Listener).filter(Listener.id.in_(listener_ids), Listener.is_active == True).all()}
+    tq = db.query(Listener).filter(Listener.id.in_(listener_ids), Listener.is_active == True)
+    if current_user.gender_preference in ("male", "female"):
+        tq = tq.filter(Listener.gender == current_user.gender_preference)
+    listeners = {l.id: l for l in tq.all()}
 
     last_ids = [r[0] for r in db.query(func.max(ChatMessage.id)).filter(
         ChatMessage.user_id == current_user.id,

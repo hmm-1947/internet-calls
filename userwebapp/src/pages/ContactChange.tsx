@@ -63,7 +63,7 @@ export default function ContactChange() {
             {me?.phone && (
               <div>
                 <label className="label">Current number</label>
-                <div className="rounded-xl border border-white/10 bg-card2 px-4 py-3 text-sm text-white/70">+91 {me.phone}</div>
+                <div className="rounded-xl border border-black/10 bg-card2 px-4 py-3 text-sm text-ink/70">+91 {me.phone}</div>
               </div>
             )}
             <PhoneField label="New phone number" value={phone} onChange={setPhone} autoFocus />

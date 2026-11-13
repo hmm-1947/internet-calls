@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/listener_data_cache.dart';
@@ -62,29 +63,29 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text(
+        backgroundColor: context.c.card,
+        title: Text(
           'Send Withdrawal Request',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: context.c.text),
         ),
-        content: const Text(
+        content: Text(
           'This will send a withdrawal request to the admin for review. '
           'Continue?',
-          style: TextStyle(color: Colors.white70, fontSize: 14),
+          style: TextStyle(color: context.c.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: context.c.muted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text(
               'Send Request',
-              style: TextStyle(color: Color(0xFFE53950)),
+              style: TextStyle(color: AppColors.brand),
             ),
           ),
         ],
@@ -123,7 +124,7 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: context.c.card,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -132,7 +133,7 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
           Text(
             title,
             style: const TextStyle(
-              color: Color(0xFFE53950),
+              color: AppColors.brand,
               fontSize: 13,
               fontWeight: FontWeight.bold,
               letterSpacing: 1,
@@ -157,12 +158,12 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
+            style: TextStyle(color: context.c.textSecondary, fontSize: 14),
           ),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.c.text,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -175,15 +176,15 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        foregroundColor: Colors.white,
-        backgroundColor: const Color(0xFF0D0D0D),
+        foregroundColor: context.c.text,
+        backgroundColor: context.c.bg,
 
-        title: const Text(
+        title: Text(
           'Wallet',
           style: TextStyle(
-            color: Colors.white,
+            color: context.c.text,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -191,7 +192,7 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53950)),
+              child: CircularProgressIndicator(color: AppColors.brand),
             )
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -200,7 +201,7 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF4A0E0E), Color(0xFF1A0505)],
+                      colors: [Color(0xFF0B3D1E), Color(0xFF062314)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -216,14 +217,14 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                               ? null
                               : _confirmAndSendWithdrawRequest,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE53950),
+                            backgroundColor: AppColors.brand,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           child: _submittingWithdrawal
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 18,
                                   height: 18,
                                   child: CircularProgressIndicator(
@@ -231,7 +232,7 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text(
+                              : Text(
                                   'Withdraw',
                                   style: TextStyle(
                                     color: Colors.white,
@@ -244,10 +245,10 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   'THIS WEEK',
                   style: TextStyle(
-                    color: Colors.white38,
+                    color: context.c.faint,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.2,
@@ -258,10 +259,10 @@ class _ListenerWalletScreenState extends State<ListenerWalletScreen> {
                 const SizedBox(height: 16),
                 _buildTimeSection('NIGHT TIME', _currentWeekNight),
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   'LAST WEEK',
                   style: TextStyle(
-                    color: Colors.white38,
+                    color: context.c.faint,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.2,

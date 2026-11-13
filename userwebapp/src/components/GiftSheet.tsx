@@ -80,10 +80,10 @@ export function GiftSheet({
         ) : (
           <div className="grid grid-cols-3 gap-3">
             {gifts.map((g) => (
-              <button key={g.id} onClick={() => choose(g)} className="group flex flex-col items-center rounded-2xl bg-[#1F2430] p-3 text-center transition hover:bg-[#262c3a]">
+              <button key={g.id} onClick={() => choose(g)} className="group flex flex-col items-center rounded-2xl bg-card2 p-3 text-center transition hover:bg-[#262c3a]">
                 <div className="flex h-16 items-center justify-center"><GiftIcon icon={g.icon} /></div>
                 <div className="mt-2 w-full truncate text-xs">{g.name}</div>
-                <div className="mt-1 flex items-center gap-1 text-xs text-white/70"><IconCoin size={13} className="text-gold" />{g.coins}</div>
+                <div className="mt-1 flex items-center gap-1 text-xs text-ink/70"><IconCoin size={13} className="text-gold" />{g.coins}</div>
                 <div className="mt-2 w-full rounded-lg bg-brand-soft py-1.5 text-[11px] font-bold group-hover:bg-brand">SEND</div>
               </button>
             ))}
@@ -91,7 +91,7 @@ export function GiftSheet({
         )}
         <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
           <div>
-            <div className="text-xs text-white/50">Balance</div>
+            <div className="text-xs text-ink/50">Balance</div>
             <div className="mt-0.5 flex items-center gap-1.5 font-bold"><IconCoin size={18} className="text-gold" />{coins} Coins</div>
           </div>
           <button className="btn btn-gold !rounded-full" onClick={topUp}>Top up</button>

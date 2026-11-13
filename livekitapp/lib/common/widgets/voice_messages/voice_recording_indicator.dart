@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -96,7 +97,7 @@ class _VoiceRecordingIndicatorState extends State<VoiceRecordingIndicator>
       child: Icon(
         paused ? Icons.play_arrow_rounded : Icons.fiber_manual_record,
         key: ValueKey<bool>(paused),
-        color: paused ? Colors.white : Colors.red,
+        color: paused ? context.c.text : Colors.red,
         size: paused ? 20 : 16,
       ),
     );
@@ -129,7 +130,7 @@ class _VoiceRecordingIndicatorState extends State<VoiceRecordingIndicator>
           builder: (context, elapsed, _) => Text(
             _fmt(elapsed),
             style: TextStyle(
-              color: paused ? Colors.white54 : null,
+              color: paused ? context.c.muted : null,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
@@ -138,11 +139,11 @@ class _VoiceRecordingIndicatorState extends State<VoiceRecordingIndicator>
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           child: paused
-              ? const Padding(
+              ? Padding(
                   padding: EdgeInsets.only(left: 8),
                   child: Text(
                     'Paused',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: context.c.muted, fontSize: 12),
                   ),
                 )
               : const SizedBox.shrink(),
@@ -176,7 +177,7 @@ class _SpectrumPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.blue
+      ..color = AppColors.brand
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
     final gap = size.width / _barCount;

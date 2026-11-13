@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -11,15 +12,6 @@ import 'package:livekitapp/user/screens/upgrade_screen.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
 
-class _AppColors {
-  static const bg = Color(0xFF0B0B0B);
-  static const cardBg = Color(0xFF1A1A1A);
-  static const cardBorder = Color(0x0DFFFFFF);
-  static const brandRed = Color(0xFFE11D48);
-  static const online = Color(0xFF74D8BD);
-  static const offline = Colors.grey;
-  static const textMuted = Color(0xFF9CA3AF);
-}
 
 class _SectionLabel extends StatelessWidget {
   final String text;
@@ -31,8 +23,8 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white54,
+        style: TextStyle(
+          color: context.c.muted,
           fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 1,
@@ -51,13 +43,13 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: _AppColors.cardBg,
+        color: context.c.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _AppColors.cardBorder),
+        border: Border.all(color: context.c.border),
       ),
       child: Text(
         text,
-        style: const TextStyle(color: Colors.white, fontSize: 12),
+        style: TextStyle(color: context.c.text, fontSize: 12),
       ),
     );
   }
@@ -279,9 +271,9 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
   Widget build(BuildContext context) {
     final showSpinner = _loading && _name.isEmpty;
     return Scaffold(
-      backgroundColor: _AppColors.bg,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        backgroundColor: _AppColors.bg,
+        backgroundColor: context.c.bg,
         elevation: 0,
         title: const Text('Profile'),
       ),
@@ -291,7 +283,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
           ? Center(
               child: Text(
                 _error!,
-                style: const TextStyle(color: _AppColors.textMuted),
+                style: TextStyle(color: context.c.muted),
               ),
             )
           : RefreshIndicator(
@@ -323,11 +315,11 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                                       height: 10,
                                       decoration: BoxDecoration(
                                         color: _isOnline
-                                            ? _AppColors.online
-                                            : _AppColors.offline,
+                                            ? AppColors.online
+                                            : AppColors.offline,
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: _AppColors.bg,
+                                          color: context.c.bg,
                                           width: 2,
                                         ),
                                       ),
@@ -335,8 +327,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                                     const SizedBox(width: 6),
                                     Text(
                                       _isOnline ? 'ONLINE' : 'OFFLINE',
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: context.c.text,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                         letterSpacing: 0.5,
@@ -355,8 +347,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                   Center(
                     child: Text(
                       _name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.c.text,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -368,8 +360,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                       _isOnline ? 'ONLINE NOW' : 'OFFLINE',
                       style: TextStyle(
                         color: _isOnline
-                            ? _AppColors.online
-                            : _AppColors.textMuted,
+                            ? AppColors.online
+                            : context.c.muted,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1,
@@ -380,9 +372,9 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
-                      color: _AppColors.cardBg,
+                      color: context.c.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _AppColors.cardBorder),
+                      border: Border.all(color: context.c.border),
                     ),
                     child: Column(
                       children: [
@@ -392,17 +384,17 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                           _avgRating != null
                               ? _avgRating!.toStringAsFixed(1)
                               : '—',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.c.text,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
+                        Text(
                           'RATING',
                           style: TextStyle(
-                            color: _AppColors.textMuted,
+                            color: context.c.muted,
                             fontSize: 11,
                             letterSpacing: 1,
                           ),
@@ -426,8 +418,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                                     : () => _callListener()),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: !_canCall
-                                ? _AppColors.brandRed.withValues(alpha: 0.3)
-                                : _AppColors.brandRed,
+                                ? AppColors.brand.withValues(alpha: 0.3)
+                                : AppColors.brand,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
@@ -457,14 +449,14 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                                           )
                                         : () => _callListener(video: true))),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _AppColors.cardBg,
+                            backgroundColor: context.c.card,
                             foregroundColor: (!_listenerVideoCallEnabled || !_canCall)
-                                ? Colors.white38
-                                : Colors.white,
+                                ? context.c.faint
+                                : context.c.text,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              side: const BorderSide(color: _AppColors.cardBorder),
+                              side: BorderSide(color: context.c.border),
                             ),
                           ),
                           icon: const Icon(Icons.videocam),
@@ -478,14 +470,14 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _AppColors.cardBg,
+                      color: context.c.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _AppColors.cardBorder),
+                      border: Border.all(color: context.c.border),
                     ),
                     child: Text(
                       '${_age?.toString() ?? '...'} · ${_occupation.isEmpty ? '...' : _occupation}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.c.textSecondary,
                         height: 1.4,
                       ),
                     ),
@@ -495,14 +487,14 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _AppColors.cardBg,
+                      color: context.c.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _AppColors.cardBorder),
+                      border: Border.all(color: context.c.border),
                     ),
                     child: Text(
                       _about.isEmpty ? 'No description yet.' : _about,
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.c.textSecondary,
                         height: 1.4,
                       ),
                     ),
@@ -513,9 +505,9 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                     runSpacing: 8,
                     children: _tags.isEmpty
                         ? [
-                            const Text(
+                            Text(
                               'Not set',
-                              style: TextStyle(color: Colors.white38),
+                              style: TextStyle(color: context.c.faint),
                             ),
                           ]
                         : _tags.map((t) => _Chip(t)).toList(),
@@ -525,8 +517,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                     _languages.isEmpty ? 'Not set' : _languages.join(' • '),
                     style: TextStyle(
                       color: _languages.isEmpty
-                          ? Colors.white38
-                          : _AppColors.brandRed,
+                          ? context.c.faint
+                          : AppColors.brand,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -534,10 +526,10 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _AppColors.brandRed.withOpacity(0.08),
+                      color: AppColors.brand.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: _AppColors.brandRed.withOpacity(0.3),
+                        color: AppColors.brand.withOpacity(0.3),
                       ),
                     ),
                     child: Row(
@@ -545,7 +537,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                       children: [
                         const Icon(
                           Icons.shield_outlined,
-                          color: _AppColors.brandRed,
+                          color: AppColors.brand,
                           size: 20,
                         ),
                         const SizedBox(width: 10),
@@ -553,7 +545,7 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                           child: Text(
                             '100% anonymous. $_name never sees your real identity. Conversations stay between the two of you.',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
+                              color: context.c.textSecondary,
                               fontSize: 13,
                               height: 1.4,
                             ),
@@ -568,8 +560,8 @@ class _ListenerProfileViewScreenState extends State<ListenerProfileViewScreen> {
                       _memberSinceYear(_createdAt).isEmpty
                           ? ''
                           : 'Member since ${_memberSinceYear(_createdAt)}',
-                      style: const TextStyle(
-                        color: Colors.white24,
+                      style: TextStyle(
+                        color: context.c.faint,
                         fontSize: 12,
                       ),
                     ),

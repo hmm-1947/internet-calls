@@ -1,3 +1,5 @@
+import 'package:livekitapp/common/widgets/app_logo.dart';
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class HomeHeader extends StatelessWidget {
@@ -14,22 +16,18 @@ class HomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 56,
+      height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      color: const Color(0xFF0B0F1A),
+      color: context.c.bg,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           isHome
-              ? Image.asset(
-                  'assets/images/banner.png',
-                  height: 32,
-                  fit: BoxFit.contain,
-                )
+              ? const AppLogo()
               : Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.c.text,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -37,7 +35,7 @@ class HomeHeader extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0x1AFFFFFF),
+              color: context.c.overlay,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -55,8 +53,8 @@ class HomeHeader extends StatelessWidget {
                     coins == null ? '' : '$coins',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.c.text,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),

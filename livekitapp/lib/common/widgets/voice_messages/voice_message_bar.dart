@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 
@@ -54,8 +55,8 @@ class VoiceMessageBar extends StatelessWidget {
                               child: CircularProgressIndicator(
                                 value: status.downloadProgress,
                                 strokeWidth: 2,
-                                color: Colors.white,
-                                backgroundColor: Colors.white24,
+                                color: context.c.text,
+                                backgroundColor: context.c.faint,
                               ),
                             ),
                           IconButton(
@@ -64,7 +65,7 @@ class VoiceMessageBar extends StatelessWidget {
                               status.playing
                                   ? Icons.pause_circle
                                   : Icons.play_circle,
-                              color: Colors.white,
+                              color: context.c.text,
                             ),
                             onPressed: () => player.toggle(track),
                           ),
@@ -78,10 +79,10 @@ class VoiceMessageBar extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.mic,
                                 size: 12,
-                                color: Colors.white54,
+                                color: context.c.muted,
                               ),
                               const SizedBox(width: 4),
                               Expanded(
@@ -89,8 +90,8 @@ class VoiceMessageBar extends StatelessWidget {
                                   'Voice message · ${track.senderLabel}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
+                                  style: TextStyle(
+                                    color: context.c.textSecondary,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -102,8 +103,8 @@ class VoiceMessageBar extends StatelessWidget {
                             status.failed
                                 ? 'Playback failed'
                                 : '${_fmt(status.position)} / ${_fmt(status.total)}',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: context.c.text,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                               fontFeatures: [FontFeature.tabularFigures()],
@@ -116,9 +117,9 @@ class VoiceMessageBar extends StatelessWidget {
                     // `builder`, above the Navigator, so there is no Overlay
                     // ancestor for a tooltip to attach to.
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.close,
-                        color: Colors.white70,
+                        color: context.c.textSecondary,
                         semanticLabel: 'Stop voice message',
                       ),
                       onPressed: player.stop,
@@ -129,8 +130,8 @@ class VoiceMessageBar extends StatelessWidget {
               LinearProgressIndicator(
                 value: progress,
                 minHeight: 2,
-                backgroundColor: Colors.white12,
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                backgroundColor: context.c.border,
+                valueColor: AlwaysStoppedAnimation<Color>(context.c.text),
               ),
             ],
           );

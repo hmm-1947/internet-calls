@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
@@ -102,11 +103,11 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
         title: const Text('Verify Phone'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.red,
+        backgroundColor: context.c.bg,
+        foregroundColor: AppColors.brand,
         elevation: 0,
       ),
       body: SafeArea(
@@ -128,18 +129,18 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
                       _sendError!,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        color: Colors.redAccent,
+                        color: AppColors.brand,
                         fontSize: 12.5,
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextButton.icon(
                       onPressed: _sending ? null : _resendOtp,
-                      icon: const Icon(Icons.refresh, color: Colors.red),
+                      icon: const Icon(Icons.refresh, color: AppColors.brand),
                       label: const Text(
                         'Retry',
                         style: TextStyle(
-                          color: Colors.red,
+                          color: AppColors.brand,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -168,10 +169,10 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.black,
-                        disabledBackgroundColor: Colors.red.withOpacity(0.3),
-                        disabledForegroundColor: Colors.black45,
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: AppColors.brand.withOpacity(0.3),
+                        disabledForegroundColor: Colors.white70,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -184,7 +185,7 @@ class _UserPhoneOtpScreenState extends State<UserPhoneOtpScreen> {
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                color: Colors.black,
+                                color: Colors.white,
                                 strokeWidth: 2.4,
                               ),
                             )

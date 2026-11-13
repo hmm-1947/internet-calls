@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,15 +8,6 @@ import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
 
-class _AppColors {
-  static const bg = Color(0xFF0B0F1A);
-  static const cardBg = Color(0xCC1A1A1A);
-  static const cardBorder = Color(0x0DFFFFFF);
-  static const pink = Color(0xFFE53950);
-  static const online = Color(0xFF74D8BD);
-  static const offline = Colors.grey;
-  static const textMuted = Color(0xFF9CA3AF);
-}
 
 class _SectionLabel extends StatelessWidget {
   final String text;
@@ -27,8 +19,8 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(top: 24, bottom: 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white54,
+        style: TextStyle(
+          color: context.c.muted,
           fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 1,
@@ -141,20 +133,20 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
     // a genuinely empty screen waits on the spinner.
     final showSpinner = _loading && _name.isEmpty;
     return Scaffold(
-      backgroundColor: _AppColors.bg,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        backgroundColor: _AppColors.bg,
+        backgroundColor: context.c.bg,
         elevation: 0,
-        foregroundColor: Colors.white,
+        foregroundColor: context.c.text,
         title: const Text('Profile'),
       ),
       body: showSpinner
           ? const Center(
-              child: CircularProgressIndicator(color: _AppColors.pink),
+              child: CircularProgressIndicator(color: AppColors.brand),
             )
           : RefreshIndicator(
-              color: _AppColors.pink,
-              backgroundColor: _AppColors.bg,
+              color: AppColors.brand,
+              backgroundColor: context.c.bg,
               onRefresh: _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -171,7 +163,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: _AppColors.pink,
+                              color: AppColors.brand,
                               width: 2,
                             ),
                           ),
@@ -189,11 +181,11 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                             height: 16,
                             decoration: BoxDecoration(
                               color: _isOnline
-                                  ? _AppColors.online
-                                  : _AppColors.offline,
+                                  ? AppColors.online
+                                  : AppColors.offline,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: _AppColors.bg,
+                                color: context.c.bg,
                                 width: 2,
                               ),
                             ),
@@ -206,8 +198,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                   Center(
                     child: Text(
                       _name.isEmpty ? 'User' : _name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.c.text,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -218,8 +210,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                     Center(
                       child: Text(
                         '@$_username',
-                        style: const TextStyle(
-                          color: _AppColors.textMuted,
+                        style: TextStyle(
+                          color: context.c.muted,
                           fontSize: 14,
                         ),
                       ),
@@ -231,8 +223,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                       _isOnline ? 'ONLINE NOW' : 'OFFLINE',
                       style: TextStyle(
                         color: _isOnline
-                            ? _AppColors.online
-                            : _AppColors.textMuted,
+                            ? AppColors.online
+                            : context.c.muted,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1,
@@ -244,9 +236,9 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _AppColors.cardBg,
+                      color: context.c.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _AppColors.cardBorder),
+                      border: Border.all(color: context.c.border),
                     ),
                     child: Text(
                       _bio.trim().isEmpty
@@ -254,8 +246,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                           : _bio,
                       style: TextStyle(
                         color: _bio.trim().isEmpty
-                            ? _AppColors.textMuted
-                            : Colors.white70,
+                            ? context.c.muted
+                            : context.c.textSecondary,
                         fontSize: 14,
                         height: 1.5,
                       ),
@@ -267,7 +259,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                       _error!,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        color: Colors.redAccent,
+                        color: AppColors.brand,
                         fontSize: 12.5,
                       ),
                     ),

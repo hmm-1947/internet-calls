@@ -107,6 +107,17 @@ class AdminListenerProfileUpdate(BaseModel):
     languages: Optional[list[str]] = None
     age: Optional[int] = None
     occupation: Optional[str] = None
+    gender: Optional[str] = None
+
+    @field_validator("gender")
+    @classmethod
+    def gender_value(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip().lower()
+        if v not in ("male", "female"):
+            raise ValueError("Gender must be male or female")
+        return v
 
     @field_validator("name")
     @classmethod
@@ -440,6 +451,17 @@ class UserContactChangeVerify(BaseModel):
 class UserVideoCallSettingUpdate(BaseModel):
     enabled: bool
 
+class UserGenderPreferenceUpdate(BaseModel):
+    preference: str
+
+    @field_validator("preference")
+    @classmethod
+    def preference_value(cls, v: str) -> str:
+        v = v.strip().lower()
+        if v not in ("male", "female"):
+            raise ValueError("Preference must be male or female")
+        return v
+
 class ListenerVideoCallSettingUpdate(BaseModel):
     enabled: bool
 
@@ -493,7 +515,18 @@ class ListenerCreate(BaseModel):
     name: str
     phone: str
     password: str
+    gender: Optional[str] = None
     confirm_reserved_username: bool = False
+
+    @field_validator("gender")
+    @classmethod
+    def gender_value(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip().lower()
+        if v not in ("male", "female"):
+            raise ValueError("Gender must be male or female")
+        return v
 
 
 class AdminListenerPasswordUpdate(BaseModel):

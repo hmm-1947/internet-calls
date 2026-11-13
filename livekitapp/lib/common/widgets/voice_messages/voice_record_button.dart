@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -409,7 +410,7 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton>
         children: [
           Icon(
             ready ? Icons.lock : Icons.lock_outline,
-            color: Colors.white,
+            color: context.c.text,
             size: 20,
           ),
           const SizedBox(height: 4),
@@ -421,9 +422,9 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton>
                 offset: Offset(0, -4 * t),
                 child: Opacity(
                   opacity: (1 - t).clamp(0.25, 1.0),
-                  child: const Icon(
+                  child: Icon(
                     Icons.keyboard_arrow_up,
-                    color: Colors.white70,
+                    color: context.c.textSecondary,
                     size: 16,
                   ),
                 ),
@@ -439,7 +440,7 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xCC141A28),
+        color: context.c.card,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -457,7 +458,7 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xCC141A28),
+        color: context.c.card,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -643,7 +644,7 @@ class _VoiceRecordButtonState extends State<VoiceRecordButton>
                                 ? 'locked'
                                 : (_recording ? 'recording' : 'idle'),
                           ),
-                          color: Colors.white,
+                          color: context.c.text,
                         ),
                       ),
                     ),

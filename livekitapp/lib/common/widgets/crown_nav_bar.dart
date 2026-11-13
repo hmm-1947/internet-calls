@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -49,13 +50,12 @@ class _CrownNavBarState extends State<CrownNavBar> {
 
   @override
   Widget build(BuildContext context) {
-    const activeColor = Color(0xFFE53950);
-    const inactiveColor = Colors.white70;
+    const activeColor = AppColors.brand;
     final itemCount = widget.icons.length;
 
     Widget buildItem(int i) {
       final selected = widget.selectedIndex == i;
-      final color = selected ? activeColor : inactiveColor;
+      final color = selected ? activeColor : context.c.textSecondary;
       return Expanded(
         child: InkWell(
           onTap: () => _handleTap(i),
@@ -106,13 +106,13 @@ class _CrownNavBarState extends State<CrownNavBar> {
             bottom: 0,
             height: barHeight,
             child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0x400F1A2E),
-                border: Border(top: BorderSide(color: Color(0x55FFFFFF))),
+              decoration: BoxDecoration(
+                color: context.c.bg,
+                border: Border(top: BorderSide(color: context.c.border)),
               ),
               child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: ColoredBox(
+                  color: Colors.transparent,
                   child: Padding(
                     padding: EdgeInsets.only(bottom: bottomInset),
                     child: Padding(
@@ -140,20 +140,10 @@ class _CrownNavBarState extends State<CrownNavBar> {
                                 height: 56,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: const Color.fromARGB(
-                                      51,
-                                      255,
-                                      124,
-                                      141,
-                                    ),
+                                    color: context.c.brandTint,
                                     borderRadius: BorderRadius.circular(22),
                                     border: Border.all(
-                                      color: const Color.fromARGB(
-                                        83,
-                                        255,
-                                        126,
-                                        126,
-                                      ),
+                                      color: AppColors.brand.withValues(alpha: 0.35),
                                       width: 1,
                                     ),
                                   ),
@@ -197,7 +187,7 @@ class _CrownNavBarState extends State<CrownNavBar> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: widget.crownImageAsset == null
-                          ? const Color(0xFFFFC1B4)
+                          ? context.c.brandTint
                           : null,
                       boxShadow: [
                         BoxShadow(
@@ -224,7 +214,7 @@ class _CrownNavBarState extends State<CrownNavBar> {
                           )
                         : Icon(
                             widget.crownIcon,
-                            color: const Color(0xFF2A0A0A),
+                            color: AppColors.brandDark,
                             size: widget.crownSize * 28 / 60,
                           ),
                   ),

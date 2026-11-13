@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
@@ -9,15 +10,6 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
 
-class _AppColors {
-  static const bg = Color(0xFF0B0B0B);
-  static const cardBg = Color(0xCC1A1A1A);
-  static const cardBorder = Color(0x0DFFFFFF);
-  static const brandRed = Color(0xFFE11D48);
-  static const textSecondary = Color(0xFFD4E4FA);
-  static const textMuted = Color(0xFF9C8484);
-  static const gold = Color(0xFFE8B93A);
-}
 
 class UpgradeScreen extends StatefulWidget {
   const UpgradeScreen({super.key});
@@ -315,7 +307,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   // Icon theme follows Best Seller status, not the icon type itself:
   // gold for regular plans, red for the featured/best-seller plan.
   Color _colorForPlan(Map<String, dynamic> plan) =>
-      plan['is_featured'] == true ? _AppColors.brandRed : _AppColors.gold;
+      plan['is_featured'] == true ? AppColors.brand : AppColors.gold;
 
   Widget _planIconGlyph(Map<String, dynamic> plan, Color color) {
     final type = plan['icon'] as String?;
@@ -336,18 +328,18 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _AppColors.bg,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        backgroundColor: _AppColors.bg,
+        backgroundColor: context.c.bg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: context.c.text),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
           'Upgrade',
           style: TextStyle(
-            color: _AppColors.brandRed,
+            color: AppColors.brand,
             fontWeight: FontWeight.w700,
             fontSize: 20,
           ),
@@ -358,7 +350,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         top: false,
         child: _loading
             ? const Center(
-                child: CircularProgressIndicator(color: _AppColors.brandRed),
+                child: CircularProgressIndicator(color: AppColors.brand),
               )
             : _error != null
             ? _buildError()
@@ -379,13 +371,13 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             Text(
               _error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _AppColors.textSecondary),
+              style: TextStyle(color: context.c.textSecondary),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _load,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _AppColors.brandRed,
+                backgroundColor: AppColors.brand,
               ),
               child: const Text('Retry'),
             ),
@@ -425,14 +417,14 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                     ? null
                     : _purchase,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _AppColors.brandRed,
-                  disabledBackgroundColor: _AppColors.brandRed.withOpacity(0.4),
+                  backgroundColor: AppColors.brand,
+                  disabledBackgroundColor: AppColors.brand.withOpacity(0.4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
                 child: _purchasing
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 22,
                         height: 22,
                         child: CircularProgressIndicator(
@@ -440,7 +432,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
+                    : Text(
                         'PURCHASE NOW',
                         style: TextStyle(
                           color: Colors.white,
@@ -464,15 +456,15 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           children: [
             Icon(
               Icons.inventory_2_outlined,
-              color: _AppColors.textMuted.withOpacity(0.6),
+              color: context.c.muted.withOpacity(0.6),
               size: 36,
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'No plans currently available',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: _AppColors.textSecondary,
+                color: context.c.textSecondary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -481,7 +473,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             Text(
               'Please check back later.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _AppColors.textMuted, fontSize: 12),
+              style: TextStyle(color: context.c.muted, fontSize: 12),
             ),
           ],
         ),
@@ -503,7 +495,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                 borderRadius: BorderRadius.circular(60),
                 boxShadow: [
                   BoxShadow(
-                    color: _AppColors.brandRed.withOpacity(0.55),
+                    color: AppColors.brand.withOpacity(0.55),
                     blurRadius: 60,
                     spreadRadius: 20,
                   ),
@@ -512,7 +504,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             ),
           ),
           url.isEmpty
-              ? Icon(Icons.workspace_premium, color: _AppColors.gold, size: 72)
+              ? Icon(Icons.workspace_premium, color: AppColors.gold, size: 72)
               : ConstrainedBox(
                   constraints: const BoxConstraints(
                     maxHeight: 220,
@@ -527,7 +519,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                           .round(),
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.workspace_premium,
-                        color: _AppColors.gold,
+                        color: AppColors.gold,
                         size: 72,
                       ),
                     ),
@@ -541,10 +533,10 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   Widget _buildBalance() {
     return Column(
       children: [
-        const Text(
+        Text(
           'MY BALANCE',
           style: TextStyle(
-            color: _AppColors.textMuted,
+            color: context.c.muted,
             fontSize: 12,
             letterSpacing: 1,
             fontWeight: FontWeight.w600,
@@ -556,14 +548,14 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           children: [
             const Icon(
               Icons.payments_rounded,
-              color: _AppColors.gold,
+              color: AppColors.gold,
               size: 22,
             ),
             const SizedBox(width: 8),
             Text(
               '$_coins Coins',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.c.text,
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
@@ -587,10 +579,10 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _AppColors.cardBg,
+          color: context.c.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? _AppColors.brandRed : _AppColors.cardBorder,
+            color: selected ? AppColors.brand : context.c.border,
             width: selected ? 1.6 : 1,
           ),
         ),
@@ -604,8 +596,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                   height: 44,
                   decoration: BoxDecoration(
                     color: featured
-                        ? _AppColors.brandRed.withOpacity(0.16)
-                        : const Color(0xFF13212F),
+                        ? AppColors.brand.withOpacity(0.16)
+                        : context.c.card,
                     shape: BoxShape.circle,
                   ),
                   child: _planIconGlyph(plan, iconColor),
@@ -617,8 +609,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                     children: [
                       Text(
                         plan['name'] as String? ?? '',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.c.text,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -626,8 +618,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                       const SizedBox(height: 2),
                       Text(
                         '$coins Coins',
-                        style: const TextStyle(
-                          color: _AppColors.textMuted,
+                        style: TextStyle(
+                          color: context.c.muted,
                           fontSize: 12,
                         ),
                       ),
@@ -638,7 +630,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                 Text(
                   '₹${plan['price']}',
                   style: TextStyle(
-                    color: featured ? _AppColors.brandRed : Colors.white,
+                    color: featured ? AppColors.brand : context.c.text,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -655,10 +647,10 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: _AppColors.brandRed,
+                    color: AppColors.brand,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text(
+                  child: Text(
                     'BEST SELLER',
                     style: TextStyle(
                       color: Colors.white,

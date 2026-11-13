@@ -1,18 +1,10 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/listener/repository/weekly_challenge_repository.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
 
-class _AppColors {
-  static const bg = Color(0xFF0B0B0B);
-  static const cardBg = Color(0xFF1A1A1A);
-  static const cardBorder = Color(0x0DFFFFFF);
-  static const brandRed = Color(0xFFE53950);
-  static const textSecondary = Colors.white54;
-  static const textMuted = Colors.white38;
-  static const trackInactive = Color(0x1FFFFFFF);
-}
 
 class WeeklyChallengeScreen extends StatefulWidget {
   const WeeklyChallengeScreen({super.key});
@@ -145,25 +137,25 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _AppColors.bg,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        backgroundColor: _AppColors.bg,
-        foregroundColor: Colors.white,
+        backgroundColor: context.c.bg,
+        foregroundColor: context.c.text,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Weekly Challenge',
-          style: TextStyle(color: Colors.white, fontSize: 20),
+          style: TextStyle(color: context.c.text, fontSize: 20),
         ),
       ),
       body: SafeArea(
         child: _loading
             ? const Center(
-                child: CircularProgressIndicator(color: _AppColors.brandRed),
+                child: CircularProgressIndicator(color: AppColors.brand),
               )
             : _error != null
             ? _buildError()
             : RefreshIndicator(
-                color: _AppColors.brandRed,
+                color: AppColors.brand,
                 onRefresh: _load,
                 child: ListView(
                   padding: const EdgeInsets.all(20),
@@ -190,9 +182,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _AppColors.cardBg,
+        color: context.c.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _AppColors.cardBorder),
+        border: Border.all(color: context.c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,29 +192,29 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
           Container(
             width: 52,
             height: 52,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _AppColors.trackInactive,
+              color: context.c.brandTint,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.emoji_events_outlined,
-              color: _AppColors.textMuted,
+              color: AppColors.brand,
               size: 26,
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No weekly challenge for this week yet',
             style: TextStyle(
-              color: Colors.white,
+              color: context.c.text,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Check back soon - a new challenge may be added by the team. In the meantime, here\'s how you did in previous weeks.',
-            style: TextStyle(color: _AppColors.textSecondary, fontSize: 13),
+            style: TextStyle(color: context.c.textSecondary, fontSize: 13),
           ),
         ],
       ),
@@ -243,10 +235,10 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Previous weeks',
           style: TextStyle(
-            color: Colors.white,
+            color: context.c.text,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -261,7 +253,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                 height: 22,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.4,
-                  color: _AppColors.brandRed,
+                  color: AppColors.brand,
                 ),
               ),
             ),
@@ -271,13 +263,13 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: _AppColors.cardBg,
+              color: context.c.card,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: _AppColors.cardBorder),
+              border: Border.all(color: context.c.border),
             ),
             child: Text(
               _historyError!,
-              style: const TextStyle(color: _AppColors.textSecondary),
+              style: TextStyle(color: context.c.textSecondary),
             ),
           )
         else if (_history == null || _history!.isEmpty)
@@ -285,13 +277,13 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: _AppColors.cardBg,
+              color: context.c.card,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: _AppColors.cardBorder),
+              border: Border.all(color: context.c.border),
             ),
-            child: const Text(
+            child: Text(
               'No previous weeks to show yet.',
-              style: TextStyle(color: _AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(color: context.c.textSecondary, fontSize: 13),
             ),
           )
         else
@@ -307,9 +299,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _AppColors.cardBg,
+        color: context.c.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _AppColors.cardBorder),
+        border: Border.all(color: context.c.border),
       ),
       child: Row(
         children: [
@@ -319,12 +311,12 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: allCompleted
-                  ? _AppColors.brandRed
-                  : _AppColors.trackInactive,
+                  ? AppColors.brand
+                  : context.c.brandTint,
             ),
             child: Icon(
               allCompleted ? Icons.emoji_events : Icons.emoji_events_outlined,
-              color: allCompleted ? Colors.white : _AppColors.textMuted,
+              color: allCompleted ? Colors.white : AppColors.brand,
               size: 20,
             ),
           ),
@@ -335,8 +327,8 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
               children: [
                 Text(
                   _formatWeekRange(entry.weekStart, entry.weekEnd),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.c.text,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -344,8 +336,8 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                 const SizedBox(height: 3),
                 Text(
                   '${_formatTalktime(entry.talkSeconds)} talked · ${entry.goalsCompleted} of ${entry.goalsTotal} goals',
-                  style: const TextStyle(
-                    color: _AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.c.textSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -364,22 +356,22 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.error_outline,
-              color: _AppColors.textMuted,
+              color: context.c.muted,
               size: 40,
             ),
             const SizedBox(height: 12),
             Text(
               _error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _AppColors.textSecondary),
+              style: TextStyle(color: context.c.textSecondary),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _load,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _AppColors.brandRed,
+                backgroundColor: AppColors.brand,
               ),
               child: const Text('Retry'),
             ),
@@ -397,9 +389,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _AppColors.cardBg,
+        color: context.c.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _AppColors.cardBorder),
+        border: Border.all(color: context.c.border),
       ),
       child: Row(
         children: [
@@ -408,9 +400,9 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             height: 52,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _AppColors.brandRed,
+              color: AppColors.brand,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.emoji_events,
               color: Colors.white,
               size: 26,
@@ -423,8 +415,8 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
               children: [
                 Text(
                   _formatTalktime(talkSeconds),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.c.text,
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                   ),
@@ -432,8 +424,8 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'talked this week · $completedCount of ${goals.length} goals done',
-                  style: const TextStyle(
-                    color: _AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.c.textSecondary,
                     fontSize: 13,
                   ),
                 ),
@@ -453,13 +445,13 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: _AppColors.cardBg,
+          color: context.c.card,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _AppColors.cardBorder),
+          border: Border.all(color: context.c.border),
         ),
-        child: const Text(
+        child: Text(
           'No challenge goals have been set up yet. Check back soon!',
-          style: TextStyle(color: _AppColors.textSecondary),
+          style: TextStyle(color: context.c.textSecondary),
         ),
       );
     }
@@ -494,17 +486,17 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       decoration: BoxDecoration(
-        color: _AppColors.cardBg,
+        color: context.c.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _AppColors.cardBorder),
+        border: Border.all(color: context.c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Your progress',
             style: TextStyle(
-              color: Colors.white,
+              color: context.c.text,
               fontSize: 15,
               fontWeight: FontWeight.w700,
             ),
@@ -528,7 +520,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                       child: Container(
                         height: 6,
                         decoration: BoxDecoration(
-                          color: _AppColors.trackInactive,
+                          color: context.c.brandTint,
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -540,7 +532,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                       child: Container(
                         height: 6,
                         decoration: BoxDecoration(
-                          color: _AppColors.brandRed,
+                          color: AppColors.brand,
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -578,8 +570,8 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                         : TextAlign.center,
                     style: TextStyle(
                       color: goal.completed
-                          ? Colors.white
-                          : _AppColors.textMuted,
+                          ? context.c.text
+                          : context.c.muted,
                       fontSize: 12,
                       fontWeight: goal.completed
                           ? FontWeight.w700
@@ -604,16 +596,16 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _AppColors.brandRed,
+          color: AppColors.brand,
           boxShadow: [
             BoxShadow(
-              color: _AppColors.brandRed.withOpacity(0.6),
+              color: AppColors.brand.withOpacity(0.6),
               blurRadius: 12,
               spreadRadius: 2,
             ),
           ],
         ),
-        child: const Icon(Icons.check, size: 14, color: Colors.white),
+        child: Icon(Icons.check, size: 14, color: Colors.white),
       );
     }
     return Container(
@@ -621,16 +613,16 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
       height: 24,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: _AppColors.bg,
-        border: Border.all(color: _AppColors.textMuted, width: 2),
+        color: context.c.brandTint,
+        border: Border.all(color: AppColors.brand.withOpacity(0.5), width: 2),
       ),
       child: Center(
         child: Container(
           width: 6,
           height: 6,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _AppColors.textMuted,
+            color: AppColors.brand.withOpacity(0.5),
           ),
         ),
       ),
@@ -649,20 +641,20 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _AppColors.brandRed,
+                    color: AppColors.brand,
                     boxShadow: [
                       BoxShadow(
-                        color: _AppColors.brandRed.withOpacity(0.5),
+                        color: AppColors.brand.withOpacity(0.5),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.check, size: 12, color: Colors.white),
+                  child: Icon(Icons.check, size: 12, color: Colors.white),
                 )
               : Icon(
                   Icons.radio_button_unchecked,
-                  color: _AppColors.textMuted,
+                  color: AppColors.brand.withOpacity(0.6),
                   size: 20,
                 ),
           const SizedBox(width: 12),
@@ -670,7 +662,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             child: Text(
               'Talk for ${_formatMinutes(goal.minutes)}',
               style: TextStyle(
-                color: goal.completed ? Colors.white : _AppColors.textSecondary,
+                color: goal.completed ? context.c.text : context.c.textSecondary,
                 fontSize: 14,
                 fontWeight: goal.completed ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -680,7 +672,7 @@ class _WeeklyChallengeScreenState extends State<WeeklyChallengeScreen> {
             const Text(
               'Completed',
               style: TextStyle(
-                color: _AppColors.brandRed,
+                color: AppColors.brand,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),

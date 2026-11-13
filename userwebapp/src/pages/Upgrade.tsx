@@ -16,7 +16,7 @@ function PlanIcon({ plan }: { plan: Plan }) {
   const icon = plan.icon || "";
   const hasImg = (icon.startsWith("/") || icon.startsWith("http")) && !failed;
   return (
-    <div className={cx("flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full", plan.is_featured ? "bg-brand/15 text-brand" : "bg-[#13212F] text-gold")}>
+    <div className={cx("flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full", plan.is_featured ? "bg-brand/15 text-brand" : "bg-brand/15 text-gold")}>
       {hasImg ? (
         <img src={mediaUrl(icon)} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
       ) : icon === "star" ? (
@@ -89,7 +89,7 @@ export default function Upgrade() {
       <PageHeader
         title="Buy coins"
         onBack={() => nav(-1)}
-        right={<button onClick={openHistory} className="rounded-full px-3 py-1.5 text-sm font-semibold text-brand-soft hover:bg-white/10">History</button>}
+        right={<button onClick={openHistory} className="rounded-full px-3 py-1.5 text-sm font-semibold text-brand-soft hover:bg-black/10">History</button>}
       />
       <div className="mx-auto w-full max-w-xl flex-1 px-5 pt-2">
         <div className="relative flex min-h-[140px] items-center justify-center py-3">
@@ -102,8 +102,8 @@ export default function Upgrade() {
         </div>
 
         <div className="mt-5 text-center">
-          <div className="text-xs font-semibold uppercase tracking-widest text-[#9C8484]">My balance</div>
-          <div className="mt-1.5 inline-flex items-center justify-center gap-2 text-2xl font-bold text-white">
+          <div className="text-xs font-semibold uppercase tracking-widest text-muted">My balance</div>
+          <div className="mt-1.5 inline-flex items-center justify-center gap-2 text-2xl font-bold text-ink">
             <IconCoin size={22} className="text-gold" />
             {me ? me.coins : "\u2014"} Coins
           </div>
@@ -125,16 +125,16 @@ export default function Upgrade() {
                   type="button"
                   onClick={() => setSelected(p.id)}
                   className={cx(
-                    "relative mb-3.5 flex w-full items-center gap-3.5 rounded-[14px] bg-[#1A1A1A]/80 p-4 text-left transition",
-                    sel ? "border-[1.6px] border-brand" : "border border-white/5"
+                    "relative mb-3.5 flex w-full items-center gap-3.5 rounded-[14px] bg-card p-4 text-left transition",
+                    sel ? "border-[1.6px] border-brand" : "border border-black/5"
                   )}
                 >
                   <PlanIcon plan={p} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-base font-semibold text-white">{p.name}</div>
-                    <div className="mt-0.5 text-xs text-[#9C8484]">{p.coins} Coins</div>
+                    <div className="truncate text-base font-semibold text-ink">{p.name}</div>
+                    <div className="mt-0.5 text-xs text-muted">{p.coins} Coins</div>
                   </div>
-                  <div className={cx("text-[17px] font-bold", p.is_featured ? "text-brand" : "text-white")}>{RUPEE}{p.price}</div>
+                  <div className={cx("text-[17px] font-bold", p.is_featured ? "text-brand" : "text-ink")}>{RUPEE}{p.price}</div>
                   {p.is_featured && (
                     <span className="absolute -top-2 right-3 rounded-md bg-brand px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Best seller</span>
                   )}
@@ -186,7 +186,7 @@ export default function Upgrade() {
       <Modal open={!!success} onClose={() => setSuccess(null)} title="Payment successful">
         <div className="flex flex-col items-center py-2 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-online/15 text-online"><IconCoin size={36} /></div>
-          <p className="mt-4 text-sm text-white/70">Your new balance</p>
+          <p className="mt-4 text-sm text-ink/70">Your new balance</p>
           <div className="mt-1 inline-flex items-center gap-2 text-3xl font-extrabold text-gold"><IconCoin size={26} />{success?.coins}</div>
           <button className="btn btn-primary mt-6 w-full" onClick={() => { setSuccess(null); nav("/"); }}>Start talking</button>
         </div>

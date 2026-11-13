@@ -1,3 +1,5 @@
+import 'package:livekitapp/common/widgets/app_logo.dart';
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class ListenerHomeHeader extends StatelessWidget {
@@ -12,20 +14,16 @@ class ListenerHomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 56,
+      height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: Color(0xFF0B0F1A),
+      color: context.c.bg,
       alignment: Alignment.centerLeft,
       child: isHome
-          ? Image.asset(
-              'assets/images/banner.png',
-              height: 32,
-              fit: BoxFit.contain,
-            )
+          ? const AppLogo()
           : Text(
               title,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.c.text,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),

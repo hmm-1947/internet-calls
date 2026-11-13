@@ -158,7 +158,7 @@ export default function Register() {
         {err && <p className="text-sm text-red-400">{err}</p>}
         <button className="btn btn-primary w-full" disabled={busy}>{busy && <Spinner size={16} />}Send code</button>
       </form>
-      <div className="flex items-center gap-3 text-xs text-muted"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div>
+      <div className="flex items-center gap-3 text-xs text-muted"><span className="h-px flex-1 bg-black/10" />or<span className="h-px flex-1 bg-black/10" /></div>
       <GoogleButton onClick={google} busy={gBusy} />
       <p className="pt-2 text-center text-sm text-muted">
         Already have an account? <Link to="/login" className="font-semibold text-brand-soft hover:underline">Log in</Link>

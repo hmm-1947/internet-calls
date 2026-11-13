@@ -49,9 +49,9 @@ export default function ListenerProfile() {
             {l.photo_url ? (
               <img src={mediaUrl(l.photo_url)} alt={l.name} className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-white/20"><IconUser size={96} /></div>
+              <div className="flex h-full w-full items-center justify-center text-ink/20"><IconUser size={96} /></div>
             )}
-            <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold backdrop-blur">
+            <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/55 text-white px-3 py-1 text-xs font-semibold backdrop-blur">
               <PresenceDot online={isLive(l)} busy={l.is_in_call} className="!h-2 !w-2 !border-0" />
               {status}
             </div>
@@ -62,14 +62,14 @@ export default function ListenerProfile() {
               <h1 className="text-2xl font-extrabold md:text-3xl">{l.name}{l.age ? `, ${l.age}` : ""}</h1>
               <BadgePill tag={l.badge_tag} />
             </div>
-            {l.occupation && <p className="mt-1 text-white/70">{l.occupation}</p>}
+            {l.occupation && <p className="mt-1 text-ink/70">{l.occupation}</p>}
             <div className="mt-3 flex items-center gap-3">
               <Stars value={l.avg_rating} count={l.rating_count} size={18} />
               {since && <span className="text-xs text-muted">Joined {since.toLocaleDateString([], { month: "short", year: "numeric" })}</span>}
             </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
-              <button disabled={!rules.voice} onClick={() => void startCall(l, false)} className="btn flex-1 bg-online/90 text-white hover:bg-online disabled:bg-white/5 disabled:text-white/40 md:flex-none md:px-8">
+              <button disabled={!rules.voice} onClick={() => void startCall(l, false)} className="btn flex-1 bg-online/90 text-white hover:bg-online disabled:bg-black/5 disabled:text-ink/40 md:flex-none md:px-8">
                 <IconPhone size={18} /> Voice call
               </button>
               {l.video_call_enabled && (
@@ -87,14 +87,14 @@ export default function ListenerProfile() {
             {l.about && (
               <section className="mt-7">
                 <h2 className="label">About</h2>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/80">{l.about}</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/80">{l.about}</p>
               </section>
             )}
             {l.languages && l.languages.length > 0 && (
               <section className="mt-6">
                 <h2 className="label">Languages</h2>
                 <div className="flex flex-wrap gap-2">
-                  {l.languages.map((x) => <span key={x} className="rounded-full px-3 py-1 text-xs text-white/80" style={{ background: "rgba(255,255,255,0.07)" }}>{x}</span>)}
+                  {l.languages.map((x) => <span key={x} className="rounded-full px-3 py-1 text-xs text-ink/80" style={{ background: "rgba(255,255,255,0.07)" }}>{x}</span>)}
                 </div>
               </section>
             )}

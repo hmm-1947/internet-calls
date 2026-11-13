@@ -1,6 +1,8 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/app_search_bar.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
@@ -17,9 +19,7 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/user/screens/calls/chat_history_screen.dart';
 
-const _bg = Color(0xFF0B0F1A);
-const _pink = Color(0xFFE53950);
-const _dimText = Colors.white54;
+const _pink = AppColors.brand;
 
 /// Time for a thread's last message, shown on the right of the chat row:
 /// the clock time if it was today, `Yesterday` if it was yesterday, else a
@@ -58,13 +58,13 @@ class _FilterChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? activeColor : const Color(0xFF1A2032),
+          color: selected ? activeColor : context.c.card,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.white54,
+            color: selected ? context.c.text : context.c.muted,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -347,7 +347,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         child: Container(
           margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF141821),
+            color: context.c.card,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Wrap(
@@ -358,7 +358,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.c.faint,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -419,29 +419,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: context.c.bg,
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-            child: Container(
-              height: 55,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A2032),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: 'Search chats...',
-                  hintStyle: TextStyle(color: _dimText),
-                  prefixIcon: Icon(Icons.search, color: _dimText),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
-                ),
-                onChanged: _onSearchChanged,
-              ),
+            child: AppSearchBar(
+              hintText: 'Search chats...',
+              onChanged: _onSearchChanged,
             ),
           ),
           Expanded(
@@ -523,7 +508,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         child: Text(
           message,
           style: TextStyle(
-            color: color ?? _dimText,
+            color: color ?? context.c.muted,
             fontSize: bold ? 16 : null,
             fontWeight: bold ? FontWeight.w600 : null,
           ),
@@ -550,7 +535,7 @@ class _ThreadTile extends StatelessWidget {
     final unread = thread['unread_count'] ?? 0;
     return RepaintBoundary(
       child: Material(
-        color: _bg,
+        color: context.c.bg,
         child: ListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -562,7 +547,7 @@ class _ThreadTile extends StatelessWidget {
                   photoUrl: thread['photo_url'],
                   radius: 26,
                   iconSize: 26,
-                  backgroundColor: const Color(0xFF2A3145),
+                  backgroundColor: context.c.card2,
                 ),
                 Positioned(
                   right: 0,
@@ -570,7 +555,7 @@ class _ThreadTile extends StatelessWidget {
                   child: PresenceDot(
                     presence: PresenceCache().listener(thread['listener_id']),
                     fallback: thread['is_online'] == true,
-                    borderColor: _bg,
+                    borderColor: context.c.bg,
                   ),
                 ),
               ],
@@ -578,27 +563,27 @@ class _ThreadTile extends StatelessWidget {
             title: Row(
               children: [
                 if (thread['is_pinned'] == true)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.push_pin, size: 14, color: _dimText),
+                    child: Icon(Icons.push_pin, size: 14, color: context.c.muted),
                   ),
                 Expanded(
                   child: Text(
                     '${thread['listener_name'] ?? ''}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.c.text,
                       fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
                   ),
                 ),
                 if (thread['is_muted'] == true)
-                  const Icon(
+                  Icon(
                     Icons.notifications_off,
                     size: 16,
-                    color: _dimText,
+                    color: context.c.muted,
                   ),
               ],
             ),
@@ -608,7 +593,7 @@ class _ThreadTile extends StatelessWidget {
                 typing: TypingCache().listener(thread['listener_id']),
                 draftKey: 'user:${thread['listener_id']}',
                 lastMessage: '${thread['last_message'] ?? ''}',
-                color: unread > 0 ? Colors.white70 : _dimText,
+                color: unread > 0 ? context.c.textSecondary : context.c.muted,
                 accentColor: _pink,
                 messageType: thread['last_message_type'] as String?,
                 callStatus: thread['last_call_status'] as String?,
@@ -620,7 +605,7 @@ class _ThreadTile extends StatelessWidget {
               children: [
                 Text(
                   _threadTimeLabel(thread['last_message_at']),
-                  style: const TextStyle(color: _dimText, fontSize: 12),
+                  style: TextStyle(color: context.c.muted, fontSize: 12),
                 ),
                 const SizedBox(height: 6),
                 if (unread > 0)
@@ -629,7 +614,7 @@ class _ThreadTile extends StatelessWidget {
                     backgroundColor: _pink,
                     child: Text(
                       '$unread',
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      style: TextStyle(color: context.c.text, fontSize: 11),
                     ),
                   ),
               ],
@@ -656,8 +641,8 @@ class _ThreadOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(label, style: const TextStyle(color: Colors.white)),
+      leading: Icon(icon, color: context.c.textSecondary),
+      title: Text(label, style: TextStyle(color: context.c.text)),
       onTap: onTap,
     );
   }

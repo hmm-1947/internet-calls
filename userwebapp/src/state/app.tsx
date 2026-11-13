@@ -245,7 +245,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={`pointer-events-auto max-w-md rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur ${
-              t.kind === "error" ? "border-red-500/40 bg-red-950/80 text-red-100" : t.kind === "success" ? "border-emerald-500/40 bg-emerald-950/80 text-emerald-100" : "border-white/10 bg-neutral-900/90 text-white"
+              t.kind === "error" ? "border-red-500/40 bg-red-50 text-red-700" : t.kind === "success" ? "border-emerald-500/40 bg-emerald-50 text-emerald-700" : "border-black/10 bg-neutral-800 text-white"
             }`}
           >
             {t.text}

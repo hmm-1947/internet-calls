@@ -48,7 +48,7 @@ export default function ProfileSetup() {
         <Field label="Display name" value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={30} />
         {err && <p className="text-sm text-red-400">{err}</p>}
         <button className="btn btn-primary w-full" disabled={busy || uname.status === "checking"}>{busy && <Spinner size={16} />}Continue</button>
-        <button type="button" onClick={() => void logout()} className="w-full text-center text-sm text-muted hover:text-white">Use a different account</button>
+        <button type="button" onClick={() => void logout()} className="w-full text-center text-sm text-muted hover:text-ink">Use a different account</button>
       </form>
     </AuthLayout>
   );

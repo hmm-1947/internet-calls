@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/auth_validators.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
@@ -135,7 +136,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
         child: Text(
           show ? error : hint,
           style: TextStyle(
-            color: show ? Colors.redAccent : Colors.white38,
+            color: show ? AppColors.brand : context.c.faint,
             fontSize: 12.5,
           ),
         ),
@@ -146,11 +147,11 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
         title: const Text('Register'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.red,
+        backgroundColor: context.c.bg,
+        foregroundColor: AppColors.brand,
         elevation: 0,
       ),
       body: SafeArea(
@@ -203,10 +204,10 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.black,
-                        disabledBackgroundColor: Colors.red.withOpacity(0.3),
-                        disabledForegroundColor: Colors.black45,
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: AppColors.brand.withOpacity(0.3),
+                        disabledForegroundColor: Colors.white70,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -219,7 +220,7 @@ class _UserRegisterScreenState extends State<UserRegisterScreen> {
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                color: Colors.black,
+                                color: Colors.white,
                                 strokeWidth: 2.4,
                               ),
                             )

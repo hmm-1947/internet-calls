@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -25,15 +26,6 @@ import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
 
-class _AppColors {
-  static const bg = Color(0xFF0B0F1A);
-  static const cardBg = Color(0xCC1A1A1A);
-  static const cardBorder = Color(0x0DFFFFFF);
-  static const brandRed = Color(0xFFE11D48);
-  static const online = Color(0xFF74D8BD);
-  static const textSecondary = Color(0xFFD4E4FA);
-  static const textMuted = Color(0xFFE5BDBE);
-}
 
 class _CoinBalanceChip extends StatelessWidget {
   final int coins;
@@ -46,7 +38,7 @@ class _CoinBalanceChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0x1AFFFFFF),
+        color: context.c.overlay,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -56,8 +48,8 @@ class _CoinBalanceChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             showLabel ? '$coins Coins' : '$coins',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.c.text,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -88,7 +80,7 @@ class _DummyOfferCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: gradient,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _AppColors.cardBorder),
+        border: Border.all(color: context.c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,14 +95,14 @@ class _DummyOfferCard extends StatelessWidget {
                   vertical: 2.5,
                 ),
                 decoration: BoxDecoration(
-                  color: _AppColors.brandRed,
+                  color: AppColors.brand,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   badge,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
-                    color: _AppColors.textSecondary,
+                    color: Colors.white,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -118,7 +110,7 @@ class _DummyOfferCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -137,7 +129,7 @@ class _DummyOfferCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF05141E),
+                color: AppColors.brandDark,
               ),
             ),
           ),
@@ -191,14 +183,14 @@ class _SpecialOfferImageCardState extends State<_SpecialOfferImageCard> {
     final filePath = _filePath;
     Widget child;
     if (widget.imageUrl.isEmpty) {
-      child = const ColoredBox(color: _AppColors.cardBg);
+      child = ColoredBox(color: context.c.card);
     } else if (filePath != null) {
       child = Image.file(
         File(filePath),
         fit: BoxFit.cover,
         width: double.infinity,
         errorBuilder: (context, error, stackTrace) =>
-            const ColoredBox(color: _AppColors.cardBg),
+            ColoredBox(color: context.c.card),
       );
     } else {
       child = Image.network(
@@ -210,14 +202,14 @@ class _SpecialOfferImageCardState extends State<_SpecialOfferImageCard> {
                     MediaQuery.devicePixelRatioOf(context))
                 .round(),
         errorBuilder: (context, error, stackTrace) =>
-            const ColoredBox(color: _AppColors.cardBg),
+            ColoredBox(color: context.c.card),
       );
     }
     return Container(
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _AppColors.cardBorder),
+        border: Border.all(color: context.c.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -552,6 +544,11 @@ class UserHomeScreenState extends State<UserHomeScreen>
       final newVideoCallEnabled = me['video_call_enabled'] ?? true;
       final newVideoCallDisabledByAdmin =
           me['video_call_disabled_by_admin'] ?? false;
+      if (me['gender_preference'] == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _askGenderPreference(token);
+        });
+      }
       final changed =
           dataChanged(_listeners, listeners) ||
           _profileName != newName ||
@@ -590,6 +587,70 @@ class UserHomeScreenState extends State<UserHomeScreen>
         _loading = false;
         _error = friendlyError(e);
       });
+    }
+  }
+
+  bool _askingGender = false;
+
+  Future<void> _askGenderPreference(String token) async {
+    if (_askingGender) return;
+    _askingGender = true;
+    try {
+      while (mounted) {
+        final choice = await showDialog<String>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => PopScope(
+            canPop: false,
+            child: AlertDialog(
+              backgroundColor: ctx.c.card,
+              title: Text(
+                'Select your preference',
+                style: TextStyle(color: ctx.c.text, fontWeight: FontWeight.w700),
+              ),
+              content: Text(
+                'Who would you like to talk to?',
+                style: TextStyle(color: ctx.c.textSecondary),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actionsOverflowAlignment: OverflowBarAlignment.center,
+              actionsOverflowButtonSpacing: 8,
+              actions: [
+                SizedBox(
+                  width: 110,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(ctx).pop('male'),
+                    child: const Text('Men'),
+                  ),
+                ),
+                SizedBox(
+                  width: 110,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(ctx).pop('female'),
+                    child: const Text('Women'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (choice == null || !mounted) return;
+        try {
+          await _repository.setGenderPreference(token, choice);
+          HomeCache().setJson('user_home_listeners', []);
+          if (mounted) {
+            setState(() => _listeners = []);
+            await _load(forceRefresh: true);
+          }
+          return;
+        } catch (e) {
+          if (mounted) {
+            PillMessage.show(context, friendlyError(e), bottomOffset: 78);
+          }
+        }
+      }
+    } finally {
+      _askingGender = false;
     }
   }
 
@@ -680,7 +741,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
   Widget build(BuildContext context) {
     final bottomPadding = 32 + MediaQuery.paddingOf(context).bottom + 90;
     return Scaffold(
-      backgroundColor: _AppColors.bg,
+      backgroundColor: context.c.bg,
       body: RefreshIndicator(
         onRefresh: _pullToRefresh,
         child: CustomScrollView(
@@ -721,7 +782,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
                   : Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: _AppColors.textMuted),
+                      style: TextStyle(color: context.c.muted),
                     ),
             ),
           ),
@@ -761,11 +822,11 @@ class UserHomeScreenState extends State<UserHomeScreen>
     return Drawer(
       backgroundColor: Colors.transparent,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF2A0A14), Color(0xFF0B0B0B)],
+            colors: [context.c.brandTint, context.c.bg],
           ),
         ),
         child: SafeArea(
@@ -778,7 +839,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
+                      icon: Icon(Icons.close, color: context.c.text),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
@@ -792,10 +853,10 @@ class UserHomeScreenState extends State<UserHomeScreen>
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: _AppColors.brandRed, width: 2),
+                  border: Border.all(color: AppColors.brand, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: _AppColors.brandRed.withValues(alpha: 0.5),
+                      color: AppColors.brand.withValues(alpha: 0.5),
                       blurRadius: 16,
                       spreadRadius: 1,
                     ),
@@ -811,8 +872,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
               Text(
                 _profileName.isEmpty ? 'User' : _profileName,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.c.text,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -823,13 +884,13 @@ class UserHomeScreenState extends State<UserHomeScreen>
               ),
               const SizedBox(height: 28),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.person_outline,
-                  color: Colors.white70,
+                  color: context.c.textSecondary,
                 ),
-                title: const Text(
+                title: Text(
                   'Profile',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: context.c.text),
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -839,21 +900,21 @@ class UserHomeScreenState extends State<UserHomeScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.settings_outlined,
-                  color: Colors.white70,
+                  color: context.c.textSecondary,
                 ),
-                title: const Text(
+                title: Text(
                   'Settings',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: context.c.text),
                 ),
                 onTap: () => Navigator.of(context).pop(),
               ),
               ListTile(
-                leading: const Icon(Icons.logout, color: Colors.white70),
-                title: const Text(
+                leading: Icon(Icons.logout, color: context.c.textSecondary),
+                title: Text(
                   'Logout',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: context.c.text),
                 ),
                 onTap: () async {
                   Navigator.of(context).pop();
@@ -881,7 +942,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
     _DummyOfferCard(
       badge: 'WELCOME',
       title: 'Welcome! Let’s Get Started',
-      gradient: LinearGradient(colors: [Color(0xFF1A1A1A), Color(0xFF1A1A1A)]),
+      gradient: LinearGradient(colors: [AppColors.brandDark, AppColors.brand]),
     ),
     _DummyOfferCard(
       badge: 'HELLO',
@@ -889,7 +950,7 @@ class UserHomeScreenState extends State<UserHomeScreen>
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [_AppColors.brandRed, Color(0xFF681A19)],
+        colors: [AppColors.brand, AppColors.brandDark],
       ),
     ),
   ];
@@ -932,8 +993,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
                   height: 6,
                   decoration: BoxDecoration(
                     color: isActive
-                        ? _AppColors.brandRed
-                        : _AppColors.textMuted.withValues(alpha: 0.4),
+                        ? AppColors.brand
+                        : context.c.muted.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -993,9 +1054,9 @@ class _ListenerCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: _AppColors.cardBg,
+            color: context.c.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _AppColors.cardBorder),
+            border: Border.all(color: context.c.border),
           ),
           child: Row(
             children: [
@@ -1025,11 +1086,11 @@ class _ListenerCard extends StatelessWidget {
                           color: isInCall
                               ? Colors.orange
                               : (isOnline
-                                    ? _AppColors.online
-                                    : Colors.grey.shade600),
+                                    ? AppColors.online
+                                    : AppColors.offline),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: const Color(0xFF050E17),
+                            color: context.c.bg,
                             width: 2,
                           ),
                         ),
@@ -1039,13 +1100,13 @@ class _ListenerCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: _details(isOnline, isInCall, tags)),
+              Expanded(child: _details(context, isOnline, isInCall, tags)),
               const SizedBox(width: 8),
               if (videoCallEnabled) ...[
-                _videoButton(),
+                _videoButton(context),
                 const SizedBox(width: 6),
               ],
-              _audioButton(),
+              _audioButton(context),
             ],
           ),
         ),
@@ -1053,7 +1114,7 @@ class _ListenerCard extends StatelessWidget {
     );
   }
 
-  Widget _details(bool isOnline, bool isInCall, List<dynamic> tags) {
+  Widget _details(BuildContext context, bool isOnline, bool isInCall, List<dynamic> tags) {
     final occupation = listener['occupation'] as String?;
     final rating = listener['avg_rating'];
     return Column(
@@ -1062,10 +1123,10 @@ class _ListenerCard extends StatelessWidget {
       children: [
         Text(
           listener['name'] ?? 'Listener',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: context.c.text,
           ),
           overflow: TextOverflow.ellipsis,
         ),
@@ -1073,7 +1134,7 @@ class _ListenerCard extends StatelessWidget {
         Text(
           'Age: ${listener['age']?.toString() ?? '...'} · '
           '${occupation != null && occupation.isNotEmpty ? occupation : '...'}',
-          style: const TextStyle(fontSize: 12, color: _AppColors.textMuted),
+          style: TextStyle(fontSize: 12, color: context.c.muted),
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 4),
@@ -1089,7 +1150,7 @@ class _ListenerCard extends StatelessWidget {
                 fontSize: 13,
                 color: isInCall
                     ? Colors.orange
-                    : (isOnline ? _AppColors.online : _AppColors.textMuted),
+                    : (isOnline ? AppColors.online : context.c.muted),
               ),
             ),
             if (rating != null)
@@ -1114,7 +1175,7 @@ class _ListenerCard extends StatelessWidget {
     );
   }
 
-  Widget _videoButton() {
+  Widget _videoButton(BuildContext context) {
     if (isCalling) return const SizedBox(width: 40, height: 40);
     final bool listenerVideoEnabled = listener['video_call_enabled'] != false;
     final bool blocked = videoCallDisabledByAdmin || !listenerVideoEnabled;
@@ -1131,21 +1192,21 @@ class _ListenerCard extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: blocked
-              ? _AppColors.brandRed.withValues(alpha: 0.2)
-              : _AppColors.brandRed.withValues(alpha: canAct ? 0.85 : 0.3),
+          color: (blocked || !canAct)
+              ? const Color(0xFF7CC796)
+              : AppColors.brand.withValues(alpha: 0.85),
           shape: BoxShape.circle,
         ),
         child: Icon(
           Icons.videocam,
-          color: blocked ? Colors.white38 : Colors.white,
+          color: Colors.white,
           size: 18,
         ),
       ),
     );
   }
 
-  Widget _audioButton() {
+  Widget _audioButton(BuildContext context) {
     if (isCalling) {
       return const SizedBox(
         width: 40,
@@ -1154,7 +1215,7 @@ class _ListenerCard extends StatelessWidget {
           padding: EdgeInsets.all(8),
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: _AppColors.brandRed,
+            color: AppColors.brand,
           ),
         ),
       );
@@ -1167,11 +1228,11 @@ class _ListenerCard extends StatelessWidget {
         height: 40,
         decoration: BoxDecoration(
           color: canAct
-              ? _AppColors.brandRed
-              : _AppColors.brandRed.withValues(alpha: 0.3),
+              ? AppColors.brand
+              : const Color(0xFF7CC796),
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.call, color: Colors.white, size: 18),
+        child: Icon(Icons.call, color: Colors.white, size: 18),
       ),
     );
   }
@@ -1235,12 +1296,12 @@ class _CyclingTagsRowState extends State<_CyclingTagsRow> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: _AppColors.brandRed.withValues(alpha: 0.16),
+              color: AppColors.brand.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               '$tag',
-              style: const TextStyle(color: Colors.white70, fontSize: 11),
+              style: TextStyle(color: context.c.textSecondary, fontSize: 11),
             ),
           ),
       ],

@@ -47,7 +47,7 @@ export default function Home() {
         </div>
         <div className="flex gap-2">
           <div className="relative flex-1 md:w-80">
-            <IconSearch size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+            <IconSearch size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/40" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search listeners" className="input !pl-10" />
           </div>
           <button
@@ -63,7 +63,7 @@ export default function Home() {
         <div className="mb-5 flex items-center gap-3 rounded-2xl border border-brand-soft/30 bg-brand/10 px-4 py-3">
           <div className="flex-1 text-sm">Turn on notifications to get new messages while this tab is open.</div>
           <button className="btn btn-primary !py-1.5" onClick={() => void enable()}>Enable</button>
-          <button onClick={() => setHideBanner(true)} className="rounded-full p-1 text-white/50 hover:text-white" aria-label="Dismiss"><IconClose size={16} /></button>
+          <button onClick={() => setHideBanner(true)} className="rounded-full p-1 text-ink/50 hover:text-ink" aria-label="Dismiss"><IconClose size={16} /></button>
         </div>
       )}
 

@@ -27,11 +27,11 @@ function upsert(list: ChatMsg[], msg: ChatMsg): ChatMsg[] {
 }
 
 function Ticks({ m }: { m: ChatMsg }) {
-  if (m.pending) return <span className="text-[10px] text-white/60">sending…</span>;
+  if (m.pending) return <span className="text-[10px] text-white/70">sending…</span>;
   if (m.failed) return <span className="text-[10px] font-bold text-yellow-200">failed · tap to retry</span>;
   if (m.status === "read" || m.is_read) return <IconCheckAll size={14} className="text-sky-300" />;
-  if (m.status === "delivered") return <IconCheckAll size={14} className="text-white/60" />;
-  return <IconCheck size={14} className="text-white/60" />;
+  if (m.status === "delivered") return <IconCheckAll size={14} className="text-white/70" />;
+  return <IconCheck size={14} className="text-white/70" />;
 }
 
 function callText(m: ChatMsg): string {
@@ -319,7 +319,7 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
   return (
     <div className="flex h-full flex-col bg-bg">
       <div className="flex items-center gap-3 border-b border-line bg-bg/90 px-3 py-2.5 backdrop-blur safe-t">
-        <button onClick={onBack} className="rounded-full p-2 hover:bg-white/10 md:hidden" aria-label="Back"><IconBack size={22} /></button>
+        <button onClick={onBack} className="rounded-full p-2 hover:bg-black/10 md:hidden" aria-label="Back"><IconBack size={22} /></button>
         <button onClick={() => nav(`/listener/${listenerId}`)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <Avatar src={photo} name={name} size={42} />
           <div className="min-w-0">
@@ -329,31 +329,31 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
             </div>
           </div>
         </button>
-        <button disabled={!rules.voice || !listener} onClick={() => listener && void startCall(listener, false)} className="rounded-full p-2.5 hover:bg-white/10 disabled:opacity-30" aria-label="Voice call"><IconPhone size={20} /></button>
+        <button disabled={!rules.voice || !listener} onClick={() => listener && void startCall(listener, false)} className="rounded-full p-2.5 hover:bg-black/10 disabled:opacity-30" aria-label="Voice call"><IconPhone size={20} /></button>
         {listener?.video_call_enabled && (
-          <button disabled={!rules.video} onClick={() => listener && void startCall(listener, true)} className="rounded-full p-2.5 hover:bg-white/10 disabled:opacity-30" aria-label="Video call"><IconVideo size={20} /></button>
+          <button disabled={!rules.video} onClick={() => listener && void startCall(listener, true)} className="rounded-full p-2.5 hover:bg-black/10 disabled:opacity-30" aria-label="Video call"><IconVideo size={20} /></button>
         )}
-        <button onClick={() => setGiftOpen(true)} className="rounded-full p-2.5 text-gold hover:bg-white/10" aria-label="Send gift"><IconGift size={20} /></button>
+        <button onClick={() => setGiftOpen(true)} className="rounded-full p-2.5 text-gold hover:bg-black/10" aria-label="Send gift"><IconGift size={20} /></button>
       </div>
 
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6">
         {loading ? <PageLoader /> : (
           <div className="mx-auto flex max-w-3xl flex-col gap-1.5">
             {hasMore && (
-              <button onClick={() => void loadOlder()} disabled={loadingOlder} className="mx-auto mb-2 rounded-full bg-white/8 px-4 py-1.5 text-xs text-white/70 hover:bg-white/15" style={{ background: "rgba(255,255,255,0.07)" }}>
+              <button onClick={() => void loadOlder()} disabled={loadingOlder} className="mx-auto mb-2 rounded-full bg-black/8 px-4 py-1.5 text-xs text-ink/70 hover:bg-black/15" style={{ background: "rgba(0,0,0,0.06)" }}>
                 {loadingOlder ? <Spinner size={12} /> : "Load earlier messages"}
               </button>
             )}
             {rows.length === 0 && <p className="py-16 text-center text-sm text-muted">Say hi to {name} 👋</p>}
             {rows.map((r) => {
-              if (r.day) return <div key={r.key} className="my-2 self-center rounded-full px-3 py-1 text-[11px] text-white/60" style={{ background: "rgba(255,255,255,0.07)" }}>{r.day}</div>;
+              if (r.day) return <div key={r.key} className="my-2 self-center rounded-full px-3 py-1 text-[11px] text-ink/60" style={{ background: "rgba(0,0,0,0.06)" }}>{r.day}</div>;
               const m = r.msg!;
               if (m.message_type === "call" && !m.is_deleted) {
                 return (
-                  <div key={r.key} className="my-1 flex items-center gap-2 self-center rounded-full border border-line bg-card px-4 py-1.5 text-xs text-white/70">
+                  <div key={r.key} className="my-1 flex items-center gap-2 self-center rounded-full border border-line bg-card px-4 py-1.5 text-xs text-ink/70">
                     {m.call_type === "video" ? <IconVideo size={14} /> : <IconPhone size={14} />}
                     {callText(m)}
-                    <span className="text-white/40">{timeLabel(m.created_at)}</span>
+                    <span className="text-ink/40">{timeLabel(m.created_at)}</span>
                   </div>
                 );
               }
@@ -364,12 +364,12 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
                     onClick={() => { if (m.failed) void sendText(m); }}
                     className={cx(
                       "relative max-w-[78%] rounded-2xl px-3.5 py-2 text-[15px] shadow-sm md:max-w-[65%]",
-                      own ? "rounded-br-md bg-brand-soft text-white" : "rounded-bl-md bg-card text-white",
+                      own ? "rounded-br-md bg-brand-soft text-white" : "rounded-bl-md bg-card text-ink",
                       m.failed && "cursor-pointer opacity-80 ring-1 ring-yellow-300/60",
                     )}
                   >
                     {m.is_deleted ? (
-                      <span className="text-sm italic text-white/60">Message deleted</span>
+                      <span className="text-sm italic text-ink/60">Message deleted</span>
                     ) : m.message_type === "audio" && m.audio_url ? (
                       <VoicePlayer src={m.audio_url} duration={m.audio_duration} />
                     ) : m.message_type === "gift" ? (
@@ -377,7 +377,7 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
                         <GiftIcon icon={m.gift_icon} size={48} />
                         <div>
                           <div className="font-semibold">{own ? "You sent" : "Sent you"} {m.gift_name ?? "a gift"}</div>
-                          {m.gift_coins ? <div className="text-xs text-white/70">{m.gift_coins} coins</div> : null}
+                          {m.gift_coins ? <div className="text-xs text-ink/70">{m.gift_coins} coins</div> : null}
                         </div>
                       </div>
                     ) : (
@@ -394,18 +394,18 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
             })}
             {typing && (
               <div className="flex w-fit items-center gap-1 rounded-2xl rounded-bl-md bg-card px-4 py-3">
-                {[0, 1, 2].map((i) => <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60" style={{ animationDelay: `${i * 0.15}s` }} />)}
+                {[0, 1, 2].map((i) => <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-black/60" style={{ animationDelay: `${i * 0.15}s` }} />)}
               </div>
             )}
           </div>
         )}
       </div>
 
-      <div className="border-t border-line bg-[#0e0e0e] px-3 py-3 safe-b md:px-6">
+      <div className="border-t border-line bg-bg px-3 py-3 safe-b md:px-6">
         <div className="mx-auto max-w-3xl">
           {rec ? (
             <div className="flex items-center gap-3">
-              <button onClick={cancelRecording} className="rounded-full p-3 text-red-400 hover:bg-white/10" aria-label="Discard"><IconTrash size={20} /></button>
+              <button onClick={cancelRecording} className="rounded-full p-3 text-red-400 hover:bg-black/10" aria-label="Discard"><IconTrash size={20} /></button>
               <div className="flex flex-1 items-center gap-3 rounded-full bg-card2 px-4 py-3">
                 <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
                 <span className="text-sm tabular-nums">{formatDuration(rec.seconds)}</span>
@@ -427,7 +427,7 @@ export function ChatThread({ listenerId, onBack }: { listenerId: number; onBack:
                   className="input max-h-32 min-w-0 flex-1 resize-none !rounded-2xl !py-3"
                 />
                 {!text.trim() ? (
-                  <button type="button" onClick={() => void startRecording()} disabled={sendingVoice} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Record voice note">
+                  <button type="button" onClick={() => void startRecording()} disabled={sendingVoice} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/10 hover:bg-black/20 disabled:opacity-50" aria-label="Record voice note">
                     {sendingVoice ? <Spinner size={18} /> : <IconMic size={20} />}
                   </button>
                 ) : (

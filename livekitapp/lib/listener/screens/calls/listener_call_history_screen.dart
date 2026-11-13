@@ -1,6 +1,8 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/app_search_bar.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/core/network/local_storage.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
@@ -23,7 +25,7 @@ IconData _statusIcon(String status, String callType) {
 Color _statusColor(String status, Color pink) {
   if (status == 'ended') return Colors.greenAccent;
   if (status == 'rejected' || status == 'cancelled' || status == 'missed') {
-    return Colors.redAccent;
+    return AppColors.brand;
   }
   return pink;
 }
@@ -64,13 +66,13 @@ class _CallFilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? activeColor : const Color(0xFF1A2032),
+          color: selected ? activeColor : context.c.card,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.white70,
+            color: selected ? context.c.text : context.c.textSecondary,
             fontWeight: FontWeight.w500,
             fontSize: 13,
           ),
@@ -286,34 +288,17 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFF0B0F1A);
-    const pink = Color(0xFFE53950);
-    const dimText = Colors.white54;
+    const pink = AppColors.brand;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: context.c.bg,
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-            child: Container(
-              height: 55,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A2032),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: 'Search calls...',
-                  hintStyle: TextStyle(color: dimText),
-                  prefixIcon: Icon(Icons.search, color: dimText),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
-                ),
-                onChanged: _onSearchChanged,
-              ),
+            child: AppSearchBar(
+              hintText: 'Search calls...',
+              onChanged: _onSearchChanged,
             ),
           ),
           Padding(
@@ -358,9 +343,9 @@ class _ListenerCallHistoryScreenState extends State<ListenerCallHistoryScreen> {
                           child: Center(
                             child: _hasMore && !_loadMoreFailed
                                 ? const CircularProgressIndicator()
-                                : const Text(
+                                : Text(
                                     'No calls yet',
-                                    style: TextStyle(color: dimText),
+                                    style: TextStyle(color: context.c.muted),
                                   ),
                           ),
                         ),
@@ -401,9 +386,7 @@ class _CallHistoryTile extends StatelessWidget {
 
   const _CallHistoryTile({required this.call});
 
-  static const _bg = Color(0xFF0B0F1A);
-  static const _pink = Color(0xFFE53950);
-  static const _dimText = Colors.white54;
+  static const _pink = AppColors.brand;
 
   @override
   Widget build(BuildContext context) {
@@ -417,15 +400,15 @@ class _CallHistoryTile extends StatelessWidget {
             photoUrl: call['other_party_photo_url'] as String?,
             radius: 24,
             iconSize: 24,
-            backgroundColor: const Color(0xFF2A3145),
+            backgroundColor: context.c.card2,
           ),
           Positioned(
             bottom: -2,
             right: -2,
             child: Container(
               padding: const EdgeInsets.all(3),
-              decoration: const BoxDecoration(
-                color: _bg,
+              decoration: BoxDecoration(
+                color: context.c.bg,
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -441,8 +424,8 @@ class _CallHistoryTile extends StatelessWidget {
         '${call['user_name'] ?? ''}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: context.c.text,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -463,7 +446,7 @@ class _CallHistoryTile extends StatelessWidget {
                   : _statusLabel(status),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _dimText),
+              style: TextStyle(color: context.c.muted),
             ),
           ),
         ],
@@ -475,7 +458,7 @@ class _CallHistoryTile extends StatelessWidget {
           maxLines: 2,
           textAlign: TextAlign.right,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: _dimText, fontSize: 12),
+          style: TextStyle(color: context.c.muted, fontSize: 12),
         ),
       ),
     );

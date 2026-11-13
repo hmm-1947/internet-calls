@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
@@ -61,11 +62,9 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFF0B0F1A);
-    const fieldBg = Color(0xFF1F2430);
-    const pink = Color(0xFFE53950);
+    const pink = AppColors.brand;
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: context.c.bg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -76,46 +75,46 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF4A0E0E), Color(0xFF1A0505)],
+                    colors: [AppColors.brandDark, AppColors.brand],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.headset_mic,
                   color: Colors.white,
                   size: 40,
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Listener Login',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: context.c.text,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Sign in to continue',
-                style: TextStyle(color: Colors.white54, fontSize: 14),
+                style: TextStyle(color: context.c.muted, fontSize: 14),
               ),
               const SizedBox(height: 32),
               TextField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.c.text),
                 decoration: InputDecoration(
                   labelText: 'Phone',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(
+                  labelStyle: TextStyle(color: context.c.muted),
+                  prefixIcon: Icon(
                     Icons.phone_outlined,
-                    color: Colors.white54,
+                    color: context.c.muted,
                   ),
                   filled: true,
-                  fillColor: fieldBg,
+                  fillColor: context.c.card,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -130,24 +129,24 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.c.text),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(
+                  labelStyle: TextStyle(color: context.c.muted),
+                  prefixIcon: Icon(
                     Icons.lock_outline,
-                    color: Colors.white54,
+                    color: context.c.muted,
                   ),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.white54,
+                      color: context.c.muted,
                     ),
                     onPressed: () =>
                         setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   filled: true,
-                  fillColor: fieldBg,
+                  fillColor: context.c.card,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -171,18 +170,18 @@ class _ListenerLoginScreenState extends State<ListenerLoginScreen> {
                     ),
                   ),
                   child: _loading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: context.c.text,
                           ),
                         )
-                      : const Text(
+                      : Text(
                           'Login',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: context.c.text,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

@@ -7,7 +7,7 @@ import { IconBack, IconClose, IconCoin, IconEye, IconEyeOff, IconStar, IconUser 
 export function Spinner({ size = 18, className = "" }: { size?: number; className?: string }) {
   return (
     <span
-      className={cx("inline-block animate-spin rounded-full border-2 border-white/20 border-t-white", className)}
+      className={cx("inline-block animate-spin rounded-full border-2 border-black/20 border-t-white", className)}
       style={{ width: size, height: size }}
     />
   );
@@ -29,7 +29,7 @@ export function Avatar({
   const url = src && !failed ? mediaUrl(src) : "";
   return (
     <div
-      className={cx("relative shrink-0 overflow-hidden rounded-full bg-card2 text-white/60", ring && "ring-2 ring-brand-soft", className)}
+      className={cx("relative shrink-0 overflow-hidden rounded-full bg-card2 text-ink/60", ring && "ring-2 ring-brand-soft", className)}
       style={{ width: size, height: size }}
     >
       {url ? (
@@ -48,7 +48,7 @@ export function PresenceDot({ online, busy, className = "" }: { online: boolean;
     <span
       className={cx(
         "inline-block h-3 w-3 rounded-full border-2 border-bg",
-        busy ? "bg-gold" : online ? "bg-online" : "bg-neutral-600",
+        busy ? "bg-gold" : online ? "bg-online" : "bg-neutral-400",
         className,
       )}
     />
@@ -59,8 +59,8 @@ export function BadgePill({ tag }: { tag?: BadgeTag | null }) {
   if (!tag) return null;
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
-      style={{ background: tag.color || "#E11D48" }}
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink"
+      style={{ background: tag.color || "#0E8F3C" }}
     >
       {tag.name}
     </span>
@@ -70,7 +70,7 @@ export function BadgePill({ tag }: { tag?: BadgeTag | null }) {
 export function Stars({ value, count, size = 14 }: { value: number | null; count?: number; size?: number }) {
   if (value === null || value === undefined) return <span className="text-xs text-muted">New</span>;
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-white/80">
+    <span className="inline-flex items-center gap-1 text-xs text-ink/80">
       <IconStar size={size} className="text-gold" />
       {value.toFixed(1)}
       {count !== undefined && <span className="text-muted">({count})</span>}
@@ -99,7 +99,7 @@ export function Switch({ checked, onChange, disabled }: { checked: boolean; onCh
       onClick={() => onChange(!checked)}
       className={cx(
         "relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-40",
-        checked ? "bg-brand-soft" : "bg-white/15",
+        checked ? "bg-brand-soft" : "bg-black/15",
       )}
     >
       <span className={cx("absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all", checked ? "left-[22px]" : "left-0.5")} />
@@ -119,7 +119,7 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className={cx("fixed inset-0 z-50 flex bg-black/70 backdrop-blur-sm", sheet ? "items-end justify-center sm:items-center" : "items-center justify-center", "p-0 sm:p-4")}
+      className={cx("fixed inset-0 z-50 flex bg-black/40 backdrop-blur-sm", sheet ? "items-end justify-center sm:items-center" : "items-center justify-center", "p-0 sm:p-4")}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -132,7 +132,7 @@ export function Modal({
         {title !== undefined && (
           <div className="flex items-center justify-between px-5 pb-2 pt-5">
             <h3 className="text-lg font-bold">{title}</h3>
-            <button onClick={onClose} className="rounded-full p-1.5 text-brand-soft hover:bg-white/10" aria-label="Close">
+            <button onClick={onClose} className="rounded-full p-1.5 text-brand-soft hover:bg-black/10" aria-label="Close">
               <IconClose size={20} />
             </button>
           </div>
@@ -151,7 +151,7 @@ export function Confirm({
 }) {
   return (
     <Modal open={open} onClose={onCancel} title={title}>
-      <div className="text-sm leading-relaxed text-white/70">{message}</div>
+      <div className="text-sm leading-relaxed text-ink/70">{message}</div>
       <div className="mt-5 flex justify-end gap-2">
         <button className="btn btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
         <button className={cx("btn", danger ? "btn-danger" : "btn-primary")} onClick={onConfirm} disabled={busy}>
@@ -166,7 +166,7 @@ export function Confirm({
 export function Notice({ open, title, message, onClose }: { open: boolean; title: string; message: ReactNode; onClose: () => void }) {
   return (
     <Modal open={open} onClose={onClose} title={title}>
-      <div className="text-sm leading-relaxed text-white/70">{message}</div>
+      <div className="text-sm leading-relaxed text-ink/70">{message}</div>
       <div className="mt-5 flex justify-end">
         <button className="btn btn-primary" onClick={onClose}>OK</button>
       </div>
@@ -198,7 +198,7 @@ export function PasswordField({ label, error, ...p }: { label?: string; error?: 
       {...p}
       type={show ? "text" : "password"}
       right={
-        <button type="button" onClick={() => setShow((s) => !s)} className="text-white/40 hover:text-white" tabIndex={-1} aria-label="Toggle password visibility">
+        <button type="button" onClick={() => setShow((s) => !s)} className="text-ink/40 hover:text-ink" tabIndex={-1} aria-label="Toggle password visibility">
           {show ? <IconEyeOff size={18} /> : <IconEye size={18} />}
         </button>
       }
@@ -210,14 +210,14 @@ export function PhoneField({ label = "Phone number", error, value, onChange, ...
   return (
     <div>
       <label className="label">{label}</label>
-      <div className={cx("flex overflow-hidden rounded-xl border border-white/10 bg-card2 transition focus-within:border-brand-soft", error && "!border-red-500/70")}>
-        <span className="flex items-center border-r border-white/10 px-3 text-sm text-white/60">+91</span>
+      <div className={cx("flex overflow-hidden rounded-xl border border-black/10 bg-card2 transition focus-within:border-brand-soft", error && "!border-red-500/70")}>
+        <span className="flex items-center border-r border-black/10 px-3 text-sm text-ink/60">+91</span>
         <input
           {...p}
           inputMode="numeric"
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^\d+\s]/g, ""))}
-          className="w-full bg-transparent px-3 py-3 text-sm text-white placeholder-white/30 outline-none"
+          className="w-full bg-transparent px-3 py-3 text-sm text-ink placeholder-black/30 outline-none"
           placeholder="10-digit mobile number"
         />
       </div>
@@ -255,7 +255,7 @@ export function PageHeader({ title, onBack, right }: { title: string; onBack?: (
   return (
     <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-line bg-bg/90 px-3 py-3 backdrop-blur safe-t md:px-6">
       {onBack && (
-        <button onClick={onBack} className="rounded-full p-2 hover:bg-white/10" aria-label="Back">
+        <button onClick={onBack} className="rounded-full p-2 hover:bg-black/10" aria-label="Back">
           <IconBack size={22} />
         </button>
       )}
@@ -268,7 +268,7 @@ export function PageHeader({ title, onBack, right }: { title: string; onBack?: (
 export function Empty({ icon, title, text, action }: { icon?: ReactNode; title: string; text?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-      {icon && <div className="mb-4 text-white/25">{icon}</div>}
+      {icon && <div className="mb-4 text-ink/25">{icon}</div>}
       <h3 className="text-base font-semibold">{title}</h3>
       {text && <p className="mt-1 max-w-sm text-sm text-muted">{text}</p>}
       {action && <div className="mt-5">{action}</div>}
@@ -278,14 +278,14 @@ export function Empty({ icon, title, text, action }: { icon?: ReactNode; title: 
 
 export function AuthLayout({ title, subtitle, children, onBack }: { title: string; subtitle?: string; children: ReactNode; onBack?: () => void }) {
   return (
-    <div className="flex min-h-full items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(225,29,72,0.18),transparent_60%)] px-4 py-10">
+    <div className="flex min-h-full items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(18,160,68,0.18),transparent_60%)] px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center text-center">
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Lailanow" className="mb-4 h-14 w-14 rounded-2xl object-cover" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="MindiCo" className="mb-4 h-14 w-14 rounded-2xl object-cover" />
         </div>
         <div className="card2 p-6 shadow-2xl sm:p-8">
           {onBack && (
-            <button onClick={onBack} className="-ml-1 mb-3 inline-flex items-center gap-1 text-sm text-muted hover:text-white">
+            <button onClick={onBack} className="-ml-1 mb-3 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
               <IconBack size={16} /> Back
             </button>
           )}
@@ -309,7 +309,7 @@ export function PasswordChecklist({ value }: { value: string }) {
     <ul className="space-y-1">
       {rules.map((r) => (
         <li key={r.label} className={cx("flex items-center gap-2 text-xs", r.ok ? "text-online" : "text-muted")}>
-          <span className={cx("inline-block h-1.5 w-1.5 rounded-full", r.ok ? "bg-online" : "bg-white/25")} />
+          <span className={cx("inline-block h-1.5 w-1.5 rounded-full", r.ok ? "bg-online" : "bg-black/25")} />
           {r.label}
         </li>
       ))}
@@ -319,7 +319,7 @@ export function PasswordChecklist({ value }: { value: string }) {
 
 export function GoogleButton({ onClick, busy }: { onClick: () => void; busy?: boolean }) {
   return (
-    <button type="button" onClick={onClick} disabled={busy} className="btn w-full border border-white/15 bg-white text-neutral-900 hover:bg-neutral-100">
+    <button type="button" onClick={onClick} disabled={busy} className="btn w-full border border-black/15 bg-white text-neutral-900 hover:bg-neutral-100">
       {busy ? <Spinner size={16} className="!border-neutral-300 !border-t-neutral-800" /> : (
         <svg width="18" height="18" viewBox="0 0 48 48">
           <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.5 17.7 9.5 24 9.5z" />

@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,13 +12,13 @@ import 'package:url_launcher/url_launcher.dart';
 /// avoid pulling in a full HTML/webview dependency just to show legal text.
 class SimpleHtmlView extends StatelessWidget {
   final String html;
-  final Color textColor;
+  final Color? textColor;
   final double baseFontSize;
 
   const SimpleHtmlView({
     super.key,
     required this.html,
-    this.textColor = Colors.white,
+    this.textColor,
     this.baseFontSize = 14,
   });
 
@@ -26,10 +27,10 @@ class SimpleHtmlView extends StatelessWidget {
     if (html.trim().isEmpty) {
       return Text(
         'Nothing has been added yet.',
-        style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: baseFontSize),
+        style: TextStyle(color: (textColor ?? context.c.text).withValues(alpha: 0.6), fontSize: baseFontSize),
       );
     }
-    final blocks = _HtmlBlockParser(html, textColor, baseFontSize).parse();
+    final blocks = _HtmlBlockParser(html, textColor ?? context.c.text, baseFontSize).parse();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: blocks);
   }
 }
@@ -351,7 +352,7 @@ class _HtmlBlockParser {
         decoration = TextDecoration.lineThrough;
       }
       final style = TextStyle(
-        color: s.href != null ? const Color(0xFF4E9BFF) : (s.color ?? textColor),
+        color: s.href != null ? AppColors.brand : (s.color ?? textColor),
         backgroundColor: s.background,
         fontSize: s.fontSize,
         fontFamily: s.fontFamily,

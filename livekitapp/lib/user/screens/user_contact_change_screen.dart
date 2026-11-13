@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/otp_countdown.dart';
@@ -187,15 +188,15 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
           child: Text(
             _fieldError ?? 'Indian mobile numbers only, without +91',
             style: TextStyle(
-              color: _fieldError != null ? Colors.redAccent : Colors.white38,
+              color: _fieldError != null ? Colors.redAccent : context.c.faint,
               fontSize: 12.5,
             ),
           ),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Once verified, this can only be changed again after 24 hours.',
-          style: TextStyle(color: Colors.white38, fontSize: 12.5),
+          style: TextStyle(color: context.c.faint, fontSize: 12.5),
         ),
         const SizedBox(height: 22),
         _primaryButton(
@@ -222,15 +223,15 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
           Text(
             _sendError!,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.redAccent, fontSize: 12.5),
+            style: const TextStyle(color: AppColors.brand, fontSize: 12.5),
           ),
           const SizedBox(height: 12),
           TextButton.icon(
             onPressed: _sending ? null : _resend,
-            icon: const Icon(Icons.refresh, color: Colors.red),
+            icon: const Icon(Icons.refresh, color: AppColors.brand),
             label: const Text(
               'Retry',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(height: 6),
@@ -266,9 +267,9 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
                     _pendingIdentifier = null;
                     _sendError = null;
                   }),
-          child: const Text(
+          child: Text(
             'Use a different $_label',
-            style: TextStyle(color: Colors.white54, fontSize: 12.5),
+            style: TextStyle(color: context.c.muted, fontSize: 12.5),
           ),
         ),
       ],
@@ -284,10 +285,10 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
       width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.black,
-          disabledBackgroundColor: Colors.red.withOpacity(0.3),
-          disabledForegroundColor: Colors.black45,
+          backgroundColor: AppColors.brand,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: AppColors.brand.withOpacity(0.3),
+          disabledForegroundColor: Colors.white70,
           padding: const EdgeInsets.symmetric(vertical: 16),
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -300,7 +301,7 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
-                  color: Colors.black,
+                  color: Colors.white,
                   strokeWidth: 2.4,
                 ),
               )
@@ -312,11 +313,11 @@ class _UserContactChangeScreenState extends State<UserContactChangeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
         title: Text(_title),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.red,
+        backgroundColor: context.c.bg,
+        foregroundColor: AppColors.brand,
         elevation: 0,
       ),
       body: SafeArea(

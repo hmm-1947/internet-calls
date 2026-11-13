@@ -1,4 +1,6 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/focus_outline.dart';
 import 'package:livekitapp/common/services/active_call_manager.dart';
 import 'package:livekitapp/common/widgets/pill_message.dart';
 import 'package:livekitapp/common/widgets/voice_messages/voice_record_button.dart';
@@ -37,7 +39,7 @@ class ChatComposer extends StatefulWidget {
   final String? tooLongMessage;
 
   final Color accentColor;
-  final Color backgroundColor;
+  final Color? backgroundColor;
 
   const ChatComposer({
     super.key,
@@ -47,8 +49,8 @@ class ChatComposer extends StatefulWidget {
     this.draftKey,
     this.maxLength,
     this.tooLongMessage,
-    this.accentColor = const Color(0xFFE53950),
-    this.backgroundColor = const Color(0xFF0B0F1A),
+    this.accentColor = AppColors.brand,
+    this.backgroundColor,
   });
 
   @override
@@ -207,7 +209,7 @@ class _ChatComposerState extends State<ChatComposer> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: widget.backgroundColor,
+      color: widget.backgroundColor ?? context.c.bg,
       padding: EdgeInsets.fromLTRB(
         8,
         8,
@@ -221,17 +223,14 @@ class _ChatComposerState extends State<ChatComposer> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: Container(
+                child: FocusOutline(
+                  radius: 24,
                   constraints: const BoxConstraints(maxHeight: 120),
                   padding: const EdgeInsets.only(
                     left: 16,
                     right: 16,
                     top: 8,
                     bottom: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A2032),
-                    borderRadius: BorderRadius.circular(24),
                   ),
                   child: _isRecording
                       ? VoiceRecordingIndicator(
@@ -261,12 +260,16 @@ class _ChatComposerState extends State<ChatComposer> {
                                         required isFocused,
                                         maxLength,
                                       }) => null,
-                                  style: const TextStyle(color: Colors.white),
+                                  style: TextStyle(color: context.c.text),
                                   textInputAction: TextInputAction.newline,
-                                  decoration: const InputDecoration(
+                                  decoration: InputDecoration(
                                     hintText: 'Type a message',
-                                    hintStyle: TextStyle(color: Colors.white54),
+                                    hintStyle: TextStyle(color: context.c.muted),
+                                    filled: false,
                                     border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    disabledBorder: InputBorder.none,
                                     isDense: true,
                                     contentPadding: EdgeInsets.zero,
                                   ),
@@ -280,7 +283,7 @@ class _ChatComposerState extends State<ChatComposer> {
                                 child: Text(
                                   '${_controller.text.length}/${widget.maxLength}',
                                   style: const TextStyle(
-                                    color: Colors.red,
+                                    color: AppColors.brand,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -302,7 +305,7 @@ class _ChatComposerState extends State<ChatComposer> {
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white),
+                          icon: Icon(Icons.send, color: Colors.white),
                           onPressed: _submit,
                         ),
                       )
@@ -318,7 +321,7 @@ class _ChatComposerState extends State<ChatComposer> {
                                 onPressed: _warnRecordingBlocked,
                                 icon: Icon(
                                   Icons.mic_off,
-                                  color: Colors.white.withValues(alpha: 0.35),
+                                  color: context.c.faint,
                                 ),
                               );
                             }

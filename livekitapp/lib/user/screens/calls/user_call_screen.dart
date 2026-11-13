@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 import 'package:audio_session/audio_session.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -1281,12 +1282,12 @@ class _CallScreenState extends State<CallScreen> {
           const SizedBox(height: 8),
           if (_fullyConnected)
             _durationText(
-              const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+              const TextStyle(color: Color(0xFFBFF0CF), fontSize: 16),
             )
           else
             Text(
               _statusText(),
-              style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+              style: const TextStyle(color: Color(0xFFBFF0CF), fontSize: 16),
             ),
           const Spacer(),
           PulsingAvatarRing(
@@ -1332,7 +1333,7 @@ class _CallScreenState extends State<CallScreen> {
                       CallActionButton(
                         icon: Icons.call_end,
                         label: '',
-                        background: const Color(0xFFE53950),
+                        background: AppColors.brand,
                         onTap: _hangUp,
                       ),
                       CallActionButton(
@@ -1385,10 +1386,8 @@ class _CallScreenState extends State<CallScreen> {
             child: ElevatedButton.icon(
               onPressed: _redialInFlight ? null : _callAgain,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE53950),
-                disabledBackgroundColor: const Color(
-                  0xFFE53950,
-                ).withValues(alpha: 0.5),
+                backgroundColor: AppColors.brand,
+                disabledBackgroundColor: AppColors.brand.withValues(alpha: 0.5),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
@@ -1496,7 +1495,7 @@ class _CallScreenState extends State<CallScreen> {
                       if (_fullyConnected)
                         _durationText(
                           const TextStyle(
-                            color: Color(0xFFE5BDBE),
+                            color: Color(0xFFBFF0CF),
                             fontSize: 15,
                           ),
                         )
@@ -1504,7 +1503,7 @@ class _CallScreenState extends State<CallScreen> {
                         Text(
                           _statusText(),
                           style: const TextStyle(
-                            color: Color(0xFFE5BDBE),
+                            color: Color(0xFFBFF0CF),
                             fontSize: 15,
                           ),
                         ),
@@ -1590,7 +1589,7 @@ class _CallScreenState extends State<CallScreen> {
                 CallActionButton(
                   icon: Icons.call_end,
                   label: '',
-                  background: const Color(0xFFE53950),
+                  background: AppColors.brand,
                   onTap: _hangUp,
                 ),
                 const SizedBox(width: 12),

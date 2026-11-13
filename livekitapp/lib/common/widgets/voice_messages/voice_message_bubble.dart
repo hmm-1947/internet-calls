@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/voice_message_player.dart';
 
@@ -36,7 +37,6 @@ class VoiceMessageBubble extends StatelessWidget {
 
   /// Chat bubbles are dark on both sides, so the transport controls are white
   /// for the sender and the receiver alike.
-  static const _controlColor = Colors.white;
 
   String get _senderLabel => isMe
       ? 'You'
@@ -61,7 +61,7 @@ class VoiceMessageBubble extends StatelessWidget {
         if (active?.messageKey != messageKey) {
           return _VoiceMessageBubbleView(
             status: idle,
-            controlColor: _controlColor,
+            controlColor: context.c.text,
             onToggle: () => player.toggle(_track, fallbackTotal: idle.total),
             onSeek: null,
           );
@@ -73,7 +73,7 @@ class VoiceMessageBubble extends StatelessWidget {
               status: status.total > Duration.zero
                   ? status
                   : status.copyWith(total: idle.total),
-              controlColor: _controlColor,
+              controlColor: context.c.text,
               onToggle: () => player.toggle(_track, fallbackTotal: idle.total),
               onSeek: player.seek,
             );

@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
@@ -42,7 +43,7 @@ class _FileExistsCache {
 class AvatarImage extends StatefulWidget {
   final String? photoUrl;
   final double radius;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final IconData fallbackIcon;
   final double iconSize;
   final String? badgeLabel;
@@ -52,7 +53,7 @@ class AvatarImage extends StatefulWidget {
     super.key,
     required this.photoUrl,
     this.radius = 28,
-    this.backgroundColor = const Color(0xFF2A2A2A),
+    this.backgroundColor,
     this.fallbackIcon = Icons.person,
     this.iconSize = 28,
     this.badgeLabel,
@@ -160,10 +161,10 @@ class _AvatarImageState extends State<AvatarImage> {
 
   Widget _fallback() => CircleAvatar(
     radius: widget.radius,
-    backgroundColor: widget.backgroundColor,
+    backgroundColor: widget.backgroundColor ?? context.c.card2,
     child: Icon(
       widget.fallbackIcon,
-      color: Colors.white54,
+      color: context.c.muted,
       size: widget.iconSize,
     ),
   );
@@ -178,7 +179,7 @@ class _AvatarImageState extends State<AvatarImage> {
   Widget _badgeWrap(Widget child) {
     final label = widget.badgeLabel;
     if (label == null || label.isEmpty) return child;
-    final color = widget.badgeColor ?? const Color(0xFFE11D48);
+    final color = widget.badgeColor ?? AppColors.brand;
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
@@ -195,7 +196,7 @@ class _AvatarImageState extends State<AvatarImage> {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.white, width: 1.4),
+              border: Border.all(color: context.c.text, width: 1.4),
               boxShadow: [
                 BoxShadow(
                   color: color.withValues(alpha: 0.55),
@@ -209,7 +210,7 @@ class _AvatarImageState extends State<AvatarImage> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.white,
+                color: context.c.text,
                 fontWeight: FontWeight.w800,
                 fontSize: (widget.radius * 0.32).clamp(8, 11),
                 height: 1.1,
@@ -228,7 +229,7 @@ class _AvatarImageState extends State<AvatarImage> {
     if (filePath != null) {
       return _badgeWrap(CircleAvatar(
         radius: widget.radius,
-        backgroundColor: widget.backgroundColor,
+        backgroundColor: widget.backgroundColor ?? context.c.card2,
         backgroundImage: _sized(FileImage(File(filePath))),
         onBackgroundImageError: (_, _) => _onFileError(filePath),
       ));
@@ -237,7 +238,7 @@ class _AvatarImageState extends State<AvatarImage> {
     if (remoteUrl == null) return _badgeWrap(_fallback());
     return _badgeWrap(CircleAvatar(
       radius: widget.radius,
-      backgroundColor: widget.backgroundColor,
+      backgroundColor: widget.backgroundColor ?? context.c.card2,
       backgroundImage: _sized(NetworkImage(remoteUrl)),
       onBackgroundImageError: (_, _) => _recoverFromDisk(remoteUrl),
     ));
@@ -250,7 +251,7 @@ class _AvatarImageState extends State<AvatarImage> {
 class HeroProfileImage extends StatelessWidget {
   final String? photoUrl;
   final double height;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final IconData fallbackIcon;
   final double fallbackIconSize;
   final BorderRadius borderRadius;
@@ -259,7 +260,7 @@ class HeroProfileImage extends StatelessWidget {
     super.key,
     required this.photoUrl,
     this.height = 320,
-    this.backgroundColor = const Color(0xFF2A2A2A),
+    this.backgroundColor,
     this.fallbackIcon = Icons.person,
     this.fallbackIconSize = 72,
     this.borderRadius = const BorderRadius.vertical(
@@ -268,9 +269,9 @@ class HeroProfileImage extends StatelessWidget {
   });
 
   Widget _fallback() => Container(
-    color: backgroundColor,
+    color: backgroundColor ?? const Color(0x339CA3AF),
     alignment: Alignment.center,
-    child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+    child: Icon(fallbackIcon, color: AppColors.offline, size: fallbackIconSize),
   );
 
   Widget _image(ImageProvider provider) => Image(

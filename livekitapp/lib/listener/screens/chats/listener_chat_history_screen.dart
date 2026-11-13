@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -41,9 +42,8 @@ class ListenerChatHistoryScreen extends StatefulWidget {
 
 class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
     with WidgetsBindingObserver, RouteAware {
-  static const _bg = Color(0xFF0B0F1A);
-  static const _pink = Color(0xFFE53950);
-  static const _green = Color(0xFF74D8BD);
+  static const _pink = AppColors.brand;
+  static const _green = AppColors.online;
 
   static const _statusRank = <String, int>{
     'failed': 0,
@@ -699,7 +699,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
               return Text(
                 online == true ? 'Online' : 'Offline',
                 style: TextStyle(
-                  color: online == true ? _green : Colors.white54,
+                  color: online == true ? _green : context.c.muted,
                   fontSize: 12,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -722,11 +722,11 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: context.c.bg,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        backgroundColor: _bg,
-        foregroundColor: Colors.white,
+        backgroundColor: context.c.bg,
+        foregroundColor: context.c.text,
         elevation: 0,
         titleSpacing: 0,
         leadingWidth: 40,
@@ -742,7 +742,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
                 photoUrl: widget.userPhotoUrl,
                 radius: isNarrow ? 15 : 18,
                 iconSize: isNarrow ? 15 : 18,
-                backgroundColor: const Color(0xFF2A3145),
+                backgroundColor: context.c.card2,
               ),
               const SizedBox(width: 8),
               Flexible(
@@ -753,7 +753,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
                     Text(
                       widget.userName,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.c.text,
                         fontSize: isNarrow ? 14 : 16,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -771,7 +771,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
             style: iconButtonStyle,
             icon: Icon(
               Icons.note_alt_outlined,
-              color: Colors.white,
+              color: context.c.text,
               size: isNarrow ? 20 : 24,
             ),
             onPressed: () {
@@ -793,7 +793,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
               style: iconButtonStyle,
               icon: Icon(
                 favorite ? Icons.favorite : Icons.favorite_border,
-                color: favorite ? _pink : Colors.white,
+                color: favorite ? _pink : context.c.text,
                 size: isNarrow ? 20 : 24,
               ),
               onPressed: () {
@@ -830,11 +830,11 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
                         ? const SizedBox.shrink()
                         : FloatingActionButton(
                             mini: true,
-                            backgroundColor: const Color(0xFF1F2430),
+                            backgroundColor: context.c.card,
                             onPressed: () => _scrollController.jumpTo(0),
-                            child: const Icon(
+                            child: Icon(
                               Icons.keyboard_arrow_down,
-                              color: Colors.white,
+                              color: context.c.text,
                             ),
                           ),
                   ),
@@ -848,7 +848,7 @@ class _ListenerChatHistoryScreenState extends State<ListenerChatHistoryScreen>
             onTextChanged: _emitTyping,
             draftKey: _chatKey,
             accentColor: _pink,
-            backgroundColor: _bg,
+            backgroundColor: context.c.bg,
           ),
         ],
       ),

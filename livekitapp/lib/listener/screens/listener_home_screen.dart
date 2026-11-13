@@ -1,5 +1,7 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/app_search_bar.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
@@ -198,21 +200,19 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
     super.dispose();
   }
 
-  static const bg = Color(0xFF0B0F1A);
-  static const pink = Color(0xFFE53950);
-  static const dimText = Colors.white54;
+  static const pink = AppColors.brand;
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: context.c.bg,
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => _searchFocusNode.unfocus(),
         child: RefreshIndicator(
           color: pink,
-          backgroundColor: bg,
+          backgroundColor: context.c.bg,
           onRefresh: _onRefresh,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(
@@ -227,12 +227,12 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
                     children: [
                       _buildSearchBar(),
                       const SizedBox(height: 20),
-                      const Text(
+                      Text(
                         'Users',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: context.c.text,
                         ),
                       ),
                     ],
@@ -247,9 +247,9 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
                     child: Center(
                       child: _loadingUsers
                           ? const CircularProgressIndicator(color: pink)
-                          : const Text(
+                          : Text(
                               'No users found',
-                              style: TextStyle(color: dimText),
+                              style: TextStyle(color: context.c.muted),
                             ),
                     ),
                   ),
@@ -282,32 +282,10 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
   }
 
   Widget _buildSearchBar() {
-    return Container(
-      height: 55,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C2B3C),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, color: dimText, size: 18),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              focusNode: _searchFocusNode,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              decoration: const InputDecoration(
-                hintText: 'Search users...',
-                hintStyle: TextStyle(color: dimText, fontSize: 16),
-                border: InputBorder.none,
-                isCollapsed: true,
-              ),
-              onChanged: _onSearchChanged,
-            ),
-          ),
-        ],
-      ),
+    return AppSearchBar(
+      hintText: 'Search users...',
+      focusNode: _searchFocusNode,
+      onChanged: _onSearchChanged,
     );
   }
 
@@ -336,9 +314,9 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xCC1A1A1A),
+          color: context.c.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0x0DFFFFFF)),
+          border: Border.all(color: context.c.border),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -359,11 +337,11 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
                     height: 16,
                     decoration: BoxDecoration(
                       color: isOnline
-                          ? const Color(0xFF74D8BD)
-                          : Colors.grey.shade600,
+                          ? AppColors.online
+                          : AppColors.offline,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: const Color(0xFF0B0F1A),
+                        color: context.c.bg,
                         width: 2,
                       ),
                     ),
@@ -378,10 +356,10 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
                 children: [
                   Text(
                     user['name'] ?? 'User',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: context.c.text,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -391,17 +369,17 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
                     style: TextStyle(
                       fontSize: 13,
                       color: isOnline
-                          ? const Color(0xFF74D8BD)
-                          : const Color(0xFFE5BDBE),
+                          ? AppColors.online
+                          : context.c.muted,
                     ),
                   ),
                   if ((user['bio'] ?? '').toString().trim().isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
                       user['bio'],
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: Colors.white54,
+                        color: context.c.muted,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -410,7 +388,7 @@ class ListenerHomeScreenState extends State<ListenerHomeScreen>
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
+            Icon(Icons.chevron_right, color: context.c.faint, size: 20),
           ],
         ),
       ),

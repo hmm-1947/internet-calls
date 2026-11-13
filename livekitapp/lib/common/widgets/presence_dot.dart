@@ -1,17 +1,18 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class PresenceDot extends StatelessWidget {
   final ValueListenable<bool?> presence;
   final bool fallback;
-  final Color borderColor;
+  final Color? borderColor;
   final double size;
 
   const PresenceDot({
     super.key,
     required this.presence,
     this.fallback = false,
-    this.borderColor = const Color(0xFF0B0F1A),
+    this.borderColor,
     this.size = 12,
   });
 
@@ -27,7 +28,7 @@ class PresenceDot extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.green,
             shape: BoxShape.circle,
-            border: Border.all(color: borderColor, width: 2),
+            border: Border.all(color: borderColor ?? context.c.bg, width: 2),
           ),
         );
       },

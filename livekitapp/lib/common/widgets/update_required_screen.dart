@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -29,7 +30,7 @@ class UpdateRequiredScreen extends StatelessWidget {
       home: PopScope(
         canPop: false,
         child: Scaffold(
-          backgroundColor: const Color(0xFF0B0B0B),
+          backgroundColor: context.c.bg,
           body: SafeArea(
             child: Center(
               child: Padding(
@@ -37,16 +38,16 @@ class UpdateRequiredScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.system_update_rounded,
-                      color: Colors.white,
+                      color: context.c.text,
                       size: 56,
                     ),
                     const SizedBox(height: 20),
-                    const Text(
+                    Text(
                       'Update Required',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.c.text,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
                       ),
@@ -57,8 +58,8 @@ class UpdateRequiredScreen extends StatelessWidget {
                       hasStoreUrl
                           ? 'A new version of the app is available. Please update to continue.'
                           : 'This version of the app is no longer supported. Please install the latest version to continue.',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.c.textSecondary,
                         fontSize: 15,
                         height: 1.4,
                       ),

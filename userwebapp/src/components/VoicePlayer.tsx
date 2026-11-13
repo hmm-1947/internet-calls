@@ -47,14 +47,14 @@ export function VoicePlayer({ src, duration }: { src: string; duration?: number 
 
   return (
     <div className="flex w-56 items-center gap-3">
-      <button onClick={toggle} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 hover:bg-white/30" aria-label={playing ? "Pause" : "Play"}>
+      <button onClick={toggle} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/20 hover:bg-black/30" aria-label={playing ? "Pause" : "Play"}>
         {playing ? <IconPause size={16} /> : <IconPlay size={16} />}
       </button>
       <div className="flex-1">
-        <div className="h-1.5 cursor-pointer rounded-full bg-white/20" onClick={seek}>
+        <div className="h-1.5 cursor-pointer rounded-full bg-black/20" onClick={seek}>
           <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
         </div>
-        <div className="mt-1 text-[11px] text-white/70">{error ? "Cannot play on this browser" : formatDuration(playing || pos > 0 ? pos : total)}</div>
+        <div className="mt-1 text-[11px] text-ink/70">{error ? "Cannot play on this browser" : formatDuration(playing || pos > 0 ? pos : total)}</div>
       </div>
     </div>
   );

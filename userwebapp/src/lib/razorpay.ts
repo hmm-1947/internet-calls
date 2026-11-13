@@ -37,12 +37,12 @@ export async function payForPlan(plan: Plan): Promise<PayResult> {
       key: order.key_id,
       amount: order.amount,
       currency: order.currency,
-      name: "Lailanow",
+      name: "MindiCo",
       description: `${order.plan_name} · ${order.coins} coins`,
       order_id: order.order_id,
       image: `${import.meta.env.BASE_URL}logo.png`,
       prefill: { name: order.name || "", email: order.email || "", contact: order.contact || "" },
-      theme: { color: "#E11D48" },
+      theme: { color: "#0E8F3C" },
       handler: async (resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
         try {
           const r = await api.verifyPayment(resp.razorpay_order_id, resp.razorpay_payment_id, resp.razorpay_signature);

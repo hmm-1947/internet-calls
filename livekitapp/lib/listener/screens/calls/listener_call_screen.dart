@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -784,12 +785,12 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
           const SizedBox(height: 8),
           if (_status.isEmpty)
             _durationText(
-              const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+              const TextStyle(color: Color(0xFFBFF0CF), fontSize: 16),
             )
           else
             Text(
               _status,
-              style: const TextStyle(color: Color(0xFFE5BDBE), fontSize: 16),
+              style: const TextStyle(color: Color(0xFFBFF0CF), fontSize: 16),
             ),
           const Spacer(),
           PulsingAvatarRing(
@@ -838,7 +839,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
                 CallActionButton(
                   icon: Icons.call_end,
                   label: '',
-                  background: const Color(0xFFE53950),
+                  background: AppColors.brand,
                   onTap: _hangUp,
                 ),
                 CallActionButton(
@@ -930,7 +931,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
                       ),
                       const SizedBox(height: 4),
                       _durationText(
-                        const TextStyle(color: Color(0xFFE5BDBE), fontSize: 15),
+                        const TextStyle(color: Color(0xFFBFF0CF), fontSize: 15),
                       ),
                     ],
                   ),
@@ -1002,7 +1003,7 @@ class _ListenerCallScreenState extends State<ListenerCallScreen>
               CallActionButton(
                 icon: Icons.call_end,
                 label: '',
-                background: const Color(0xFFE53950),
+                background: AppColors.brand,
                 onTap: _hangUp,
               ),
               CallActionButton(

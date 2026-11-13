@@ -6,7 +6,7 @@ import { Avatar, Confirm, Modal, Notice, Spinner, Switch } from "../components/u
 import { IconChevron, IconDoc, IconEdit, IconHeadset, IconLock, IconLogout, IconShield, IconTrash, IconPhone, IconVideo } from "../components/icons";
 
 function Label({ children }: { children: ReactNode }) {
-  return <div className="px-1 pb-2 pt-6 text-xs font-semibold uppercase tracking-widest text-white/50">{children}</div>;
+  return <div className="px-1 pb-2 pt-6 text-xs font-semibold uppercase tracking-widest text-ink/50">{children}</div>;
 }
 
 function Row({
@@ -16,11 +16,11 @@ function Row({
     <div
       role={onClick ? "button" : undefined}
       onClick={busy ? undefined : onClick}
-      className={`flex items-center gap-3.5 border-b border-line px-4 py-3.5 last:border-b-0 ${onClick ? "cursor-pointer hover:bg-white/5" : ""}`}
+      className={`flex items-center gap-3.5 border-b border-line px-4 py-3.5 last:border-b-0 ${onClick ? "cursor-pointer hover:bg-black/5" : ""}`}
     >
       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${danger ? "bg-red-500/15 text-red-500" : "bg-brand/15 text-brand"}`}>{icon}</div>
       <div className={`flex-1 text-[15px] ${danger ? "font-semibold text-red-500" : ""}`}>{title}</div>
-      {busy ? <Spinner size={16} /> : trailing ?? (onClick && !danger ? <IconChevron size={18} className="text-white/35" /> : null)}
+      {busy ? <Spinner size={16} /> : trailing ?? (onClick && !danger ? <IconChevron size={18} className="text-ink/35" /> : null)}
     </div>
   );
 }
@@ -150,9 +150,9 @@ export default function Settings() {
         message="You signed in with Google, so this account does not have a password to change. Manage it from your Google account instead."
         onClose={() => setPwNotice(false)}
       />
-      <Confirm open={logoutOpen} title="Log out?" message="You will need to sign in again to use Lailanow." confirmLabel="Logout" danger busy={loggingOut} onConfirm={() => void doLogout()} onCancel={() => setLogoutOpen(false)} />
+      <Confirm open={logoutOpen} title="Log out?" message="You will need to sign in again to use MindiCo." confirmLabel="Logout" danger busy={loggingOut} onConfirm={() => void doLogout()} onCancel={() => setLogoutOpen(false)} />
       <Modal open={delOpen} onClose={() => (deleting ? undefined : setDelOpen(false))} title="Delete account">
-        <p className="text-sm leading-relaxed text-white/70">
+        <p className="text-sm leading-relaxed text-ink/70">
           Are you sure you want to delete your account? The admins will be notified about your account deletion and will process it. This cannot be undone once it is done.
         </p>
         <textarea value={reason} onChange={(e) => setReason(e.target.value.slice(0, 300))} rows={3} placeholder="Reason (optional)" className="input mt-4 resize-none" />

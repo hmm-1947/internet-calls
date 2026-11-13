@@ -34,6 +34,7 @@ from app.schemas.schemas import (
     UserContactChangeVerify,
     UserProfileUpdate,
     UserVideoCallSettingUpdate,
+    UserGenderPreferenceUpdate,
     AccountDeletionRequestCreate,
     detect_identifier,
     validate_username,
@@ -834,7 +835,10 @@ def change_password(payload: UserChangePassword, db: Session = Depends(get_db), 
 
 @router.get("/listeners")
 def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    listeners = db.query(Listener).filter(Listener.is_active == True).all()
+    lq = db.query(Listener).filter(Listener.is_active == True)
+    if current_user.gender_preference in ("male", "female"):
+        lq = lq.filter(Listener.gender == current_user.gender_preference)
+    listeners = lq.all()
     listener_ids = [l.id for l in listeners]
     rating_rows = db.query(
         CallRating.listener_id,
@@ -916,7 +920,7 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
 @router.get("/listener/{listener_id}")
 def get_listener_profile(listener_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     l = db.query(Listener).filter(Listener.id == listener_id, Listener.is_active == True).first()
-    if not l:
+    if not l or (current_user.gender_preference in ("male", "female") and l.gender != current_user.gender_preference):
         raise HTTPException(status_code=404, detail="Listener not found")
     avg_rating = db.query(sqlfunc.avg(CallRating.rating)).filter(CallRating.listener_id == l.id).scalar()
     rating_count = db.query(sqlfunc.count(CallRating.id)).filter(CallRating.listener_id == l.id).scalar()
@@ -987,6 +991,7 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         "photo_url": current_user.photo_url,
         "video_call_enabled": current_user.video_call_enabled,
         "video_call_disabled_by_admin": current_user.video_call_disabled_by_admin,
+        "gender_preference": current_user.gender_preference,
     }
 
 
@@ -1221,6 +1226,13 @@ def update_video_call_setting(payload: UserVideoCallSettingUpdate, db: Session =
         "video_call_enabled": current_user.video_call_enabled,
         "video_call_disabled_by_admin": current_user.video_call_disabled_by_admin,
     }
+
+
+@router.post("/gender-preference")
+def update_gender_preference(payload: UserGenderPreferenceUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    current_user.gender_preference = payload.preference
+    db.commit()
+    return {"status": "updated", "gender_preference": current_user.gender_preference}
 
 
 @router.post("/bio")

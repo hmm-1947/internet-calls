@@ -1,4 +1,6 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/focus_outline.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:livekitapp/common/utils/profile_image_crop.dart';
@@ -10,14 +12,6 @@ import 'package:livekitapp/listener/repository/listener_repository.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
 
-class _AppColors {
-  static const bg = Color(0xFF0B0B0B);
-  static const cardBg = Color(0xFF1A1A1A);
-  static const cardBorder = Color(0x0DFFFFFF);
-  static const brandRed = Color(0xFFE11D48);
-  static const online = Color(0xFF74D8BD);
-  static const textMuted = Color(0xFF9CA3AF);
-}
 
 String _memberSinceYear(String? createdAt) {
   if (createdAt == null) return '';
@@ -38,8 +32,8 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white54,
+        style: TextStyle(
+          color: context.c.muted,
           fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 1,
@@ -59,12 +53,12 @@ class _ProfileChip extends StatelessWidget {
     return Chip(
       label: Text(
         text,
-        style: const TextStyle(color: Colors.white, fontSize: 12),
+        style: TextStyle(color: context.c.text, fontSize: 12),
       ),
-      backgroundColor: _AppColors.cardBg,
-      side: const BorderSide(color: _AppColors.cardBorder),
+      backgroundColor: context.c.card,
+      side: BorderSide(color: context.c.border),
       onDeleted: onDeleted,
-      deleteIconColor: Colors.white54,
+      deleteIconColor: context.c.muted,
     );
   }
 }
@@ -198,7 +192,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
     if (picked == null) return;
     final cropped = await cropProfileImage(
       picked,
-      brandColor: _AppColors.brandRed,
+      brandColor: AppColors.brand,
     );
     if (cropped == null) return;
     setState(() => _uploadingPhoto = true);
@@ -287,13 +281,13 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
             controller: controller,
             enabled: !atLimit,
             maxLength: maxChars,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.c.text),
             decoration: InputDecoration(
               counterText: '',
               hintText: atLimit ? 'Limit reached' : hint,
-              hintStyle: const TextStyle(color: Colors.white38),
+              hintStyle: TextStyle(color: context.c.faint),
               filled: true,
-              fillColor: _AppColors.cardBg,
+              fillColor: context.c.card,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
@@ -308,7 +302,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
         ),
         const SizedBox(width: 8),
         IconButton(
-          icon: const Icon(Icons.add_circle, color: _AppColors.brandRed),
+          icon: const Icon(Icons.add_circle, color: AppColors.brand),
           onPressed: atLimit ? null : addFromController,
         ),
       ],
@@ -318,15 +312,15 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _AppColors.bg,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        backgroundColor: _AppColors.bg,
+        backgroundColor: context.c.bg,
         elevation: 0,
-        foregroundColor: Colors.white,
-        title: const Text(
+        foregroundColor: context.c.text,
+        title: Text(
           'Profile',
           style: TextStyle(
-            color: Colors.white,
+            color: context.c.text,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -345,22 +339,22 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                           )
                         : const Text(
                             'Save',
-                            style: TextStyle(color: _AppColors.brandRed),
+                            style: TextStyle(color: AppColors.brand),
                           ),
                   )
                 : IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.edit_outlined,
-                      color: Colors.white70,
+                      color: context.c.textSecondary,
                     ),
                     onPressed: _startEditing,
                   ),
           if (_editing)
             TextButton(
               onPressed: _saving ? null : _cancelEditing,
-              child: const Text(
+              child: Text(
                 'Cancel',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: context.c.muted),
               ),
             ),
         ],
@@ -425,11 +419,11 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                         height: 10,
                                         decoration: BoxDecoration(
                                           color: _isOnline
-                                              ? _AppColors.online
-                                              : _AppColors.textMuted,
+                                              ? AppColors.online
+                                              : context.c.muted,
                                           shape: BoxShape.circle,
                                           border: Border.all(
-                                            color: _AppColors.bg,
+                                            color: context.c.bg,
                                             width: 2,
                                           ),
                                         ),
@@ -437,8 +431,8 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                       const SizedBox(width: 6),
                                       Text(
                                         _isOnline ? 'ONLINE' : 'OFFLINE',
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: context.c.text,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
                                           letterSpacing: 0.5,
@@ -455,10 +449,10 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                       width: 40,
                                       height: 40,
                                       decoration: const BoxDecoration(
-                                        color: _AppColors.brandRed,
+                                        color: AppColors.brand,
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.camera_alt,
                                         color: Colors.white,
                                         size: 18,
@@ -476,8 +470,8 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                   Center(
                     child: Text(
                       _name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.c.text,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -489,8 +483,8 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       _isOnline ? 'ONLINE NOW' : 'OFFLINE',
                       style: TextStyle(
                         color: _isOnline
-                            ? _AppColors.online
-                            : _AppColors.textMuted,
+                            ? AppColors.online
+                            : context.c.muted,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1,
@@ -504,9 +498,9 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
-                            color: _AppColors.cardBg,
+                            color: context.c.card,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: _AppColors.cardBorder),
+                            border: Border.all(color: context.c.border),
                           ),
                           child: Column(
                             children: [
@@ -520,17 +514,17 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                 _avgRating != null
                                     ? _avgRating!.toStringAsFixed(1)
                                     : '—',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.c.text,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              const Text(
+                              Text(
                                 'RATING',
                                 style: TextStyle(
-                                  color: _AppColors.textMuted,
+                                  color: context.c.muted,
                                   fontSize: 11,
                                   letterSpacing: 1,
                                 ),
@@ -544,31 +538,31 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
-                            color: _AppColors.cardBg,
+                            color: context.c.card,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: _AppColors.cardBorder),
+                            border: Border.all(color: context.c.border),
                           ),
                           child: Column(
                             children: [
                               const Icon(
                                 Icons.call,
-                                color: _AppColors.brandRed,
+                                color: AppColors.brand,
                                 size: 20,
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 '$_totalCalls',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.c.text,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              const Text(
+                              Text(
                                 'TOTAL CALLS',
                                 style: TextStyle(
-                                  color: _AppColors.textMuted,
+                                  color: context.c.muted,
                                   fontSize: 11,
                                   letterSpacing: 1,
                                 ),
@@ -592,15 +586,15 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,
                                 ],
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: context.c.text),
                                 decoration: InputDecoration(
                                   counterText: '',
                                   hintText: 'Age',
-                                  hintStyle: const TextStyle(
-                                    color: Colors.white38,
+                                  hintStyle: TextStyle(
+                                    color: context.c.faint,
                                   ),
                                   filled: true,
-                                  fillColor: _AppColors.cardBg,
+                                  fillColor: context.c.card,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
                                     borderSide: BorderSide.none,
@@ -618,15 +612,15 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                               child: TextField(
                                 controller: _occupationController,
                                 maxLength: 20,
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: context.c.text),
                                 decoration: InputDecoration(
                                   counterText: '',
                                   hintText: 'Occupation',
-                                  hintStyle: const TextStyle(
-                                    color: Colors.white38,
+                                  hintStyle: TextStyle(
+                                    color: context.c.faint,
                                   ),
                                   filled: true,
-                                  fillColor: _AppColors.cardBg,
+                                  fillColor: context.c.card,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
                                     borderSide: BorderSide.none,
@@ -644,44 +638,45 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: _AppColors.cardBg,
+                            color: context.c.card,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: _AppColors.cardBorder),
+                            border: Border.all(color: context.c.border),
                           ),
                           child: Text(
                             '${_age?.toString() ?? '...'} · ${_occupation.isEmpty ? '...' : _occupation}',
-                            style: const TextStyle(
-                              color: Colors.white70,
+                            style: TextStyle(
+                              color: context.c.textSecondary,
                               height: 1.4,
                             ),
                           ),
                         ),
 
                   const _SectionLabel('ABOUT'),
-                  Container(
+                  FocusOutline(
                     width: double.infinity,
+                    radius: 14,
+                    restColor: context.c.border,
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _AppColors.cardBg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _AppColors.cardBorder),
-                    ),
                     child: _editing
                         ? TextField(
                             controller: _aboutController,
                             maxLines: 4,
                             maxLength: 100,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: const InputDecoration(
+                            style: TextStyle(color: context.c.text),
+                            decoration: InputDecoration(
+                              filled: false,
                               border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
                               hintText: 'Tell users about yourself...',
-                              hintStyle: TextStyle(color: Colors.white38),
+                              hintStyle: TextStyle(color: context.c.faint),
                             ),
                           )
                         : Text(
                             _about.isEmpty ? 'No description yet.' : _about,
-                            style: const TextStyle(
-                              color: Colors.white70,
+                            style: TextStyle(
+                              color: context.c.textSecondary,
                               height: 1.4,
                             ),
                           ),
@@ -715,9 +710,9 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       runSpacing: 8,
                       children: _tags.isEmpty
                           ? [
-                              const Text(
+                              Text(
                                 'Not set',
-                                style: TextStyle(color: Colors.white38),
+                                style: TextStyle(color: context.c.faint),
                               ),
                             ]
                           : _tags.map((t) => _ProfileChip(t)).toList(),
@@ -750,8 +745,8 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       _languages.isEmpty ? 'Not set' : _languages.join(' • '),
                       style: TextStyle(
                         color: _languages.isEmpty
-                            ? Colors.white38
-                            : _AppColors.brandRed,
+                            ? context.c.faint
+                            : AppColors.brand,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -759,10 +754,10 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _AppColors.brandRed.withOpacity(0.08),
+                      color: AppColors.brand.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: _AppColors.brandRed.withOpacity(0.3),
+                        color: AppColors.brand.withOpacity(0.3),
                       ),
                     ),
                     child: Row(
@@ -770,7 +765,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       children: [
                         const Icon(
                           Icons.shield_outlined,
-                          color: _AppColors.brandRed,
+                          color: AppColors.brand,
                           size: 20,
                         ),
                         const SizedBox(width: 10),
@@ -778,7 +773,7 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                           child: Text(
                             '100% anonymous. Users never see your real identity. Conversations stay between the two of you.',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
+                              color: context.c.textSecondary,
                               fontSize: 13,
                               height: 1.4,
                             ),
@@ -793,8 +788,8 @@ class ListenerProfileScreenState extends State<ListenerProfileScreen> {
                       _memberSinceYear(_createdAt).isEmpty
                           ? ''
                           : 'Member since ${_memberSinceYear(_createdAt)}',
-                      style: const TextStyle(
-                        color: Colors.white24,
+                      style: TextStyle(
+                        color: context.c.faint,
                         fontSize: 12,
                       ),
                     ),

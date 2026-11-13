@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -144,7 +145,7 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
     if (picked == null) return;
     final cropped = await cropProfileImage(
       picked,
-      brandColor: const Color(0xFFE11D48),
+      brandColor: AppColors.brand,
     );
     if (cropped == null) return;
     setState(() => _photo = cropped);
@@ -247,12 +248,12 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
             children: [
               CircleAvatar(
                 radius: 44,
-                backgroundColor: Colors.white.withOpacity(0.06),
+                backgroundColor: context.c.overlay,
                 backgroundImage: _photo != null ? FileImage(_photo!) : null,
                 child: _photo == null
-                    ? const Icon(
+                    ? Icon(
                         Icons.person_outline,
-                        color: Colors.white38,
+                        color: context.c.faint,
                         size: 38,
                       )
                     : null,
@@ -260,12 +261,12 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
               Container(
                 padding: const EdgeInsets.all(5),
                 decoration: const BoxDecoration(
-                  color: Colors.red,
+                  color: AppColors.brand,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   _photo == null ? Icons.add : Icons.edit,
-                  color: Colors.black,
+                  color: Colors.white,
                   size: 15,
                 ),
               ),
@@ -275,14 +276,14 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
         const SizedBox(height: 8),
         Text(
           _photo == null ? 'Add a profile photo (optional)' : 'Tap to change',
-          style: const TextStyle(color: Colors.white38, fontSize: 12.5),
+          style: TextStyle(color: context.c.faint, fontSize: 12.5),
         ),
         if (_photo != null)
           TextButton(
             onPressed: _loading ? null : () => setState(() => _photo = null),
-            child: const Text(
+            child: Text(
               'Remove photo',
-              style: TextStyle(color: Colors.white54, fontSize: 12.5),
+              style: TextStyle(color: context.c.muted, fontSize: 12.5),
             ),
           ),
       ],
@@ -293,28 +294,28 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
   /// the handle is free, red when it is taken or invalid.
   Widget _usernameStatus() {
     if (_checkingUsername) {
-      return const Row(
+      return Row(
         children: [
           SizedBox(
             width: 13,
             height: 13,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Colors.white54,
+              color: context.c.muted,
             ),
           ),
           SizedBox(width: 8),
           Text(
             'Checking availability…',
-            style: TextStyle(color: Colors.white54, fontSize: 12.5),
+            style: TextStyle(color: context.c.muted, fontSize: 12.5),
           ),
         ],
       );
     }
     if (_usernameMessage == null) {
-      return const Text(
+      return Text(
         '3-20 characters: letters, numbers, dots or underscores',
-        style: TextStyle(color: Colors.white38, fontSize: 12.5),
+        style: TextStyle(color: context.c.faint, fontSize: 12.5),
       );
     }
     final available = _usernameAvailable == true;
@@ -322,7 +323,7 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
       children: [
         Icon(
           available ? Icons.check_circle : Icons.cancel,
-          color: available ? Colors.greenAccent : Colors.redAccent,
+          color: available ? Colors.greenAccent : AppColors.brand,
           size: 16,
         ),
         const SizedBox(width: 8),
@@ -330,7 +331,7 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
           child: Text(
             _usernameMessage!,
             style: TextStyle(
-              color: available ? Colors.greenAccent : Colors.redAccent,
+              color: available ? Colors.greenAccent : AppColors.brand,
               fontSize: 12.5,
             ),
           ),
@@ -343,11 +344,11 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
   Widget build(BuildContext context) {
     final nameError = _showErrors ? displayNameError(_displayName) : null;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
         title: const Text('Your Profile'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.red,
+        backgroundColor: context.c.bg,
+        foregroundColor: AppColors.brand,
         elevation: 0,
       ),
       body: SafeArea(
@@ -388,8 +389,8 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
                         nameError ?? 'This is the name listeners will see',
                         style: TextStyle(
                           color: nameError != null
-                              ? Colors.redAccent
-                              : Colors.white38,
+                              ? AppColors.brand
+                              : context.c.faint,
                           fontSize: 12.5,
                         ),
                       ),
@@ -400,10 +401,10 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.black,
-                        disabledBackgroundColor: Colors.red.withOpacity(0.3),
-                        disabledForegroundColor: Colors.black45,
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: AppColors.brand.withOpacity(0.3),
+                        disabledForegroundColor: Colors.white70,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -416,7 +417,7 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                color: Colors.black,
+                                color: Colors.white,
                                 strokeWidth: 2.4,
                               ),
                             )

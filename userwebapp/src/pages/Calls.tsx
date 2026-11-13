@@ -103,7 +103,7 @@ export default function Calls() {
           <button
             key={f.id}
             onClick={() => setFilter(f.id)}
-            className={cx("shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition", filter === f.id ? "bg-brand-soft text-white" : "bg-white/5 text-white/60 hover:bg-white/10")}
+            className={cx("shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition", filter === f.id ? "bg-brand-soft text-white" : "bg-black/5 text-ink/60 hover:bg-black/10")}
           >
             {f.label}
           </button>
@@ -126,7 +126,7 @@ export default function Calls() {
             const tone = st.bad ? "text-red-400" : "text-online";
             return (
               <div key={c.id}>
-                {showDay && <div className="border-b border-line bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">{listTimeLabel(c.created_at)}</div>}
+                {showDay && <div className="border-b border-line bg-black/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">{listTimeLabel(c.created_at)}</div>}
                 <div className="flex items-center gap-3 border-b border-line px-4 py-3">
                   <button onClick={() => nav(`/listener/${c.listener_id}`)} className="shrink-0">
                     <Avatar src={c.other_party_photo_url} name={c.listener_name} size={48} />
@@ -138,12 +138,12 @@ export default function Calls() {
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
                       {c.call_type === "video" ? <IconVideo size={13} className={tone} /> : <IconPhone size={13} className={tone} />}
-                      <span className={st.bad ? "text-red-400" : "text-white/70"}>{st.text}</span>
+                      <span className={st.bad ? "text-red-400" : "text-ink/70"}>{st.text}</span>
                       <span className="text-muted">{timeLabel(c.created_at)}</span>
                       {c.coins_deducted ? <span className="inline-flex items-center gap-1 text-gold"><IconCoin size={12} />{c.coins_deducted}</span> : null}
                     </div>
                   </div>
-                  <button onClick={() => nav(`/chats/${c.listener_id}`)} className="rounded-full p-2.5 text-white/60 hover:bg-white/10 hover:text-white" aria-label="Chat"><IconChat size={18} /></button>
+                  <button onClick={() => nav(`/chats/${c.listener_id}`)} className="rounded-full p-2.5 text-ink/60 hover:bg-black/10 hover:text-ink" aria-label="Chat"><IconChat size={18} /></button>
                   <button
                     disabled={!!call}
                     onClick={() => callBack(c)}

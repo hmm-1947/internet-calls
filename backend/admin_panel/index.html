@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Panel-LailaNow</title>
-  <link rel="icon" type="image/png" href="/assets/title_logo.png">
+  <title>Admin Panel-MindiCo</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400&family=Open+Sans:ital,wght@0,400;0,700;1,400&family=Lato:ital,wght@0,400;0,700;1,400&family=PT+Sans:ital,wght@0,400;0,700;1,400&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -13,10 +13,10 @@
   <style>
     :root {
       --mint: #f4f5f7;
-      --leaf: #e63946;
-      --leaf-dark: #c1121f;
-      --sky: #e63946;
-      --sky-dark: #c1121f;
+      --leaf: #12a044;
+      --leaf-dark: #0b7a33;
+      --sky: #12a044;
+      --sky-dark: #0b7a33;
       --ink: #1f2430;
       --slate: #7c8493;
       --line: #ecedf1;
@@ -39,6 +39,12 @@
     [data-theme="dark"] .confirm-icon.danger  { background: #3a2224; color: #ff6b6b; }
     [data-theme="dark"] .confirm-icon.warning { background: #3a3020; color: #e0a83e; }
     [data-theme="dark"] .confirm-icon.info    { background: #1e3a2c; color: #3ed687; }
+
+    a { color: var(--leaf); }
+    a:hover { color: var(--leaf-dark); }
+
+    body.auth-mode { background: #ffffff; }
+    body.auth-mode .card { background: #f3f4f6; border-color: #e5e7eb; box-shadow: none; }
 
     /* While the theme attribute is being swapped, every element's own
        transition is switched off for a frame. CSS custom properties
@@ -365,7 +371,7 @@
       right: 16px;
       top: 0;
       height: 0;
-      background: #fdeceb;
+      background: #ddf3e4;
       border: 1px solid var(--leaf);
       border-radius: 10px;
       z-index: 0;
@@ -378,18 +384,18 @@
     }
 
     [data-theme="dark"] .nav-slider {
-      background: #3a2224;
+      background: #173824;
     }
 
 
-    /* Red counter of unseen notifications, sits at the end of the nav row. */
+    /* Counter of unseen notifications, sits at the end of the nav row. */
     .nav-badge {
       margin-left: auto;
       min-width: 20px;
       height: 20px;
       padding: 0 6px;
       border-radius: 10px;
-      background: var(--danger);
+      background: var(--leaf);
       color: #fff;
       font-size: 11px;
       font-weight: 800;
@@ -488,8 +494,8 @@
     }
 
     .notif-row.unread {
-      border-color: rgba(230, 57, 70, .45);
-      background: rgba(230, 57, 70, .05);
+      border-color: rgba(18, 160, 68, .45);
+      background: rgba(18, 160, 68, .05);
     }
 
     .notif-row.leaving {
@@ -693,7 +699,7 @@
       height: 12px;
       border-radius: 50%;
       background: var(--sky);
-      box-shadow: 0 0 8px 1px rgba(230, 57, 70, .3);
+      box-shadow: 0 0 8px 1px rgba(18, 160, 68, .3);
     }
 
     h2 {
@@ -754,14 +760,64 @@
       border-color: #4c5468;
     }
 
+    select {
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      padding-right: 38px;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 14px 14px;
+    }
+
+    select:has(option[value=""]:checked) {
+      color: var(--slate);
+    }
+
     input:focus,
     textarea:focus,
     select:focus {
       outline: none;
       border-color: var(--sky);
-      box-shadow: inset 0 1px 2px rgba(20, 20, 30, .04), 0 0 0 3px rgba(230, 57, 70, .12);
-      background: var(--white);
+      box-shadow: inset 0 1px 2px rgba(20, 20, 30, .04), 0 0 0 3px rgba(18, 160, 68, .12);
+      background-color: var(--white);
     }
+
+    .cs { position: relative; display: block; }
+    .cs.cs-auto { display: inline-block; width: auto; }
+    .cs-native { position: absolute !important; opacity: 0 !important; pointer-events: none !important; width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; left: 0; bottom: 0; }
+    .cs-btn {
+      display: block; width: 100%; text-align: left; cursor: pointer;
+      padding: 10px 38px 10px 12px; margin: 5px 0;
+      border: 1px solid var(--line); border-radius: 10px;
+      background-color: var(--white); color: var(--ink);
+      font-size: 13px; font-family: inherit; line-height: normal;
+      box-shadow: inset 0 1px 2px rgba(20, 20, 30, .04);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 16px center; background-size: 14px 14px;
+      transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    .cs.cs-auto .cs-btn { width: auto; }
+    .cs-btn:hover { border-color: #d8dae0; }
+    [data-theme="dark"] .cs-btn:hover { border-color: #4c5468; }
+    .cs-btn:focus, .cs-btn.open { outline: none; border-color: var(--sky); box-shadow: 0 0 0 3px rgba(18, 160, 68, .12); }
+    .cs-btn.placeholder { color: var(--slate); }
+    .cs-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .cs-menu {
+      position: fixed; z-index: 100000; overflow-y: auto; padding: 5px;
+      background: var(--white); color: var(--ink); border: 1px solid var(--line); border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(20, 20, 30, .16); font-size: 13px; font-family: inherit;
+    }
+    [data-theme="dark"] .cs-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, .5); }
+    .cs-opt { padding: 9px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .cs-opt.muted { color: var(--slate); }
+    .cs-opt.active { background: rgba(18, 160, 68, .1); }
+    .cs-opt.selected { color: var(--sky); font-weight: 600; }
+    .cs-opt.selected::after { content: ""; width: 14px; height: 14px; flex: none; background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2312a044' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E"); }
+    .cs-opt.disabled { opacity: .45; cursor: not-allowed; }
 
     select:disabled {
       cursor: not-allowed;
@@ -771,7 +827,7 @@
     [data-theme="dark"] input:focus,
     [data-theme="dark"] textarea:focus,
     [data-theme="dark"] select:focus {
-      box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25), 0 0 0 3px rgba(230, 57, 70, .18);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25), 0 0 0 3px rgba(18, 160, 68, .18);
     }
 
     /* Coin Settings "add coins" drawer: a plain amount field reads better
@@ -813,7 +869,7 @@
       background: var(--leaf);
       color: #fff;
       width: 100%;
-      box-shadow: 0 3px 10px rgba(230, 57, 70, .25);
+      box-shadow: 0 3px 10px rgba(18, 160, 68, .25);
       border: 1px solid transparent;
     }
 
@@ -835,7 +891,7 @@
     .btn-leaf {
       background: var(--leaf);
       color: #fff;
-      box-shadow: 0 3px 10px rgba(230, 57, 70, .2);
+      box-shadow: 0 3px 10px rgba(18, 160, 68, .2);
       border: 1px solid transparent;
     }
 
@@ -1185,7 +1241,7 @@
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      background: #fdeceb;
+      background: #ddf3e4;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1302,7 +1358,7 @@
     }
 
     .badge-role {
-      background: #fdeceb;
+      background: #ddf3e4;
       color: var(--leaf);
     }
 
@@ -1529,21 +1585,21 @@
     }
 
     .tag-listener-row.selected {
-      background: #fdeceb;
+      background: #ddf3e4;
       border-color: var(--leaf);
     }
 
     [data-theme="dark"] .tag-listener-row.selected {
-      background: #3a2224;
+      background: #173824;
     }
 
     .person-item.selected {
-      background: #fdeceb;
+      background: #ddf3e4;
       border-color: var(--leaf);
     }
 
     [data-theme="dark"] .person-item.selected {
-      background: #3a2224;
+      background: #173824;
     }
 
     .person-name {
@@ -1860,10 +1916,150 @@
     .wallet-date-range input[type="date"] {
       padding: 6px 30px 6px 10px;
       border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.15);
-      background: #101010;
-      color: #fff;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink);
       font-size: 13px;
+    }
+
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus,
+    textarea:-webkit-autofill,
+    select:-webkit-autofill {
+      -webkit-text-fill-color: var(--ink);
+      caret-color: var(--ink);
+      -webkit-box-shadow: 0 0 0 1000px var(--white) inset !important;
+      box-shadow: 0 0 0 1000px var(--white) inset !important;
+      transition: background-color 9999s ease-out 0s;
+    }
+
+    .dp-pop {
+      position: fixed;
+      z-index: 5000;
+      width: 280px;
+      padding: 14px;
+      background: var(--white);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(20, 20, 30, .18);
+      font-size: 13px;
+      user-select: none;
+    }
+
+    [data-theme="dark"] .dp-pop {
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+    }
+
+    .dp-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .dp-title {
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .dp-nav {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      margin: 0;
+    }
+
+    .dp-nav:hover {
+      border-color: var(--leaf);
+      color: var(--leaf);
+    }
+
+    .dp-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .dp-dow {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--slate);
+      padding: 4px 0;
+    }
+
+    .dp-day {
+      height: 32px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      margin: 0;
+      width: auto;
+    }
+
+    .dp-day:hover {
+      background: var(--mint);
+    }
+
+    .dp-day.out {
+      color: var(--slate);
+      opacity: .45;
+    }
+
+    .dp-day.today {
+      box-shadow: inset 0 0 0 1px var(--leaf);
+    }
+
+    .dp-day.sel,
+    .dp-day.sel:hover {
+      background: var(--leaf);
+      color: #fff;
+    }
+
+    .dp-day:disabled {
+      opacity: .25;
+      cursor: not-allowed;
+      background: transparent;
+    }
+
+    .dp-foot {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+
+    .dp-link {
+      border: 0;
+      background: transparent;
+      color: var(--leaf);
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 6px;
+      margin: 0;
+      width: auto;
+      box-shadow: none;
+    }
+
+    .dp-link:hover {
+      color: var(--leaf-dark);
     }
 
     .wallet-date-input-wrap {
@@ -1887,7 +2083,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: rgba(255,255,255,0.6);
+      color: var(--slate);
       cursor: pointer;
     }
     .page-size-row select {
@@ -2727,6 +2923,7 @@
 
   <div id="loginScreen" style="max-width:380px;margin:80px auto;display:none;">
     <div class="card">
+      <div style="text-align:center;margin-bottom:14px;"><img src="/assets/applogo.png" alt="MindiCo" style="height:96px;max-width:100%;object-fit:contain;"></div>
       <h2>Admin Login</h2>
       <div id="loginStepCreds">
         <input id="loginIdentifier" placeholder="Username or Email">
@@ -2978,7 +3175,7 @@
       <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
         Requests and events raised from the apps.
       </p>
-      <input class="search-box" id="notificationSearch" placeholder="Search withdrawal requests by listener name" oninput="onNotificationSearch()">
+      <input class="search-box" autocomplete="off" id="notificationSearch" placeholder="Search withdrawal requests by listener name" oninput="onNotificationSearch()">
       <div id="notificationsList"></div>
     </div>
   </div>
@@ -2991,7 +3188,7 @@
       <div class="msg-box" id="usersMsgBox"></div>
       <div class="layout">
         <div class="sidebar">
-          <input class="search-box" id="userSearch" placeholder="Search by name, username, email or phone" oninput="renderPersonList('user')">
+          <input class="search-box" autocomplete="off" id="userSearch" placeholder="Search by name, username, email or phone" oninput="renderPersonList('user')">
           <div id="userList"></div>
         </div>
         <div class="content" id="userContent">
@@ -3013,6 +3210,11 @@
       <h2>Register Listener</h2>
       <input id="name" placeholder="Name">
       <input id="phone" placeholder="Phone">
+      <select id="listenerGender" style="width:100%">
+        <option value="">Select gender</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+      </select>
       <div class="pw-field">
         <input id="password" placeholder="Password" type="password">
         <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePasswordVisibility(this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -3026,7 +3228,7 @@
       </h2>
       <div class="layout">
         <div class="sidebar">
-          <input class="search-box" id="listenerSearch" placeholder="Search by name or phone" oninput="renderPersonList('listener')">
+          <input class="search-box" autocomplete="off" id="listenerSearch" placeholder="Search by name or phone" oninput="renderPersonList('listener')">
           <div id="listenerList"></div>
         </div>
         <div class="content" id="listenerContent">
@@ -3072,13 +3274,13 @@
     <div class="coin-add-grid">
       <div class="card">
         <h2>Add Coins — User</h2>
-        <input type="text" id="coinUserSearch" placeholder="Search user by name, @username, email or phone" oninput="renderCoinSearchResults('user')">
+        <input type="text" autocomplete="off" id="coinUserSearch" placeholder="Search user by name, @username, email or phone" oninput="renderCoinSearchResults('user')">
         <div id="coinUserResults" class="coin-search-results"></div>
       </div>
 
       <div class="card">
         <h2>Add Coins — Listener</h2>
-        <input type="text" id="coinListenerSearch" placeholder="Search listener by name or phone" oninput="renderCoinSearchResults('listener')">
+        <input type="text" autocomplete="off" id="coinListenerSearch" placeholder="Search listener by name or phone" oninput="renderCoinSearchResults('listener')">
         <div id="coinListenerResults" class="coin-search-results"></div>
       </div>
     </div>
@@ -3382,7 +3584,7 @@
     <div class="card">
       <h2>Assign Tag to Listener</h2>
       <label style="font-size:13px;color:var(--slate);font-weight:600">Search listeners</label>
-      <input class="search-box" id="tagListenerSearch" placeholder="Search by name or tag…" oninput="onTagListenerSearchInput()">
+      <input class="search-box" autocomplete="off" id="tagListenerSearch" placeholder="Search by name or tag…" oninput="onTagListenerSearchInput()">
       <div id="tagListenerResults" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:420px;overflow-y:auto;"></div>
     </div>
   </div>
@@ -3474,7 +3676,13 @@
       return h;
     }
 
+    function setAuthTheme(on) {
+      document.documentElement.setAttribute('data-theme', on ? 'light' : (localStorage.getItem('adminThemeV2') || 'light'));
+      document.body.classList.toggle('auth-mode', on);
+    }
+
     function showLoginScreen() {
+      setAuthTheme(true);
       if (typeof resetLoginStep === 'function') resetLoginStep();
       document.getElementById('loginScreen').style.display = '';
       document.getElementById('forgotScreen').style.display = 'none';
@@ -3483,6 +3691,7 @@
     }
 
     function showForgotScreen() {
+      setAuthTheme(true);
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('forgotScreen').style.display = '';
       document.getElementById('panelRoot').style.display = 'none';
@@ -3657,6 +3866,7 @@
     }
 
     function showUnlockScreen() {
+      setAuthTheme(true);
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('forgotScreen').style.display = 'none';
       document.getElementById('unlockScreen').style.display = '';
@@ -3714,6 +3924,7 @@
       } catch (e) { setUnlockMsg('✗ ' + e.message, false); }
     }
     function showPanel() {
+      setAuthTheme(false);
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('panelRoot').style.display = '';
       applyStoredNavCollapse();
@@ -4399,7 +4610,7 @@
       // around it (including on dark-mode toggle, since this re-reads on
       // every render rather than caching a stale color).
       const cs = getComputedStyle(document.documentElement);
-      const accent = (cs.getPropertyValue('--leaf').trim()) || '#e63946';
+      const accent = (cs.getPropertyValue('--leaf').trim()) || '#12a044';
       const secondary = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
       const gridColor = (cs.getPropertyValue('--line').trim()) || '#ecedf1';
       const inkColor = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
@@ -4737,6 +4948,7 @@
     // instead of an emoji.
     const CONFIRM_ICONS = {
       warning: '<svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+      logout: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
       lock: '<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
       edit: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
       image: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5-11 11"/></svg>',
@@ -4789,9 +5001,9 @@
         title: 'Logout',
         body: 'Are you sure you want to log out of the admin panel?',
         okLabel: 'Logout',
-        okClass: 'btn-danger',
-        icon: 'lock',
-        iconClass: 'warning'
+        okClass: 'btn-leaf',
+        icon: 'logout',
+        iconClass: 'info'
       });
       if (ok) doAdminLogout();
     }
@@ -5155,7 +5367,9 @@
       const name = document.getElementById('name').value.trim();
       const phone = document.getElementById('phone').value.trim();
       const password = document.getElementById('password').value;
+      const gender = document.getElementById('listenerGender').value;
       if (!name || !phone || !password) { setMsg('Please fill in all fields.', false); return; }
+      if (!gender) { setMsg('Please select the listener gender.', false); return; }
 
       // Caught again server-side; this is just so the admin does not wait for
       // a round trip to be told the name or number is taken.
@@ -5168,7 +5382,7 @@
       try {
         const res = await fetch(API_URL + '/admin/listeners', {
           method: 'POST', headers: authHeaders(true),
-          body: JSON.stringify({ name, phone, password })
+          body: JSON.stringify({ name, phone, password, gender })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
@@ -5176,6 +5390,7 @@
         document.getElementById('name').value = '';
         document.getElementById('phone').value = '';
         document.getElementById('password').value = '';
+        document.getElementById('listenerGender').value = '';
         loadPeople();
       } catch (e) { setMsg('✗ ' + e.message, false); }
     }
@@ -6953,6 +7168,108 @@
       return s;
     }
 
+    let _dpEl = null;
+    let _dpClose = null;
+
+    function openAdminDatePicker(inp) {
+      if (_dpClose) { const same = _dpEl && _dpEl._for === inp; _dpClose(); if (same) return; }
+      const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+      const pad = n => String(n).padStart(2, '0');
+      const iso = (y, m, d) => y + '-' + pad(m + 1) + '-' + pad(d);
+      const parse = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; };
+      const now = new Date();
+      const today = iso(now.getFullYear(), now.getMonth(), now.getDate());
+      let sel = parse(inp.value);
+      let view = sel ? { y: sel.y, m: sel.m } : { y: now.getFullYear(), m: now.getMonth() };
+      const pop = document.createElement('div');
+      pop.className = 'dp-pop';
+      pop._for = inp;
+      document.body.appendChild(pop);
+      _dpEl = pop;
+
+      function place() {
+        const r = inp.getBoundingClientRect();
+        const h = pop.offsetHeight;
+        const w = pop.offsetWidth;
+        let top = r.top - h - 6;
+        if (top < 8) top = r.bottom + 6;
+        let left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
+        pop.style.top = top + 'px';
+        pop.style.left = left + 'px';
+      }
+
+      function choose(value) {
+        const setter = Object.getOwnPropertyDescriptor(inp, 'value');
+        if (setter && setter.set) setter.set.call(inp, value); else inp.value = value;
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+        close();
+      }
+
+      function render() {
+        const first = new Date(view.y, view.m, 1).getDay();
+        const days = new Date(view.y, view.m + 1, 0).getDate();
+        const prevDays = new Date(view.y, view.m, 0).getDate();
+        const selIso = sel ? iso(sel.y, sel.m, sel.d) : '';
+        let cells = DOW.map(d => '<div class="dp-dow">' + d + '</div>').join('');
+        for (let i = 0; i < 42; i++) {
+          let y = view.y, m = view.m, d = i - first + 1, out = false;
+          if (d < 1) { m--; d = prevDays + d; out = true; }
+          else if (d > days) { m++; d = d - days; out = true; }
+          if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
+          const v = iso(y, m, d);
+          const dis = (inp.min && v < inp.min) || (inp.max && v > inp.max);
+          cells += '<button type="button" class="dp-day' + (out ? ' out' : '') + (v === today ? ' today' : '') + (v === selIso ? ' sel' : '') + '" data-v="' + v + '"' + (dis ? ' disabled' : '') + '>' + d + '</button>';
+        }
+        pop.innerHTML =
+          '<div class="dp-head"><button type="button" class="dp-nav" data-nav="-1">&#8249;</button>' +
+          '<div class="dp-title">' + MONTHS[view.m] + ' ' + view.y + '</div>' +
+          '<button type="button" class="dp-nav" data-nav="1">&#8250;</button></div>' +
+          '<div class="dp-grid">' + cells + '</div>' +
+          '<div class="dp-foot"><button type="button" class="dp-link" data-act="clear">Clear</button>' +
+          '<button type="button" class="dp-link" data-act="today">Today</button></div>';
+        place();
+      }
+
+      pop.addEventListener('mousedown', e => e.preventDefault());
+      pop.addEventListener('click', e => {
+        const t = e.target.closest('button');
+        if (!t) return;
+        if (t.dataset.nav) {
+          view.m += +t.dataset.nav;
+          if (view.m < 0) { view.m = 11; view.y--; } else if (view.m > 11) { view.m = 0; view.y++; }
+          render();
+        } else if (t.dataset.v) {
+          choose(t.dataset.v);
+        } else if (t.dataset.act === 'today') {
+          if ((inp.min && today < inp.min) || (inp.max && today > inp.max)) return;
+          choose(today);
+        } else if (t.dataset.act === 'clear') {
+          choose('');
+        }
+      });
+
+      const onDoc = e => { if (!pop.contains(e.target) && e.target !== inp) close(); };
+      const onKey = e => { if (e.key === 'Escape') close(); };
+      const onMove = e => { if (!pop.contains(e.target)) close(); };
+      function close() {
+        document.removeEventListener('mousedown', onDoc, true);
+        document.removeEventListener('keydown', onKey, true);
+        window.removeEventListener('resize', close);
+        window.removeEventListener('scroll', onMove, true);
+        pop.remove();
+        _dpEl = null;
+        _dpClose = null;
+      }
+      _dpClose = close;
+      document.addEventListener('mousedown', onDoc, true);
+      document.addEventListener('keydown', onKey, true);
+      window.addEventListener('resize', close);
+      window.addEventListener('scroll', onMove, true);
+      render();
+    }
+
     /**
      * Native date inputs follow the browser's locale and cannot be formatted
      * from CSS alone, so each one carries its value as DD-MON-YYYY in a
@@ -6978,7 +7295,8 @@
         });
         inp.addEventListener('input', () => sync(inp));
         inp.addEventListener('change', () => sync(inp));
-        inp.addEventListener('click', () => { try { inp.showPicker(); } catch (e) {} });
+        inp.addEventListener('mousedown', e => e.preventDefault());
+        inp.addEventListener('click', e => { e.preventDefault(); openAdminDatePicker(inp); });
         sync(inp);
       }
       function scan(root) {
@@ -7390,16 +7708,16 @@
           </div>
           ${p.type === 'user' ? `
           <div class="person-actions">
-            <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('user', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
-            <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleVideoCall('user', ${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
-            <button class="btn btn-danger" onclick="deletePerson('user', ${p.id}, ${jsArg(p.name)})">Delete User</button>
+            <button class="btn ${p.raw.is_active ? 'btn-leaf' : 'btn-leaf'}" onclick="toggleActive('user', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-leaf'}" onclick="toggleVideoCall('user', ${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
+            <button class="btn btn-leaf" onclick="deletePerson('user', ${p.id}, ${jsArg(p.name)})">Delete User</button>
           </div>` : `
           <div class="person-actions">
-            <button class="btn ${p.raw.is_active ? 'btn-danger' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
-            <button class="btn ${p.raw.status_on ? 'btn-danger' : 'btn-leaf'}" onclick="toggleListenerStatus(${p.id}, ${!!p.raw.status_on})">${p.raw.status_on ? 'Set Offline' : 'Set Online'}</button>
-            <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-danger'}" onclick="toggleListenerVideoCall(${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
-            <button class="btn btn-danger" onclick="openListenerPasswordModal(${p.id}, ${jsArg(p.name)})">Reset Password</button>
-            <button class="btn btn-danger" onclick="deletePerson('listener', ${p.id}, ${jsArg(p.name)})">Delete Listener</button>
+            <button class="btn ${p.raw.is_active ? 'btn-leaf' : 'btn-leaf'}" onclick="toggleActive('listener', ${p.id}, ${p.raw.is_active})">${p.raw.is_active ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn ${p.raw.status_on ? 'btn-leaf' : 'btn-leaf'}" onclick="toggleListenerStatus(${p.id}, ${!!p.raw.status_on})">${p.raw.status_on ? 'Set Offline' : 'Set Online'}</button>
+            <button class="btn ${p.raw.video_call_disabled_by_admin ? 'btn-leaf' : 'btn-leaf'}" onclick="toggleListenerVideoCall(${p.id}, ${p.raw.video_call_disabled_by_admin})">${p.raw.video_call_disabled_by_admin ? 'Enable Video Call' : 'Disable Video Call'}</button>
+            <button class="btn btn-leaf" onclick="openListenerPasswordModal(${p.id}, ${jsArg(p.name)})">Reset Password</button>
+            <button class="btn btn-leaf" onclick="deletePerson('listener', ${p.id}, ${jsArg(p.name)})">Delete Listener</button>
           </div>`}
         </div>
         <div class="profile-edit-box" style="margin:12px 0;padding:12px;border:1px solid #333;border-radius:8px">
@@ -7415,6 +7733,12 @@
               ` : `
               <label>Display name</label>
               <input type="text" id="nameInput-${p.id}" style="width:100%" maxlength="30" value="${escapeHtml(p.raw.name || '')}">
+              <label>Gender</label>
+              <select id="genderInput-${p.id}" style="width:100%">
+                <option value="" ${!p.raw.gender ? 'selected' : ''}>Select gender</option>
+                <option value="male" ${p.raw.gender === 'male' ? 'selected' : ''}>Male</option>
+                <option value="female" ${p.raw.gender === 'female' ? 'selected' : ''}>Female</option>
+              </select>
               <label>About</label>
               <textarea id="aboutInput-${p.id}" rows="2" style="width:100%">${(p.raw.about || '').replace(/</g, '&lt;')}</textarea>
               <label>Good to talk about (comma separated)</label>
@@ -7821,7 +8145,7 @@ ${logSection === 'chats' ? '' : `
       const ok = await confirmDialog(
         newActive
           ? { title: `Activate ${roleLabel}`, body: `Activate this ${roleLabel.toLowerCase()}? They will regain access to the app.`, okLabel: 'Activate', okClass: 'btn-leaf', icon: 'check', iconClass: 'info' }
-          : { title: `Deactivate ${roleLabel}`, body: `Deactivate this ${roleLabel.toLowerCase()}? They will lose access to the app.`, okLabel: 'Deactivate', okClass: 'btn-danger', icon: 'block', iconClass: 'danger' }
+          : { title: `Deactivate ${roleLabel}`, body: `Deactivate this ${roleLabel.toLowerCase()}? They will lose access to the app.`, okLabel: 'Deactivate', okClass: 'btn-leaf', icon: 'block', iconClass: 'info' }
       );
       if (!ok) return;
       try {
@@ -7844,7 +8168,7 @@ ${logSection === 'chats' ? '' : `
       const roleLabel = type === 'user' ? 'user' : 'listener';
       const ok = await confirmDialog(
         newDisabled
-          ? { title: 'Disable Video Call', body: `Disable video calling for this ${roleLabel}? ${type === 'user' ? 'They will only be able to make audio calls.' : 'No user will be able to video call them, and they will not be able to re-enable it themselves until you lift this.'}`, okLabel: 'Disable', okClass: 'btn-danger', icon: 'video-off', iconClass: 'danger' }
+          ? { title: 'Disable Video Call', body: `Disable video calling for this ${roleLabel}? ${type === 'user' ? 'They will only be able to make audio calls.' : 'No user will be able to video call them, and they will not be able to re-enable it themselves until you lift this.'}`, okLabel: 'Disable', okClass: 'btn-leaf', icon: 'video-off', iconClass: 'info' }
           : { title: 'Enable Video Call', body: `Re-enable video calling for this ${roleLabel}?${type === 'listener' ? ' They will regain control of their own video call toggle.' : ''}`, okLabel: 'Enable', okClass: 'btn-leaf', icon: 'video', iconClass: 'info' }
       );
       if (!ok) return;
@@ -7867,7 +8191,7 @@ ${logSection === 'chats' ? '' : `
       const newDisabled = !currentlyDisabled;
       const ok = await confirmDialog(
         newDisabled
-          ? { title: 'Disable Video Call', body: 'Disable video calling for this listener? No user will be able to video call them, regardless of the listener\'s own settings.', okLabel: 'Disable', okClass: 'btn-danger', icon: 'video-off', iconClass: 'danger' }
+          ? { title: 'Disable Video Call', body: 'Disable video calling for this listener? No user will be able to video call them, regardless of the listener\'s own settings.', okLabel: 'Disable', okClass: 'btn-leaf', icon: 'video-off', iconClass: 'info' }
           : { title: 'Enable Video Call', body: 'Re-enable video calling for this listener? Their own app settings will decide whether video calls are available.', okLabel: 'Enable', okClass: 'btn-leaf', icon: 'video', iconClass: 'info' }
       );
       if (!ok) return;
@@ -7890,7 +8214,7 @@ ${logSection === 'chats' ? '' : `
       const ok = await confirmDialog(
         goOnline
           ? { title: 'Set Listener Online', body: 'Set this listener to online? They will show as online whenever they are logged in, and can change their own status again.', okLabel: 'Set Online', okClass: 'btn-leaf', icon: 'check', iconClass: 'info' }
-          : { title: 'Set Listener Offline', body: 'Set this listener to offline? They will show as offline and receive no calls, and cannot switch themselves back online until you turn this on.', okLabel: 'Set Offline', okClass: 'btn-danger', icon: 'x', iconClass: 'danger' }
+          : { title: 'Set Listener Offline', body: 'Set this listener to offline? They will show as offline and receive no calls, and cannot switch themselves back online until you turn this on.', okLabel: 'Set Offline', okClass: 'btn-leaf', icon: 'x', iconClass: 'info' }
       );
       if (!ok) return;
       try {
@@ -7942,7 +8266,8 @@ ${logSection === 'chats' ? '' : `
           }
           const occupation = document.getElementById(`occupationInput-${id}`).value.trim();
 
-          body = { name, about: document.getElementById(`aboutInput-${id}`).value, tags, languages, age, occupation };
+          const genderVal = document.getElementById(`genderInput-${id}`).value;
+          body = { name, about: document.getElementById(`aboutInput-${id}`).value, tags, languages, age, occupation, gender: genderVal || null };
 
         }
         const res = await fetch(API_URL + endpoint, { method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(body) });
@@ -7985,9 +8310,9 @@ ${logSection === 'chats' ? '' : `
         title: `Delete ${roleLabel}`,
         body: `Permanently delete ${roleLabel.toLowerCase()} "${name}"? This will remove all their calls, chats, recordings, ratings, and sessions. This cannot be undone.`,
         okLabel: `Delete ${roleLabel}`,
-        okClass: 'btn-danger',
+        okClass: 'btn-leaf',
         icon: 'trash',
-        iconClass: 'danger'
+        iconClass: 'info'
       });
       if (!ok) return;
       try {
@@ -8100,7 +8425,7 @@ ${logSection === 'chats' ? '' : `
           ? '<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
           : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>';
       }
-      localStorage.setItem('adminTheme', theme);
+      localStorage.setItem('adminThemeV2', theme);
       // Wait a couple of frames for the new colors to actually paint, then
       // re-enable transitions so hover/focus effects keep animating normally.
       requestAnimationFrame(() => {
@@ -8126,7 +8451,7 @@ ${logSection === 'chats' ? '' : `
       if (!instances.length) return;
 
       const cs = getComputedStyle(document.documentElement);
-      const accent = (cs.getPropertyValue('--leaf').trim()) || '#e63946';
+      const accent = (cs.getPropertyValue('--leaf').trim()) || '#12a044';
       const secondary = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
       const gridColor = (cs.getPropertyValue('--line').trim()) || '#ecedf1';
       const inkColor = (cs.getPropertyValue('--ink').trim()) || '#1f2430';
@@ -8178,7 +8503,7 @@ ${logSection === 'chats' ? '' : `
       applyTheme(current === 'dark' ? 'light' : 'dark');
     }
 
-    applyTheme(localStorage.getItem('adminTheme') || 'light');
+    applyTheme(localStorage.getItem('adminThemeV2') || 'light');
     window.addEventListener('DOMContentLoaded', initAuth);
 
     let adminWs = null;
@@ -8285,6 +8610,131 @@ ${logSection === 'chats' ? '' : `
     })();
   </script>
   <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaApiReady&render=explicit" async defer></script>
-</body>
+  <script>
+    (function () {
+      let openState = null;
+      function closeMenu() {
+        if (!openState) return;
+        openState.menu.remove();
+        openState.btn.classList.remove('open');
+        openState = null;
+      }
+      function refresh(sel) {
+        const btn = sel._csBtn;
+        if (!btn) return;
+        const o = sel.options[sel.selectedIndex];
+        btn.textContent = o ? o.text : '';
+        btn.classList.toggle('placeholder', !o || o.value === '');
+        btn.disabled = sel.disabled;
+      }
+      function choose(sel, i) {
+        if (sel.selectedIndex !== i) {
+          sel.selectedIndex = i;
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        refresh(sel);
+        closeMenu();
+        sel._csBtn.focus();
+      }
+      function openMenu(sel) {
+        if (openState && openState.sel === sel) { closeMenu(); return; }
+        closeMenu();
+        const btn = sel._csBtn;
+        const menu = document.createElement('div');
+        menu.className = 'cs-menu';
+        let active = sel.selectedIndex;
+        const els = [];
+        Array.from(sel.options).forEach((o, i) => {
+          const d = document.createElement('div');
+          d.className = 'cs-opt' + (i === sel.selectedIndex ? ' selected' : '') + (o.value === '' ? ' muted' : '') + (o.disabled ? ' disabled' : '');
+          d.textContent = o.text;
+          d.addEventListener('mouseenter', () => setActive(i));
+          d.addEventListener('mousedown', e => e.preventDefault());
+          d.addEventListener('click', () => { if (!o.disabled) choose(sel, i); });
+          menu.appendChild(d);
+          els.push(d);
+        });
+        function setActive(i) {
+          active = i;
+          els.forEach((e, k) => e.classList.toggle('active', k === i));
+          if (els[i]) els[i].scrollIntoView({ block: 'nearest' });
+        }
+        document.body.appendChild(menu);
+        const r = btn.getBoundingClientRect();
+        const h = Math.min(menu.scrollHeight + 2, 260);
+        const below = window.innerHeight - r.bottom;
+        menu.style.width = r.width + 'px';
+        menu.style.left = r.left + 'px';
+        menu.style.maxHeight = '260px';
+        if (below < h + 12 && r.top > below) menu.style.top = Math.max(8, r.top - h - 4) + 'px';
+        else menu.style.top = (r.bottom + 4) + 'px';
+        btn.classList.add('open');
+        openState = { sel, btn, menu, setActive, getActive: () => active, count: els.length };
+        setActive(sel.selectedIndex);
+      }
+      function enhance(sel) {
+        if (sel._csBtn || sel.multiple || sel.size > 1) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'cs' + ((sel.style.width === 'auto' || sel.classList.contains('range-select')) ? ' cs-auto' : '');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cs-btn' + (sel.classList.contains('range-select') ? ' range-select' : '');
+        if (sel.style.margin) btn.style.margin = sel.style.margin;
+        if (sel.style.padding) btn.style.padding = sel.style.padding;
+        if (sel.style.width && sel.style.width !== 'auto') btn.style.width = sel.style.width;
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        wrap.appendChild(btn);
+        sel.classList.add('cs-native');
+        sel.tabIndex = -1;
+        sel._csBtn = btn;
+        btn.addEventListener('click', () => openMenu(sel));
+        btn.addEventListener('keydown', e => {
+          const st = openState && openState.sel === sel ? openState : null;
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!st) { openMenu(sel); return; }
+            const d = e.key === 'ArrowDown' ? 1 : -1;
+            st.setActive(Math.max(0, Math.min(st.count - 1, st.getActive() + d)));
+          } else if ((e.key === 'Enter' || e.key === ' ') && st) {
+            e.preventDefault();
+            choose(sel, st.getActive());
+          } else if (e.key === 'Escape' && st) {
+            e.preventDefault();
+            closeMenu();
+          } else if (e.key === 'Tab') {
+            closeMenu();
+          }
+        });
+        new MutationObserver(() => refresh(sel)).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+        refresh(sel);
+      }
+      const vd = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+      Object.defineProperty(HTMLSelectElement.prototype, 'value', {
+        get: vd.get,
+        set: function (v) { vd.set.call(this, v); refresh(this); },
+        configurable: true
+      });
+      const sd = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+      Object.defineProperty(HTMLSelectElement.prototype, 'selectedIndex', {
+        get: sd.get,
+        set: function (v) { sd.set.call(this, v); refresh(this); },
+        configurable: true
+      });
+      function scan(root) {
+        if (root.nodeType !== 1) return;
+        if (root.tagName === 'SELECT') enhance(root);
+        root.querySelectorAll && root.querySelectorAll('select').forEach(enhance);
+      }
+      scan(document.body);
+      new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(scan))).observe(document.body, { childList: true, subtree: true });
+      document.addEventListener('mousedown', e => {
+        if (openState && !openState.menu.contains(e.target) && !openState.btn.contains(e.target)) closeMenu();
+      });
+      window.addEventListener('resize', closeMenu);
+      window.addEventListener('scroll', e => { if (openState && !openState.menu.contains(e.target)) closeMenu(); }, true);
+    })();
+  </script></body>
 
 </html>

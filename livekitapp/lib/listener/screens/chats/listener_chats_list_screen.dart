@@ -1,6 +1,8 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekitapp/common/widgets/app_search_bar.dart';
 import 'package:livekitapp/common/services/avatar_cache.dart';
 import 'package:livekitapp/common/widgets/avatar_image.dart';
 import 'package:livekitapp/common/widgets/chat_thread_subtitle.dart';
@@ -16,9 +18,7 @@ import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/listener/screens/chats/listener_chat_history_screen.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
 
-const _bg = Color(0xFF0B0F1A);
-const _pink = Color(0xFFE53950);
-const _dimText = Colors.white54;
+const _pink = AppColors.brand;
 
 class ListenerChatsListScreen extends StatefulWidget {
   const ListenerChatsListScreen({super.key});
@@ -276,7 +276,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
         child: Container(
           margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF141821),
+            color: context.c.card,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Wrap(
@@ -287,7 +287,7 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.c.faint,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -347,29 +347,14 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: context.c.bg,
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-            child: Container(
-              height: 55,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A2032),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: 'Search chats...',
-                  hintStyle: TextStyle(color: _dimText),
-                  prefixIcon: Icon(Icons.search, color: _dimText),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
-                ),
-                onChanged: _onSearchChanged,
-              ),
+            child: AppSearchBar(
+              hintText: 'Search chats...',
+              onChanged: _onSearchChanged,
             ),
           ),
           Expanded(
@@ -385,12 +370,12 @@ class _ListenerChatsListScreenState extends State<ListenerChatsListScreen> {
                           sliver: SliverToBoxAdapter(child: _filterRow()),
                         ),
                         if (_filtered.isEmpty)
-                          const SliverFillRemaining(
+                          SliverFillRemaining(
                             hasScrollBody: false,
                             child: Center(
                               child: Text(
                                 'No chats yet',
-                                style: TextStyle(color: _dimText),
+                                style: TextStyle(color: context.c.muted),
                               ),
                             ),
                           )
@@ -463,14 +448,14 @@ class _FilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? _pink : const Color(0xFF1A2032),
+          color: selected ? _pink : context.c.card,
           borderRadius: BorderRadius.circular(20),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.white70,
+            color: selected ? context.c.text : context.c.textSecondary,
             fontWeight: FontWeight.w500,
             fontSize: 13,
           ),
@@ -506,7 +491,7 @@ class _ThreadTile extends StatelessWidget {
     final unread = thread['unread_count'] ?? 0;
     return RepaintBoundary(
       child: Material(
-        color: _bg,
+        color: context.c.bg,
         child: ListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -518,7 +503,7 @@ class _ThreadTile extends StatelessWidget {
                   photoUrl: thread['photo_url'],
                   radius: 26,
                   iconSize: 26,
-                  backgroundColor: const Color(0xFF2A3145),
+                  backgroundColor: context.c.card2,
                 ),
                 Positioned(
                   right: 0,
@@ -526,7 +511,7 @@ class _ThreadTile extends StatelessWidget {
                   child: PresenceDot(
                     presence: PresenceCache().user(thread['user_id']),
                     fallback: thread['is_online'] == true,
-                    borderColor: _bg,
+                    borderColor: context.c.bg,
                   ),
                 ),
               ],
@@ -534,27 +519,27 @@ class _ThreadTile extends StatelessWidget {
             title: Row(
               children: [
                 if (thread['is_pinned'] == true)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.push_pin, size: 14, color: _dimText),
+                    child: Icon(Icons.push_pin, size: 14, color: context.c.muted),
                   ),
                 Expanded(
                   child: Text(
                     '${thread['user_name'] ?? ''}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.c.text,
                       fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
                   ),
                 ),
                 if (thread['is_muted'] == true)
-                  const Icon(
+                  Icon(
                     Icons.notifications_off,
                     size: 16,
-                    color: _dimText,
+                    color: context.c.muted,
                   ),
               ],
             ),
@@ -562,7 +547,7 @@ class _ThreadTile extends StatelessWidget {
               typing: TypingCache().user(thread['user_id']),
               draftKey: 'listener:${thread['user_id']}',
               lastMessage: '${thread['last_message'] ?? ''}',
-              color: _dimText,
+              color: context.c.muted,
               accentColor: _pink,
               messageType: thread['last_message_type'] as String?,
               callStatus: thread['last_call_status'] as String?,
@@ -573,7 +558,7 @@ class _ThreadTile extends StatelessWidget {
               children: [
                 Text(
                   _fmtTime(thread['last_message_at']),
-                  style: const TextStyle(color: _dimText, fontSize: 12),
+                  style: TextStyle(color: context.c.muted, fontSize: 12),
                 ),
                 const SizedBox(height: 6),
                 if (unread > 0)
@@ -593,7 +578,7 @@ class _ThreadTile extends StatelessWidget {
                     child: Text(
                       '$unread',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      style: TextStyle(color: context.c.text, fontSize: 11),
                     ),
                   ),
               ],
@@ -620,8 +605,8 @@ class _ThreadOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(label, style: const TextStyle(color: Colors.white)),
+      leading: Icon(icon, color: context.c.textSecondary),
+      title: Text(label, style: TextStyle(color: context.c.text)),
       onTap: onTap,
     );
   }

@@ -58,7 +58,7 @@ export function ChatThreadList({ activeId, onOpen }: { activeId: number | null; 
           )}
         </div>
         <div className="relative">
-          <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+          <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/40" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats" className="input !py-2.5 !pl-10" />
         </div>
       </div>
@@ -71,8 +71,8 @@ export function ChatThreadList({ activeId, onOpen }: { activeId: number | null; 
               key={t.listener_id}
               onClick={() => onOpen(t.listener_id)}
               className={cx(
-                "group relative flex cursor-pointer items-center gap-3 border-b border-line px-4 py-3 transition hover:bg-white/5",
-                activeId === t.listener_id && "bg-white/8",
+                "group relative flex cursor-pointer items-center gap-3 border-b border-line px-4 py-3 transition hover:bg-black/5",
+                activeId === t.listener_id && "bg-black/8",
               )}
               style={activeId === t.listener_id ? { background: "rgba(255,255,255,0.07)" } : undefined}
             >
@@ -84,29 +84,29 @@ export function ChatThreadList({ activeId, onOpen }: { activeId: number | null; 
                 <div className="flex items-center gap-2">
                   <span className="truncate font-semibold">{t.listener_name}</span>
                   <BadgePill tag={t.badge_tag} />
-                  {t.is_pinned && <IconPin size={13} className="text-white/40" />}
-                  {t.is_muted && <IconMute size={13} className="text-white/40" />}
+                  {t.is_pinned && <IconPin size={13} className="text-ink/40" />}
+                  {t.is_muted && <IconMute size={13} className="text-ink/40" />}
                 </div>
-                <div className={cx("mt-0.5 truncate text-sm", t.unread_count > 0 && !t.is_muted ? "font-medium text-white" : "text-muted")}>{preview(t)}</div>
+                <div className={cx("mt-0.5 truncate text-sm", t.unread_count > 0 && !t.is_muted ? "font-medium text-ink" : "text-muted")}>{preview(t)}</div>
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <span className="text-[11px] text-muted">{listTimeLabel(t.last_message_at)}</span>
                 {t.unread_count > 0 ? (
-                  <span className={cx("min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-bold", t.is_muted ? "bg-white/20" : "bg-brand-soft")}>{t.unread_count > 99 ? "99+" : t.unread_count}</span>
+                  <span className={cx("min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-bold", t.is_muted ? "bg-black/20" : "bg-brand-soft")}>{t.unread_count > 99 ? "99+" : t.unread_count}</span>
                 ) : <span className="h-5" />}
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); setMenu(menu === t.listener_id ? null : t.listener_id); }}
-                className="rounded-full p-1.5 text-white/40 hover:bg-white/10 hover:text-white md:opacity-0 md:group-hover:opacity-100"
+                className="rounded-full p-1.5 text-ink/40 hover:bg-black/10 hover:text-ink md:opacity-0 md:group-hover:opacity-100"
                 aria-label="Chat options"
               >
                 <IconMore size={18} />
               </button>
               {menu === t.listener_id && (
                 <div onClick={(e) => e.stopPropagation()} className="pop-in absolute right-4 top-14 z-20 w-44 overflow-hidden rounded-xl border border-line bg-card2 shadow-2xl">
-                  <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-white/10" onClick={() => void setting(t, { is_pinned: !t.is_pinned })}><IconPin size={16} />{t.is_pinned ? "Unpin" : "Pin"}</button>
-                  <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-white/10" onClick={() => void setting(t, { is_muted: !t.is_muted })}><IconMute size={16} />{t.is_muted ? "Unmute" : "Mute"}</button>
-                  <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-white/10" onClick={() => void setting(t, { is_archived: !t.is_archived })}><IconArchive size={16} />{t.is_archived ? "Unarchive" : "Archive"}</button>
+                  <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-black/10" onClick={() => void setting(t, { is_pinned: !t.is_pinned })}><IconPin size={16} />{t.is_pinned ? "Unpin" : "Pin"}</button>
+                  <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-black/10" onClick={() => void setting(t, { is_muted: !t.is_muted })}><IconMute size={16} />{t.is_muted ? "Unmute" : "Mute"}</button>
+                  <button className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-black/10" onClick={() => void setting(t, { is_archived: !t.is_archived })}><IconArchive size={16} />{t.is_archived ? "Unarchive" : "Archive"}</button>
                 </div>
               )}
             </div>

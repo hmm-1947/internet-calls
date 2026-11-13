@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class PasswordRule {
@@ -55,7 +56,7 @@ class PasswordRulesChecklist extends StatelessWidget {
 
     // Priority 1: mismatch message (when the confirm field differs).
     if (confirmPassword != password) {
-      return _row(Icons.cancel, Colors.redAccent, 'Passwords do not match');
+      return _row(Icons.cancel, AppColors.brand, 'Passwords do not match');
     }
 
     // Priority 2: failing rules.
@@ -66,7 +67,7 @@ class PasswordRulesChecklist extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: failingRules
-          .map((rule) => _row(Icons.cancel, Colors.redAccent, rule.label))
+          .map((rule) => _row(Icons.cancel, AppColors.brand, rule.label))
           .toList(),
     );
   }

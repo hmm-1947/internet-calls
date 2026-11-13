@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -149,19 +150,20 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.c.bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Login',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFFFF9C4),
+                  color: context.c.text,
                 ),
               ),
               const SizedBox(height: 32),
@@ -169,17 +171,17 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                 controller: _identifierController,
                 keyboardType: TextInputType.phone,
                 maxLength: 10,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.c.text),
                 decoration: InputDecoration(
                   counterText: '',
                   labelText: 'Phone Number',
-                  labelStyle: const TextStyle(color: Colors.white),
+                  labelStyle: TextStyle(color: context.c.text),
                   enabledBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: context.c.text),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.red, width: 2),
+                    borderSide: const BorderSide(color: AppColors.brand, width: 2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
@@ -188,22 +190,22 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.c.text),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  labelStyle: const TextStyle(color: Colors.white),
+                  labelStyle: TextStyle(color: context.c.text),
                   enabledBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: context.c.text),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.red, width: 2),
+                    borderSide: const BorderSide(color: AppColors.brand, width: 2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.white70,
+                      color: context.c.textSecondary,
                     ),
                     onPressed: () =>
                         setState(() => _obscurePassword = !_obscurePassword),
@@ -220,7 +222,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   },
                   child: const Text(
                     'Forgot Password?',
-                    style: TextStyle(color: Colors.red),
+                    style: TextStyle(color: AppColors.brand),
                   ),
                 ),
               ),
@@ -229,8 +231,8 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.black,
+                    backgroundColor: AppColors.brand,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -238,7 +240,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   ),
                   onPressed: _loading ? null : _login,
                   child: _loading
-                      ? const CircularProgressIndicator(color: Colors.black)
+                      ? const CircularProgressIndicator(color: Colors.white)
                       : const Text('Login'),
                 ),
               ),
@@ -247,7 +249,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   Navigator.of(context).push(
                     fadeRoute(
                       OnboardingScreen(
-                        accentColor: Colors.red,
+                        accentColor: AppColors.brand,
                         nextScreenBuilder: (_) => const UserRegisterScreen(),
                       ),
                     ),
@@ -255,7 +257,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                 },
                 child: const Text(
                   'Create an account',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: AppColors.brand),
                 ),
               ),
               const SizedBox(height: 8),
@@ -263,8 +265,8 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white24),
+                    foregroundColor: context.c.text,
+                    side: BorderSide(color: context.c.faint),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -272,12 +274,12 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   ),
                   onPressed: _googleLoading ? null : _signInWithGoogle,
                   icon: _googleLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: context.c.text,
                           ),
                         )
                       : const Icon(Icons.g_mobiledata, size: 24),
@@ -285,6 +287,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),

@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:livekitapp/common/utils/fade_page_route.dart';
@@ -144,12 +145,12 @@ class _UserMainScreenState extends State<UserMainScreen> {
         _onTabSelected(0);
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F1A2E),
+        backgroundColor: context.c.bg,
         extendBody: true,
         body: Column(
           children: [
             Container(
-              color: Colors.black,
+              color: context.c.bg,
               child: SafeArea(
                 bottom: false,
                 child: ValueListenableBuilder<int?>(
@@ -214,7 +215,7 @@ class _UserMainScreenState extends State<UserMainScreen> {
                           width: 8,
                           height: 8,
                           decoration: const BoxDecoration(
-                            color: Colors.red,
+                            color: AppColors.brand,
                             shape: BoxShape.circle,
                           ),
                         ),

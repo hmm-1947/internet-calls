@@ -82,7 +82,7 @@ export default function CallSummary() {
         <div className="mt-4 flex justify-center gap-2" onMouseLeave={() => setHover(0)}>
           {[1, 2, 3, 4, 5].map((n) => (
             <button key={n} onMouseEnter={() => setHover(n)} onClick={() => setRating(n)} aria-label={`${n} star`} className="transition hover:scale-110">
-              <IconStar size={38} className={n <= shown ? "text-gold" : "text-white/15"} />
+              <IconStar size={38} className={n <= shown ? "text-gold" : "text-ink/15"} />
             </button>
           ))}
         </div>
@@ -99,7 +99,7 @@ export default function CallSummary() {
         </button>
       </div>
 
-      <button className="mt-4 text-sm font-semibold text-muted hover:text-white" onClick={done}>Skip</button>
+      <button className="mt-4 text-sm font-semibold text-muted hover:text-ink" onClick={done}>Skip</button>
     </div>
   );
 }

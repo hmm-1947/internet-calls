@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/screens/change_password_screen.dart';
 import 'package:livekitapp/common/screens/legal_document_screen.dart';
@@ -13,13 +14,6 @@ import 'package:livekitapp/user/screens/auth/user_login_screen.dart';
 import 'package:livekitapp/user/screens/user_personal_info_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class _AppColors {
-  static const bg = Color(0xFF0B0F1A);
-  static const cardBg = Color(0xFF141B26);
-  static const cardBorder = Color(0x0DFFFFFF);
-  static const brandRed = Color(0xFFE11D48);
-  static const textMuted = Color(0xFF9CA3AF);
-}
 
 class _MenuTile extends StatelessWidget {
   final IconData icon;
@@ -44,9 +38,9 @@ class _MenuTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: _AppColors.cardBg,
+          color: context.c.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _AppColors.cardBorder),
+          border: Border.all(color: context.c.border),
         ),
         child: Row(
           children: [
@@ -55,16 +49,16 @@ class _MenuTile extends StatelessWidget {
               height: 34,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: _AppColors.brandRed.withOpacity(0.15),
+                color: AppColors.brand.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: _AppColors.brandRed, size: 18),
+              child: Icon(icon, color: AppColors.brand, size: 18),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: TextStyle(color: context.c.text, fontSize: 15),
               ),
             ),
             if (busy)
@@ -73,11 +67,11 @@ class _MenuTile extends StatelessWidget {
                 height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: _AppColors.brandRed,
+                  color: AppColors.brand,
                 ),
               )
             else
-              const Icon(Icons.chevron_right, color: Colors.white38),
+              Icon(Icons.chevron_right, color: context.c.faint),
           ],
         ),
       ),
@@ -95,8 +89,8 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white54,
+        style: TextStyle(
+          color: context.c.muted,
           fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 1,
@@ -128,16 +122,16 @@ class _SettingsTile extends StatelessWidget {
         height: 34,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _AppColors.brandRed.withOpacity(0.15),
+          color: AppColors.brand.withOpacity(0.15),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: _AppColors.brandRed, size: 18),
+        child: Icon(icon, color: AppColors.brand, size: 18),
       ),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
+      title: Text(title, style: TextStyle(color: context.c.text)),
       trailing:
           trailing ??
           (onTap != null
-              ? const Icon(Icons.chevron_right, color: Colors.white38)
+              ? Icon(Icons.chevron_right, color: context.c.faint)
               : null),
     );
   }
@@ -152,7 +146,7 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 0),
       decoration: BoxDecoration(
-        color: _AppColors.cardBg,
+        color: context.c.card,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Material(
@@ -260,22 +254,22 @@ class UserProfileScreenState extends State<UserProfileScreen> {
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          backgroundColor: _AppColors.cardBg,
-          title: const Text(
+          backgroundColor: context.c.card,
+          title: Text(
             'No password on this account',
-            style: TextStyle(color: Colors.white, fontSize: 18),
+            style: TextStyle(color: context.c.text, fontSize: 18),
           ),
-          content: const Text(
+          content: Text(
             'You signed in with Google, so this account does not have a '
             'password to change. Manage it from your Google account instead.',
-            style: TextStyle(color: _AppColors.textMuted),
+            style: TextStyle(color: context.c.muted),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text(
                 'Got it',
-                style: TextStyle(color: _AppColors.brandRed),
+                style: TextStyle(color: AppColors.brand),
               ),
             ),
           ],
@@ -360,30 +354,30 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: _AppColors.cardBg,
-        title: const Text(
+        backgroundColor: context.c.card,
+        title: Text(
           'Delete Account',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: context.c.text),
         ),
-        content: const Text(
+        content: Text(
           'Are you sure you want to delete your account?\n\n'
           'The admins will be notified about your account deletion and will '
           'process it. This cannot be undone once it is done.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.c.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: context.c.textSecondary),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text(
               'Delete Account',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+              style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -420,15 +414,15 @@ class UserProfileScreenState extends State<UserProfileScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: _AppColors.cardBg,
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content: Text(message, style: const TextStyle(color: Colors.white70)),
+        backgroundColor: context.c.card,
+        title: Text(title, style: TextStyle(color: context.c.text)),
+        content: Text(message, style: TextStyle(color: context.c.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text(
               'OK',
-              style: TextStyle(color: _AppColors.brandRed),
+              style: TextStyle(color: AppColors.brand),
             ),
           ),
         ],
@@ -524,7 +518,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _AppColors.bg,
+      backgroundColor: context.c.bg,
       body: RefreshIndicator(
         onRefresh: refresh,
         child: _loading
@@ -554,7 +548,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: _AppColors.brandRed,
+                          color: AppColors.brand,
                           width: 2,
                         ),
                       ),
@@ -569,8 +563,8 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                   Center(
                     child: Text(
                       _name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.c.text,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -580,8 +574,8 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                   Center(
                     child: Text(
                       _phone,
-                      style: const TextStyle(
-                        color: _AppColors.textMuted,
+                      style: TextStyle(
+                        color: context.c.muted,
                         fontSize: 13,
                       ),
                     ),
@@ -605,7 +599,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                         ).push(slideRoute(const UserPersonalInfoScreen()));
                       },
                     ),
-                    const Divider(height: 1, color: Colors.white12),
+                    Divider(height: 1, color: context.c.border),
                     _SettingsTile(
                       icon: Icons.lock_reset,
                       title: 'Change Password',
@@ -623,7 +617,6 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                         value: _videoCallDisabledByAdmin
                             ? false
                             : _videoCallEnabled,
-                        activeColor: const Color(0xFFE53950),
                         onChanged: _videoCallDisabledByAdmin
                             ? null
                             : (_savingVideoCallSetting
@@ -640,7 +633,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                       onTap: _openHelpAndSupport,
                       busy: _openingSupportChat,
                     ),
-                    const Divider(height: 1, color: Colors.white12),
+                    Divider(height: 1, color: context.c.border),
                     _SettingsTile(
                       icon: Icons.description_outlined,
                       title: 'Terms of Service',
@@ -654,7 +647,7 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                         );
                       },
                     ),
-                    const Divider(height: 1, color: Colors.white12),
+                    Divider(height: 1, color: context.c.border),
                     _SettingsTile(
                       icon: Icons.privacy_tip_outlined,
                       title: 'Privacy Policy',
@@ -675,12 +668,12 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                       onTap: _requestingDeletion ? null : _deleteAccount,
                       leading: const Icon(
                         Icons.delete_forever_outlined,
-                        color: Colors.red,
+                        color: AppColors.brand,
                       ),
                       title: const Text(
                         'Delete Account',
                         style: TextStyle(
-                          color: Colors.red,
+                          color: AppColors.brand,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -690,12 +683,12 @@ class UserProfileScreenState extends State<UserProfileScreen> {
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.red,
+                                color: AppColors.brand,
                               ),
                             )
                           : null,
                     ),
-                    const Divider(height: 1, color: Colors.white12),
+                    Divider(height: 1, color: context.c.border),
                     ListTile(
                       onTap: _loggingOut ? null : _logout,
                       leading: const Icon(Icons.logout, color: Colors.red),

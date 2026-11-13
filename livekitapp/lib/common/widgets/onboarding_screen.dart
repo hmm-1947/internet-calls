@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class OnboardingPageData {
@@ -88,7 +89,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F1A),
+      backgroundColor: context.c.bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -99,7 +100,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: Text(
                   'Skip',
                   style: TextStyle(
-                    color: _isLastPage ? Colors.transparent : Colors.white54,
+                    color: _isLastPage ? Colors.transparent : context.c.muted,
                   ),
                 ),
               ),
@@ -125,8 +126,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Text(
                           page.title,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.c.text,
                             fontSize: 24,
                             fontWeight: FontWeight.w700,
                           ),
@@ -135,8 +136,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Text(
                           page.body,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: context.c.textSecondary,
                             fontSize: 15,
                             height: 1.5,
                           ),
@@ -157,7 +158,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   width: i == _index ? 20 : 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: i == _index ? widget.accentColor : Colors.white24,
+                    color: i == _index ? widget.accentColor : context.c.faint,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -178,10 +179,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   child: Text(
                     _isLastPage ? 'Get Started' : 'Next',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: context.c.text,
                     ),
                   ),
                 ),

@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
@@ -132,7 +133,7 @@ class _UnreadSeparator extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFE53950).withOpacity(0.16),
+        color: AppColors.brand.withOpacity(0.16),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -140,7 +141,7 @@ class _UnreadSeparator extends StatelessWidget {
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Color(0xFFE53950),
+          color: AppColors.brand,
         ),
       ),
     );

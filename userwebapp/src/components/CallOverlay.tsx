@@ -52,7 +52,7 @@ export function CallOverlay() {
 
   if (minimized) {
     return (
-      <div className="fixed bottom-20 right-3 z-[55] flex items-center gap-3 rounded-2xl border border-white/10 bg-[#141821] p-2.5 pr-3 shadow-2xl md:bottom-6 md:right-6">
+      <div className="fixed bottom-20 right-3 z-[55] flex items-center gap-3 rounded-2xl border border-white/10 bg-[#212823] p-2.5 pr-3 shadow-2xl md:bottom-6 md:right-6">
         {call.video && call.remoteVideo ? (
           <VideoView track={call.remoteVideo} className="h-16 w-12 rounded-xl" />
         ) : (
@@ -72,11 +72,11 @@ export function CallOverlay() {
   const showVideo = call.video && connected;
 
   return (
-    <div className="fixed inset-0 z-[55] flex flex-col overflow-hidden bg-[#0B0B0B] text-white safe-t safe-b">
+    <div className="fixed inset-0 z-[55] flex flex-col overflow-hidden bg-[#0E1210] text-white safe-t safe-b">
       {showVideo && call.remoteVideo && !call.remoteVideoMuted && (
         <VideoView track={call.remoteVideo} className="absolute inset-0 h-full w-full" />
       )}
-      <div className={cx("absolute inset-0", showVideo && call.remoteVideo && !call.remoteVideoMuted ? "bg-gradient-to-b from-black/60 via-transparent to-black/70" : "bg-[radial-gradient(ellipse_at_top,rgba(225,29,72,0.25),transparent_65%)]")} />
+      <div className={cx("absolute inset-0", showVideo && call.remoteVideo && !call.remoteVideoMuted ? "bg-gradient-to-b from-black/60 via-transparent to-black/70" : "bg-[radial-gradient(ellipse_at_top,rgba(18,160,68,0.25),transparent_65%)]")} />
 
       <div className="relative z-10 flex items-center justify-between px-5 pt-4">
         <div className="text-xs text-white/60">{call.video ? "Video call" : "Voice call"}{call.quality ? ` · ${call.quality}` : ""}</div>

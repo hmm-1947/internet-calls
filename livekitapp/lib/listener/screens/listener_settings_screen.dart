@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -30,8 +31,8 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white54,
+        style: TextStyle(
+          color: context.c.muted,
           fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 1,
@@ -60,18 +61,18 @@ class _SettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
+      leading: Icon(icon, color: context.c.textSecondary),
+      title: Text(title, style: TextStyle(color: context.c.text)),
       subtitle: subtitle != null
           ? Text(
               subtitle!,
-              style: const TextStyle(color: Colors.white38, fontSize: 12),
+              style: TextStyle(color: context.c.faint, fontSize: 12),
             )
           : null,
       trailing:
           trailing ??
           (onTap != null
-              ? const Icon(Icons.chevron_right, color: Colors.white38)
+              ? Icon(Icons.chevron_right, color: context.c.faint)
               : null),
     );
   }
@@ -96,18 +97,18 @@ class _MenuTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       onTap: busy ? null : onTap,
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
+      leading: Icon(icon, color: context.c.textSecondary),
+      title: Text(title, style: TextStyle(color: context.c.text)),
       trailing: busy
-          ? const SizedBox(
+          ? SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white70,
+                color: context.c.textSecondary,
               ),
             )
-          : const Icon(Icons.chevron_right, color: Colors.white38),
+          : Icon(Icons.chevron_right, color: context.c.faint),
     );
   }
 }
@@ -121,7 +122,7 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: context.c.card,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Material(
@@ -278,13 +279,13 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content: Text(message, style: const TextStyle(color: Colors.white70)),
+        backgroundColor: context.c.card,
+        title: Text(title, style: TextStyle(color: context.c.text)),
+        content: Text(message, style: TextStyle(color: context.c.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK', style: TextStyle(color: Colors.red)),
+            child: const Text('OK', style: TextStyle(color: AppColors.brand)),
           ),
         ],
       ),
@@ -359,7 +360,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F1A),
+      backgroundColor: context.c.bg,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 100),
         children: [
@@ -372,7 +373,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                   photoUrl: _photoUrl,
                   radius: 32,
                   iconSize: 32,
-                  backgroundColor: const Color(0xFF2A3145),
+                  backgroundColor: context.c.card2,
                   badgeLabel: AvatarImage.badgeLabelOf(_badgeTag),
                   badgeColor: AvatarImage.badgeColorOf(_badgeTag),
                 ),
@@ -384,8 +385,8 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                     children: [
                       Text(
                         _name,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.c.text,
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
                         ),
@@ -395,8 +396,8 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                         const SizedBox(height: 4),
                         Text(
                           _phone,
-                          style: const TextStyle(
-                            color: Colors.white54,
+                          style: TextStyle(
+                            color: context.c.muted,
                             fontSize: 13,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -420,7 +421,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                 ).push(slideRoute(const ListenerWalletScreen()));
               },
             ),
-            const Divider(height: 1, color: Colors.white12),
+            Divider(height: 1, color: context.c.border),
             _SettingsTile(
               icon: Icons.person_outline,
               title: 'Edit Profile',
@@ -432,7 +433,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
             ),
 
             // Change Password option hidden for now (kept for easy re-enable in future).
-            // const Divider(height: 1, color: Colors.white12),
+            // const Divider(height: 1, color: context.c.border),
             // _SettingsTile(
             //   icon: Icons.lock_reset,
             //   title: 'Change Password',
@@ -453,7 +454,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
             //     );
             //   },
             // ),
-            const Divider(height: 1, color: Colors.white12),
+            Divider(height: 1, color: context.c.border),
             _SettingsTile(
               icon: Icons.reviews,
               title: 'Reviews & Ratings',
@@ -477,18 +478,16 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                       : 'you are offline and will not receive calls'),
               trailing: Switch(
                 value: _statusOnline && !_adminForcedOffline,
-                activeColor: Colors.green,
                 onChanged: (value) => _toggleStatus(value),
               ),
             ),
-            const Divider(height: 1, color: Colors.white12),
+            Divider(height: 1, color: context.c.border),
             _SettingsTile(
               icon: Icons.videocam_outlined,
               title: 'Video Call',
               subtitle: 'allow users to video call you',
               trailing: Switch(
                 value: _videoCallEnabled,
-                activeColor: Colors.green,
                 onChanged: _toggleVideoCall,
               ),
             ),
@@ -509,7 +508,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
               onTap: _openHelpAndSupport,
               busy: _openingSupportChat,
             ),
-            const Divider(height: 1, color: Colors.white12),
+            Divider(height: 1, color: context.c.border),
             _SettingsTile(
               icon: Icons.description_outlined,
               title: 'Terms of Service',
@@ -522,7 +521,7 @@ class ListenerSettingsScreenState extends State<ListenerSettingsScreen> {
                 );
               },
             ),
-            const Divider(height: 1, color: Colors.white12),
+            Divider(height: 1, color: context.c.border),
             _SettingsTile(
               icon: Icons.privacy_tip_outlined,
               title: 'Privacy Policy',

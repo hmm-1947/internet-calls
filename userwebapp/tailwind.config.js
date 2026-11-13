@@ -3,14 +3,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: "#0B0B0B",
-        card: "#1A1A1A",
-        card2: "#141821",
-        line: "rgba(255,255,255,0.05)",
-        brand: { DEFAULT: "#E11D48", soft: "#E53950" },
-        gold: "#FFC94A",
+        bg: "#FFFFFF",
+        card: "#F3F4F6",
+        card2: "#E9ECEF",
+        line: "#E5E7EB",
+        ink: "#111111",
+        brand: { DEFAULT: "#0E8F3C", soft: "#12A044" },
+        gold: "#E8B93A",
         online: "#22C55E",
-        muted: "#9CA3AF",
+        muted: "#6B7280",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],

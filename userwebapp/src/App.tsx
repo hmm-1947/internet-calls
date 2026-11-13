@@ -49,14 +49,14 @@ function Bridge() {
 
 function Blocked({ onSwitch }: { onSwitch: () => void }) {
   return (
-    <div className="flex min-h-full items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(225,29,72,0.18),transparent_60%)] px-4">
+    <div className="flex min-h-full items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(18,160,68,0.18),transparent_60%)] px-4">
       <div className="card2 w-full max-w-md p-8 text-center shadow-2xl">
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="mx-auto mb-5 h-14 w-14 rounded-2xl object-cover" />
-        <h1 className="text-xl font-bold">Lailanow is open in another tab</h1>
+        <h1 className="text-xl font-bold">MindiCo is open in another tab</h1>
         <p className="mt-2 text-sm text-muted">
-          Only one tab can be active at a time so your chats and calls stay in sync. Switch to use Lailanow here instead.
+          Only one tab can be active at a time so your chats and calls stay in sync. Switch to use MindiCo here instead.
         </p>
-        <button className="btn btn-primary mt-6 w-full" onClick={onSwitch}>Use Lailanow in this tab</button>
+        <button className="btn btn-primary mt-6 w-full" onClick={onSwitch}>Use MindiCo in this tab</button>
       </div>
     </div>
   );

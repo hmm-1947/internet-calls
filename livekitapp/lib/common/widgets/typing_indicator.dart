@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// Animated "typing" label used in the chat app bar and the chat list.
@@ -11,7 +12,7 @@ class TypingIndicator extends StatefulWidget {
 
   const TypingIndicator({
     super.key,
-    this.color = const Color(0xFFE53950),
+    this.color = AppColors.brand,
     this.fontSize = 12,
     this.label = 'typing',
   });

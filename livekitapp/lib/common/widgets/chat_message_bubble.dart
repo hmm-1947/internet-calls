@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/chat_message_merge.dart';
 import 'package:livekitapp/common/utils/gift_stack.dart';
@@ -75,8 +76,7 @@ class ChatMessageBubble extends StatelessWidget {
   /// Identifies this conversation, forwarded to voice notes.
   final String chatKey;
 
-  static const _bubbleIn = Color(0xFF1F2430);
-  static const _bubbleOut = Color(0xFF7A1620);
+  static const _bubbleOut = AppColors.brand;
 
   const ChatMessageBubble({
     super.key,
@@ -89,10 +89,10 @@ class ChatMessageBubble extends StatelessWidget {
     this.chatKey = '',
   });
 
-  Widget _statusIcon() {
+  Widget _statusIcon(BuildContext context) {
     final status = message['status'];
     IconData icon;
-    var color = Colors.white70;
+    var color = context.c.textSecondary;
     switch (status) {
       case 'sending':
       case 'queued':
@@ -107,7 +107,7 @@ class ChatMessageBubble extends StatelessWidget {
         break;
       case 'failed':
         icon = Icons.error_outline;
-        color = Colors.redAccent;
+        color = AppColors.brand;
         break;
       case 'sent':
       default:
@@ -116,11 +116,11 @@ class ChatMessageBubble extends StatelessWidget {
     return Icon(icon, size: 14, color: color);
   }
 
-  Widget _content() {
+  Widget _content(BuildContext context) {
     if (message['is_deleted'] == true) {
-      return const Text(
+      return Text(
         'Message deleted',
-        style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
+        style: TextStyle(color: context.c.textSecondary, fontStyle: FontStyle.italic),
       );
     }
     switch (message['message_type']) {
@@ -146,7 +146,7 @@ class ChatMessageBubble extends StatelessWidget {
       default:
         return Text(
           '${message['message'] ?? ''}',
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: context.c.text),
         );
     }
   }
@@ -164,12 +164,12 @@ class ChatMessageBubble extends StatelessWidget {
             margin: const EdgeInsets.symmetric(vertical: 8),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: _bubbleIn,
+              color: context.c.card,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               callLabel,
-              style: const TextStyle(fontSize: 12, color: Colors.white54),
+              style: TextStyle(fontSize: 12, color: context.c.muted),
             ),
           ),
           callBubble,
@@ -183,14 +183,14 @@ class ChatMessageBubble extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.only(left: 12, right: 6, top: 8, bottom: 6),
         decoration: BoxDecoration(
-          color: isMe ? _bubbleOut : _bubbleIn,
+          color: isMe ? _bubbleOut : context.c.card,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Stack(
           children: [
             Padding(
               padding: const EdgeInsets.only(right: 52, bottom: 14),
-              child: _content(),
+              child: _content(context),
             ),
             Positioned(
               right: 0,
@@ -200,10 +200,10 @@ class ChatMessageBubble extends StatelessWidget {
                 children: [
                   Text(
                     clockLabel(message['created_at']),
-                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    style: TextStyle(color: context.c.muted, fontSize: 11),
                   ),
                   if (isMe) const SizedBox(width: 4),
-                  if (isMe) _statusIcon(),
+                  if (isMe) _statusIcon(context),
                 ],
               ),
             ),
@@ -221,12 +221,12 @@ class ChatMessageBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: _bubbleIn,
+            color: context.c.card,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
             label,
-            style: const TextStyle(fontSize: 12, color: Colors.white54),
+            style: TextStyle(fontSize: 12, color: context.c.muted),
           ),
         ),
         bubble,

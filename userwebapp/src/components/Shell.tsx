@@ -26,7 +26,7 @@ export function Shell() {
       to={it.to}
       end={it.end}
       className={({ isActive }) =>
-        cx("relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold", isActive ? "text-brand-soft" : "text-white/50")
+        cx("relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold", isActive ? "text-brand-soft" : "text-ink/50")
       }
     >
       <it.icon size={22} />
@@ -39,10 +39,10 @@ export function Shell() {
 
   return (
     <div className="flex h-full bg-bg">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-[#0e0e0e] p-4 md:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-bg p-4 md:flex">
         <div className="mb-8 flex items-center gap-3 px-2 pt-2">
           <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-10 w-10 rounded-xl object-cover" />
-          <span className="text-xl font-extrabold tracking-tight">Lailanow</span>
+          <span className="text-xl font-extrabold tracking-tight">MindiCo</span>
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {items.map((it) => (
@@ -53,7 +53,7 @@ export function Shell() {
               className={({ isActive }) =>
                 cx(
                   "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition",
-                  isActive ? "bg-brand/15 text-brand-soft" : "text-white/60 hover:bg-white/5 hover:text-white",
+                  isActive ? "bg-brand/15 text-brand-soft" : "text-ink/60 hover:bg-black/5 hover:text-ink",
                 )
               }
             >
@@ -67,7 +67,7 @@ export function Shell() {
         </nav>
         <div className="space-y-3 border-t border-line pt-4">
           <button onClick={() => nav("/upgrade")} className="btn btn-gold w-full">Buy coins</button>
-          <div className="flex items-center gap-3 rounded-xl bg-white/5 p-2.5">
+          <div className="flex items-center gap-3 rounded-xl bg-black/5 p-2.5">
             <Avatar src={me?.photo_url} name={me?.name} size={36} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{me?.name ?? "…"}</div>
@@ -86,7 +86,7 @@ export function Shell() {
           <header className="flex items-center justify-between border-b border-line bg-bg/90 px-4 py-3 backdrop-blur safe-t md:hidden">
             <div className="flex items-center gap-2">
               <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-8 w-8 rounded-lg object-cover" />
-              <span className="text-lg font-extrabold">Lailanow</span>
+              <span className="text-lg font-extrabold">MindiCo</span>
             </div>
             <div className="flex items-center gap-2">
               {!socketUp && <span className="text-[11px] text-gold">Reconnecting…</span>}
@@ -98,7 +98,7 @@ export function Shell() {
           <Outlet />
         </main>
         {!inThread && (
-          <nav className="relative z-20 grid grid-cols-5 border-t border-line bg-[#0e0e0e] safe-b md:hidden">
+          <nav className="relative z-20 grid grid-cols-5 border-t border-line bg-bg safe-b md:hidden">
             {items.slice(0, 2).map(tab)}
             <div />
             {items.slice(2).map(tab)}
@@ -106,7 +106,7 @@ export function Shell() {
               onClick={() => nav("/upgrade")}
               aria-label="Buy coins"
               className="absolute left-1/2 top-0 h-[72px] w-[72px] -translate-x-1/2 -translate-y-[55%] overflow-hidden rounded-full active:scale-95"
-              style={{ boxShadow: "0 0 16px 2px rgba(229,57,80,0.5)" }}
+              style={{ boxShadow: "0 0 16px 2px rgba(18,160,68,0.5)" }}
             >
               <img src={`${import.meta.env.BASE_URL}rupee-256.png`} alt="" className="h-full w-full object-cover" />
             </button>

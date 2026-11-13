@@ -166,6 +166,9 @@ def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=De
     if existing:
         raise HTTPException(status_code=400, detail=f'Phone already registered to "{existing.name}"')
 
+    if payload.gender not in ("male", "female"):
+        raise HTTPException(status_code=400, detail="Gender is required")
+
     _assert_listener_name_available(db, name)
 
     if not payload.confirm_reserved_username:
@@ -177,6 +180,7 @@ def create_listener(payload: ListenerCreate, db: Session = Depends(get_db), _=De
         name=name,
         phone=phone,
         password_hash=hash_password(payload.password),
+        gender=payload.gender,
     )
     db.add(listener)
     try:
@@ -199,7 +203,7 @@ def list_listeners(skip: int = Query(0, ge=0), limit: Optional[int] = Query(None
     if tag_ids:
         for t in db.query(ListenerBadgeTag).filter(ListenerBadgeTag.id.in_(tag_ids)).all():
             tags_by_id[t.id] = {"id": t.id, "name": t.name, "color": t.color}
-    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": l.effective_online, "is_logged_in": bool(l.is_logged_in), "status_on": bool(l.is_online) and not bool(l.admin_forced_offline), "admin_forced_offline": bool(l.admin_forced_offline), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "badge_tag": tags_by_id.get(l.badge_tag_id), "video_call_disabled_by_admin": bool(l.video_call_disabled_by_admin)} for l in listeners]
+    result = [{"id": l.id, "name": l.name, "phone": l.phone, "is_active": l.is_active, "is_online": l.effective_online, "is_logged_in": bool(l.is_logged_in), "status_on": bool(l.is_online) and not bool(l.admin_forced_offline), "admin_forced_offline": bool(l.admin_forced_offline), "about": l.about, "tags": l.tags, "languages": l.languages, "photo_url": l.photo_url, "age": l.age, "occupation": l.occupation, "gender": l.gender, "badge_tag": tags_by_id.get(l.badge_tag_id), "video_call_disabled_by_admin": bool(l.video_call_disabled_by_admin)} for l in listeners]
     result.sort(key=lambda x: not x["is_online"])
     return result
 
@@ -221,8 +225,10 @@ def update_listener_profile(listener_id: int, payload: AdminListenerProfileUpdat
         listener.age = payload.age
     if payload.occupation is not None:
         listener.occupation = payload.occupation
+    if payload.gender is not None:
+        listener.gender = payload.gender
     db.commit()
-    return {"id": listener.id, "name": listener.name, "about": listener.about, "tags": listener.tags, "languages": listener.languages, "age": listener.age, "occupation": listener.occupation}
+    return {"id": listener.id, "name": listener.name, "about": listener.about, "tags": listener.tags, "languages": listener.languages, "age": listener.age, "occupation": listener.occupation, "gender": listener.gender}
 
 @router.post("/listeners/{listener_id}/photo")
 async def update_listener_photo(listener_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _=Depends(verify_admin)):

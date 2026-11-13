@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -133,7 +134,7 @@ class _PulsingAvatarRingState extends State<PulsingAvatarRing>
                     top: -(photoSize * 0.06),
                     child: _CallBadge(
                       label: widget.badgeLabel!,
-                      color: widget.badgeColor ?? const Color(0xFFE11D48),
+                      color: widget.badgeColor ?? AppColors.brand,
                     ),
                   ),
               ],
@@ -151,7 +152,7 @@ class _AvatarHalo extends StatelessWidget {
 
   const _AvatarHalo({required this.size, required this.level});
 
-  static const _pink = Color(0xFFE53950);
+  static const _pink = AppColors.brand;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +199,7 @@ class _AvatarRingFace extends StatelessWidget {
     required this.photoUrl,
   });
 
-  static const _pink = Color(0xFFE53950);
+  static const _pink = AppColors.brand;
 
   @override
   Widget build(BuildContext context) {

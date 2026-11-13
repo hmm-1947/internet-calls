@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/utils/data_diff.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
@@ -106,28 +107,28 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F2430),
-        title: const Text(
+        backgroundColor: context.c.card,
+        title: Text(
           'Unsaved changes',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: context.c.text),
         ),
-        content: const Text(
+        content: Text(
           'You have unsaved notes. Do you want to save before leaving?',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.c.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop('discard'),
-            child: const Text(
+            child: Text(
               'Close without saving',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: context.c.textSecondary),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop('save'),
             child: const Text(
               'Save',
-              style: TextStyle(color: Color(0xFFE53950)),
+              style: TextStyle(color: AppColors.brand),
             ),
           ),
         ],
@@ -181,11 +182,11 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
         if (shouldPop && mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0B0F1A),
+        backgroundColor: context.c.bg,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF0B0F1A),
+          backgroundColor: context.c.bg,
           title: Text('Notes about ${widget.otherPartyName}',     style: TextStyle(
-            color: Color.fromARGB(255, 255, 90, 90),
+            color: AppColors.brand,
             fontWeight: FontWeight.bold,
           ),),
         ),
@@ -199,13 +200,13 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: const Color(0xFFE53950),
+                          backgroundColor: AppColors.brand,
                           child: Text(
                             (_userName ?? widget.otherPartyName).isNotEmpty
                                 ? (_userName ?? widget.otherPartyName)[0]
                                       .toUpperCase()
                                 : '?',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -219,8 +220,8 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
                             children: [
                               Text(
                                 _userName ?? widget.otherPartyName,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.c.text,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -230,8 +231,8 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
                                 _lastCallAt != null
                                     ? 'Last called: ${_formatDate(_lastCallAt!)}'
                                     : 'No previous calls',
-                                style: const TextStyle(
-                                  color: Colors.white54,
+                                style: TextStyle(
+                                  color: context.c.muted,
                                   fontSize: 13,
                                 ),
                               ),
@@ -247,12 +248,12 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
                         maxLines: null,
                         expands: true,
                         textAlignVertical: TextAlignVertical.top,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.c.text),
                         decoration: InputDecoration(
                           hintText: 'Write your thoughts about this user...',
-                          hintStyle: const TextStyle(color: Colors.white38),
+                          hintStyle: TextStyle(color: context.c.faint),
                           filled: true,
-                          fillColor: const Color(0xFF1F2430),
+                          fillColor: context.c.card,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -267,14 +268,14 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
                       child: ElevatedButton(
                         onPressed: _saving ? null : _save,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE53950),
+                          backgroundColor: AppColors.brand,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         child: _saving
-                            ? const SizedBox(
+                            ? SizedBox(
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
@@ -282,7 +283,7 @@ class _ListenerCallNotesScreenState extends State<ListenerCallNotesScreen> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text(
+                            : Text(
                                 'Save',
                                 style: TextStyle(
                                   color: Colors.white,

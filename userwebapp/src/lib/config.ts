@@ -19,7 +19,7 @@ export const FIREBASE_CONFIG = {
 };
 
 export const VAPID_KEY: string = (import.meta.env.VITE_FIREBASE_VAPID_KEY as string) || "";
-export const APP_NAME = "Lailanow";
+export const APP_NAME = "MindiCo";
 export const MAX_CHAT_LENGTH = 100;
 export const RING_TIMEOUT_SECONDS = 55;
 

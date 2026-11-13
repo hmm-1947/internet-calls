@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 import 'package:livekitapp/core/network/home_cache.dart';
@@ -51,7 +52,7 @@ Widget buildGiftIcon(String? icon, {double size = 34}) {
         },
         errorBuilder: (ctx, error, stack) => Icon(
           giftIconFor(icon),
-          color: const Color(0xFFE53950),
+          color: AppColors.brand,
           size: size,
         ),
       ),
@@ -59,7 +60,7 @@ Widget buildGiftIcon(String? icon, {double size = 34}) {
   }
   return Icon(
     giftIconFor(icon),
-    color: const Color(0xFFE53950),
+    color: AppColors.brand,
     size: size,
   );
 }
@@ -171,11 +172,11 @@ class _GiftSheetState extends State<GiftSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141821),
-        title: const Text('Send Gift?', style: TextStyle(color: Colors.white)),
+        backgroundColor: context.c.card,
+        title: Text('Send Gift?', style: TextStyle(color: context.c.text)),
         content: Text(
           'Send ${gift['name']} for $cost coins?',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.c.textSecondary),
         ),
         actions: [
           TextButton(
@@ -239,7 +240,7 @@ class _GiftSheetState extends State<GiftSheet> {
     final content = Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
       decoration: BoxDecoration(
-        color: const Color(0xFF141821),
+        color: context.c.card,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -249,17 +250,17 @@ class _GiftSheetState extends State<GiftSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Send a Gift',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: context.c.text,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   decoration: TextDecoration.none,
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: Color(0xFFE53950)),
+                icon: const Icon(Icons.close, color: AppColors.brand),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -279,7 +280,7 @@ class _GiftSheetState extends State<GiftSheet> {
                             width: double.infinity,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1F2430),
+                              color: context.c.card,
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: buildGiftIcon(g['icon'] as String?),
@@ -287,8 +288,8 @@ class _GiftSheetState extends State<GiftSheet> {
                           const SizedBox(height: 8),
                           Text(
                             g['name'] as String,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: context.c.text,
                               fontSize: 13,
                               decoration: TextDecoration.none,
                             ),
@@ -305,8 +306,8 @@ class _GiftSheetState extends State<GiftSheet> {
                               const SizedBox(width: 3),
                               Text(
                                 g['coins'].toString(),
-                                style: const TextStyle(
-                                  color: Colors.white70,
+                                style: TextStyle(
+                                  color: context.c.textSecondary,
                                   fontSize: 12,
                                   decoration: TextDecoration.none,
                                 ),
@@ -318,7 +319,7 @@ class _GiftSheetState extends State<GiftSheet> {
                             width: double.infinity,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFE53950),
+                                backgroundColor: AppColors.brand,
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 10,
                                 ),
@@ -327,7 +328,7 @@ class _GiftSheetState extends State<GiftSheet> {
                                 ),
                               ),
                               onPressed: _sending ? null : () => _send(g),
-                              child: const Text(
+                              child: Text(
                                 'SEND',
                                 style: TextStyle(
                                   color: Colors.white,
@@ -351,10 +352,10 @@ class _GiftSheetState extends State<GiftSheet> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Balance',
                     style: TextStyle(
-                      color: Colors.white54,
+                      color: context.c.muted,
                       fontSize: 12,
                       decoration: TextDecoration.none,
                     ),
@@ -370,8 +371,8 @@ class _GiftSheetState extends State<GiftSheet> {
                       const SizedBox(width: 6),
                       Text(
                         '$_balance Coins',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.c.text,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           decoration: TextDecoration.none,
@@ -392,7 +393,7 @@ class _GiftSheetState extends State<GiftSheet> {
                 child: const Text(
                   'Top up',
                   style: TextStyle(
-                    color: Colors.black,
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                     decoration: TextDecoration.none,
                   ),

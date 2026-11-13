@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/core/constants/api_constants.dart';
 
@@ -28,7 +29,7 @@ Widget _giftMessageImage(String? icon, {double size = 40}) {
         cacheHeight: (size * 3).round(),
         errorBuilder: (_, __, ___) => Icon(
           giftMessageIconFor(icon),
-          color: const Color(0xFFE53950),
+          color: AppColors.brand,
           size: size,
         ),
       ),
@@ -36,7 +37,7 @@ Widget _giftMessageImage(String? icon, {double size = 40}) {
   }
   return Icon(
     giftMessageIconFor(icon),
-    color: const Color(0xFFE53950),
+    color: AppColors.brand,
     size: size,
   );
 }
@@ -84,8 +85,8 @@ class GiftMessageBubble extends StatelessWidget {
               children: [
                 Text(
                   isMe ? 'You sent a gift' : 'Gift received',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.c.text,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -98,12 +99,12 @@ class GiftMessageBubble extends StatelessWidget {
                       vertical: 1,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE53950),
+                      color: AppColors.brand,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       'x$stackCount',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -116,7 +117,7 @@ class GiftMessageBubble extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               giftName,
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: TextStyle(color: context.c.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 3),
             Row(
@@ -139,8 +140,8 @@ class GiftMessageBubble extends StatelessWidget {
                 if (stackCount > 1)
                   Text(
                     '  •  sent $stackCount times',
-                    style: const TextStyle(
-                      color: Colors.white54,
+                    style: TextStyle(
+                      color: context.c.muted,
                       fontSize: 11,
                       fontStyle: FontStyle.italic,
                     ),
@@ -151,13 +152,13 @@ class GiftMessageBubble extends StatelessWidget {
               const SizedBox(height: 3),
               Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.call, color: Colors.white38, size: 11),
+                children: [
+                  Icon(Icons.call, color: context.c.faint, size: 11),
                   SizedBox(width: 3),
                   Text(
                     'Sent during call',
                     style: TextStyle(
-                      color: Colors.white38,
+                      color: context.c.faint,
                       fontSize: 10,
                       fontStyle: FontStyle.italic,
                     ),

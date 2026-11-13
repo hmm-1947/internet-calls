@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,9 +13,7 @@ import 'package:livekitapp/user/repository/user_repository.dart';
 import 'package:livekitapp/user/screens/user_contact_change_screen.dart';
 import 'package:livekitapp/common/utils/friendly_error.dart';
 
-const _kBrandRed = Color(0xFFE11D48);
-const _kFieldBg = Color(0xFF141B26);
-const _kFieldBorder = Color(0x0DFFFFFF);
+const _kBrandRed = AppColors.brand;
 
 class _FieldLabel extends StatelessWidget {
   final String text;
@@ -67,16 +66,16 @@ class _EditableField extends StatelessWidget {
       maxLength: maxLength,
       keyboardType: keyboardType,
       style: TextStyle(
-        color: enabled ? Colors.white : Colors.white54,
+        color: enabled ? context.c.text : context.c.muted,
         fontSize: 14,
       ),
       decoration: InputDecoration(
         counterText: '',
         filled: true,
-        fillColor: _kFieldBg,
+        fillColor: context.c.card,
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white38),
-        prefixIcon: Icon(icon, color: Colors.white38, size: 18),
+        hintStyle: TextStyle(color: context.c.faint),
+        prefixIcon: Icon(icon, color: context.c.faint, size: 18),
         prefixIconConstraints: const BoxConstraints(minWidth: 46),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -84,15 +83,15 @@ class _EditableField extends StatelessWidget {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kFieldBorder),
+          borderSide: BorderSide.none,
         ),
         disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kFieldBorder),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kBrandRed, width: 1.4),
+          borderSide: const BorderSide(color: _kBrandRed, width: 1.5),
         ),
       ),
     );
@@ -123,19 +122,19 @@ class _ContactField extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
       decoration: BoxDecoration(
-        color: _kFieldBg,
+        color: context.c.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _kFieldBorder),
+        border: Border.all(color: context.c.border),
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white38, size: 18),
+          Icon(icon, color: context.c.faint, size: 18),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               _isEmpty ? emptyHint : value!,
               style: TextStyle(
-                color: _isEmpty ? Colors.white38 : Colors.white70,
+                color: _isEmpty ? context.c.faint : context.c.textSecondary,
                 fontSize: 14,
               ),
             ),
@@ -148,7 +147,7 @@ class _ContactField extends StatelessWidget {
             onPressed: onAction,
             style: TextButton.styleFrom(
               foregroundColor: _kBrandRed,
-              disabledForegroundColor: Colors.white24,
+              disabledForegroundColor: context.c.faint,
               minimumSize: const Size(0, 36),
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
@@ -182,8 +181,8 @@ class _EditFieldButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = !enabled
-        ? Colors.white24
-        : (editing ? Colors.white : _kBrandRed);
+        ? context.c.faint
+        : (editing ? context.c.text : _kBrandRed);
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -194,15 +193,15 @@ class _EditFieldButton extends StatelessWidget {
           height: 48,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: editing && enabled ? _kBrandRed : const Color(0xFF141B26),
+            color: editing && enabled ? _kBrandRed : context.c.card,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _kFieldBorder),
+            border: Border.all(color: context.c.border),
           ),
           child: Icon(
             !enabled
                 ? Icons.lock_outline
                 : (editing ? Icons.check : Icons.edit_outlined),
-            color: editing && enabled ? Colors.white : color,
+            color: editing && enabled ? context.c.text : color,
             size: 18,
           ),
         ),
@@ -213,7 +212,7 @@ class _EditFieldButton extends StatelessWidget {
 
 class _FieldHint extends StatelessWidget {
   final String text;
-  final Color color;
+  final Color? color;
   final IconData? icon;
 
   /// Rendered in red inside [text]. Used to make the "24 hours" in the
@@ -222,13 +221,13 @@ class _FieldHint extends StatelessWidget {
 
   const _FieldHint(
     this.text, {
-    this.color = Colors.white38,
+    this.color,
     this.icon,
     this.highlight,
   });
 
-  Widget _body() {
-    final style = TextStyle(color: color, fontSize: 12.5);
+  Widget _body(BuildContext context) {
+    final style = TextStyle(color: color ?? context.c.faint, fontSize: 12.5);
     final needle = highlight;
     if (needle == null || needle.isEmpty || !text.contains(needle)) {
       return Text(text, style: style);
@@ -260,10 +259,10 @@ class _FieldHint extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (icon != null) ...[
-            Icon(icon, color: color, size: 14),
+            Icon(icon, color: color ?? context.c.faint, size: 14),
             const SizedBox(width: 6),
           ],
-          Expanded(child: _body()),
+          Expanded(child: _body(context)),
         ],
       ),
     );
@@ -653,7 +652,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
       );
     }
     if (_checkingUsername) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.only(top: 6, left: 4),
         child: Row(
           children: [
@@ -662,20 +661,20 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
               height: 13,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white54,
+                color: context.c.muted,
               ),
             ),
             SizedBox(width: 8),
             Text(
               'Checking availability…',
-              style: TextStyle(color: Colors.white54, fontSize: 12.5),
+              style: TextStyle(color: context.c.muted, fontSize: 12.5),
             ),
           ],
         ),
       );
     }
     if (_usernameMessage == null) {
-      return const _FieldHint(
+      return _FieldHint(
         'Can only be changed once every 24 hours',
         highlight: '24 hours',
       );
@@ -683,7 +682,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
     final available = _usernameAvailable == true;
     return _FieldHint(
       _usernameMessage!,
-      color: available ? Colors.greenAccent : Colors.redAccent,
+      color: available ? Colors.greenAccent : AppColors.brand,
       icon: available ? Icons.check_circle : Icons.cancel,
     );
   }
@@ -706,16 +705,16 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0B),
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        foregroundColor: Colors.white,
-        backgroundColor: const Color(0xFF0B0B0B),
+        foregroundColor: context.c.text,
+        backgroundColor: context.c.bg,
         elevation: 0,
 
-        title: const Text(
+        title: Text(
           'Personal Information',
           style: TextStyle(
-            color: Colors.white,
+            color: context.c.text,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -767,9 +766,9 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                                     color: _kBrandRed,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.camera_alt,
-                                    color: Colors.white,
+                                    color: context.c.text,
                                     size: 18,
                                   ),
                                 ),
@@ -807,7 +806,7 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                     ),
                   ],
                 ),
-                const _FieldHint('Change this as often as you like'),
+                _FieldHint('Change this as often as you like'),
                 const SizedBox(height: 18),
                 const _FieldLabel('USERNAME'),
                 Row(
@@ -857,12 +856,12 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                   controller: _bioController,
                   maxLines: 4,
                   maxLength: 100,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  style: TextStyle(color: context.c.text, fontSize: 14),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: _kFieldBg,
+                    fillColor: context.c.card,
                     hintText: 'Tell listeners about yourself',
-                    hintStyle: const TextStyle(color: Colors.white38),
+                    hintStyle: TextStyle(color: context.c.faint),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -881,18 +880,18 @@ class UserPersonalInfoScreenState extends State<UserPersonalInfoScreen> {
                       ),
                     ),
                     child: _saving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
-                              color: Colors.white,
+                              color: context.c.text,
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text(
+                        : Text(
                             'Save Changes',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.c.text,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

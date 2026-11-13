@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -48,9 +49,8 @@ class ChatHistoryScreen extends StatefulWidget {
 
 class _ChatHistoryScreenState extends State<ChatHistoryScreen>
     with WidgetsBindingObserver, RouteAware {
-  static const _bg = Color(0xFF0B0F1A);
-  static const _pink = Color(0xFFE53950);
-  static const _green = Color(0xFF74D8BD);
+  static const _pink = AppColors.brand;
+  static const _green = AppColors.online;
 
   static const _statusRank = <String, int>{
     'failed': 0,
@@ -861,7 +861,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
               return Text(
                 online == true ? 'Online' : 'Offline',
                 style: TextStyle(
-                  color: online == true ? _green : Colors.white54,
+                  color: online == true ? _green : context.c.muted,
                   fontSize: 12,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -879,7 +879,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 14, vertical: 6),
       margin: EdgeInsets.only(right: isNarrow ? 6 : 12, left: 4),
       decoration: BoxDecoration(
-        color: const Color(0x1AFFFFFF),
+        color: context.c.overlay,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -893,8 +893,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
               width: 34,
               child: Text(
                 coins == null ? '' : '$coins',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.c.text,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -919,11 +919,11 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: context.c.bg,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        foregroundColor: Colors.white,
-        backgroundColor: _bg,
+        foregroundColor: context.c.text,
+        backgroundColor: context.c.bg,
         elevation: 0,
         titleSpacing: 0,
         leadingWidth: 40,
@@ -937,7 +937,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                 photoUrl: widget.listenerPhotoUrl,
                 radius: isNarrow ? 15 : 18,
                 iconSize: isNarrow ? 15 : 18,
-                backgroundColor: const Color(0xFF2A3145),
+                backgroundColor: context.c.card2,
               ),
               const SizedBox(width: 8),
               Flexible(
@@ -948,7 +948,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                     Text(
                       widget.listenerName,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.c.text,
                         fontSize: isNarrow ? 14 : 16,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -969,7 +969,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                 style: iconButtonStyle,
                 icon: Icon(
                   Icons.call,
-                  color: listenerOnline ? Colors.white : Colors.white38,
+                  color: listenerOnline ? context.c.text : context.c.faint,
                   size: isNarrow ? 20 : 24,
                 ),
                 onPressed: !listenerOnline
@@ -999,7 +999,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                             style: iconButtonStyle,
                             icon: Icon(
                               Icons.videocam,
-                              color: enabled ? Colors.white : Colors.white38,
+                              color: enabled ? context.c.text : context.c.faint,
                               size: isNarrow ? 20 : 24,
                             ),
                             onPressed: !listenerOnline
@@ -1024,7 +1024,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
             style: iconButtonStyle,
             icon: Icon(
               Icons.card_giftcard,
-              color: Colors.white,
+              color: context.c.text,
               size: isNarrow ? 20 : 24,
             ),
             onPressed: () {
@@ -1041,7 +1041,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
               style: iconButtonStyle,
               icon: Icon(
                 favorite ? Icons.favorite : Icons.favorite_border,
-                color: favorite ? _pink : Colors.white,
+                color: favorite ? _pink : context.c.text,
                 size: isNarrow ? 20 : 24,
               ),
               onPressed: () {
@@ -1077,11 +1077,11 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
                         ? const SizedBox.shrink()
                         : FloatingActionButton(
                             mini: true,
-                            backgroundColor: const Color(0xFF1F2430),
+                            backgroundColor: context.c.card,
                             onPressed: () => _scrollController.jumpTo(0),
-                            child: const Icon(
+                            child: Icon(
                               Icons.keyboard_arrow_down,
-                              color: Colors.white,
+                              color: context.c.text,
                             ),
                           ),
                   ),
@@ -1097,7 +1097,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen>
             maxLength: 100,
             tooLongMessage: 'Message too long, only 100 characters allowed',
             accentColor: _pink,
-            backgroundColor: _bg,
+            backgroundColor: context.c.bg,
           ),
         ],
       ),

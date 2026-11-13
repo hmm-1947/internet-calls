@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/common/widgets/auth/auth_card.dart';
 import 'package:livekitapp/common/widgets/auth/password_rules_checklist.dart';
@@ -112,20 +113,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const pink = Color(0xFFE53950);
+    const pink = AppColors.brand;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.c.bg,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Change Password',
           style: TextStyle(
-            color: Colors.white,
+            color: context.c.text,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
         ),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: context.c.bg,
+        foregroundColor: context.c.text,
         elevation: 0,
       ),
       body: SafeArea(
@@ -169,10 +170,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.black,
-                        disabledBackgroundColor: Colors.red.withOpacity(0.3),
-                        disabledForegroundColor: Colors.black45,
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: AppColors.brand.withOpacity(0.3),
+                        disabledForegroundColor: Colors.white70,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -185,7 +186,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                color: Colors.black,
+                                color: Colors.white,
                                 strokeWidth: 2.4,
                               ),
                             )

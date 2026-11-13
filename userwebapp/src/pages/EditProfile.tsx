@@ -106,7 +106,7 @@ export default function EditProfile() {
         <div className="flex justify-center">
           <button onClick={() => file.current?.click()} disabled={uploading} className="group relative rounded-full" aria-label="Change photo">
             <Avatar src={me.photo_url} name={me.name} size={112} ring />
-            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition group-hover:opacity-100">
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition group-hover:opacity-100">
               {uploading ? <Spinner size={22} /> : <IconCamera size={26} />}
             </span>
             <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-bg bg-brand-soft">
@@ -140,9 +140,9 @@ export default function EditProfile() {
           </div>
           <div>
             <label className="label">Phone number</label>
-            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-card2 px-4 py-3 text-sm">
-              <span className="flex-1 text-white/80">{me.phone ? `+91 ${me.phone}` : "Not added"}</span>
-              <button type="button" onClick={() => nav("/settings/contact")} className="font-semibold text-brand-soft hover:text-white">{me.phone ? "Change" : "Add"}</button>
+            <div className="flex items-center gap-3 rounded-xl border border-black/10 bg-card2 px-4 py-3 text-sm">
+              <span className="flex-1 text-ink/80">{me.phone ? `+91 ${me.phone}` : "Not added"}</span>
+              <button type="button" onClick={() => nav("/settings/contact")} className="font-semibold text-brand-soft hover:text-ink">{me.phone ? "Change" : "Add"}</button>
             </div>
           </div>
           {me.email && (

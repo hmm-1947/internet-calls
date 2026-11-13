@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LailaNow — Find your listener</title>
+<title>MindiCo — Find your listener</title>
 <meta name="description" content="Connect one-on-one with expert listeners and talk through what's on your mind, in complete privacy." />
-<link rel="icon" type="image/png" href="/assets/title_logo.png">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
@@ -14,11 +14,11 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#fff;--bg-soft:#FFF6F6;--bg-soft-2:#FDEEEF;
-  --red:#D6293B;--red-bright:#EF3B4E;--red-deep:#7E1122;--red-soft:#FDE4E6;
-  --ink:#241417;--ink-muted:#7A6467;--line:#F2DEE1;
-  --shadow:0 24px 60px -24px rgba(126,17,34,.28);
-  --shadow-lg:0 40px 90px -30px rgba(126,17,34,.35);
+  --bg:#fff;--bg-soft:#F4FBF6;--bg-soft-2:#E9F7EE;
+  --red:#12A044;--red-bright:#22C55E;--red-deep:#0B7A33;--red-soft:#DDF3E4;
+  --ink:#111613;--ink-muted:#6B7280;--line:#DCEBE1;
+  --shadow:0 24px 60px -24px rgba(11,122,51,.28);
+  --shadow-lg:0 40px 90px -30px rgba(11,122,51,.35);
   --ease:cubic-bezier(.16,.84,.44,1);
   --glass:rgba(255,255,255,.72);
 }
@@ -31,9 +31,9 @@ a{color:inherit;text-decoration:none}ul{list-style:none}img{display:block;max-wi
 /* ambient background */
 .aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
 .aurora i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5}
-.aurora .a1{width:520px;height:520px;background:#FFD9DE;top:-180px;left:-120px;animation:drift 18s ease-in-out infinite}
-.aurora .a2{width:460px;height:460px;background:#FFE9E1;top:340px;right:-160px;animation:drift 22s ease-in-out infinite reverse}
-.aurora .a3{width:400px;height:400px;background:#F6E2FF;bottom:-140px;left:35%;opacity:.35;animation:drift 26s ease-in-out infinite}
+.aurora .a1{width:520px;height:520px;background:#CFF0DB;top:-180px;left:-120px;animation:drift 18s ease-in-out infinite}
+.aurora .a2{width:460px;height:460px;background:#E2F6E8;top:340px;right:-160px;animation:drift 22s ease-in-out infinite reverse}
+.aurora .a3{width:400px;height:400px;background:#D9F2E6;bottom:-140px;left:35%;opacity:.35;animation:drift 26s ease-in-out infinite}
 @keyframes drift{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(40px,-40px,0) scale(1.12)}}
 .grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.035;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence baseFrequency='.85' numOctaves='3'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>")}
@@ -50,8 +50,8 @@ header{position:sticky;top:0;z-index:50;background:var(--glass);backdrop-filter:
 .nav-links a:not(.nav-cta)::after{content:"";position:absolute;left:0;bottom:-6px;height:2px;width:0;background:var(--red);border-radius:2px;transition:width .3s var(--ease)}
 .nav-links a:not(.nav-cta):hover::after{width:100%}
 .nav-links a:hover{opacity:1;color:var(--red)}
-.nav-cta{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,var(--red-bright),var(--red-deep));color:#fff!important;padding:11px 22px;border-radius:999px;font-weight:700;font-size:.9rem;box-shadow:0 12px 26px -10px rgba(214,41,59,.65);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
-.nav-cta:hover{transform:translateY(-2px);box-shadow:0 18px 34px -10px rgba(214,41,59,.8)}
+.nav-cta{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,var(--red-bright),var(--red-deep));color:#fff!important;padding:11px 22px;border-radius:999px;font-weight:700;font-size:.9rem;box-shadow:0 12px 26px -10px rgba(18,160,68,.65);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+.nav-cta:hover{transform:translateY(-2px);box-shadow:0 18px 34px -10px rgba(18,160,68,.8)}
 .menu-btn{display:none;background:none;border:none;cursor:pointer;flex-direction:column;gap:5px;padding:6px}
 .menu-btn span{width:22px;height:2px;background:var(--ink);border-radius:2px;transition:.3s var(--ease)}
 .menu-btn.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
@@ -65,13 +65,13 @@ section{padding:104px 0;position:relative}
 .section-head h2{font-size:clamp(2rem,3.2vw,2.8rem);line-height:1.12;margin-top:18px}
 .section-head p{margin-top:16px;color:var(--ink-muted);font-size:1.06rem}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;background:var(--red-soft);color:var(--red-deep);font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:8px 16px;border-radius:999px}
-.eyebrow .pulse{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(214,41,59,.6);animation:ring 2s infinite}
-@keyframes ring{70%{box-shadow:0 0 0 9px rgba(214,41,59,0)}100%{box-shadow:0 0 0 0 rgba(214,41,59,0)}}
-.btn-primary{background:linear-gradient(135deg,var(--red-bright),var(--red-deep));color:#fff;padding:16px 32px;border-radius:999px;font-weight:700;font-size:1rem;box-shadow:0 18px 36px -12px rgba(214,41,59,.6);transition:transform .25s var(--ease),box-shadow .25s var(--ease);border:none;cursor:pointer;display:inline-flex;align-items:center;gap:10px;position:relative;overflow:hidden}
+.eyebrow .pulse{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(18,160,68,.6);animation:ring 2s infinite}
+@keyframes ring{70%{box-shadow:0 0 0 9px rgba(18,160,68,0)}100%{box-shadow:0 0 0 0 rgba(18,160,68,0)}}
+.btn-primary{background:linear-gradient(135deg,var(--red-bright),var(--red-deep));color:#fff;padding:16px 32px;border-radius:999px;font-weight:700;font-size:1rem;box-shadow:0 18px 36px -12px rgba(18,160,68,.6);transition:transform .25s var(--ease),box-shadow .25s var(--ease);border:none;cursor:pointer;display:inline-flex;align-items:center;gap:10px;position:relative;overflow:hidden}
 .btn-primary::after{content:"";position:absolute;top:0;left:-120%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);transform:skewX(-20deg)}
 .btn-primary:hover::after{animation:sheen .9s var(--ease)}
 @keyframes sheen{to{left:140%}}
-.btn-primary:hover{transform:translateY(-3px);box-shadow:0 24px 44px -12px rgba(214,41,59,.7)}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 24px 44px -12px rgba(18,160,68,.7)}
 .btn-ghost{font-weight:700;color:var(--red-deep);display:inline-flex;align-items:center;gap:8px;border-bottom:1.5px solid var(--red-deep);padding-bottom:2px;transition:gap .25s var(--ease)}
 .btn-ghost:hover{gap:14px}
 .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
@@ -107,7 +107,7 @@ section{padding:104px 0;position:relative}
 .caption{margin-top:24px;font-size:.86rem;color:var(--ink-muted);font-style:italic}
 .card-foot{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
 .pill{font-size:.72rem;font-weight:700;color:var(--red-deep);background:#fff;border:1px solid var(--line);padding:6px 12px;border-radius:999px}
-.float-chip{position:absolute;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:16px;padding:12px 16px;box-shadow:0 18px 36px -16px rgba(126,17,34,.4);font-size:.8rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.float-chip{position:absolute;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:16px;padding:12px 16px;box-shadow:0 18px 36px -16px rgba(11,122,51,.4);font-size:.8rem;font-weight:700;display:flex;align-items:center;gap:8px}
 .float-chip.a{top:-10px;left:-30px;color:var(--red-deep);animation:float 5s ease-in-out infinite}
 .float-chip.b{bottom:-18px;right:-18px;color:var(--red);animation:float 5.6s ease-in-out infinite .6s}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
@@ -122,7 +122,7 @@ section{padding:104px 0;position:relative}
 /* listeners */
 .listener-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:28px}
 .listener-card{position:relative;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:28px;padding:34px 20px 28px;text-align:center;transition:transform .3s var(--ease),box-shadow .3s var(--ease);box-shadow:0 10px 24px -14px rgba(0,0,0,.12);display:flex;flex-direction:column;align-items:center;overflow:hidden}
-.listener-card::before{content:"";position:absolute;inset:0;background:radial-gradient(400px circle at var(--mx,50%) var(--my,0%),rgba(214,41,59,.10),transparent 60%);opacity:0;transition:opacity .3s}
+.listener-card::before{content:"";position:absolute;inset:0;background:radial-gradient(400px circle at var(--mx,50%) var(--my,0%),rgba(18,160,68,.10),transparent 60%);opacity:0;transition:opacity .3s}
 .listener-card:hover::before{opacity:1}
 .listener-card:hover{transform:translateY(-8px);box-shadow:var(--shadow)}
 .listener-ring{width:118px;height:118px;border-radius:50%;background:conic-gradient(from 0deg,var(--red-soft),var(--red),var(--red-soft));display:flex;align-items:center;justify-content:center;margin-bottom:18px;padding:8px;animation:spin 14s linear infinite}
@@ -146,7 +146,7 @@ section{padding:104px 0;position:relative}
 .price-card{position:relative;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border:1.5px solid var(--line);border-radius:24px;padding:32px 20px 26px;text-align:center;display:flex;flex-direction:column;transition:transform .28s var(--ease),box-shadow .28s var(--ease),border-color .28s}
 .price-card:hover{transform:translateY(-8px);box-shadow:var(--shadow);border-color:var(--red)}
 .price-card.popular{border-color:var(--red);background:linear-gradient(180deg,#fff,var(--bg-soft-2));box-shadow:var(--shadow)}
-.badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-bright),var(--red-deep));color:#fff;font-size:.66rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:6px 14px;border-radius:999px;white-space:nowrap;box-shadow:0 10px 20px -10px rgba(214,41,59,.8)}
+.badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-bright),var(--red-deep));color:#fff;font-size:.66rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:6px 14px;border-radius:999px;white-space:nowrap;box-shadow:0 10px 20px -10px rgba(18,160,68,.8)}
 .price-card .amount{font-family:'Fraunces',serif;font-size:2.1rem;font-weight:700;color:var(--red-deep);margin-top:10px}
 .price-card .credits{margin-top:6px;font-size:.85rem;color:var(--ink-muted);font-weight:600}
 .price-card .buy{margin-top:auto;padding-top:0}
@@ -245,7 +245,7 @@ footer ul li a:hover{color:#fff}
 <header>
   <nav class="nav">
 <a class="logo" href="/">
-    <img src="logo-1234.webp" alt="LailaNow Logo">
+    <img src="logo-1234.webp" alt="MindiCo Logo">
 </a>
     <div class="nav-links" id="navLinks">
       <a href="#about">About</a>
@@ -414,7 +414,7 @@ footer ul li a:hover{color:#fff}
     <div class="section-head reveal">
       <span class="eyebrow">Simple, pay-as-you-talk</span>
       <h2>Choose your plan</h2>
-      <p>Credits work across every listener on LailaNow. Buy once, use whenever you need someone to talk to.</p>
+      <p>Credits work across every listener on MindiCo. Buy once, use whenever you need someone to talk to.</p>
     </div>
     <div class="pricing-grid">
       <div class="price-card reveal"><div class="amount">₹99</div><div class="credits">1,980 Credits</div><div class="buy"><button>Buy now</button></div></div>
@@ -431,16 +431,16 @@ footer ul li a:hover{color:#fff}
   <div class="wrap about-grid">
     <div class="about-visual reveal"><span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span></div>
     <div class="about-copy reveal">
-      <span class="eyebrow">About LailaNow</span>
+      <span class="eyebrow">About MindiCo</span>
       <h2>A space built around being heard</h2>
-      <p>LailaNow connects you with expert listeners for honest, one-on-one conversations — whether you're feeling lonely, overwhelmed, or just need to think out loud with someone who's actually paying attention.</p>
-      <p>We built LailaNow because not every hard moment needs a diagnosis. Sometimes it just needs a person, undistracted, on the other end.</p>
+      <p>MindiCo connects you with expert listeners for honest, one-on-one conversations — whether you're feeling lonely, overwhelmed, or just need to think out loud with someone who's actually paying attention.</p>
+      <p>We built MindiCo because not every hard moment needs a diagnosis. Sometimes it just needs a person, undistracted, on the other end.</p>
       <div class="stats">
         <div class="stat"><b>560+</b><span>Expert listeners</span></div>
         <div class="stat"><b>1.2M</b><span>Minutes talked</span></div>
         <div class="stat"><b>4.9★</b><span>Average rating</span></div>
       </div>
-      <div class="callout"><strong>Important:</strong> This is not a medical or mental health service. LailaNow listeners are not therapists or counselors. If you need professional help, please consult a licensed practitioner. LailaNow is a safe and supportive space. Adult content, sexual conversations, harassment, hate speech, spam, scams, abusive behavior, or any illegal activity are strictly prohibited. Users who violate these guidelines may have their access restricted or removed.</div>
+      <div class="callout"><strong>Important:</strong> This is not a medical or mental health service. MindiCo listeners are not therapists or counselors. If you need professional help, please consult a licensed practitioner. MindiCo is a safe and supportive space. Adult content, sexual conversations, harassment, hate speech, spam, scams, abusive behavior, or any illegal activity are strictly prohibited. Users who violate these guidelines may have their access restricted or removed.</div>
     </div>
   </div>
 </section>
@@ -449,7 +449,7 @@ footer ul li a:hover{color:#fff}
   <div class="wrap">
     <div class="cta-band reveal">
       <h2>Your next conversation is one tap away</h2>
-      <p>Thousands of people have already found someone to talk to on LailaNow. Take the first step today.</p>
+      <p>Thousands of people have already found someone to talk to on MindiCo. Take the first step today.</p>
       <a class="btn-primary" href="#listeners">Find your listener</a>
       <p class="cta-note">Not a medical or mental health service. Please consult a licensed professional for clinical support.</p>
     </div>
@@ -461,15 +461,15 @@ footer ul li a:hover{color:#fff}
     <div class="footer-grid">
       <div>
     <a class="logo" href="/">
-    <img src="logo-12345.webp" alt="LailaNow Logo">
+    <img src="logo-12345.webp" alt="MindiCo Logo">
 </a>
         <p>Connecting people with empathetic listeners for honest, judgment-free conversations, one call at a time.</p>
       </div>
       <div><h4>Quick links</h4><ul><li><a href="#about">About</a></li><li><a href="#listeners">Listeners</a></li><li><a href="#pricing">Pricing</a></li><li><a href="#contact">Contact</a></li></ul></div>
-      <div><h4>Reach us</h4><ul><li>Kochi, Kerala, India</li><li><a href="mailto:hello@lailanow.app">lailanowapp@gmail.com</a></li><li><a href="tel:+910000000000">+91 92920 24915</a></li></ul></div>
+      <div><h4>Reach us</h4><ul><li>Kochi, Kerala, India</li><li><a href="mailto:hello@MindiCo.app">MindiCoapp@gmail.com</a></li><li><a href="tel:+910000000000">+91 92920 24915</a></li></ul></div>
         <div><h4>Legal</h4><ul><li><a href="privacy.html">Privacy Policy</a></li><li><a href="terms.html">Terms &amp; Conditions</a></li><li><a href="refund.html">Refund Policy</a></li><li><a href="delete-account.html">Delete Account</a></li></ul></div>
     </div>
-    <div class="footer-bottom"><span>LailaNow — Someone to talk to, whenever you need it.</span><span>© 2026. All rights reserved.</span></div>
+    <div class="footer-bottom"><span>MindiCo — Someone to talk to, whenever you need it.</span><span>© 2026. All rights reserved.</span></div>
   </div>
 </footer>
 

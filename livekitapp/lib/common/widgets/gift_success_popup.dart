@@ -1,3 +1,4 @@
+import 'package:livekitapp/core/theme/app_theme.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:livekitapp/user/widgets/gift_sheet.dart';
@@ -122,7 +123,7 @@ class _ConfettiOverlayState extends State<_ConfettiOverlay>
   static const double kMaxStartDelay = 0.15;
 
   static const _colors = [
-    Color(0xFFE53950),
+    AppColors.brand,
     Color(0xFFFFC94A),
     Color(0xFF22C55E),
     Color(0xFF3B82F6),
@@ -245,9 +246,9 @@ class _GiftSuccessPopupState extends State<GiftSuccessPopup> {
           Container(
             padding: const EdgeInsets.fromLTRB(24, 32, 24, 26),
             decoration: BoxDecoration(
-              color: const Color(0xFF141821),
+              color: context.c.card,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: context.c.border),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -257,16 +258,16 @@ class _GiftSuccessPopupState extends State<GiftSuccessPopup> {
                   width: 90,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F2430),
+                    color: context.c.card,
                     shape: BoxShape.circle,
                   ),
                   child: buildGiftIcon(widget.giftIcon, size: 52),
                 ),
                 const SizedBox(height: 18),
-                const Text(
+                Text(
                   'Gift Sent!',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: context.c.text,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     decoration: TextDecoration.none,
@@ -278,8 +279,8 @@ class _GiftSuccessPopupState extends State<GiftSuccessPopup> {
                       ? '${widget.giftName} sent to ${widget.recipientName}'
                       : widget.giftName,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: context.c.textSecondary,
                     fontSize: 14,
                     decoration: TextDecoration.none,
                   ),

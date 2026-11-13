@@ -74,16 +74,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  # Full-bleed SQUARE logo (solid black to every edge, no transparent corners).
-  # The original circular logo (transparent corners) is kept as
-  # assets/images/app_logo_circle_original.png and still used inside the app.
-  # Used for the legacy (pre-Android 8 / non-adaptive launcher) icons and iOS.
-  image_path: "assets/images/app_logo_fullbleed.png"
-
-  # Adaptive icon: background matches the logo's black so the launcher mask
-  # (circle, squircle or square) never reveals a white edge.
-  adaptive_icon_background: "#000000"
-  adaptive_icon_foreground: "assets/images/app_logo_fullbleed.png"
+  image_path: "assets/images/app_icon_full.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/app_icon_foreground.png"
   remove_alpha_ios: true
 
 
@@ -110,7 +103,7 @@ flutter:
     - assets/audio/ringing_tone.mp3
     - assets/audio/listener_no_response.mp3
     - assets/audio/ringtone_default.mp3
-    - assets/images/banner.png
+    - assets/images/logo.png
     - assets/images/rupee_icon.png
     - assets/images/app_logo.png
     - .env
