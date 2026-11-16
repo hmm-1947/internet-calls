@@ -224,6 +224,7 @@ async def login(payload: ListenerLogin, db: Session = Depends(get_db)):
     token = generate_session_token()
     db.add(SessionModel(token=token, listener_id=listener.id, expires_at=session_expiry()))
     listener.is_logged_in = True
+    listener.is_online = True
     record_audit_event(db, "listener", listener.id, listener.name, "login")
     db.commit()
     from app.utils.listener_presence import broadcast_listener_presence
