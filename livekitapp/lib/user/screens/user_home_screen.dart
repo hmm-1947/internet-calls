@@ -379,8 +379,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
   }
   static int _statusRank(Map<String, dynamic> listener) {
     if (listener['presence_online'] != true) return 3;
-    if (listener['is_in_call'] == true) return 1;
-    if (listener['is_live'] == false) return 2;
+    if (listener['is_in_call'] == true) return 2;
+    if (listener['is_live'] == false) return 1;
     return 0;
   }
 

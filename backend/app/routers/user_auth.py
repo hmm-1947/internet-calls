@@ -908,11 +908,11 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
         if not item["is_online"]:
             rank = 3
         elif item["is_in_call"]:
-            rank = 1
+            rank = 2
         elif item["is_live"]:
             rank = 0
         else:
-            rank = 2
+            rank = 1
         active_at = item["_active_at"]
         return (
             rank,
