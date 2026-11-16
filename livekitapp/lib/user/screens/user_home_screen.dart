@@ -1334,5 +1334,5 @@ bool _fakeInCallNow(Map<String, dynamic> listener) {
   final id = listener['id'];
   if (id is! int) return false;
   if (_fakeMix(id * 7919 + 13) % 100 >= 50) return false;
-  return _fakeMix(id * 100003 + _fakeCallBucket()) % 100 < 60;
+  return _fakeMix(id * 100003 + _fakeCallBucket()) % 100 < 40;
 }
