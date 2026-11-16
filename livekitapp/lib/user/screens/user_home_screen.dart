@@ -1333,6 +1333,7 @@ bool _fakeInCallNow(Map<String, dynamic> listener) {
   if (listener['is_live'] == true) return false;
   final id = listener['id'];
   if (id is! int) return false;
-  if (_fakeMix(id * 7919 + 13) % 100 >= 50) return false;
-  return _fakeMix(id * 100003 + _fakeCallBucket()) % 100 < 40;
+  final bucket = _fakeCallBucket();
+  if (_fakeMix(id * 7919 + 13) % 2 != bucket % 2) return false;
+  return _fakeMix(id * 100003 + bucket) % 100 < 40;
 }
