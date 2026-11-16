@@ -880,10 +880,13 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
         except (TypeError, json.JSONDecodeError):
             tags = []
         last_call_at = last_call_by_listener.get(l.id)
+        is_live = manager.is_listener_online(l.id)
+        active_at = (manager.listener_connected_at(l.id) if is_live else None) or l.last_seen
         result.append({
             "id": l.id, "name": l.name, "is_online": l.effective_online,
             "presence_online": l.effective_online,
             "is_in_call": l.id in busy_listener_ids,
+            "is_live": manager.is_listener_online(l.id),
             "video_call_enabled": bool(l.video_call_enabled) and not bool(l.video_call_disabled_by_admin),
             "tags": tags,
             "avg_rating": round(avg_rating, 1) if avg_rating else None,
@@ -896,21 +899,31 @@ def get_listeners(db: Session = Depends(get_db), current_user=Depends(get_curren
             # on the same field so presence changes arriving over the socket
             # keep the list in this exact order without a refetch.
             "last_interacted_at": last_call_at.isoformat() if last_call_at else None,
+            "active_at": active_at.isoformat() if active_at else None,
+            "_active_at": active_at,
         })
 
     def _order_key(item):
         last_call_at = last_call_by_listener.get(item["id"])
+        if not item["is_online"]:
+            rank = 3
+        elif item["is_in_call"]:
+            rank = 1
+        elif item["is_live"]:
+            rank = 0
+        else:
+            rank = 2
+        active_at = item["_active_at"]
         return (
-            # 1. previously called listeners, whether they are online or not
-            0 if last_call_at else 1,
-            # 2. online before offline, inside each of those two groups
-            0 if item["is_online"] else 1,
-            # 3. most recently called first (0 keeps strangers in id order)
+            rank,
             -last_call_at.timestamp() if last_call_at else 0,
+            -active_at.timestamp() if active_at else 0,
             item["id"],
         )
 
     result.sort(key=_order_key)
+    for item in result:
+        item.pop("_active_at", None)
     return result
 
 @router.get("/listener/{listener_id}")

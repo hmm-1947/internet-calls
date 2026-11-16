@@ -373,27 +373,38 @@ class UserHomeScreenState extends State<UserHomeScreen>
     return raw is String ? DateTime.tryParse(raw) : null;
   }
 
-  /// Orders the catalogue the same way the backend does, so a presence change
-  /// pushed over the socket re-sorts the list without waiting for a refetch:
-  ///
-  ///  1. listeners the user has called before, online ones first
-  ///  2. everyone else, online ones first
-  ///
-  /// Previous contacts therefore stay above strangers even while offline. A
-  /// first-time user has no contacts, so this collapses to plain online-first.
-  /// The sort is stable, so listeners that tie keep the server's order
-  /// (most recent call first, then by id).
+  static DateTime? _activeAt(Map<String, dynamic> listener) {
+    final raw = listener['active_at'];
+    return raw is String ? DateTime.tryParse(raw) : null;
+  }
+  static int _statusRank(Map<String, dynamic> listener) {
+    if (listener['presence_online'] != true) return 3;
+    if (listener['is_in_call'] == true) return 1;
+    if (listener['is_live'] == false) return 2;
+    return 0;
+  }
+
   void _reorder() {
     final ordered = List<Map<String, dynamic>>.of(_listeners);
     mergeSort<Map<String, dynamic>>(
       ordered,
       compare: (a, b) {
-        final aInteracted = _lastInteractedAt(a) != null;
-        final bInteracted = _lastInteractedAt(b) != null;
-        if (aInteracted != bInteracted) return aInteracted ? -1 : 1;
-        final aOnline = a['presence_online'] == true;
-        final bOnline = b['presence_online'] == true;
-        if (aOnline != bOnline) return aOnline ? -1 : 1;
+        final byStatus = _statusRank(a).compareTo(_statusRank(b));
+        if (byStatus != 0) return byStatus;
+        final aAt = _lastInteractedAt(a);
+        final bAt = _lastInteractedAt(b);
+        if (aAt != null && bAt != null) {
+          final byRecent = bAt.compareTo(aAt);
+          if (byRecent != 0) return byRecent;
+        } else if (aAt != null || bAt != null) {
+          return aAt != null ? -1 : 1;
+        }
+        final aActive = _activeAt(a);
+        final bActive = _activeAt(b);
+        if (aActive != null && bActive != null) {
+          return bActive.compareTo(aActive);
+        }
+        if (aActive != null || bActive != null) return aActive != null ? -1 : 1;
         return 0;
       },
     );
@@ -447,6 +458,9 @@ class UserHomeScreenState extends State<UserHomeScreen>
       setState(() {
         _listeners[idx]['is_online'] = online;
         _listeners[idx]['presence_online'] = online;
+        if (!online && data['last_seen'] is String) {
+          _listeners[idx]['active_at'] = data['last_seen'];
+        }
         _reorder();
       });
     } else if (type == 'listener_presence') {
@@ -474,6 +488,21 @@ class UserHomeScreenState extends State<UserHomeScreen>
       if (_listeners[idx]['is_in_call'] == inCall) return;
       setState(() {
         _listeners[idx]['is_in_call'] = inCall;
+        _reorder();
+      });
+    } else if (type == 'listener_live') {
+      final listenerId = data['listener_id'];
+      if (listenerId == null) return;
+      final live = data['is_live'] == true;
+      final idx = _listeners.indexWhere((l) => l['id'] == listenerId);
+      if (idx == -1) return;
+      if (_listeners[idx]['is_live'] == live) return;
+      setState(() {
+        _listeners[idx]['is_live'] = live;
+        if (data['active_at'] is String) {
+          _listeners[idx]['active_at'] = data['active_at'];
+        }
+        _reorder();
       });
     } else if (type == 'listener_rating_updated') {
       final listenerId = data['listener_id'];

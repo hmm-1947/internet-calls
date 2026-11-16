@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Dict, Iterable
 from fastapi import WebSocket
 
@@ -22,6 +23,7 @@ class ConnectionManager:
         self.user_connections: Dict[int, WebSocket] = {}
         self.user_tokens: Dict[int, str] = {}
         self.listener_connections: Dict[int, WebSocket] = {}
+        self.listener_connected: Dict[int, datetime] = {}
         self.admin_connections: list = []
         self._lock = asyncio.Lock()
 
@@ -62,6 +64,8 @@ class ConnectionManager:
         async with self._lock:
             old = self.listener_connections.get(listener_id)
             self.listener_connections[listener_id] = websocket
+            if old is None:
+                self.listener_connected[listener_id] = datetime.now(timezone.utc)
         if old is not None and old is not websocket:
             try:
                 await old.close()
@@ -78,6 +82,7 @@ class ConnectionManager:
         async with self._lock:
             if websocket is None or self.listener_connections.get(listener_id) is websocket:
                 self.listener_connections.pop(listener_id, None)
+                self.listener_connected.pop(listener_id, None)
 
 
     def is_user_online(self, user_id: int) -> bool:
@@ -85,6 +90,9 @@ class ConnectionManager:
 
     def is_listener_online(self, listener_id: int) -> bool:
         return listener_id in self.listener_connections
+
+    def listener_connected_at(self, listener_id: int):
+        return self.listener_connected.get(listener_id)
 
     async def send_to_user(self, user_id: int, data: dict):
         ws = self.user_connections.get(user_id)

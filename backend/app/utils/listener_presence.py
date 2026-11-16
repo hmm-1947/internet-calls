@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.core.ws_manager import manager
 
 
@@ -26,3 +28,12 @@ async def reject_calls_if_offline(db, listener) -> None:
         return
     from app.routers.call import reject_ringing_calls_for_listener
     await reject_ringing_calls_for_listener(db, listener.id)
+
+
+async def broadcast_listener_live(listener_id: int, live: bool) -> None:
+    await manager.broadcast_to_all_users({
+        "type": "listener_live",
+        "listener_id": listener_id,
+        "is_live": live,
+        "active_at": datetime.now(timezone.utc).isoformat(),
+    })

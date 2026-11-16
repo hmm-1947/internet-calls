@@ -1052,7 +1052,11 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...)):
     if listener_id is None:
         await websocket.close(code=close_code)
         return
+    was_live = manager.is_listener_online(listener_id)
     await manager.connect_listener(listener_id, websocket)
+    if not was_live:
+        from app.utils.listener_presence import broadcast_listener_live
+        asyncio.create_task(broadcast_listener_live(listener_id, True))
     availability_on, admin_forced, user_ids, gift_events = await run_in_threadpool(_load_listener_ws_state, listener_id)
     logger.info(f"WebSocket listener={listener_id} connected (availability switch is_online={availability_on})")
     await manager.send_to_listener(listener_id, {"type": "listener_status_changed", "is_online": availability_on, "admin_forced_offline": admin_forced})
@@ -1070,6 +1074,8 @@ async def listener_chat_ws(websocket: WebSocket, token: str = Query(...)):
     if manager.is_listener_online(listener_id):
         logger.info(f"WebSocket listener={listener_id} disconnected: {reason} (another connection is still open, stays online)")
         return
+    from app.utils.listener_presence import broadcast_listener_live
+    asyncio.create_task(broadcast_listener_live(listener_id, False))
 
     logger.info(f"WebSocket listener={listener_id} disconnected: {reason} (presence unchanged, it is not socket-based)")
     await run_in_threadpool(_stamp_listener_last_seen, listener_id)
