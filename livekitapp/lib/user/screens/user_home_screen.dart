@@ -252,6 +252,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
   bool _videoCallDisabledByAdmin = false;
 
   Timer? _pollTimer;
+  Timer? _fakeStatusTimer;
+  int _lastFakeBucket = _fakeCallBucket();
   final PageController _offersController = PageController(
     viewportFraction: 0.92,
   );
@@ -305,6 +307,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
     if (!_active) {
       _pollTimer?.cancel();
       _pollTimer = null;
+      _fakeStatusTimer?.cancel();
+      _fakeStatusTimer = null;
       _offersAutoScrollTimer?.cancel();
       _offersAutoScrollTimer = null;
       return;
@@ -314,6 +318,14 @@ class UserHomeScreenState extends State<UserHomeScreen>
       _loadSpecialOffers();
     });
     _syncOffersAutoScroll();
+    _fakeStatusTimer ??= Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted || !_active) return;
+      if (_fakeBucketHold != null) return;
+      final bucket = _fakeRealBucket();
+      if (bucket == _lastFakeBucket) return;
+      _lastFakeBucket = bucket;
+      setState(_reorder);
+    });
   }
 
   void _syncOffersAutoScroll() {
@@ -378,7 +390,9 @@ class UserHomeScreenState extends State<UserHomeScreen>
     return raw is String ? DateTime.tryParse(raw) : null;
   }
   static int _statusRank(Map<String, dynamic> listener) {
-    if (listener['presence_online'] != true) return 3;
+    if (listener['presence_online'] != true) {
+      return _fakeInCallNow(listener) ? 3 : 4;
+    }
     if (listener['is_in_call'] == true) return 2;
     if (listener['is_live'] == false) return 1;
     return 0;
@@ -537,6 +551,8 @@ class UserHomeScreenState extends State<UserHomeScreen>
     _tickerMode?.removeListener(_onVisibilityChanged);
     _socketSub?.cancel();
     _pollTimer?.cancel();
+    _fakeStatusTimer?.cancel();
+    _fakeBucketHold = null;
     _offersAutoScrollTimer?.cancel();
     _offersController.dispose();
     _offersPage.dispose();
@@ -705,6 +721,21 @@ class UserHomeScreenState extends State<UserHomeScreen>
     ).push(slideRoute(ListenerProfileViewScreen(listenerId: listener['id'])));
   }
 
+  bool _onListScroll(ScrollNotification n) {
+    if (n.depth != 0) return false;
+    if (n is ScrollStartNotification) {
+      _fakeBucketHold ??= _fakeRealBucket();
+    } else if (n is ScrollEndNotification && _fakeBucketHold != null) {
+      _fakeBucketHold = null;
+      final bucket = _fakeRealBucket();
+      if (bucket != _lastFakeBucket && mounted) {
+        _lastFakeBucket = bucket;
+        setState(_reorder);
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = 32 + MediaQuery.paddingOf(context).bottom + 90;
@@ -712,19 +743,22 @@ class UserHomeScreenState extends State<UserHomeScreen>
       backgroundColor: _AppColors.bg,
       body: RefreshIndicator(
         onRefresh: _pullToRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(5, 24, 5, 0),
-              sliver: SliverToBoxAdapter(child: _buildOffersSection()),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(5, 32, 5, 0),
-              sliver: SliverToBoxAdapter(child: _buildFeaturedHeader()),
-            ),
-            ..._buildFeaturedBody(bottomPadding),
-          ],
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _onListScroll,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(5, 24, 5, 0),
+                sliver: SliverToBoxAdapter(child: _buildOffersSection()),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(5, 32, 5, 0),
+                sliver: SliverToBoxAdapter(child: _buildFeaturedHeader()),
+              ),
+              ..._buildFeaturedBody(bottomPadding),
+            ],
+          ),
         ),
       ),
     );
@@ -1013,7 +1047,7 @@ class _ListenerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isOnline = listener['presence_online'] == true;
-    final bool isInCall = isOnline && listener['is_in_call'] == true;
+    final bool isInCall = (isOnline && listener['is_in_call'] == true) || _fakeInCallNow(listener);
     final tags = (listener['tags'] as List?) ?? const [];
 
     return RepaintBoundary(
@@ -1275,4 +1309,30 @@ class _CyclingTagsRowState extends State<_CyclingTagsRow> {
       ],
     );
   }
+}
+
+const int _fakeCallWindowMs = 3 * 60 * 1000;
+
+int? _fakeBucketHold;
+
+int _fakeRealBucket() =>
+    DateTime.now().millisecondsSinceEpoch ~/ _fakeCallWindowMs;
+
+int _fakeCallBucket() => _fakeBucketHold ?? _fakeRealBucket();
+
+int _fakeMix(int value) {
+  var x = value & 0xFFFFFFFF;
+  x = ((x >> 16) ^ x) * 0x45d9f3b & 0xFFFFFFFF;
+  x = ((x >> 16) ^ x) * 0x45d9f3b & 0xFFFFFFFF;
+  x = (x >> 16) ^ x;
+  return x & 0x7FFFFFFF;
+}
+
+bool _fakeInCallNow(Map<String, dynamic> listener) {
+  if (listener['presence_online'] == true) return false;
+  if (listener['is_live'] == true) return false;
+  final id = listener['id'];
+  if (id is! int) return false;
+  if (_fakeMix(id * 7919 + 13) % 100 >= 50) return false;
+  return _fakeMix(id * 100003 + _fakeCallBucket()) % 100 < 60;
 }
