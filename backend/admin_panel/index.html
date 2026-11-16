@@ -3303,21 +3303,21 @@
     <div class="card">
       <h2>User App Update</h2>
       <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
-        Set the latest version number for each store. Any user on an older build is blocked from using the app and redirected to the store link to update — there is no "optional" update, the latest version is always the required one.
+        Set the latest build number for each store (the number after the + in pubspec.yaml, e.g. 7). Any user whose installed build number is lower is blocked from using the app and redirected to the store link to update. Builds equal to or higher than this number are allowed.
       </p>
 
       <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;">
         <div style="flex:1;min-width:280px;">
           <h3 style="margin-bottom:10px;">Android</h3>
-          <label style="font-size:13px;color:var(--slate);font-weight:600">Latest version</label>
-          <input id="avAndroidVersion" placeholder="e.g. 2.5.0" style="width:100%;margin-bottom:12px;">
+          <label style="font-size:13px;color:var(--slate);font-weight:600">Latest build number</label>
+          <input id="avAndroidVersion" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 7" style="width:100%;margin-bottom:12px;">
           <label style="font-size:13px;color:var(--slate);font-weight:600">Play Store URL</label>
           <input id="avAndroidUrl" placeholder="https://play.google.com/store/apps/details?id=..." style="width:100%;">
         </div>
         <div style="flex:1;min-width:280px;">
           <h3 style="margin-bottom:10px;">iOS</h3>
-          <label style="font-size:13px;color:var(--slate);font-weight:600">Latest version</label>
-          <input id="avIosVersion" placeholder="e.g. 2.5.0" style="width:100%;margin-bottom:12px;">
+          <label style="font-size:13px;color:var(--slate);font-weight:600">Latest build number</label>
+          <input id="avIosVersion" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 7" style="width:100%;margin-bottom:12px;">
           <label style="font-size:13px;color:var(--slate);font-weight:600">App Store URL</label>
           <input id="avIosUrl" placeholder="https://apps.apple.com/app/id..." style="width:100%;">
         </div>
@@ -3330,12 +3330,12 @@
     <div class="card" style="margin-top:16px;">
       <h2>Listener App Update</h2>
       <p style="font-size:13px;color:var(--slate);margin-top:-6px;">
-        The listener app isn't distributed through any store, so there's no redirect link — a listener on an older build should be shown an "update required" screen once the listener app checks this on launch.
+        The listener app isn't distributed through any store, so there's no redirect link — a listener whose installed build number is lower than this is shown an "update required" screen on launch. Builds equal to or higher are allowed.
       </p>
 
       <div style="max-width:280px;margin-top:10px;">
-        <label style="font-size:13px;color:var(--slate);font-weight:600">Latest version</label>
-        <input id="avListenerVersion" placeholder="e.g. 2.5.0" style="width:100%;">
+        <label style="font-size:13px;color:var(--slate);font-weight:600">Latest build number</label>
+        <input id="avListenerVersion" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 7" style="width:100%;">
       </div>
 
       <button class="btn btn-leaf" onclick="saveListenerVersion()" style="margin-top:16px;">Save</button>
@@ -4065,17 +4065,19 @@
     }
 
     let avLoaded = false;
+    function avBuild(v) { return /^\d+$/.test(String(v || '').trim()) ? String(v).trim() : ''; }
+    function avInvalid(v) { return v && !/^\d+$/.test(v); }
     async function loadAppVersion() {
       if (avLoaded) return;
       try {
         const res = await fetch(API_URL + '/app-settings/version-check');
         const data = await res.json();
         const u = data.user || {};
-        document.getElementById('avAndroidVersion').value = (u.android && u.android.latest_version) || '';
+        document.getElementById('avAndroidVersion').value = avBuild(u.android && u.android.latest_version);
         document.getElementById('avAndroidUrl').value = (u.android && u.android.store_url) || '';
-        document.getElementById('avIosVersion').value = (u.ios && u.ios.latest_version) || '';
+        document.getElementById('avIosVersion').value = avBuild(u.ios && u.ios.latest_version);
         document.getElementById('avIosUrl').value = (u.ios && u.ios.store_url) || '';
-        document.getElementById('avListenerVersion').value = (data.listener && data.listener.latest_version) || '';
+        document.getElementById('avListenerVersion').value = avBuild(data.listener && data.listener.latest_version);
         avLoaded = true;
       } catch (e) { }
     }
@@ -4087,6 +4089,11 @@
       const iosVersion = document.getElementById('avIosVersion').value.trim();
       const iosUrl = document.getElementById('avIosUrl').value.trim();
 
+      if (avInvalid(androidVersion) || avInvalid(iosVersion)) {
+        msgEl.textContent = '✗ Enter the build number as a whole number, e.g. 7';
+        msgEl.style.color = '#d9435e';
+        return;
+      }
       if (androidVersion && !androidUrl) {
         msgEl.textContent = '✗ Set the Play Store URL before saving an Android version';
         msgEl.style.color = '#d9435e';
@@ -4122,6 +4129,11 @@
     async function saveListenerVersion() {
       const msgEl = document.getElementById('avListenerMsg');
       const listenerVersion = document.getElementById('avListenerVersion').value.trim();
+      if (avInvalid(listenerVersion)) {
+        msgEl.textContent = '✗ Enter the build number as a whole number, e.g. 7';
+        msgEl.style.color = '#d9435e';
+        return;
+      }
       const payload = { latest_app_version_listener: listenerVersion || null };
       try {
         const res = await fetch(API_URL + '/app-settings/admin/version-check', {

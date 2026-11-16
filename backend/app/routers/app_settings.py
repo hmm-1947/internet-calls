@@ -2,7 +2,7 @@ import os
 import re
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -121,6 +121,18 @@ class VersionCheckPayload(BaseModel):
     latest_app_version_ios: str | None = None
     ios_store_url: str | None = None
     latest_app_version_listener: str | None = None
+
+    @field_validator("latest_app_version_android", "latest_app_version_ios", "latest_app_version_listener")
+    @classmethod
+    def _build_number_only(cls, value):
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        if not value.isdigit():
+            raise ValueError("Enter the build number as a whole number, e.g. 7")
+        return str(int(value))
 
 
 @router.put("/admin/version-check")
