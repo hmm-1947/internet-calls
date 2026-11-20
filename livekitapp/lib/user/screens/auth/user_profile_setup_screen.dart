@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -180,6 +181,10 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
           username: _username,
           displayName: _displayName.trim(),
         );
+        try {
+          await FacebookAppEvents()
+              .logCompletedRegistration(registrationMethod: 'google');
+        } catch (_) {}
       } else {
         final result = await _repository.registerComplete(
           widget.signupToken!,
@@ -190,6 +195,10 @@ class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
         UserDataCache().clear();
         await ChatStorage().clearAll();
         await _localStorage.saveSession(result.token, result.id, result.name);
+        try {
+          await FacebookAppEvents()
+              .logCompletedRegistration(registrationMethod: 'phone');
+        } catch (_) {}
       }
 
       // The photo is a nice-to-have: a failed upload must not block a user who

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -230,6 +231,10 @@ void main() async {
   ActiveCallManager.instance.init();
   ActiveCallManager.instance.rootNavigatorKey = userNavigatorKey;
   await Firebase.initializeApp();
+  try {
+    await FacebookAppEvents().setAutoLogAppEventsEnabled(true);
+    await FacebookAppEvents().activateApp();
+  } catch (_) {}
 
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
