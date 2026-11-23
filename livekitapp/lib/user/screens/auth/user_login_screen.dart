@@ -103,9 +103,13 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       UserDataCache().clear();
       await ChatStorage().clearAll();
       await _localStorage.saveSession(auth.token, auth.id, auth.name);
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      if (fcmToken != null) {
-        await _repository.updateFcmToken(auth.token, fcmToken);
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          await _repository.updateFcmToken(auth.token, fcmToken);
+        }
+      } catch (e) {
+        debugPrint('FCM token skipped: $e');
       }
       if (!mounted) return;
       // A first-time Google account has no username or display name yet, so

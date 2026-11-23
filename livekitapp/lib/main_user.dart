@@ -269,9 +269,13 @@ Future<void> _registerFcmToken() async {
   final localStorage = LocalStorage();
   final authToken = await localStorage.getToken();
   if (authToken == null) return;
-  final fcmToken = await FirebaseMessaging.instance.getToken();
-  if (fcmToken == null) return;
-  await UserRepository().updateFcmToken(authToken, fcmToken);
+  try {
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken == null) return;
+    await UserRepository().updateFcmToken(authToken, fcmToken);
+  } catch (e) {
+    debugPrint('FCM token skipped: $e');
+  }
 }
 
 class UserApp extends StatefulWidget {
