@@ -21,23 +21,12 @@ class AppVersionBlock {
 /// this check must never be able to lock someone out of the app on its own
 /// due to a network hiccup.
 class AppVersionService {
-  static List<int> _parts(String version) => RegExp(r'\d+')
-      .allMatches(version)
-      .map((m) => int.parse(m.group(0)!))
-      .toList();
-
-  static bool _isOutdated(String? current, String? required) {
-    if (required == null || required.isEmpty) return false;
-    if (current == null || current.isEmpty) return true;
-    final c = _parts(current);
-    final r = _parts(required);
-    final len = c.length > r.length ? c.length : r.length;
-    for (var i = 0; i < len; i++) {
-      final cv = i < c.length ? c[i] : 0;
-      final rv = i < r.length ? r[i] : 0;
-      if (cv != rv) return cv < rv;
-    }
-    return false;
+  static bool _isOutdated(String? currentBuild, String? requiredBuild) {
+    final required = int.tryParse((requiredBuild ?? '').trim());
+    if (required == null) return false;
+    final current = int.tryParse((currentBuild ?? '').trim());
+    if (current == null) return true;
+    return current < required;
   }
 
   static Future<Map<String, dynamic>?> _fetch() async {
@@ -60,7 +49,7 @@ class AppVersionService {
     if (data == null) return null;
     final required = data['listener']?['latest_version'] as String?;
     final info = await PackageInfo.fromPlatform();
-    if (_isOutdated(info.version, required)) {
+    if (_isOutdated(info.buildNumber, required)) {
       return const AppVersionBlock();
     }
     return null;
@@ -76,7 +65,7 @@ class AppVersionService {
     final required = platformData?['latest_version'] as String?;
     final storeUrl = platformData?['store_url'] as String?;
     final info = await PackageInfo.fromPlatform();
-    if (_isOutdated(info.version, required)) {
+    if (_isOutdated(info.buildNumber, required)) {
       return AppVersionBlock(storeUrl: storeUrl);
     }
     return null;

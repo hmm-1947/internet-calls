@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -232,6 +233,10 @@ void main() async {
   ActiveCallManager.instance.init();
   ActiveCallManager.instance.rootNavigatorKey = userNavigatorKey;
   await Firebase.initializeApp();
+  try {
+    await FacebookAppEvents().setAutoLogAppEventsEnabled(true);
+    await FacebookAppEvents().activateApp();
+  } catch (_) {}
 
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
@@ -266,9 +271,13 @@ Future<void> _registerFcmToken() async {
   final localStorage = LocalStorage();
   final authToken = await localStorage.getToken();
   if (authToken == null) return;
-  final fcmToken = await FirebaseMessaging.instance.getToken();
-  if (fcmToken == null) return;
-  await UserRepository().updateFcmToken(authToken, fcmToken);
+  try {
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken == null) return;
+    await UserRepository().updateFcmToken(authToken, fcmToken);
+  } catch (e) {
+    debugPrint('FCM token skipped: $e');
+  }
 }
 
 class UserApp extends StatefulWidget {
